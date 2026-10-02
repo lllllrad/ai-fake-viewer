@@ -103,4 +103,4 @@ Default chat retention is seven days with startup/hourly cleanup; frames and pro
 - **NOT_RUN:** long-duration simultaneous three-platform soak, queue pressure, process memory and sustained latency benchmarks.
 - **NOT_RUN:** GitHub Actions workflows. Windows/Linux build/test and Linux browser jobs are supplied but were not run on GitHub here.
 
-Operator setup, local URLs, reauthentication, stop, recovery and data removal are documented in [README.md](README.md). T01–T12 implementation status is tracked in [TASKS.md](TASKS.md). These remaining live checks are explicitly not reported as completed.
+The live two-PC operator procedure is in [LIVE_SETUP.md](LIVE_SETUP.md); data removal and detailed behavior are in [README.md](README.md). T01–T12 implementation status is tracked in [TASKS.md](TASKS.md). These remaining live checks are explicitly not reported as completed.
