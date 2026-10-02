@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import {
   incomingSchema,
@@ -17,6 +17,8 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    if (path !== ":memory:" && process.platform !== "win32")
+      chmodSync(path, 0o600);
     this.db
       .exec(`PRAGMA journal_mode=WAL; PRAGMA secure_delete=ON; PRAGMA busy_timeout=5000;
  CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
@@ -25,6 +27,8 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT,type TEXT,target TEXT,at INTEGER,payload TEXT);
  CREATE TABLE IF NOT EXISTS connector_checkpoints(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,session TEXT,at INTEGER,reserved REAL,input INTEGER,output INTEGER,status TEXT);
+ CREATE TABLE IF NOT EXISTS transcripts(id TEXT PRIMARY KEY,session TEXT NOT NULL,captured INTEGER NOT NULL,text TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS transcripts_captured ON transcripts(captured);
  CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,session TEXT,at INTEGER,action TEXT);
  PRAGMA user_version=1;`);
     const active = this.db
@@ -282,12 +286,16 @@ export class Store extends EventEmitter {
     if (
       !this.db
         .prepare("SELECT 1 FROM messages WHERE received<? LIMIT 1")
+        .get(before) &&
+      !this.db
+        .prepare("SELECT 1 FROM transcripts WHERE captured<? LIMIT 1")
         .get(before)
     )
       return;
     this.transaction(() => {
       this.db.prepare("DELETE FROM events WHERE at<?").run(before);
       this.db.prepare("DELETE FROM messages WHERE received<?").run(before);
+      this.db.prepare("DELETE FROM transcripts WHERE captured<?").run(before);
       this.db
         .prepare(
           "DELETE FROM actors_private WHERE id NOT IN (SELECT actor FROM messages)",
@@ -305,7 +313,7 @@ export class Store extends EventEmitter {
   }
   deleteAll() {
     this.db.exec(
-      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM audit_events; DELETE FROM sessions;",
+      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM sessions;",
     );
     this.sessionId = randomUUID();
     this.db
@@ -313,6 +321,48 @@ export class Store extends EventEmitter {
       .run(this.sessionId, Date.now());
     this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
     this.emit("reset");
+  }
+  recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
+    if (this.closed()) return false;
+    if (
+      !Number.isSafeInteger(entry.capturedAt) ||
+      !entry.text.trim() ||
+      entry.text.length > 1000
+    )
+      throw Error("Invalid transcript");
+    this.db
+      .prepare(
+        "INSERT INTO transcripts(id,session,captured,text) VALUES(?,?,?,?)",
+      )
+      .run(entry.id, this.sessionId, entry.capturedAt, entry.text);
+    return true;
+  }
+  transcriptCount() {
+    return (
+      this.db.prepare("SELECT COUNT(*) AS count FROM transcripts").get() as {
+        count: number;
+      }
+    ).count;
+  }
+  transcriptRows(limit = 10) {
+    return this.db
+      .prepare(
+        "SELECT id,session AS sessionId,captured AS capturedAt,text FROM transcripts ORDER BY rowid DESC LIMIT ?",
+      )
+      .all(limit) as {
+      id: string;
+      sessionId: string;
+      capturedAt: number;
+      text: string;
+    }[];
+  }
+  *exportTranscripts() {
+    const rows = this.db
+      .prepare(
+        "SELECT id,session AS sessionId,captured AS capturedAt,text FROM transcripts ORDER BY rowid",
+      )
+      .iterate();
+    for (const row of rows) yield JSON.stringify(row) + "\n";
   }
   reserve(maxCalls: number, maxUsd: number | null, reserved: number | null) {
     return this.transaction(() => {

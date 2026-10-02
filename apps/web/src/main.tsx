@@ -563,10 +563,34 @@ function Admin() {
               </p>
               <p>{status.audio.latestText || "No recent speech transcript"}</p>
               <p className="hint">
-                Transcripts stay in memory and enter AI context automatically.
-                Near-silent chunks are skipped. Configure the RTMP audio URL,
-                Groq API key and audio review locally.
+                Recent transcripts enter AI context automatically. Successful
+                transcripts are logged privately for up to{" "}
+                {status.retentionDays}
+                days; raw audio is not saved. Near-silent chunks are skipped.
+                Configure the RTMP audio URL, Groq API key and audio review
+                locally.
               </p>
+              <p>{status.audio.loggedCount} retained transcripts</p>
+              <div className="toolbar">
+                <a
+                  href="/api/admin/transcripts/export"
+                  download="transcripts.jsonl"
+                >
+                  Download transcript log (JSONL)
+                </a>
+              </div>
+              {status.audio.history.length > 0 && (
+                <ol>
+                  {status.audio.history.map((entry: any) => (
+                    <li key={entry.id}>
+                      <time dateTime={new Date(entry.capturedAt).toISOString()}>
+                        {new Date(entry.capturedAt).toLocaleString()}
+                      </time>{" "}
+                      {entry.text}
+                    </li>
+                  ))}
+                </ol>
+              )}
               <div className="toolbar">
                 <button onClick={() => void action("audio/start")}>
                   Start audio
@@ -806,7 +830,7 @@ function Admin() {
                 onClick={() => {
                   if (
                     confirm(
-                      "Permanently delete all local chat, identities, usage and history? Receivers will stop.",
+                      "Permanently delete all local chat, transcripts, identities, usage and history? Receivers will stop.",
                     )
                   )
                     void action("data/delete");
@@ -816,7 +840,8 @@ function Admin() {
               </button>
             </div>
             <p className="hint">
-              Retention: up to 7 days. Frames and prompts are not written to
+              Retention: up to {status.retentionDays} days for chat and
+              transcripts. Frames, raw audio and prompts are not written to
               disk. No platform chat sending is provided.
             </p>
           </section>

@@ -42,6 +42,7 @@ export class Transcriber {
     public config: Config["audio"],
     public reviewed: boolean,
     public request: typeof fetch = fetch,
+    public onTranscript?: (entry: Transcript) => boolean,
   ) {}
   start() {
     if (this.child) return;
@@ -140,7 +141,14 @@ export class Transcriber {
       if (raw.length > 8192) throw Error("Groq transcription too large");
       const text = response.parse(JSON.parse(raw)).text.trim().slice(0, 1000);
       if (generation === this.generation && text) {
-        this.transcripts.push({ id: randomUUID(), capturedAt, text });
+        const entry = { id: randomUUID(), capturedAt, text };
+        try {
+          if (this.onTranscript && !this.onTranscript(entry)) return;
+        } catch {
+          this.state = "storage_error";
+          return;
+        }
+        this.transcripts.push(entry);
         this.transcripts = this.recent();
         this.state = "receiving";
         this.failures = 0;

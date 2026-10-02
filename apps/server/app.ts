@@ -4,6 +4,7 @@ import fastifyStatic from "@fastify/static";
 import { timingSafeEqual, randomBytes, createHmac } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
+import { Readable } from "node:stream";
 import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
@@ -45,6 +46,8 @@ export async function createApp(
   const transcriber = new Transcriber(
     config.audio,
     config.policy.groqAudioReviewed,
+    fetch,
+    (entry) => store.recordTranscript(entry),
   );
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
@@ -233,10 +236,20 @@ export async function createApp(
       store.off("reset", reset);
     });
   });
+  app.get("/api/admin/transcripts/export", async (_req, reply) => {
+    reply
+      .type("application/x-ndjson; charset=utf-8")
+      .header(
+        "Content-Disposition",
+        'attachment; filename="transcripts.jsonl"',
+      );
+    return reply.send(Readable.from(store.exportTranscripts()));
+  });
   app.get("/api/admin/status", async () => ({
     demo: !!opts.demo,
     sessionId: store.sessionId,
     closed: store.closed(),
+    retentionDays: config.retentionDays,
     connectors: supervisor.states,
     audio: {
       state: transcriber.state,
@@ -245,6 +258,8 @@ export async function createApp(
       latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
       transcriptCount: transcriber.recent().length,
       latestText: transcriber.recent().at(-1)?.text ?? null,
+      loggedCount: store.transcriptCount(),
+      history: store.transcriptRows(),
     },
     capture: {
       state: capture.state,
@@ -400,6 +415,7 @@ export async function createApp(
   app.post("/api/admin/session/new", async () => {
     scheduler.stop();
     await supervisor.stop();
+    transcriber.stop();
     store.newSession();
     supervisor.start();
     transcriber.start();

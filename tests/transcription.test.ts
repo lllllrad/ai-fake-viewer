@@ -9,6 +9,7 @@ import { Transcriber, wavFromPcm } from "../packages/transcription.ts";
 import { Capture } from "../packages/capture.ts";
 import { Store } from "../packages/storage.ts";
 import { Scheduler } from "../packages/scheduler.ts";
+import { createApp } from "../apps/server/app.ts";
 import {
   modelMessages,
   validateDecision,
@@ -45,16 +46,25 @@ test("Groq Whisper receives bounded WAV chunks and keeps transcript private", as
     const config = configSchema.parse({
       audio: { enabled: true, url: audioUrl, maxRequests: 1 },
     });
-    const transcription = new Transcriber(config.audio, true, request);
+    const store = new Store(":memory:");
+    const transcription = new Transcriber(
+      config.audio,
+      true,
+      request,
+      (entry) => store.recordTranscript(entry),
+    );
     transcription.state = "receiving";
     const pcm = Buffer.alloc(320000);
     assert.equal(wavFromPcm(pcm).length, 320044);
     await transcription.transcribe(pcm);
     assert.equal(seen, 1);
     assert.equal(transcription.recent()[0]?.text, "화면을 봐 주세요");
+    assert.equal(store.transcriptRows()[0]?.text, "화면을 봐 주세요");
+    assert.equal(store.snapshot().messages.length, 0);
     assert.equal(transcription.state, "budget_exhausted");
     await transcription.transcribe(pcm);
     assert.equal(seen, 1);
+    store.close();
   } finally {
     if (oldKey === undefined) delete process.env.GROQ_API_KEY;
     else process.env.GROQ_API_KEY = oldKey;
@@ -249,6 +259,87 @@ setInterval(() => {}, 1000);
   } finally {
     child.send({ type: "stop" });
     child.kill();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("transcript log persists across restart and follows retention and deletion", () => {
+  const directory = mkdtempSync(join(tmpdir(), "mixed-transcript-log-"));
+  const path = join(directory, "chat.sqlite");
+  try {
+    const store = new Store(path);
+    const sessionId = store.sessionId;
+    assert.equal(
+      store.recordTranscript({ id: "old", capturedAt: 1, text: "earlier" }),
+      true,
+    );
+    assert.equal(
+      store.recordTranscript({
+        id: "new",
+        capturedAt: Date.now(),
+        text: "now",
+      }),
+      true,
+    );
+    store.close();
+    const reopened = new Store(path);
+    assert.deepEqual(
+      reopened.transcriptRows().map((entry) => entry.text),
+      ["now", "earlier"],
+    );
+    assert.equal(reopened.transcriptRows()[0].sessionId, sessionId);
+    assert.equal(reopened.transcriptCount(), 2);
+    reopened.purge(100);
+    assert.equal(reopened.transcriptCount(), 1);
+    assert.equal(JSON.parse([...reopened.exportTranscripts()][0]).text, "now");
+    reopened.deleteAll();
+    assert.equal(reopened.transcriptCount(), 0);
+    reopened.close();
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("transcript export is available only to the local administrator", async () => {
+  const config = configSchema.parse({ database: ":memory:" });
+  const adminToken = "a".repeat(32);
+  const directory = mkdtempSync(join(tmpdir(), "mixed-transcript-api-"));
+  const { app, store } = await createApp(config, {
+    adminToken,
+    readerToken: "b".repeat(32),
+    encryptionKey: "c".repeat(64),
+    chatgptTokenPath: join(directory, "chatgpt.tokens"),
+    startInputs: false,
+  });
+  try {
+    store.recordTranscript({
+      id: "private",
+      capturedAt: Date.now(),
+      text: "private speech",
+    });
+    const denied = await app.inject({
+      method: "GET",
+      url: "/api/admin/transcripts/export",
+      headers: { host: `127.0.0.1:${config.port}` },
+    });
+    assert.equal(denied.statusCode, 401);
+    const allowed = await app.inject({
+      method: "GET",
+      url: "/api/admin/transcripts/export",
+      headers: {
+        host: `127.0.0.1:${config.port}`,
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(allowed.statusCode, 200);
+    assert.match(
+      allowed.headers["content-type"] as string,
+      /application\/x-ndjson/,
+    );
+    assert.equal(JSON.parse(allowed.body.trim()).text, "private speech");
+    assert.equal(store.snapshot().messages.length, 0);
+  } finally {
+    await app.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });
