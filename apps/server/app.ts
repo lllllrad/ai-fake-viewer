@@ -9,7 +9,8 @@ import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Scheduler } from "../../packages/scheduler.ts";
-import { mockModel, openaiModel } from "../../packages/model.ts";
+import { mockModel, openaiModel, chatgptModel } from "../../packages/model.ts";
+import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
 export function equal(a: unknown, b: string) {
@@ -39,12 +40,21 @@ export async function createApp(
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   const store = new Store(config.database);
   const capture = new Capture(config.capture, !!opts.demo);
+  const chatgpt = new ChatgptAuth(opts.encryptionKey);
   const scheduler = new Scheduler(
     store,
     capture,
     config,
-    opts.demo ? mockModel : openaiModel(config.ai),
+    opts.demo
+      ? mockModel
+      : config.ai.provider === "chatgpt_subscription"
+        ? chatgptModel(config.ai, chatgpt)
+        : openaiModel(config.ai),
     !!opts.demo,
+    () =>
+      config.ai.provider === "chatgpt_subscription"
+        ? !!chatgpt.active?.refreshToken && !!chatgpt.active?.model
+        : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
   );
   const auth = new ChzzkAuth(opts.encryptionKey);
   const supervisor = new Supervisor(config, store, auth, !!opts.demo);
@@ -177,16 +187,21 @@ export async function createApp(
       rejects: scheduler.rejects,
       usage: store.usage(),
       costEstimate:
+        config.ai.provider === "chatgpt_subscription" ||
         config.ai.inputUsdPerMillion === null ||
         config.ai.outputUsdPerMillion === null ||
         !config.ai.priceCheckedAt
           ? "unavailable"
           : "configured_prices",
       maxCalls: config.ai.maxCalls,
+      provider: config.ai.provider,
       model: opts.demo
         ? "mock"
-        : (process.env.OPENAI_MODEL ?? "not configured"),
+        : config.ai.provider === "chatgpt_subscription"
+          ? (chatgpt.active?.model ?? "not selected")
+          : (process.env.OPENAI_MODEL ?? "not configured"),
     },
+    chatgpt: chatgpt.status,
     policy: config.policy,
     messages: store.snapshot().messages,
   }));
@@ -283,6 +298,60 @@ export async function createApp(
   app.post("/api/admin/connectors/stop", async () => {
     await supervisor.stop();
     return { ok: true };
+  });
+  app.post("/api/admin/chatgpt/authorize", async (req) => {
+    const body = z
+      .object({ clientId: z.string().optional() })
+      .parse(req.body ?? {});
+    return { url: chatgpt.authorizationUrl(config.port, body.clientId) };
+  });
+  app.get("/api/admin/chatgpt/models", async () => ({
+    models: await chatgpt.models(),
+  }));
+  app.post("/api/admin/chatgpt/select-account", async (req) => {
+    scheduler.stop();
+    const body = z.object({ clientId: z.string() }).parse(req.body);
+    chatgpt.select(body.clientId);
+    return { ok: true };
+  });
+  app.post("/api/admin/chatgpt/select-model", async (req) => {
+    scheduler.stop();
+    const body = z.object({ slug: z.string() }).parse(req.body);
+    const models = await chatgpt.models();
+    chatgpt.setModel(
+      body.slug,
+      models.map((m) => m.slug),
+    );
+    return { ok: true };
+  });
+  app.post("/api/admin/chatgpt/disconnect", async () => {
+    scheduler.stop();
+    return chatgpt.disconnect();
+  });
+  app.get("/oauth/chatgpt/callback", async (req, reply) => {
+    try {
+      const q = z
+        .object({
+          state: z.string().optional(),
+          code: z.string().optional(),
+          client_id: z.string().optional(),
+          error: z.string().optional(),
+        })
+        .parse(req.query);
+      await chatgpt.callback(q);
+      return reply
+        .type("text/plain")
+        .send(
+          "ChatGPT connected. Return to the admin page and select a model.",
+        );
+    } catch {
+      return reply
+        .code(400)
+        .type("text/plain")
+        .send(
+          "ChatGPT connection failed. Return to the admin page and try again.",
+        );
+    }
   });
   app.post("/api/admin/chzzk/authorize", async () => ({
     url: auth.authorizationUrl(config.chzzk.redirectUri),

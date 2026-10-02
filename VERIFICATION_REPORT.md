@@ -10,8 +10,8 @@
 - Browser: Playwright 1.63.0, Chromium 153.0.8010.12, headless.
 - OBS: unavailable; version and physical camera behavior not verified.
 - FFmpeg: production executable not used; a controlled JPEG-emitting executable exercised the capture worker.
-- Lockfile SHA-256: `d30d66d40ad18c7057eb3d5aafc152f66b073afd53ba551cf53124daa5b2ae6c`.
-- `npm run check`: PASS, TypeScript + production Vite build + **21 tests**, zero failures/skips on this Linux host.
+- Lockfile SHA-256: `454a70634cd90790a1d9f8e303d08d976550680a3f78760d695f5589f5d1f91a`.
+- `npm run check`: PASS, TypeScript + production Vite build + **23 tests**, zero failures/skips on this Linux host.
 - `npm run test:browser`: PASS, no browser page errors. Admin, reader, overlay and 390-pixel-wide admin checks completed.
 - Actual demo entry point: PASS. HTTP health, authenticated status, three `demo_fixture` inputs, artificial frame reception and initial `ai: stopped` verified. SIGTERM shutdown completed; no demo server is intentionally left running.
 - Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). All seven repository Markdown files are English; the Korean handoff stays ignored under `.local/`.
@@ -20,7 +20,7 @@ The environment initially lacked Chromium shared libraries and all system fonts.
 
 ## Measured behavior
 
-The browser fixture inserted **12 artificial messages**, waiting for both reader and overlay DOMs after each insertion. The final measured P95 from insertion start (including SQLite ingestion) to both DOM elements being present was **27 ms**. This small sequential local test meets the initial 1-second target but is not a throughput, long-run or production latency guarantee. It excludes platform transmission/polling and real model latency.
+The browser fixture inserted **12 artificial messages**, waiting for both reader and overlay DOMs after each insertion. The final measured P95 from insertion start (including SQLite ingestion) to both DOM elements being present was **25 ms**. This small sequential local test meets the initial 1-second target but is not a throughput, long-run or production latency guarantee. It excludes platform transmission/polling and real model latency.
 
 Reader and overlay text/order matched. Hidden text did not return after an overlay reload. The overlay's HTML and body backgrounds were transparent; the disclosure remained in the viewport. Script-like chat was rendered as text and did not execute. Manual AI approval published the same mock response to both views. Stopping AI still allowed a subsequent platform fixture to render. No observed duplicates or missing messages in this bounded test.
 
@@ -36,7 +36,8 @@ Screenshots and machine-readable browser timings are generated under ignored `te
 | SOOP official SDK            | BLOCKED                                                                                                                                | BLOCKED     | Official distribution, method/event/auth contract and applicable approval are not established; adapter exposes `official_spec_pending` |
 | SOOP unofficial library      | PASS: explicit opt-in gate, version/integrity pin and installed type inspection                                                        | BLOCKED     | No streamer/terms review/live test; exact source-commit-to-tarball equivalence not established                                         |
 | OBS Program camera           | PASS: real JPEG bytes through capture process; configured ROI becomes black; source-size changes invalidate approval                   | BLOCKED     | No OBS/physical camera or Studio Mode Program-versus-Preview test                                                                      |
-| OpenAI image model           | PASS: mock HTTP inspection verifies JPEG data URL, structured output, input counting, `store:false`, no tools                          | BLOCKED     | No key or selected model; no paid call, actual image comprehension or provider billing verified                                        |
+| OpenAI API-key image model   | PASS: mock HTTP inspection verifies JPEG data URL, structured output, input counting, `store:false`, no tools                          | BLOCKED     | No key or selected model; no paid call, actual image comprehension or provider billing verified                                        |
+| ChatGPT subscription model   | PASS: OAuth PKCE/state/encrypted storage fixture and streamed completion/image payload fixture                                         | BLOCKED     | No interactive account consent or live model call; actual plan access and image comprehension unverified                               |
 
 Authentication scopes: YouTube API-key public access or operator-supplied OAuth; CHZZK chat-read and user-information-read for the authorized broadcaster; no SOOP credentials requested. No native chat-write permissions are requested by application flows. See [research/platform-contracts.md](research/platform-contracts.md) for primary sources and [research/soop-official-verification.md](research/soop-official-verification.md) for the separate SOOP evidence.
 
@@ -86,7 +87,7 @@ Final `npm audit`: **0 critical, 0 high, 3 moderate** legacy `parseuri` dependen
 
 Source labels and a permanent mixed-chat disclosure are implemented. No blind-source mode, viewer-count inflation, account creation, participant chat room or native-send feature is provided. Model processing permissions default off; provider review also defaults off. Actual platform/purpose-specific processing and retention review remains **BLOCKED pending the operator's substantive review**. Configuration acknowledgment does not establish legal permission.
 
-No model name or pricing was configured. Real provider calls and cost are therefore **NOT_RUN**, not zero-cost evidence. Monetary estimates remain unavailable until prices and a verification date are supplied. The mock model used synthetic output and zero fixture usage. Failure/cancellation reservations are intentionally conservative.
+No real model was selected or configured. Real provider calls and cost are therefore **NOT_RUN**, not zero-cost evidence. Subscription usage has no local USD estimate; API-key monetary estimates remain unavailable until prices and a verification date are supplied. The mock model used synthetic output and zero fixture usage. Failure/cancellation reservations are intentionally conservative.
 
 Default chat retention is seven days with startup/hourly cleanup; frames and prompts are memory-only. Hidden bodies are removed from stored messages, events contain references instead of historical bodies, and public replay projects current state. Whole-database deletion is implemented; off-application backups, SSD forensic erasure and provider/platform data deletion are outside this application's control.
 
@@ -96,7 +97,7 @@ Default chat retention is seven days with startup/hourly cleanup; frames and pro
 - **BLOCKED:** separate live YouTube gRPC and REST tests with Korean/emoji text, credential expiry, quota and transport fallback.
 - **BLOCKED:** CHZZK own-channel OAuth, real token rotation, permission revocation and fresh-session reconnection.
 - **BLOCKED:** verified SOOP official contract/approval; separate experimental package provenance/terms review and live join/end/reconnect.
-- **BLOCKED:** real image model reacting to distinct visual events, hallucination review, manual moderation rehearsal and price verification.
+- **BLOCKED:** interactive ChatGPT account authorization, real image model reacting to distinct visual events, hallucination review, manual moderation rehearsal and API-key price verification.
 - **NOT_RUN:** long-duration simultaneous three-platform soak, queue pressure, process memory and sustained latency benchmarks.
 - **NOT_RUN:** GitHub Actions workflows. Windows/Linux build/test and Linux browser jobs are supplied but were not run on GitHub here.
 

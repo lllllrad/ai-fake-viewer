@@ -30,6 +30,7 @@ policy:
   reviewReference: ""
   providerReviewed: false
 ai:
+  provider: chatgpt_subscription # or openai_api
   manualApproval: true
   maxCalls: 100
   maxInputTokens: 24000

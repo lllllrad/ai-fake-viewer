@@ -100,6 +100,9 @@ export const configSchema = z
       }),
     ai: z
       .object({
+        provider: z
+          .enum(["chatgpt_subscription", "openai_api"])
+          .default("chatgpt_subscription"),
         manualApproval: z.boolean().default(true),
         maxCalls: z.number().int().min(1).max(10000).default(100),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
@@ -136,6 +139,7 @@ export const configSchema = z
       })
       .strict()
       .default({
+        provider: "chatgpt_subscription",
         manualApproval: true,
         maxCalls: 100,
         maxInputTokens: 24000,
@@ -159,7 +163,13 @@ export const configSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
+    if (c.ai.provider === "chatgpt_subscription" && c.ai.maxUsd !== null)
+      ctx.addIssue({
+        code: "custom",
+        message: "USD budgets apply only to the API-key provider",
+      });
     if (
+      c.ai.provider === "openai_api" &&
       c.ai.maxUsd !== null &&
       (c.ai.inputUsdPerMillion === null ||
         c.ai.outputUsdPerMillion === null ||

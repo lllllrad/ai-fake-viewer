@@ -30,6 +30,8 @@ export class Scheduler {
     public config: Config,
     public model: Model,
     public demo = false,
+    public providerReady: () => boolean = () =>
+      !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
   ) {}
   start() {
     if (this.store.closed()) throw Error("Session is closed");
@@ -37,11 +39,9 @@ export class Scheduler {
       throw Error("Review and confirm fresh masked Program preview first");
     if (
       !this.demo &&
-      (!this.config.policy.providerReviewed ||
-        !process.env.OPENAI_API_KEY ||
-        !process.env.OPENAI_MODEL)
+      (!this.config.policy.providerReviewed || !this.providerReady())
     )
-      throw Error("Provider review, model name and API key required");
+      throw Error("Provider review and model connection required");
     this.stop();
     this.state = "running";
     this.timer = setInterval(() => void this.tick(), 1000);
@@ -102,6 +102,7 @@ export class Scheduler {
     if (persona < 0) return;
     const c = this.config.ai;
     const priced =
+      c.provider === "openai_api" &&
       c.inputUsdPerMillion !== null &&
       c.outputUsdPerMillion !== null &&
       !!c.priceCheckedAt;

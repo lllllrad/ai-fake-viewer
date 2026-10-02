@@ -205,6 +205,9 @@ function Admin() {
   const [preview, setPreview] = useState("");
   const [links, setLinks] = useState<any>();
   const [busy, setBusy] = useState(false);
+  const [chatgptModels, setChatgptModels] = useState<
+    { slug: string; name: string }[]
+  >([]);
   const api = async (path: string, method = "GET") => {
     const r = await fetch(`/api/admin/${path}`, {
       method,
@@ -215,6 +218,36 @@ function Admin() {
       throw Error(b.error);
     }
     return r;
+  };
+  const post = async (path: string, body: unknown) => {
+    const r = await fetch(`/api/admin/${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw Error((await r.json()).error);
+    return r.json();
+  };
+  const loadChatgptModels = async () => {
+    try {
+      setChatgptModels((await (await api("chatgpt/models")).json()).models);
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+  const authorizeChatgpt = async (clientId?: string) => {
+    try {
+      const { url } = await post(
+        "chatgpt/authorize",
+        clientId ? { clientId } : {},
+      );
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      setError(e.message);
+    }
   };
   const refresh = async () => {
     try {
@@ -432,6 +465,95 @@ function Admin() {
                 {status.ai.model} · {status.ai.skips} skipped ·{" "}
                 {status.ai.rejects} rejected
               </p>
+              {status.ai.provider === "chatgpt_subscription" &&
+                !status.demo && (
+                  <div className="pending">
+                    <strong>ChatGPT plan connection</strong>
+                    <p>
+                      {status.chatgpt.accounts.find(
+                        (a: any) => a.clientId === status.chatgpt.active,
+                      )?.email || "No active account"}
+                    </p>
+                    <div className="toolbar">
+                      <button onClick={() => void authorizeChatgpt()}>
+                        Continue with ChatGPT
+                      </button>
+                      <button
+                        className="secondary"
+                        onClick={() => void loadChatgptModels()}
+                      >
+                        Load available models
+                      </button>
+                    </div>
+                    {status.chatgpt.accounts.map((a: any) => (
+                      <div key={a.clientId} className="toolbar">
+                        <span>
+                          {a.email || a.clientId}{" "}
+                          {a.connected ? "· connected" : "· signed out"}
+                        </span>
+                        <button
+                          className="secondary"
+                          onClick={() =>
+                            void post("chatgpt/select-account", {
+                              clientId: a.clientId,
+                            })
+                              .then(refresh)
+                              .catch((e: any) => setError(e.message))
+                          }
+                        >
+                          Use
+                        </button>
+                        <button
+                          className="secondary"
+                          onClick={() => void authorizeChatgpt(a.clientId)}
+                        >
+                          Sign in
+                        </button>
+                      </div>
+                    ))}
+                    {chatgptModels.length > 0 && (
+                      <label>
+                        Model
+                        <select
+                          value={
+                            status.ai.model === "not selected"
+                              ? ""
+                              : status.ai.model
+                          }
+                          onChange={(e) =>
+                            void post("chatgpt/select-model", {
+                              slug: e.target.value,
+                            })
+                              .then(refresh)
+                              .catch((err: any) => setError(err.message))
+                          }
+                        >
+                          <option value="">Select a model</option>
+                          {chatgptModels.map((m) => (
+                            <option key={m.slug} value={m.slug}>
+                              {m.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <p>
+                      <a
+                        href="https://chatgpt.com/settings/usage"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Review ChatGPT plan usage and app access
+                      </a>
+                    </p>
+                    <button
+                      className="secondary"
+                      onClick={() => void action("chatgpt/disconnect")}
+                    >
+                      Disconnect active account
+                    </button>
+                  </div>
+                )}
               <button
                 disabled={busy || status.closed}
                 onClick={() => void action("ai/start")}

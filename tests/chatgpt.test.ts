@@ -1,0 +1,167 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
+import { chatgptModel } from "../packages/model.ts";
+import { configSchema } from "../packages/config.ts";
+const key = "e".repeat(64);
+const response = {
+  access_token: "access",
+  refresh_token: "refresh",
+  id_token: "identity",
+  token_type: "Bearer",
+  expires_in: 3600,
+  scope:
+    "openid profile email offline_access resource.invoke chatgpt.tokens.use.direct",
+};
+test("ChatGPT OAuth uses PKCE, one-time state, verified identity and encrypted storage", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chatgpt-test-"));
+  const path = join(dir, "tokens");
+  const requests: { url: string; body: URLSearchParams }[] = [];
+  const request = (async (url: any, init: any) => {
+    requests.push({ url: String(url), body: new URLSearchParams(init.body) });
+    return Response.json(response);
+  }) as typeof fetch;
+  let validated = 0;
+  const verify = async (_token: string, clientId: string, nonce: string) => {
+    assert.equal(clientId, "oaiapp_fixture");
+    assert(nonce.length > 30);
+    validated++;
+    return { sub: "account-1", email: "user@example.test" };
+  };
+  try {
+    const auth = new ChatgptAuth(key, path, request, verify);
+    const url = new URL(auth.authorizationUrl(3210));
+    assert.equal(url.origin, "https://auth.openai.com");
+    assert.equal(url.searchParams.get("client_id"), "dynamic_agent_client");
+    assert.equal(
+      url.searchParams.get("redirect_uri"),
+      "http://127.0.0.1:3210/oauth/chatgpt/callback",
+    );
+    assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+    assert(
+      url.searchParams.get("scope")?.includes("chatgpt.tokens.use.direct"),
+    );
+    const state = url.searchParams.get("state")!;
+    await assert.rejects(
+      auth.callback({
+        state: "wrong",
+        code: "code",
+        client_id: "oaiapp_fixture",
+      }),
+    );
+    assert.equal(requests.length, 0);
+    const second = new URL(auth.authorizationUrl(3210));
+    await auth.callback({
+      state: second.searchParams.get("state")!,
+      code: "code",
+      client_id: "oaiapp_fixture",
+    });
+    assert.equal(validated, 1);
+    assert.equal(requests[0].body.get("client_id"), "oaiapp_fixture");
+    assert.equal(
+      requests[0].body.get("redirect_uri"),
+      second.searchParams.get("redirect_uri"),
+    );
+    assert(!readFileSync(path).toString().includes("refresh"));
+    assert.equal(
+      new ChatgptAuth(key, path, request, verify).status.accounts[0].email,
+      "user@example.test",
+    );
+    await assert.rejects(
+      auth.callback({ state: second.searchParams.get("state")!, code: "code" }),
+    );
+    const reauth = new URL(auth.authorizationUrl(3210, "oaiapp_fixture"));
+    assert.equal(reauth.searchParams.get("client_id"), "oaiapp_fixture");
+    assert.equal(reauth.searchParams.get("agent_name_hint"), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+test("ChatGPT inference requires completed stream and sends masked image with subscription flags", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chatgpt-model-"));
+  try {
+    const auth = new ChatgptAuth(key, join(dir, "tokens")) as any;
+    auth.data.accounts = [
+      {
+        clientId: "fixture",
+        subject: "s",
+        email: null,
+        accessToken: "access",
+        refreshToken: "refresh",
+        idToken: null,
+        expiresAt: Date.now() + 3600000,
+        earliestRefreshAt: 0,
+        scopes: ["chatgpt.tokens.use.direct"],
+        model: "vision-fixture",
+      },
+    ];
+    auth.data.active = "fixture";
+    const input: any = {
+      frames: [
+        {
+          id: "f",
+          capturedAt: Date.now(),
+          bytes: Buffer.from("image"),
+          hash: "h",
+        },
+      ],
+      messages: [],
+      persona: { name: "test", style: "brief" },
+      description: "fixture",
+    };
+    const decision = {
+      action: "skip",
+      text: null,
+      replyToMessageId: null,
+      evidenceFrameIds: [],
+      evidenceMessageIds: [],
+    };
+    const completed = {
+      type: "response.completed",
+      response: {
+        status: "completed",
+        output: [
+          {
+            type: "message",
+            content: [{ type: "output_text", text: JSON.stringify(decision) }],
+          },
+        ],
+        usage: { input_tokens: 20, output_tokens: 10 },
+      },
+    };
+    let seen: any;
+    const request = (async (_url: any, init: any) => {
+      seen = JSON.parse(init.body);
+      return new Response(`data: ${JSON.stringify(completed)}\n\n`, {
+        headers: { "Content-Type": "text/event-stream" },
+      });
+    }) as typeof fetch;
+    const model = chatgptModel(configSchema.parse({}).ai, auth, request);
+    const result = await model(input, new AbortController().signal);
+    assert.equal(result.decision.action, "skip");
+    assert.equal(seen.store, false);
+    assert.equal(seen.stream, true);
+    assert.equal(seen.max_output_tokens, undefined);
+    assert.equal(
+      seen.input[1].content[1].image_url,
+      "data:image/jpeg;base64,aW1hZ2U=",
+    );
+    const interrupted = chatgptModel(
+      configSchema.parse({}).ai,
+      auth,
+      (async () =>
+        new Response(
+          'data: {"type":"response.output_text.delta"}\n\n',
+        )) as typeof fetch,
+    );
+    await assert.rejects(
+      interrupted(input, new AbortController().signal),
+      /before completion/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
