@@ -34,6 +34,7 @@ async function waitFor(fn: () => boolean) {
 }
 test("A05, A11, A12, A18: authenticated API and two identical public streams", async () => {
   const port = await freePort();
+  const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-api-test-"));
   const c = configSchema.parse({
     port,
     database: ":memory:",
@@ -48,6 +49,10 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
     readerToken: reader,
     encryptionKey,
     startInputs: false,
+    chatgptTokenPath: join(
+      mkdtempSync(join(tmpdir(), "chatgpt-api-test-")),
+      "tokens",
+    ),
   });
   await app.listen({ port, host: "127.0.0.1" });
   const host = `127.0.0.1:${port}`;
@@ -59,6 +64,35 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       (await app.inject({ url: "/api/admin/status", headers })).statusCode,
       401,
     );
+    assert.equal(
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/admin/chatgpt/authorize",
+          headers,
+        })
+      ).statusCode,
+      401,
+    );
+    const chatgptAuthorization = await app.inject({
+      method: "POST",
+      url: "/api/admin/chatgpt/authorize",
+      headers: authHeaders,
+    });
+    assert.equal(chatgptAuthorization.statusCode, 200);
+    const chatgptUrl = new URL(chatgptAuthorization.json().url);
+    assert.equal(chatgptUrl.origin, "https://auth.openai.com");
+    assert.equal(
+      chatgptUrl.searchParams.get("redirect_uri"),
+      `http://127.0.0.1:${port}/oauth/chatgpt/callback`,
+    );
+    assert.equal(
+      (
+        await app.inject({ url: "/api/admin/status", headers: authHeaders })
+      ).json().chatgpt.accounts.length,
+      0,
+    );
+
     assert.equal(
       (
         await app.inject({
@@ -142,6 +176,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
   } finally {
     for (const ws of sockets) ws.terminate();
     await app.close();
+    rmSync(chatgptDir, { recursive: true, force: true });
   }
 });
 test("T04/A19: REST pacing honors upstream interval; read-only outbound methods", async () => {

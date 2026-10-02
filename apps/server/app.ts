@@ -29,6 +29,7 @@ export async function createApp(
     encryptionKey: string;
     startInputs?: boolean;
     persistReaderToken?: (token: string) => void;
+    chatgptTokenPath?: string;
   },
 ) {
   if (
@@ -40,7 +41,10 @@ export async function createApp(
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   const store = new Store(config.database);
   const capture = new Capture(config.capture, !!opts.demo);
-  const chatgpt = new ChatgptAuth(opts.encryptionKey);
+  const chatgpt = new ChatgptAuth(
+    opts.encryptionKey,
+    opts.chatgptTokenPath ?? "data/chatgpt.tokens",
+  );
   const scheduler = new Scheduler(
     store,
     capture,
