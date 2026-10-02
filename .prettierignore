@@ -1,0 +1,9 @@
+.local/
+node_modules/
+dist/
+data/
+.env*
+config.yaml
+package-lock.json
+vendor/
+test-results/

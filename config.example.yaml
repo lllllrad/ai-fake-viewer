@@ -1,0 +1,46 @@
+port: 3210
+database: data/chat.sqlite
+retentionDays: 7
+youtube:
+  enabled: false
+  video: ""
+  transport: grpc
+  restFallback: true
+chzzk:
+  enabled: false
+  redirectUri: http://127.0.0.1:3210/oauth/chzzk/callback
+soop:
+  mode: disabled
+  experimentalConsent: false
+  streamerId: ""
+capture:
+  enabled: false
+  ffmpeg: ffmpeg
+  backend: dshow
+  device: OBS Virtual Camera
+  intervalMs: 3000
+  programConfirmed: false
+  # Normalized rectangles, applied before preview and upload.
+  # Include every chat overlay and any private area in every scene.
+  masks: []
+policy:
+  youtubeAiContextApproved: false
+  chzzkAiContextApproved: false
+  soopAiContextApproved: false
+  reviewReference: ""
+  providerReviewed: false
+ai:
+  manualApproval: true
+  maxCalls: 100
+  maxInputTokens: 24000
+  maxOutputTokens: 500
+  maxUsd: null
+  inputUsdPerMillion: null
+  outputUsdPerMillion: null
+  priceCheckedAt: ""
+  description: A live broadcast. React only to visible events.
+  personas:
+    - name: Orbit · experiment
+      style: Brief, curious Korean spectator.
+    - name: Pebble · experiment
+      style: Playful visual comparisons in short Korean.
