@@ -35,7 +35,7 @@ Edit the generated `config.yaml` and `.env`, then restart with:
 npm start
 ```
 
-Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. The provided `.local` handoff did not include its proposed YAML or environment example, so [config.example.yaml](config.example.yaml) defines the implemented schema. No config fields contain API secrets. Windows PowerShell supports the same npm commands.
+Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. The provided `.local` handoff did not include its proposed YAML or environment example, so [config.example.yaml](config.example.yaml) defines the implemented schema. API keys belong in `.env`; private RTMP read URLs may appear only in ignored local `config.yaml`. Windows PowerShell supports the same npm commands.
 
 ### YouTube: official gRPC and REST
 
@@ -105,7 +105,7 @@ capture:
 
 The example masks the rightmost 30% of the image. Change it for your actual composition. Coordinates are normalized to the entire original image. Include **every** chat overlay (including this application's overlay), credentials and private regions in every scene. Masks are applied before resizing, administrator preview and model upload. Masked images are held only in memory: up to 10 frames / 30 seconds; each request uses at most 3 fresh frames. Images are resized to fit 1280 × 1280.
 
-Open admin, inspect the masked preview and select **Confirm masked Program**. Non-demo AI is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. Ten seconds without a fresh frame pauses AI and requires a manual start. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
+Open admin, inspect the masked preview and select **Confirm masked Program**. Image upload is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. In `ai.visualMode: continuous`, ten seconds without a fresh frame pauses AI and requires a manual start. In `on_request` mode, text-only decisions can continue while unavailable video requests are skipped. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
 
 Capture failures are isolated and retried up to five times with backoff. Confirmation is cleared on failure. For a camera on the same Linux PC, select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
 
@@ -130,7 +130,13 @@ capture:
       height: 1.0
 ```
 
-Use the exact private read URL in your ignored local config; never commit that URL or share it in screenshots. Replace the masks for your actual scene. [FFmpeg can read RTMP](https://mediamtx.org/docs/read/ffmpeg). Confirm a fresh masked preview before starting AI. The setup script prepares credentials but does not start the RTMP service. Physical remote OBS/RTMP operation still needs a live test.
+Use the exact private read URL in your ignored local config; never commit that URL or share it in screenshots. Replace the masks for your actual scene. [FFmpeg can read RTMP](https://mediamtx.org/docs/read/ffmpeg). Confirm a fresh masked preview before allowing AI to inspect video. The setup script prepares credentials but does not start the RTMP service. Physical remote OBS/RTMP operation still needs a live test.
+
+## Groq speech and AI model data review
+
+Set `GROQ_API_KEY` in private `.env`, then configure `audio.enabled: true`, `audio.url` to the private RTMP read URL, and `policy.groqAudioReviewed: true` after reviewing audio sharing. The first RTMP audio track is converted to 10-second, 16 kHz mono WAV chunks and sent to [Groq Whisper transcription](https://console.groq.com/docs/speech-to-text). Near-silent chunks are skipped locally; recent transcripts are held in memory and enter AI context automatically, without being posted as public chat. `audio.maxRequests` caps calls per app process; a restart resets that cap. Groq credentials and live transcription have not been verified here. See [LIVE_SETUP.md](LIVE_SETUP.md) for the exact two-PC setup.
+
+With `ai.visualMode: on_request`, the AI first receives transcript/permitted chat text without images. It can request `inspect`, which causes one additional call with a fresh confirmed masked frame; unavailable frames are skipped. Both calls count against `ai.maxCalls`. `continuous` retains the earlier image-first path.
 
 ## Image model and data review
 
@@ -139,9 +145,9 @@ The default `ai.provider: chatgpt_subscription` uses OpenAI's [Sign in with Chat
 This flow requires a ChatGPT plan and feature availability for your account; authorization and live inference still need your interaction. It is distinct from ordinary API-key billing. ChatGPT subscription requests use account-specific model slugs, `store: false`, `stream: true`, and accept output only after the completion event. The app enforces a persisted call limit and local request/output bounds; exact pre-call input token counting and USD budgets are unavailable for this provider. `ai.maxInputTokens` and `ai.maxOutputTokens` reject a completed response that reports usage above those values but cannot prevent that call. Review usage and app limits in ChatGPT Settings. The selected model must support images and structured output; this remains unverified until a real authorized call succeeds.
 
 For an independently billed API key, set `ai.provider: openai_api`, `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. Choose a model available to your API account that supports image input, Responses structured output and input token counting. The API-key path uses pre-call token counting and can use `ai.maxUsd` when verified prices are configured. Both providers require `policy.providerReviewed: true` after reviewing their handling of uploaded images and chat. `store: false` does not mean all provider logs are disabled.
-Platform text is excluded from model context by default. Enabling any of `youtubeAiContextApproved`, `chzzkAiContextApproved` or `soopAiContextApproved` requires a nonempty `policy.reviewReference` pointing to your substantive review record. These settings record a decision; they do not grant platform permission. Image masks remain required, including when YouTube text processing is disabled. Do not enable a data path the applicable terms do not permit. R03 is only partially available with the conservative defaults.
+Platform text is excluded from model context by default. Enabling any of `youtubeAiContextApproved`, `chzzkAiContextApproved` or `soopAiContextApproved` requires a nonempty `policy.reviewReference` pointing to your substantive review record. These settings record a decision; they do not grant platform permission. Image masks remain required whenever images may be uploaded, including when YouTube text processing is disabled. Do not enable a data path the applicable terms do not permit. R03 is only partially available with the conservative defaults.
 
-The model receives masked JPEGs, bounded recent permitted text, session pseudonyms and one character's style. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. This is not a complete moderation or factuality guarantee. Keep `ai.manualApproval: true` for initial rehearsals. Pending approvals expire after 30 seconds and are invalidated by stopping, hiding evidence or stale input.
+The model receives bounded recent transcripts and permitted text, session pseudonyms and one character's style; it receives masked JPEGs only in continuous mode or after an on-request inspection. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. This is not a complete moderation or factuality guarantee. Keep `ai.manualApproval: true` for initial rehearsals. Pending approvals expire after 30 seconds and are invalidated by stopping, hiding evidence or stale input.
 
 Calls are limited per session, persisted across restarts, with one generation at a time, at least 20 seconds between attempts and messages, at least 45 seconds per character, and at most three messages per minute. Busy human chat suppresses generation. Synthetic message arrival alone does not trigger another response. Unchanged frames can skip inference.
 
@@ -172,7 +178,7 @@ Use **Delete all local data** to stop receivers and AI, clear chat, identity, hi
 - YouTube `waiting_live`: verify the broadcast is live, chat is enabled and your credentials can access it. `quota_blocked` requires quota review; `ended` requires a new live video.
 - CHZZK authorization cannot start in demo mode or before `chzzk.enabled: true` and both Client ID/Secret are set. Register an app with chat-read and user-info scopes and an exact local callback; restart in live mode. `permission_blocked`: verify own-channel login and scopes, then reauthorize. Silence during an active subscription is normal.
 - Capture: verify FFmpeg/device name, OBS camera startup, Program selection and masks. The preview is already masked. Capture stderr is not exposed because it may contain local paths.
-- AI: check preview confirmation, frame freshness, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
+- AI: check the selected visual mode, Groq transcript status, preview confirmation when video is requested, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
 
 ```sh
 npm run check

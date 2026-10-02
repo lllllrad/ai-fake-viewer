@@ -27,15 +27,23 @@ capture:
   # Normalized rectangles, applied before preview and upload.
   # Include every chat overlay and any private area in every scene.
   masks: []
+audio:
+  enabled: false
+  ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
+  url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
+  chunkSeconds: 10
+  maxRequests: 360
 policy:
   youtubeAiContextApproved: false
   chzzkAiContextApproved: false
   soopAiContextApproved: false
   reviewReference: ""
   providerReviewed: false
+  groqAudioReviewed: false
 ai:
   provider: chatgpt_subscription # or openai_api
   manualApproval: true
+  visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   maxCalls: 100
   maxInputTokens: 24000
   maxOutputTokens: 500

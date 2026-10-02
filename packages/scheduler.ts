@@ -1,5 +1,6 @@
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
+import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import { validateDecision, type Model, type ModelInput } from "./model.ts";
 import type { Decision } from "./contracts.ts";
@@ -32,10 +33,14 @@ export class Scheduler {
     public demo = false,
     public providerReady: () => boolean = () =>
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
+    public transcriber?: Transcriber,
   ) {}
   start() {
     if (this.store.closed()) throw Error("Session is closed");
-    if (!this.capture.confirmed || !this.capture.recent().length)
+    if (
+      this.config.ai.visualMode === "continuous" &&
+      (!this.capture.confirmed || !this.capture.recent().length)
+    )
       throw Error("Review and confirm fresh masked Program preview first");
     if (
       !this.demo &&
@@ -66,7 +71,10 @@ export class Scheduler {
   }
   async tick(now = Date.now()) {
     if (this.state !== "running") return;
-    if (!this.capture.confirmed || !this.capture.recent().length) {
+    if (
+      this.config.ai.visualMode === "continuous" &&
+      (!this.capture.confirmed || !this.capture.recent().length)
+    ) {
       this.stop("paused_input_stale");
       return;
     }
@@ -93,31 +101,38 @@ export class Scheduler {
       this.speechTimes.filter((t) => t > now - 60000).length >= 3
     )
       return;
-    const frames = this.capture.recent();
-    const hash = frames.at(-1)!.hash;
-    if (hash === this.lastHash && externalSeq === this.lastExternal) return;
+    const transcripts = this.transcriber?.recent() ?? [];
+    const allowedExternal = external.filter(
+      (m) =>
+        m.displayTime > now - 60000 && this.allowed().includes(m.attribution),
+    );
+    const triggerMessage = allowedExternal.at(-1)?.id ?? "";
+    const frames =
+      this.config.ai.visualMode === "continuous" ? this.capture.recent() : [];
+    const hash =
+      this.config.ai.visualMode === "continuous"
+        ? frames.at(-1)!.hash
+        : `${transcripts.at(-1)?.id ?? ""}:${triggerMessage}`;
+    if (
+      this.config.ai.visualMode === "on_request" &&
+      !transcripts.length &&
+      !triggerMessage
+    )
+      return;
+    if (
+      hash === this.lastHash &&
+      (this.config.ai.visualMode === "on_request" ||
+        externalSeq === this.lastExternal)
+    )
+      return;
     const persona = this.config.ai.personas.findIndex(
       (_, i) => now - (this.personaTimes[i] ?? 0) >= 45000,
     );
     if (persona < 0) return;
     const c = this.config.ai;
-    const priced =
-      c.provider === "openai_api" &&
-      c.inputUsdPerMillion !== null &&
-      c.outputUsdPerMillion !== null &&
-      !!c.priceCheckedAt;
-    const reserve = priced
-      ? (c.maxInputTokens * c.inputUsdPerMillion! +
-          c.maxOutputTokens * c.outputUsdPerMillion!) /
-        1e6
-      : null;
-    const usageId = this.store.reserve(c.maxCalls, c.maxUsd, reserve);
-    if (!usageId) {
-      this.stop("budget_exhausted");
-      return;
-    }
-    const input: ModelInput = {
+    let input: ModelInput = {
       frames,
+      transcripts,
       messages,
       persona: c.personas[persona],
       description: c.description,
@@ -133,33 +148,46 @@ export class Scheduler {
     this.lastHash = hash;
     this.lastExternal = externalSeq;
     try {
-      const r = await this.model(input, signal);
-      let cost: number | null = null;
-      if (
-        priced &&
-        Number.isFinite(r.inputTokens) &&
-        Number.isFinite(r.outputTokens)
-      )
-        cost =
-          (r.inputTokens! * c.inputUsdPerMillion! +
-            r.outputTokens! * c.outputUsdPerMillion!) /
-          1e6;
-      this.store.settle(usageId, r.inputTokens, r.outputTokens, cost);
+      let r = await this.callModel(input, signal);
       if (
         generation !== this.generation ||
         signal.aborted ||
         this.state !== "running"
       )
         return;
-      const d = validateDecision(r.decision, input);
+      let d = validateDecision(r.decision, input);
+      if (d.action === "inspect") {
+        if (
+          c.visualMode !== "on_request" ||
+          !this.capture.confirmed ||
+          !this.capture.recent().length
+        ) {
+          this.skips++;
+          return;
+        }
+        input = { ...input, frames: this.capture.recent() };
+        r = await this.callModel(input, signal);
+        if (
+          generation !== this.generation ||
+          signal.aborted ||
+          this.state !== "running"
+        )
+          return;
+        d = validateDecision(r.decision, input);
+      }
+      if (d.action === "inspect") {
+        this.skips++;
+        return;
+      }
       if (d.action === "skip") {
         this.skips++;
         return;
       }
       if (
         this.store.closed() ||
-        !this.capture.confirmed ||
-        !this.capture.recent().length ||
+        (input.frames.length > 0 &&
+          (!this.capture.confirmed || !this.capture.recent().length)) ||
+        d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)) ||
         d.evidenceMessageIds.some((id) => !this.store.publicMessage(id)) ||
         (d.replyToMessageId && !this.store.publicMessage(d.replyToMessageId))
       )
@@ -170,19 +198,53 @@ export class Scheduler {
         persona,
         expires: Math.min(
           Date.now() + 30000,
-          input.frames.at(-1)!.capturedAt + 30000,
+          input.frames.length
+            ? input.frames.at(-1)!.capturedAt + 30000
+            : Date.now() + 30000,
         ),
         generation,
       };
       if (!c.manualApproval) this.approve();
-    } catch {
+    } catch (error) {
       if (generation === this.generation) {
         this.rejects++;
-        this.stop("model_error");
+        this.stop(
+          error instanceof Error && error.message === "budget_exhausted"
+            ? "budget_exhausted"
+            : "model_error",
+        );
       }
     } finally {
       this.busy = false;
     }
+  }
+  async callModel(input: ModelInput, signal: AbortSignal) {
+    const c = this.config.ai;
+    const priced =
+      c.provider === "openai_api" &&
+      c.inputUsdPerMillion !== null &&
+      c.outputUsdPerMillion !== null &&
+      !!c.priceCheckedAt;
+    const reserve = priced
+      ? (c.maxInputTokens * c.inputUsdPerMillion! +
+          c.maxOutputTokens * c.outputUsdPerMillion!) /
+        1e6
+      : null;
+    const usageId = this.store.reserve(c.maxCalls, c.maxUsd, reserve);
+    if (!usageId) throw Error("budget_exhausted");
+    const result = await this.model(input, signal);
+    let cost: number | null = null;
+    if (
+      priced &&
+      Number.isFinite(result.inputTokens) &&
+      Number.isFinite(result.outputTokens)
+    )
+      cost =
+        (result.inputTokens! * c.inputUsdPerMillion! +
+          result.outputTokens! * c.outputUsdPerMillion!) /
+        1e6;
+    this.store.settle(usageId, result.inputTokens, result.outputTokens, cost);
+    return result;
   }
   approve() {
     const p = this.pending;
@@ -193,8 +255,9 @@ export class Scheduler {
       p.expires < Date.now() ||
       this.state !== "running" ||
       this.store.closed() ||
-      !this.capture.confirmed ||
-      !this.capture.recent().length
+      (p.input.frames.length > 0 &&
+        (!this.capture.confirmed || !this.capture.recent().length)) ||
+      p.decision.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id))
     )
       return;
     const d = p.decision;

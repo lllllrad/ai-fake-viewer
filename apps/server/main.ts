@@ -6,27 +6,33 @@ if (existsSync(".env")) loadEnvFile(".env");
 try {
   const demo = process.argv.includes("--demo");
   const config = loadConfig();
-  if (demo) config.database = "data/demo.sqlite";
-  const { app, store, supervisor, capture } = await createApp(config, {
-    startInputs: false,
-    demo,
-    adminToken: process.env.ADMIN_TOKEN ?? "",
-    readerToken: process.env.READER_TOKEN ?? "",
-    encryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
-    persistReaderToken: (token) => {
-      const text = readFileSync(".env", "utf8");
-      const lines = text
-        .split("\n")
-        .filter((line) => !line.startsWith("READER_TOKEN="));
-      writeFileSync(
-        ".env.tmp",
-        lines.join("\n") + "\nREADER_TOKEN=" + token + "\n",
-        { mode: 0o600 },
-      );
-      renameSync(".env.tmp", ".env");
-      process.env.READER_TOKEN = token;
+  if (demo) {
+    config.database = "data/demo.sqlite";
+    config.ai.visualMode = "continuous";
+  }
+  const { app, store, supervisor, capture, transcriber } = await createApp(
+    config,
+    {
+      startInputs: false,
+      demo,
+      adminToken: process.env.ADMIN_TOKEN ?? "",
+      readerToken: process.env.READER_TOKEN ?? "",
+      encryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
+      persistReaderToken: (token) => {
+        const text = readFileSync(".env", "utf8");
+        const lines = text
+          .split("\n")
+          .filter((line) => !line.startsWith("READER_TOKEN="));
+        writeFileSync(
+          ".env.tmp",
+          lines.join("\n") + "\nREADER_TOKEN=" + token + "\n",
+          { mode: 0o600 },
+        );
+        renameSync(".env.tmp", ".env");
+        process.env.READER_TOKEN = token;
+      },
     },
-  });
+  );
   await app
     .listen({ host: config.network.bindHost, port: config.port })
     .catch(async (error) => {
@@ -36,6 +42,7 @@ try {
   if (!store.closed()) {
     supervisor.start();
     capture.start();
+    if (!demo) transcriber.start();
   }
   console.log(
     `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — credentials and Program input required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,

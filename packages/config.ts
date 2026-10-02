@@ -93,6 +93,22 @@ export const configSchema = z
         programConfirmed: false,
         masks: [],
       }),
+    audio: z
+      .object({
+        enabled: z.boolean().default(false),
+        ffmpeg: z.string().default("ffmpeg"),
+        url: z.string().max(1024).default(""),
+        chunkSeconds: z.number().int().min(10).max(30).default(10),
+        maxRequests: z.number().int().min(1).max(10000).default(360),
+      })
+      .strict()
+      .default({
+        enabled: false,
+        ffmpeg: "ffmpeg",
+        url: "",
+        chunkSeconds: 10,
+        maxRequests: 360,
+      }),
     policy: z
       .object({
         youtubeAiContextApproved: z.boolean().default(false),
@@ -100,6 +116,7 @@ export const configSchema = z
         soopAiContextApproved: z.boolean().default(false),
         reviewReference: z.string().max(1000).default(""),
         providerReviewed: z.boolean().default(false),
+        groqAudioReviewed: z.boolean().default(false),
       })
       .strict()
       .default({
@@ -108,6 +125,7 @@ export const configSchema = z
         soopAiContextApproved: false,
         reviewReference: "",
         providerReviewed: false,
+        groqAudioReviewed: false,
       }),
     ai: z
       .object({
@@ -115,6 +133,7 @@ export const configSchema = z
           .enum(["chatgpt_subscription", "openai_api"])
           .default("chatgpt_subscription"),
         manualApproval: z.boolean().default(true),
+        visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
         maxOutputTokens: z.number().int().min(200).max(2000).default(500),
@@ -152,6 +171,7 @@ export const configSchema = z
       .default({
         provider: "chatgpt_subscription",
         manualApproval: true,
+        visualMode: "continuous",
         maxCalls: 100,
         maxInputTokens: 24000,
         maxOutputTokens: 500,
@@ -196,6 +216,26 @@ export const configSchema = z
           path: ["network", "publicBaseUrl"],
           message:
             "LAN mode requires an HTTP base URL with this port and a non-loopback host",
+        });
+    }
+    if (c.audio.enabled) {
+      let valid = false;
+      try {
+        const url = new URL(c.audio.url);
+        valid =
+          ["rtmp:", "rtmps:"].includes(url.protocol) &&
+          !!url.hostname &&
+          !url.username &&
+          !url.password;
+      } catch {
+        /* invalid URL */
+      }
+      if (!valid)
+        ctx.addIssue({
+          code: "custom",
+          path: ["audio", "url"],
+          message:
+            "Audio transcription requires an RTMP URL without authority credentials",
         });
     }
     if (c.capture.backend === "rtmp") {

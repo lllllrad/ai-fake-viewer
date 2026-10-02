@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
+import { Transcriber } from "../../packages/transcription.ts";
 import { Scheduler } from "../../packages/scheduler.ts";
 import { mockModel, openaiModel, chatgptModel } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
@@ -41,6 +42,10 @@ export async function createApp(
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   const store = new Store(config.database);
   const capture = new Capture(config.capture, !!opts.demo);
+  const transcriber = new Transcriber(
+    config.audio,
+    config.policy.groqAudioReviewed,
+  );
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
@@ -59,6 +64,7 @@ export async function createApp(
       config.ai.provider === "chatgpt_subscription"
         ? !!chatgpt.active?.refreshToken && !!chatgpt.active?.model
         : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
+    transcriber,
   );
   const auth = new ChzzkAuth(opts.encryptionKey);
   const supervisor = new Supervisor(config, store, auth, !!opts.demo);
@@ -232,6 +238,14 @@ export async function createApp(
     sessionId: store.sessionId,
     closed: store.closed(),
     connectors: supervisor.states,
+    audio: {
+      state: transcriber.state,
+      requests: transcriber.requests,
+      maxRequests: config.audio.maxRequests,
+      latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
+      transcriptCount: transcriber.recent().length,
+      latestText: transcriber.recent().at(-1)?.text ?? null,
+    },
     capture: {
       state: capture.state,
       confirmed: capture.confirmed,
@@ -260,6 +274,7 @@ export async function createApp(
           : "configured_prices",
       maxCalls: config.ai.maxCalls,
       provider: config.ai.provider,
+      visualMode: config.ai.visualMode,
       model: opts.demo
         ? "mock"
         : config.ai.provider === "chatgpt_subscription"
@@ -284,6 +299,11 @@ export async function createApp(
       soop: {
         mode: config.soop.mode,
         streamerConfigured: !!config.soop.streamerId,
+      },
+      audio: {
+        enabled: config.audio.enabled,
+        credentialsConfigured: !!process.env.GROQ_API_KEY,
+        reviewed: config.policy.groqAudioReviewed,
       },
       capture: {
         enabled: config.capture.enabled,
@@ -374,6 +394,7 @@ export async function createApp(
     scheduler.stop();
     await supervisor.stop();
     store.closeSession();
+    transcriber.stop();
     return { ok: true };
   });
   app.post("/api/admin/session/new", async () => {
@@ -381,6 +402,7 @@ export async function createApp(
     await supervisor.stop();
     store.newSession();
     supervisor.start();
+    transcriber.start();
     return { ok: true };
   });
   app.post("/api/admin/data/delete", async () => {
@@ -388,6 +410,16 @@ export async function createApp(
     await supervisor.stop();
     store.deleteAll();
     capture.stop();
+    transcriber.stop();
+    return { ok: true };
+  });
+  app.post("/api/admin/audio/start", async () => {
+    if (store.closed()) throw Error("Session closed");
+    transcriber.start();
+    return { ok: true };
+  });
+  app.post("/api/admin/audio/stop", async () => {
+    transcriber.stop();
     return { ok: true };
   });
   app.post("/api/admin/connectors/start", async () => {
@@ -507,12 +539,14 @@ export async function createApp(
     scheduler.stop();
     await supervisor.stop();
     capture.stop();
+    transcriber.stop();
     for (const s of sockets) s.close();
     store.close();
   });
   if (opts.startInputs !== false && !store.closed()) {
     supervisor.start();
     capture.start();
+    if (!opts.demo) transcriber.start();
   }
-  return { app, store, capture, scheduler, supervisor };
+  return { app, store, capture, scheduler, supervisor, transcriber };
 }

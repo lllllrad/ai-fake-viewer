@@ -396,6 +396,15 @@ function Admin() {
                     : "add streamer ID"}
               </p>
               <p>
+                Groq speech:{" "}
+                {status.setup.audio.enabled
+                  ? status.setup.audio.credentialsConfigured &&
+                    status.setup.audio.reviewed
+                    ? "ready to transcribe"
+                    : "add GROQ_API_KEY and review audio sharing"
+                  : "disabled in config.yaml"}
+              </p>
+              <p>
                 Program camera:{" "}
                 {status.setup.capture.enabled
                   ? status.setup.capture.maskConfigured
@@ -545,6 +554,33 @@ function Admin() {
             </section>
             <section className="card">
               <div className="section-title">
+                <h2>Groq speech transcription</h2>
+                <span className="status">{status.audio.state}</span>
+              </div>
+              <p>
+                {status.audio.requests} / {status.audio.maxRequests} requests
+                this process
+              </p>
+              <p>{status.audio.latestText || "No recent speech transcript"}</p>
+              <p className="hint">
+                Transcripts stay in memory and enter AI context automatically.
+                Near-silent chunks are skipped. Configure the RTMP audio URL,
+                Groq API key and audio review locally.
+              </p>
+              <div className="toolbar">
+                <button onClick={() => void action("audio/start")}>
+                  Start audio
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => void action("audio/stop")}
+                >
+                  Stop audio
+                </button>
+              </div>
+            </section>
+            <section className="card">
+              <div className="section-title">
                 <h2>AI characters</h2>
                 <span className="status">{status.ai.state}</span>
               </div>
@@ -558,8 +594,11 @@ function Admin() {
                   : `Estimated / reserved: $${status.ai.usage.reservedUsd.toFixed(4)}`}
               </p>
               <p>
-                {status.ai.model} · {status.ai.skips} skipped ·{" "}
-                {status.ai.rejects} rejected
+                {status.ai.model} ·{" "}
+                {status.ai.visualMode === "on_request"
+                  ? "text first; AI requests video when needed"
+                  : "continuous video"}{" "}
+                · {status.ai.skips} skipped · {status.ai.rejects} rejected
               </p>
               {status.ai.provider === "chatgpt_subscription" &&
                 !status.demo && (
@@ -657,8 +696,10 @@ function Admin() {
                 Start AI
               </button>
               <p className="hint">
-                AI always starts manually. A fresh, confirmed masked frame is
-                required. Receivers continue when AI stops.
+                AI always starts manually. In on-request mode, transcription or
+                permitted chat starts a text-only decision; a fresh, confirmed
+                masked frame is sent only if AI requests visual inspection.
+                Receivers and transcription continue when AI stops.
               </p>
               {status.ai.pending && (
                 <div className="pending">
@@ -689,6 +730,7 @@ function Admin() {
                 </p>
                 <p>
                   Provider review: {String(status.policy.providerReviewed)}.
+                  Groq audio review: {String(status.policy.groqAudioReviewed)}.
                   Record the applicable terms review in config.yaml; operator
                   consent alone does not establish platform permission.
                 </p>

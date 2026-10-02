@@ -2,7 +2,7 @@
 
 This runbook covers two Linux PCs on the same private LAN: one runs this application, and the other runs OBS Studio with its web overlay. Follow [README.md](README.md) for design details and [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for tested behavior and remaining live checks.
 
-The OBS Browser Source only **displays chat**. For AI to see the broadcast, OBS must also send its Program video to the app PC's RTMP server. If OBS already streams to YouTube or CHZZK, keep that destination and arrange a second output or relay for this RTMP feed.
+The OBS Browser Source only **displays chat**. For AI to transcribe speech or inspect video, OBS must also send Program audio/video to the app PC's RTMP server. If OBS already streams to YouTube or CHZZK, keep that destination and arrange a second output or relay for this RTMP feed.
 
 ## 1. Prepare the app PC
 
@@ -42,7 +42,7 @@ Open `data/rtmp-urls.txt` **locally** and copy `OBS_PUBLISH_URL` privately to th
 - If OBS has no other stream destination, set **Settings → Stream → Service: Custom** with `OBS_PUBLISH_URL` as the Server and an empty Stream Key, then select **Start Streaming**. This is the arrangement in [MediaMTX's OBS publishing instructions](https://mediamtx.org/docs/publish/obs-studio).
 - If OBS already streams to a public platform, keep that primary Stream setting. One built-in secondary-output route is **Settings → Output → Output Mode: Advanced → Recording → Type: Custom Output (FFmpeg) → FFmpeg Output Type: Output to URL**. Set the full `OBS_PUBLISH_URL` as the URL, choose `flv` as container and compatible H.264 video/AAC audio encoders, then use **Start Recording** to start this secondary RTMP output. In this mode that button sends to a URL rather than saving a recording; it can use an extra encoder and prevents normal simultaneous file recording through the same Recording output. Verify these controls and CPU headroom in your installed OBS version before a live broadcast. The [OBS forum's second-stream guide](https://obsproject.com/forum/resources/stream-to-2-destinations-simultaneously-with-obs-without-nginx.788/) describes this route. A compatible multiple-RTMP-output plugin is another option, but plugin compatibility must be checked against your OBS version.
 
-Verify the transmitted image is the intended Program scene. An output that goes only to a public platform does not feed this app. If you use OBS Studio Mode, Preview changes must not enter the RTMP Program output until transition.
+Verify the transmitted image and audio track are the intended Program output. An output that goes only to a public platform does not feed this app. If you use OBS Studio Mode, Preview changes must not enter the RTMP Program output until transition.
 
 In the app PC's ignored `config.yaml`, set `capture.url` to the exact `APP_READ_URL` from the private file. Quote the value because it contains `&`. Configure capture like this, with masks adjusted to the **actual** scene:
 
@@ -62,9 +62,26 @@ capture:
       height: 1.0
 ```
 
-The example blacks out the rightmost 30% of the source frame. Change or add normalized rectangles to cover every on-screen chat area and private region in every scene; do not assume the example fits your layout. `programConfirmed: true` records your physical Program-source check, while **Confirm masked Program** in admin is a separate runtime preview approval. Stop AI and review the mask again after changing scenes or composition. Capture can be left disabled until OBS video is publishing. The RTMP server being online alone does not produce frames.
+The example blacks out the rightmost 30% of the source frame. In `ai.visualMode: on_request`, capture keeps only a short masked local frame buffer; the AI provider receives an image only after the model explicitly requests `inspect`. Change or add normalized rectangles to cover every on-screen chat area and private region in every scene; do not assume the example fits your layout. `programConfirmed: true` records your physical Program-source check, while **Confirm masked Program** in admin is a separate runtime preview approval. Stop AI and review the mask again after changing scenes or composition. Capture can be left disabled until OBS video is publishing. The RTMP server being online alone does not produce frames.
 
-## 3. Connect real chat sources
+## 3. Enable automatic Groq Whisper transcription
+
+Create a Groq API key in your own Groq account and put it in the ignored local `.env` as `GROQ_API_KEY=...`. This key is separate from ChatGPT or an OpenAI API key. Review Groq's handling of broadcast audio, then set `policy.groqAudioReviewed: true`. Configure the first audio track of the same private RTMP stream using the exact `APP_READ_URL` from `data/rtmp-urls.txt`:
+
+```yaml
+audio:
+  enabled: true
+  ffmpeg: scripts/ffmpeg-docker.sh
+  url: "PASTE_PRIVATE_APP_READ_URL_HERE"
+  chunkSeconds: 10
+  maxRequests: 360
+policy:
+  groqAudioReviewed: true
+```
+
+Merge these fields into the existing sections of `config.yaml`; do not replace the rest of the file. After restarting `npm start`, audio begins automatically. The admin **Groq speech transcription** card shows `listening` after audio arrives, the latest transcript, and request usage. Near-silent chunks are skipped locally. Spoken chunks are sent as 16 kHz mono WAV to Groq's [`whisper-large-v3-turbo` transcription endpoint](https://console.groq.com/docs/speech-to-text); transcripts remain in memory for up to two minutes and do not appear as viewer chat. A request in progress causes newer chunks to be dropped rather than queued. `maxRequests` is a per-process cap, so a restart resets it; inspect Groq usage for billing and account limits. Use **Stop audio** to halt uploads without stopping chat receivers or AI. If `config_required`, check the key; if `review_required`, complete the audio review; if `provider_error`, inspect the Groq account/key and service status. No live Groq request can be verified until you add your key.
+
+## 4. Connect real chat sources
 
 ### CHZZK
 
@@ -82,16 +99,16 @@ Obtain a YouTube Data API key for your project, or an appropriately authorized a
 
 SOOP's official integration is not ready for live acceptance. Leave `soop.mode: disabled` unless you separately review the experimental path described in [README.md](README.md).
 
-## 4. Connect an image-capable AI model
+## 5. Connect an AI model
 
 Choose **one** provider in `config.yaml`:
 
 - For `ai.provider: chatgpt_subscription` (the current default), open admin on the app PC and select **Continue with ChatGPT**. Complete account consent in that browser, return to admin, select **Load available models**, then choose an image-capable model that supports the required structured response. This uses the account's available [ChatGPT sign-in flow](https://developers.openai.com/siwc/token-sharing-open-source/sign-in); it does not reuse Codex login and does not require an OpenAI API key. Actual account eligibility and a real image response must be checked with your account.
 - For `ai.provider: openai_api`, put `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. Choose a model available to that API account with image input, structured Responses output and token counting. This path uses API billing; review its limits and pricing before paid calls.
 
-Review what masked frames and permitted chat text may be sent to the provider, then set `policy.providerReviewed: true` in `config.yaml` and restart. Keep `ai.manualApproval: true` for the first live rehearsals. Platform chat is excluded from model context by default; set a platform's `*AiContextApproved` flag only after a separate applicable review and record `policy.reviewReference`. These flags do not grant platform permission. A working chat receiver does not require its AI-context flag.
+Review what transcription text, masked frames and permitted chat text may be sent to the AI provider, then set `policy.providerReviewed: true` in `config.yaml` and restart. Keep `ai.manualApproval: true` for the first live rehearsals. Platform chat is excluded from model context by default; set a platform's `*AiContextApproved` flag only after a separate applicable review and record `policy.reviewReference`. These flags do not grant platform permission. A working chat receiver does not require its AI-context flag.
 
-## 5. Start and verify a live session
+## 6. Start and verify a live session
 
 From the repository root on the app PC, start one server process:
 
@@ -101,17 +118,19 @@ npm start
 
 Keep that process running. Verify `node --version` reports Node 24 before starting. For a manually supervised terminal that survives SSH logout, start `tmux new -s mixed-chat`, run the start command inside it, detach with Ctrl+B then D, and return with `tmux attach -t mixed-chat`. Unlike the RTMP container, the app process does not automatically restart after reboot; start it again or install a service manager before unattended use. If another instance holds port 3210, stop it rather than running demo and live together. Open `http://127.0.0.1:3210/admin` on the app PC and sign in once with `ADMIN_TOKEN` from local `.env`; the session survives page reloads for up to seven days. The **Live setup** card should show each configured prerequisite, and the admin page must not show the demo-mode notice. The authenticated `/api/admin/status` response has `demo: false` when checked separately.
 
+Set `ai.visualMode: on_request` in `config.yaml` for text-first operation. A transcript or permitted human chat can trigger an AI decision. The first model call has **no image**; the model may answer from text, skip, or ask to `inspect`. Only that request starts a second model call containing a fresh confirmed masked frame. If a frame is unavailable, the inspection is skipped; speech-only replies can still work. An inspection consumes a second AI call and counts twice against `ai.maxCalls`. `continuous` retains the original image-first behavior.
+
 Use this order for the first rehearsal:
 
 1. Authorize CHZZK and ChatGPT on the app PC, if those sources/providers are selected. Start receivers and confirm real messages arrive under their real platform labels. No platform should show `demo_fixture`.
-2. Start the OBS RTMP output. Select **Start capture** if needed, wait for fresh Program frames, inspect the **masked** admin preview, and select **Confirm masked Program**. Do not start AI if any chat or private region remains visible in the preview.
+2. Start the OBS RTMP output with an audio track. Confirm **Groq speech transcription** shows fresh words after speech. If AI should be allowed to inspect video, select **Start capture** if needed, wait for fresh Program frames, inspect the **masked** preview, and select **Confirm masked Program**. Without a confirmed preview, visual requests are skipped; speech-only decisions continue.
 3. Select **Reader & OBS links**. On the OBS PC, create a Browser Source with the private `overlay` link including its `#` fragment; the initial suggested size is 600 × 900 with a transparent background. The `reader` link is for a separate read-only view. These links contain access tokens; copy them privately and update OBS after rotating the reader token.
-4. Select **Start AI** only after capture is receiving fresh frames, the model is connected, policy review is recorded and the preview is confirmed. With manual approval on, inspect each pending response and select **Publish locally**. AI messages appear only in this app's reader/overlay, not as native CHZZK or YouTube chat posts.
+4. Select **Start AI** after transcription or permitted chat is available, the model is connected and provider review is recorded. For visual inspection, capture must also receive fresh masked frames and the preview must be confirmed. With manual approval on, inspect each pending response and select **Publish locally**. AI messages appear only in this app's reader/overlay, not as native CHZZK or YouTube chat posts.
 5. Verify the OBS Browser Source shows the same real messages as the reader, Korean text displays correctly, a visual change in Program yields fresh masked frames, and **Stop AI now** halts AI while human chat continues.
 
-If OBS says it cannot access the channel or stream key, first check that its Server field contains the full `OBS_PUBLISH_URL` with `user=publisher` and its Stream Key is empty. Check `docker logs --tail 30 mixed-chat-rtmp`: an authentication failure means the supplied role or password is wrong; no new connection suggests an address, port or firewall problem. If AI reports stale frames or capture fails, inspect OBS output, the RTMP container and the private read URL, then restart capture, review the preview and start AI manually. An unchanged but fresh still image is acceptable; a missing frame is not. An `Action unavailable` message after setup should be investigated from the **Live setup** card and the relevant status instead of switching to demo mode.
+If OBS says it cannot access the channel or stream key, first check that its Server field contains the full `OBS_PUBLISH_URL` with `user=publisher` and its Stream Key is empty. Check `docker logs --tail 30 mixed-chat-rtmp`: an authentication failure means the supplied role or password is wrong; no new connection suggests an address, port or firewall problem. If audio has no transcripts, check that OBS sends its intended audio track and that the RTMP server receives it. If a visual request has no fresh frame, inspect OBS output, capture status and the private read URL, then restart capture and review the preview. An unchanged but fresh still image is acceptable; a missing frame only prevents visual inspection in on-request mode. An `Action unavailable` message after setup should be investigated from the **Live setup** card and the relevant status instead of switching to demo mode.
 
-## 6. Stop, recover and protect access
+## 7. Stop, recover and protect access
 
 In admin, use **Stop AI now**, **Stop receivers** and **Stop capture** for a controlled rehearsal end; then stop `npm start` with Ctrl+C. Stop the RTMP service with `docker stop mixed-chat-rtmp` when you do not need it; resume with `docker start mixed-chat-rtmp`. `docker logs --tail 50 mixed-chat-rtmp` shows recent RTMP service errors. If CHZZK authorization is revoked, reauthorize on the app PC. If the app-PC LAN IP changes, update both its public link origin and the RTMP container binding; the existing container cannot change its published bind address in place.
 
