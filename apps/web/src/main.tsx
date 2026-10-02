@@ -7,9 +7,11 @@ const disclosure =
 function TokenForm({
   title,
   onSubmit,
+  error,
 }: {
   title: string;
   onSubmit: (t: string) => void;
+  error?: string;
 }) {
   const [token, setToken] = useState("");
   return (
@@ -35,6 +37,11 @@ function TokenForm({
         </label>
         <button>Connect</button>
       </form>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
     </main>
   );
 }
@@ -199,7 +206,9 @@ function PublicChat() {
   );
 }
 function Admin() {
-  const [token, setToken] = useState("");
+  const [session, setSession] = useState<
+    "checking" | "signed_in" | "signed_out"
+  >("checking");
   const [status, setStatus] = useState<any>();
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
@@ -211,7 +220,7 @@ function Admin() {
   const api = async (path: string, method = "GET") => {
     const r = await fetch(`/api/admin/${path}`, {
       method,
-      headers: { Authorization: `Bearer ${token}` },
+      credentials: "same-origin",
     });
     if (!r.ok) {
       const b = await r.json();
@@ -222,10 +231,8 @@ function Admin() {
   const post = async (path: string, body: unknown) => {
     const r = await fetch(`/api/admin/${path}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw Error((await r.json()).error);
@@ -254,17 +261,28 @@ function Admin() {
       const r = await api("status");
       setStatus(await r.json());
     } catch (e: any) {
-      setError(e.message);
+      if (e.message === "Administrator token required") {
+        setStatus(undefined);
+        setSession("signed_out");
+      } else setError(e.message);
     }
   };
   useEffect(() => {
-    if (!token) return;
+    void api("status")
+      .then(async (r) => {
+        setStatus(await r.json());
+        setSession("signed_in");
+      })
+      .catch(() => setSession("signed_out"));
+  }, []);
+  useEffect(() => {
+    if (session !== "signed_in") return;
     void refresh();
     const timer = setInterval(() => void refresh(), 2000);
     return () => clearInterval(timer);
-  }, [token]);
+  }, [session]);
   useEffect(() => {
-    if (!token || !status?.capture.lastFrameAt) return;
+    if (session !== "signed_in" || !status?.capture.lastFrameAt) return;
     let cancelled = false,
       url = "";
     void api("preview")
@@ -279,7 +297,7 @@ function Admin() {
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [token, status?.capture.lastFrameAt]);
+  }, [session, status?.capture.lastFrameAt]);
   const action = async (path: string) => {
     setBusy(true);
     setError("");
@@ -292,9 +310,32 @@ function Admin() {
       setBusy(false);
     }
   };
-  if (!token)
+  if (session === "checking")
     return (
-      <TokenForm title="Your broadcast, in one place." onSubmit={setToken} />
+      <main className="login">
+        <p>Checking local session…</p>
+      </main>
+    );
+  if (session === "signed_out")
+    return (
+      <TokenForm
+        title="Your broadcast, in one place."
+        error={error}
+        onSubmit={(token) => {
+          void fetch("/api/admin/login", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token }),
+          })
+            .then(async (r) => {
+              if (!r.ok) throw Error((await r.json()).error);
+              setError("");
+              setSession("signed_in");
+            })
+            .catch((e) => setError(e.message));
+        }}
+      />
     );
   return (
     <main className="admin">
@@ -323,6 +364,61 @@ function Admin() {
               DEMO SESSION · Artificial platform messages, generated test frames
               and a mock model. No live services are connected.
             </aside>
+          )}
+          {!status.demo && (
+            <section className="card">
+              <div className="section-title">
+                <h2>Live setup</h2>
+              </div>
+              <p>
+                YouTube:{" "}
+                {status.setup.youtube.enabled
+                  ? status.setup.youtube.credentialsConfigured &&
+                    status.setup.youtube.videoConfigured
+                    ? "ready to test"
+                    : "add API key or access token and live video ID"
+                  : "disabled in config.yaml"}
+              </p>
+              <p>
+                CHZZK:{" "}
+                {status.setup.chzzk.enabled
+                  ? status.setup.chzzk.credentialsConfigured
+                    ? "ready to authorize"
+                    : "add developer app Client ID and Secret to .env"
+                  : "disabled in config.yaml"}
+              </p>
+              <p>
+                SOOP:{" "}
+                {status.setup.soop.mode === "disabled"
+                  ? "disabled"
+                  : status.setup.soop.streamerConfigured
+                    ? status.setup.soop.mode
+                    : "add streamer ID"}
+              </p>
+              <p>
+                Program camera:{" "}
+                {status.setup.capture.enabled
+                  ? status.setup.capture.maskConfigured
+                    ? "review masked preview"
+                    : "configure privacy masks"
+                  : "disabled in config.yaml"}
+              </p>
+              <p>
+                AI:{" "}
+                {status.setup.ai.connected && status.setup.ai.modelSelected
+                  ? "model connected"
+                  : status.setup.ai.provider === "chatgpt_subscription"
+                    ? "connect ChatGPT and select a model below"
+                    : "set OPENAI_API_KEY and OPENAI_MODEL"}
+                {status.setup.ai.providerReviewed
+                  ? ""
+                  : "; provider review required"}
+              </p>
+              <p className="hint">
+                Save config.yaml and .env locally, then restart the server.
+                Never paste Client Secrets or tokens into chat.
+              </p>
+            </section>
           )}
           <div className="grid connections">
             {Object.entries(status.connectors).map(([p, s]: [string, any]) => (
@@ -688,12 +784,16 @@ function Admin() {
         LOCAL STUDIO · source-labeled conversation ·{" "}
         <button
           className="secondary"
-          onClick={() => {
-            setToken("");
-            setStatus(undefined);
-            setPreview("");
-            setLinks(undefined);
-          }}
+          onClick={() =>
+            void api("logout", "POST")
+              .then(() => {
+                setStatus(undefined);
+                setPreview("");
+                setLinks(undefined);
+                setSession("signed_out");
+              })
+              .catch((e) => setError(e.message))
+          }
         >
           Sign out
         </button>

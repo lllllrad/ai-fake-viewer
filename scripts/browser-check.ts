@@ -32,6 +32,21 @@ try {
   await adminPage.getByLabel("Access token").fill(admin);
   await adminPage.getByRole("button", { name: "Connect", exact: true }).click();
   await adminPage.getByRole("heading", { name: "Broadcast studio" }).waitFor();
+  await adminPage.reload();
+  await adminPage.getByRole("heading", { name: "Broadcast studio" }).waitFor();
+  assert(
+    (
+      await adminPage.evaluate(async () =>
+        document.fonts.load('16px "Noto Sans KR Variable"', "한글"),
+      )
+    ).length > 0,
+  );
+  await adminPage.getByRole("button", { name: "Authorize CHZZK" }).click();
+  await adminPage
+    .getByRole("alert")
+    .getByText("Demo mode uses artificial inputs", { exact: false })
+    .waitFor();
+  await adminPage.getByRole("button", { name: "Dismiss" }).click();
   const readerPage = await context.newPage(),
     overlay = await context.newPage();
   await readerPage.goto(`${origin}/reader#${reader}`);

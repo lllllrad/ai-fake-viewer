@@ -16,6 +16,13 @@ const rect = z
 export const configSchema = z
   .object({
     port: z.number().int().min(1024).max(65535).default(3210),
+    network: z
+      .object({
+        bindHost: z.enum(["127.0.0.1", "0.0.0.0"]).default("127.0.0.1"),
+        publicBaseUrl: z.string().max(200).default(""),
+      })
+      .strict()
+      .default({ bindHost: "127.0.0.1", publicBaseUrl: "" }),
     database: z.string().default("data/chat.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
     youtube: z
@@ -66,8 +73,11 @@ export const configSchema = z
       .object({
         enabled: z.boolean().default(false),
         ffmpeg: z.string().default("ffmpeg"),
-        backend: z.enum(["dshow", "v4l2", "avfoundation"]).default("dshow"),
+        backend: z
+          .enum(["dshow", "v4l2", "avfoundation", "rtmp"])
+          .default("dshow"),
         device: z.string().default("OBS Virtual Camera"),
+        url: z.string().max(1024).default(""),
         intervalMs: z.number().int().min(1000).max(5000).default(3000),
         programConfirmed: z.boolean().default(false),
         masks: z.array(rect).max(30).default([]),
@@ -78,6 +88,7 @@ export const configSchema = z
         ffmpeg: "ffmpeg",
         backend: "dshow",
         device: "OBS Virtual Camera",
+        url: "",
         intervalMs: 3000,
         programConfirmed: false,
         masks: [],
@@ -163,6 +174,50 @@ export const configSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
+    if (c.network.bindHost === "0.0.0.0") {
+      let valid = false;
+      try {
+        const u = new URL(c.network.publicBaseUrl);
+        valid =
+          u.protocol === "http:" &&
+          u.port === String(c.port) &&
+          u.pathname === "/" &&
+          !u.search &&
+          !u.hash &&
+          !u.username &&
+          !u.password &&
+          !["127.0.0.1", "localhost", "0.0.0.0"].includes(u.hostname);
+      } catch {
+        /* invalid URL */
+      }
+      if (!valid)
+        ctx.addIssue({
+          code: "custom",
+          path: ["network", "publicBaseUrl"],
+          message:
+            "LAN mode requires an HTTP base URL with this port and a non-loopback host",
+        });
+    }
+    if (c.capture.backend === "rtmp") {
+      let valid = false;
+      try {
+        const url = new URL(c.capture.url);
+        valid =
+          ["rtmp:", "rtmps:"].includes(url.protocol) &&
+          !!url.hostname &&
+          !url.username &&
+          !url.password;
+      } catch {
+        /* invalid URL */
+      }
+      if (!valid)
+        ctx.addIssue({
+          code: "custom",
+          path: ["capture", "url"],
+          message:
+            "RTMP capture requires an rtmp:// or rtmps:// URL without embedded credentials",
+        });
+    }
     if (c.ai.provider === "chatgpt_subscription" && c.ai.maxUsd !== null)
       ctx.addIssue({
         code: "custom",

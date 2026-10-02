@@ -1,5 +1,7 @@
+@import "@fontsource-variable/noto-sans-kr/wght.css";
 :root {
   font-family:
+    "Noto Sans KR Variable",
     Inter,
     ui-sans-serif,
     system-ui,
@@ -20,7 +22,8 @@ body {
   margin: 0;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 button,

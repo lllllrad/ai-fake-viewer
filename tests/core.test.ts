@@ -327,6 +327,22 @@ test("Manual approval discarded after evidence deletion and capture invalidation
   assert.equal(h.s.snapshot().messages.length, 0);
   h.s.close();
 });
+test("RTMP configuration requires a local stream URL without embedded credentials", () => {
+  assert.equal(
+    configSchema.parse({
+      capture: { backend: "rtmp", url: "rtmp://127.0.0.1:1935/program" },
+    }).capture.backend,
+    "rtmp",
+  );
+  for (const url of [
+    "",
+    "http://127.0.0.1/program",
+    "rtmp://user:secret@127.0.0.1/program",
+  ])
+    assert.throws(() =>
+      configSchema.parse({ capture: { backend: "rtmp", url } }),
+    );
+});
 test("A20: strict configuration rejects typos, invalid masks and unsupported blind mode", () => {
   for (const v of [
     { round_blind: true },

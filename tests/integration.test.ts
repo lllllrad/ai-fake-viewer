@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createServer } from "node:net";
 import { fork } from "node:child_process";
-import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { writeFileSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -32,6 +32,60 @@ async function waitFor(fn: () => boolean) {
   }
   throw Error("Timed out");
 }
+test("LAN overlay links work while administrator and OAuth routes stay local", async () => {
+  const port = await freePort();
+  const publicBaseUrl = `http://10.10.142.3:${port}`;
+  const c = configSchema.parse({
+    port,
+    network: { bindHost: "0.0.0.0", publicBaseUrl },
+    database: ":memory:",
+  });
+  const { app } = await createApp(c, {
+    adminToken: admin,
+    readerToken: reader,
+    encryptionKey,
+    startInputs: false,
+  });
+  try {
+    const remoteAddress = "10.10.142.24";
+    const host = `10.10.142.3:${port}`;
+    for (const path of ["/reader", "/overlay", "/health"])
+      assert.equal(
+        (await app.inject({ url: path, headers: { host }, remoteAddress }))
+          .statusCode,
+        200,
+        path,
+      );
+    for (const path of [
+      "/",
+      "/admin",
+      "/api/admin/status",
+      "/oauth/chzzk/callback",
+    ])
+      assert.equal(
+        (
+          await app.inject({
+            url: path,
+            headers: { host, authorization: `Bearer ${admin}` },
+            remoteAddress,
+          })
+        ).statusCode,
+        403,
+        path,
+      );
+    const links = await app.inject({
+      url: "/api/admin/links",
+      headers: {
+        host: `127.0.0.1:${port}`,
+        authorization: `Bearer ${admin}`,
+      },
+    });
+    assert.equal(links.statusCode, 200);
+    assert.equal(links.json().overlay, `${publicBaseUrl}/overlay#${reader}`);
+  } finally {
+    await app.close();
+  }
+});
 test("A05, A11, A12, A18: authenticated API and two identical public streams", async () => {
   const port = await freePort();
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-api-test-"));
@@ -68,6 +122,51 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       (
         await app.inject({
           method: "POST",
+          url: "/api/admin/login",
+          headers,
+          payload: { token: "bad" },
+        })
+      ).statusCode,
+      401,
+    );
+    const login = await app.inject({
+      method: "POST",
+      url: "/api/admin/login",
+      headers,
+      payload: { token: admin },
+    });
+    assert.equal(login.statusCode, 200);
+    const cookie = login.headers["set-cookie"] as string;
+    assert.match(cookie, /HttpOnly; SameSite=Strict/);
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/admin/status",
+          headers: { host, cookie },
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/admin/status",
+          headers: { host, cookie: "mixed_chat_admin=bad" },
+        })
+      ).statusCode,
+      401,
+    );
+    const logout = await app.inject({
+      method: "POST",
+      url: "/api/admin/logout",
+      headers: { host, cookie },
+    });
+    assert.equal(logout.statusCode, 200);
+    assert.match(logout.headers["set-cookie"] as string, /Max-Age=0/);
+    assert.equal(
+      (
+        await app.inject({
+          method: "POST",
           url: "/api/admin/chatgpt/authorize",
           headers,
         })
@@ -92,6 +191,13 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       ).json().chatgpt.accounts.length,
       0,
     );
+    const chzzkSetup = await app.inject({
+      method: "POST",
+      url: "/api/admin/chzzk/authorize",
+      headers: authHeaders,
+    });
+    assert.equal(chzzkSetup.statusCode, 409);
+    assert.match(chzzkSetup.json().error, /chzzk.enabled/);
 
     assert.equal(
       (
@@ -312,7 +418,7 @@ test("T10/A10/A19: Responses receives real image bytes, structured output and no
   }
 });
 test(
-  "A17: capture worker blacks out configured ROI before emitting JPEG",
+  "A17: RTMP capture worker blacks out configured ROI before emitting JPEG",
   { skip: process.platform === "win32" },
   async () => {
     const dir = mkdtempSync(join(tmpdir(), "mixed-capture-"));
@@ -326,9 +432,10 @@ test(
         .toBuffer(),
     );
     const fake = join(dir, "fake-ffmpeg");
+    const argsFile = join(dir, "ffmpeg-args.json");
     writeFileSync(
       fake,
-      `#!${process.execPath}\nconst fs=require('node:fs');setTimeout(()=>process.stdout.write(fs.readFileSync(${JSON.stringify(fixture)})),20);setInterval(()=>{},1000);`,
+      `#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(${JSON.stringify(argsFile)},JSON.stringify(process.argv.slice(2)));setTimeout(()=>process.stdout.write(fs.readFileSync(${JSON.stringify(fixture)})),20);setInterval(()=>{},1000);`,
       { mode: 0o700 },
     );
     const child = fork(new URL("../workers/capture.mjs", import.meta.url), [], {
@@ -355,8 +462,8 @@ test(
         type: "start",
         config: {
           ffmpeg: fake,
-          backend: "v4l2",
-          device: "fixture",
+          backend: "rtmp",
+          url: "rtmp://127.0.0.1:1935/program",
           intervalMs: 3000,
           masks: [{ x: 0, y: 0, width: 0.5, height: 1 }],
         },
@@ -370,6 +477,12 @@ test(
       assert(pixel(10, 50) < 10);
       assert(pixel(90, 50) > 240);
       assert.equal(frame.sourceWidth, 100);
+      const args = JSON.parse(readFileSync(argsFile, "utf8"));
+      const inputAt = args.indexOf("-i");
+      assert.deepEqual(args.slice(inputAt, inputAt + 2), [
+        "-i",
+        "rtmp://127.0.0.1:1935/program",
+      ]);
     } finally {
       child.send({ type: "stop" });
       await once(child, "exit");

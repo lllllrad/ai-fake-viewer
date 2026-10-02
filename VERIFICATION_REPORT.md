@@ -10,17 +10,18 @@
 - Browser: Playwright 1.63.0, Chromium 153.0.8010.12, headless.
 - OBS: unavailable; version and physical camera behavior not verified.
 - FFmpeg: production executable not used; a controlled JPEG-emitting executable exercised the capture worker.
-- Lockfile SHA-256: `454a70634cd90790a1d9f8e303d08d976550680a3f78760d695f5589f5d1f91a`.
-- `npm run check`: PASS, TypeScript + production Vite build + **23 tests**, zero failures/skips on this Linux host.
+- Lockfile SHA-256: `2f1eb9c6156b5bd7845e8e41c54ec06d80be4e21e96fbd32a5cd0f823fca4b97`.
+- `npm run check`: PASS, TypeScript + production Vite build + **25 tests**, zero failures/skips on this Linux host.
 - `npm run test:browser`: PASS, no browser page errors. Admin, reader, overlay and 390-pixel-wide admin checks completed.
+- Live server LAN smoke check: PASS. `10.10.142.3:3210/overlay` and `/health` returned 200, while `/admin` returned 403 via the LAN address; admin and generated OBS links returned 200 and the LAN host respectively through loopback. No external OBS PC was tested.
 - Actual demo entry point: PASS. HTTP health, authenticated status, three `demo_fixture` inputs, artificial frame reception and initial `ai: stopped` verified. SIGTERM shutdown completed; no demo server is intentionally left running.
 - Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). All seven repository Markdown files are English; the Korean handoff stays ignored under `.local/`.
 
-The environment initially lacked Chromium shared libraries and all system fonts. Test-only libraries and English/Korean fonts were extracted under `/tmp`; no system package installation was performed. Browser checks used `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` pointing there. Initial browser failures were environment failures; the completed run above passed. A bare headless Linux demo may emit a fontconfig warning when drawing its optional SVG text label; the artificial shapes and browser-level demo disclosure remain available.
+The environment initially lacked Chromium shared libraries and all system fonts. Test-only libraries and English/Korean fonts were extracted under `/tmp`; no system package installation was performed. Browser checks used `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` pointing there. Initial browser failures were environment failures; the completed run above passed. The browser now bundles Noto Sans KR for Korean chat; the Linux browser check still used a temporary fontconfig setup. A bare headless Linux demo may still emit a fontconfig warning when drawing its optional SVG test-frame label; the artificial shapes and browser-level demo disclosure remain available.
 
 ## Measured behavior
 
-The browser fixture inserted **12 artificial messages**, waiting for both reader and overlay DOMs after each insertion. The final measured P95 from insertion start (including SQLite ingestion) to both DOM elements being present was **25 ms**. This small sequential local test meets the initial 1-second target but is not a throughput, long-run or production latency guarantee. It excludes platform transmission/polling and real model latency.
+The browser fixture verified persistent administrator login after reload, the bundled Korean font, and an actionable CHZZK demo-mode error. It then inserted **12 artificial messages**, waiting for both reader and overlay DOMs after each insertion. The final measured P95 from insertion start (including SQLite ingestion) to both DOM elements being present was **28 ms**. This small sequential local test meets the initial 1-second target but is not a throughput, long-run or production latency guarantee. It excludes platform transmission/polling and real model latency.
 
 Reader and overlay text/order matched. Hidden text did not return after an overlay reload. The overlay's HTML and body backgrounds were transparent; the disclosure remained in the viewport. Script-like chat was rendered as text and did not execute. Manual AI approval published the same mock response to both views. Stopping AI still allowed a subsequent platform fixture to render. No observed duplicates or missing messages in this bounded test.
 
@@ -35,7 +36,7 @@ Screenshots and machine-readable browser timings are generated under ignored `te
 | CHZZK official OAuth/session | PASS: top-level token response, encrypted atomic rotation, concurrent refresh single-flight; Socket.IO 2.0.3 local SYSTEM/CHAT fixture | BLOCKED     | No approved client credentials, broadcaster OAuth, scopes or live own-channel session                                                  |
 | SOOP official SDK            | BLOCKED                                                                                                                                | BLOCKED     | Official distribution, method/event/auth contract and applicable approval are not established; adapter exposes `official_spec_pending` |
 | SOOP unofficial library      | PASS: explicit opt-in gate, version/integrity pin and installed type inspection                                                        | BLOCKED     | No streamer/terms review/live test; exact source-commit-to-tarball equivalence not established                                         |
-| OBS Program camera           | PASS: real JPEG bytes through capture process; configured ROI becomes black; source-size changes invalidate approval                   | BLOCKED     | No OBS/physical camera or Studio Mode Program-versus-Preview test                                                                      |
+| OBS Program / RTMP input     | PASS: real JPEG bytes through RTMP-configured capture process; configured ROI becomes black; source-size changes invalidate approval   | BLOCKED     | No OBS/physical camera, real RTMP server or Studio Mode Program-versus-Preview test                                                    |
 | OpenAI API-key image model   | PASS: mock HTTP inspection verifies JPEG data URL, structured output, input counting, `store:false`, no tools                          | BLOCKED     | No key or selected model; no paid call, actual image comprehension or provider billing verified                                        |
 | ChatGPT subscription model   | PASS: OAuth PKCE/state/encrypted storage fixture and streamed completion/image payload fixture                                         | BLOCKED     | No interactive account consent or live model call; actual plan access and image comprehension unverified                               |
 
@@ -66,7 +67,7 @@ Authentication scopes: YouTube API-key public access or operator-supplied OAuth;
 | A19 | PASS             | Instrumented YouTube fixture calls are GET-only; model calls target Responses; socket fixture emits no outbound CHAT event. Native platform message sends observed: 0 in fixture tests; live network acceptance is BLOCKED |
 | A20 | PASS             | Unknown config keys, invalid mask bounds, missing money pricing and undocumented context approvals rejected; non-demo failures are not replaced with mock success                                                          |
 
-Additional PASS checks: expired-data cleanup, public reveal field restriction, pending reply invalidation, source resolution change at unchanged resized output dimensions, host/Origin rejection, independent role tokens, token-rotation socket invalidation, overlay disclosure visibility and mobile overflow.
+Additional PASS checks: LAN reader/overlay access with loopback-only administrator and OAuth routes, expired-data cleanup, public reveal field restriction, pending reply invalidation, source resolution change at unchanged resized output dimensions, host/Origin rejection, independent role tokens, token-rotation socket invalidation, overlay disclosure visibility and mobile overflow.
 
 ## Requirement completion boundary
 

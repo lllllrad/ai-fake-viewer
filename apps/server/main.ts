@@ -28,7 +28,7 @@ try {
     },
   });
   await app
-    .listen({ host: "127.0.0.1", port: config.port })
+    .listen({ host: config.network.bindHost, port: config.port })
     .catch(async (error) => {
       await app.close();
       throw error;

@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { timingSafeEqual, randomBytes } from "node:crypto";
+import { timingSafeEqual, randomBytes, createHmac } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
@@ -66,8 +66,42 @@ export async function createApp(
   const origins = [
     `http://127.0.0.1:${config.port}`,
     `http://localhost:${config.port}`,
+    ...(config.network.bindHost === "0.0.0.0"
+      ? [config.network.publicBaseUrl]
+      : []),
   ];
+  const publicOrigin =
+    config.network.bindHost === "0.0.0.0"
+      ? config.network.publicBaseUrl
+      : origins[0];
+  const isLoopback = (ip: string) =>
+    ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip);
   const hosts = origins.map((v) => new URL(v).host);
+  const sessionAgeSeconds = 7 * 24 * 60 * 60;
+  const sessionCookie = "mixed_chat_admin";
+  const signSession = (value: string) =>
+    createHmac("sha256", opts.adminToken).update(value).digest("base64url");
+  const newSession = () => {
+    const payload = `${Date.now() + sessionAgeSeconds * 1000}.${randomBytes(16).toString("base64url")}`;
+    return `${payload}.${signSession(payload)}`;
+  };
+  const validSession = (cookie: string | undefined) => {
+    const value = cookie
+      ?.split(";")
+      .map((v) => v.trim())
+      .find((v) => v.startsWith(`${sessionCookie}=`))
+      ?.slice(sessionCookie.length + 1);
+    if (!value || !/^\d+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value))
+      return false;
+    const dot = value.lastIndexOf(".");
+    const payload = value.slice(0, dot);
+    const expires = Number(payload.slice(0, payload.indexOf(".")));
+    return (
+      Number.isSafeInteger(expires) &&
+      expires > Date.now() &&
+      equal(value.slice(dot + 1), signSession(payload))
+    );
+  };
   const sockets = new Set<any>();
   await app.register(websocket, { options: { maxPayload: 4096 } });
   app.addHook("onRequest", async (req, reply) => {
@@ -79,13 +113,22 @@ export async function createApp(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
+    if (
+      (req.url.startsWith("/api/admin/") ||
+        req.url.startsWith("/oauth/") ||
+        ["/admin", "/"].includes(req.url)) &&
+      !isLoopback(req.ip)
+    )
+      return reply
+        .code(403)
+        .send({ error: "Administrator access is local only" });
     if (!hosts.includes(req.headers.host ?? ""))
       return reply.code(403).send({ error: "Host rejected" });
     if (req.headers.origin && !origins.includes(req.headers.origin))
       return reply.code(403).send({ error: "Origin rejected" });
-    if (req.url.startsWith("/api/admin/")) {
+    if (req.url.startsWith("/api/admin/") && req.url !== "/api/admin/login") {
       const token = req.headers.authorization?.replace(/^Bearer /, "");
-      if (!equal(token, opts.adminToken))
+      if (!equal(token, opts.adminToken) && !validSession(req.headers.cookie))
         return reply.code(401).send({ error: "Administrator token required" });
       if (
         req.method !== "GET" &&
@@ -106,6 +149,24 @@ export async function createApp(
     });
   });
   app.get("/health", async () => ({ ok: true }));
+  app.post("/api/admin/login", async (req, reply) => {
+    const body = z.object({ token: z.string() }).parse(req.body);
+    if (!equal(body.token, opts.adminToken))
+      return reply.code(401).send({ error: "Invalid administrator token" });
+    reply.header(
+      "Set-Cookie",
+      `${sessionCookie}=${newSession()}; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=${sessionAgeSeconds}`,
+    );
+    return { ok: true };
+  });
+  app.post("/api/admin/logout", async (_req, reply) => {
+    reply.header(
+      "Set-Cookie",
+      `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=0`,
+    );
+    return { ok: true };
+  });
+
   app.get("/stream", { websocket: true }, (socket, req) => {
     if (!req.headers.origin || !origins.includes(req.headers.origin)) {
       socket.close(1008);
@@ -206,12 +267,47 @@ export async function createApp(
           : (process.env.OPENAI_MODEL ?? "not configured"),
     },
     chatgpt: chatgpt.status,
+    setup: {
+      youtube: {
+        enabled: config.youtube.enabled,
+        credentialsConfigured: !!(
+          process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
+        ),
+        videoConfigured: !!config.youtube.video,
+      },
+      chzzk: {
+        enabled: config.chzzk.enabled,
+        credentialsConfigured: !!(
+          process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
+        ),
+      },
+      soop: {
+        mode: config.soop.mode,
+        streamerConfigured: !!config.soop.streamerId,
+      },
+      capture: {
+        enabled: config.capture.enabled,
+        maskConfigured: config.capture.masks.length > 0,
+      },
+      ai: {
+        provider: config.ai.provider,
+        providerReviewed: config.policy.providerReviewed,
+        connected:
+          config.ai.provider === "chatgpt_subscription"
+            ? !!chatgpt.active?.refreshToken
+            : !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
+        modelSelected:
+          config.ai.provider === "chatgpt_subscription"
+            ? !!chatgpt.active?.model
+            : !!process.env.OPENAI_MODEL,
+      },
+    },
     policy: config.policy,
     messages: store.snapshot().messages,
   }));
   app.get("/api/admin/links", async () => ({
-    reader: `${origins[0]}/reader#${readerToken}`,
-    overlay: `${origins[0]}/overlay#${readerToken}`,
+    reader: `${publicOrigin}/reader#${readerToken}`,
+    overlay: `${publicOrigin}/overlay#${readerToken}`,
   }));
   app.post("/api/admin/reader-token/rotate", async () => {
     const next = randomBytes(32).toString("hex");
@@ -357,9 +453,23 @@ export async function createApp(
         );
     }
   });
-  app.post("/api/admin/chzzk/authorize", async () => ({
-    url: auth.authorizationUrl(config.chzzk.redirectUri),
-  }));
+  app.post("/api/admin/chzzk/authorize", async (req, reply) => {
+    if (opts.demo)
+      return reply.code(409).send({
+        error:
+          "Demo mode uses artificial inputs. Restart with npm start for live CHZZK.",
+      });
+    if (!config.chzzk.enabled)
+      return reply.code(409).send({
+        error: "Set chzzk.enabled: true in config.yaml, then restart.",
+      });
+    if (!process.env.CHZZK_CLIENT_ID || !process.env.CHZZK_CLIENT_SECRET)
+      return reply.code(409).send({
+        error:
+          "Set CHZZK_CLIENT_ID and CHZZK_CLIENT_SECRET in .env, then restart.",
+      });
+    return { url: auth.authorizationUrl(config.chzzk.redirectUri) };
+  });
   app.post("/api/admin/chzzk/forget", async () => {
     await supervisor.stop();
     auth.forget();

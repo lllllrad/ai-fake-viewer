@@ -1,4 +1,7 @@
 port: 3210
+network:
+  bindHost: 127.0.0.1 # set 0.0.0.0 to allow reader and overlay from another PC
+  publicBaseUrl: "" # LAN mode: http://APP_PC_LAN_IP:3210
 database: data/chat.sqlite
 retentionDays: 7
 youtube:
@@ -16,8 +19,9 @@ soop:
 capture:
   enabled: false
   ffmpeg: ffmpeg
-  backend: dshow
+  backend: dshow # rtmp for a separate OBS PC and a local/LAN RTMP server
   device: OBS Virtual Camera
+  url: "" # when backend is rtmp: rtmp://127.0.0.1:1935/program
   intervalMs: 3000
   programConfirmed: false
   # Normalized rectangles, applied before preview and upload.

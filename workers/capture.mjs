@@ -11,11 +11,13 @@ process.on("message", (m) => {
   if (m.type !== "start" || child) return;
   const c = m.config;
   const input =
-    c.backend === "dshow"
-      ? ["-f", "dshow", "-i", `video=${c.device}`]
-      : c.backend === "v4l2"
-        ? ["-f", "v4l2", "-i", c.device]
-        : ["-f", "avfoundation", "-i", c.device];
+    c.backend === "rtmp"
+      ? ["-i", c.url]
+      : c.backend === "dshow"
+        ? ["-f", "dshow", "-i", `video=${c.device}`]
+        : c.backend === "v4l2"
+          ? ["-f", "v4l2", "-i", c.device]
+          : ["-f", "avfoundation", "-i", c.device];
   child = spawn(
     c.ffmpeg,
     [

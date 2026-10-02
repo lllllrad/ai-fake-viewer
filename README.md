@@ -15,7 +15,7 @@ npm run build
 npm run demo
 ```
 
-Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated local `.env` into the sign-in form. The server never prints your tokens. Keep `.env` private.
+Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated local `.env` into the sign-in form. The server never prints your tokens. Keep `.env` private. Admin sign-in now uses an HttpOnly, SameSite=Strict local cookie valid for up to seven days across reloads and server restarts; **Sign out** clears it. Changing `ADMIN_TOKEN` invalidates existing cookies.
 
 1. The demo starts artificial platform chat and artificial moving image frames. It makes no platform or model requests.
 2. Inspect the preview and select **Confirm masked Program**. In demo mode this confirms a clearly labeled artificial input.
@@ -23,7 +23,7 @@ Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated loca
 4. Select **Publish locally** in the review panel. It appears in the shared conversation.
 5. Select **Reader & OBS links**. Open the reader link and copy the overlay link to an OBS Browser Source.
 6. **Stop AI now** cancels pending generation and approval without stopping chat receivers.
-7. Press **Ctrl+C** in the terminal to stop the whole application.
+7. Press **Ctrl+C** in the terminal to stop the whole application. Then use `npm start` for live mode. A still-running `npm run demo` process keeps producing artificial messages even if you edit config.yaml.
 
 Demo data uses `data/demo.sqlite`; live mode uses `database` from `config.yaml`. Starting either mode never automatically starts AI. Use **New session** after a closed session. Start only one server process per database and port.
 
@@ -107,7 +107,30 @@ The example masks the rightmost 30% of the image. Change it for your actual comp
 
 Open admin, inspect the masked preview and select **Confirm masked Program**. Non-demo AI is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. Ten seconds without a fresh frame pauses AI and requires a manual start. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
 
-Capture failures are isolated and retried up to five times with backoff. Confirmation is cleared on failure. For Linux select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
+Capture failures are isolated and retried up to five times with backoff. Confirmation is cleared on failure. For a camera on the same Linux PC, select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
+
+### OBS on a separate Linux PC: optional RTMP input
+
+The app reads an RTMP or RTMPS stream through the same FFmpeg worker and privacy-mask pipeline. On a Linux app PC with Docker, `scripts/setup-rtmp.sh APP_PC_LAN_IP` generates private MediaMTX publish/read credentials in ignored `data/`; review `data/mediamtx.yml` and `data/rtmp-urls.txt`, then run `scripts/start-rtmp.sh APP_PC_LAN_IP` to start an authenticated RTMP service bound to that LAN IP and loopback. The container uses a pinned [MediaMTX](https://mediamtx.org/docs/kickoff/install) image. `scripts/ffmpeg-docker.sh` uses its FFmpeg binary for capture, so a host FFmpeg installation is not required. Stop the service with `docker stop mixed-chat-rtmp`; remove its container with `docker rm mixed-chat-rtmp`. The service has a persistent restart policy once explicitly started.
+
+On the separate Linux OBS PC, set a Custom stream service Server URL to `OBS_PUBLISH_URL` from the private credential file and leave Stream Key empty. [MediaMTX documents this OBS arrangement](https://mediamtx.org/docs/publish/obs-studio). If OBS already streams to a public platform, configure a separate output or relay; do not replace the public destination. On the app PC, use `APP_READ_URL` from the same private file in ignored `config.yaml` and set:
+
+```yaml
+capture:
+  enabled: true
+  ffmpeg: scripts/ffmpeg-docker.sh
+  backend: rtmp
+  url: "APP_READ_URL_FROM_PRIVATE_FILE"
+  intervalMs: 3000
+  programConfirmed: true
+  masks:
+    - x: 0.70
+      y: 0.0
+      width: 0.30
+      height: 1.0
+```
+
+Use the exact private read URL in your ignored local config; never commit that URL or share it in screenshots. Replace the masks for your actual scene. [FFmpeg can read RTMP](https://mediamtx.org/docs/read/ffmpeg). Confirm a fresh masked preview before starting AI. The setup script prepares credentials but does not start the RTMP service. Physical remote OBS/RTMP operation still needs a live test.
 
 ## Image model and data review
 
@@ -126,7 +149,7 @@ Calls are limited per session, persisted across restarts, with one generation at
 
 ## Reader, overlay and operations
 
-Reader and overlay tokens are placed in URL fragments and sent in the first WebSocket authentication message. They do not grant administrator access. Treat OBS links as private. **Rotate reader token** immediately disconnects readers and atomically updates `.env`; fetch new links and update OBS. If environment variables are supplied externally, update `READER_TOKEN` there too before restarting. Admin credentials stay only in the current page's memory; reload to sign out. To rotate admin credentials, stop the server, replace `ADMIN_TOKEN` with a fresh random value of at least 32 characters, and restart.
+Reader and overlay tokens are placed in URL fragments and sent in the first WebSocket authentication message. They do not grant administrator access. Treat OBS links as private. **Rotate reader token** immediately disconnects readers and atomically updates `.env`; fetch new links and update OBS. If environment variables are supplied externally, update `READER_TOKEN` there too before restarting. Admin credentials are exchanged for a seven-day HttpOnly local session cookie; use **Sign out** to clear it. To rotate admin credentials, stop the server, replace `ADMIN_TOKEN` with a fresh random value of at least 32 characters, and restart.
 
 Use the exact overlay link shown in admin for an OBS **Browser Source**, typically **600 × 900**. The page has a transparent background and shows the latest 12 messages. The reader keeps a 300-message window, supports following and jumping to new messages, and has no message input. The source's refresh/visibility settings do not control receivers or AI. The required mixed-chat disclosure and platform attribution stay visible; synthetic messages are labeled **Experiment**.
 
@@ -134,7 +157,7 @@ Both pages order by the original committed message sequence. Updates replace the
 
 **Hide** removes a message locally and erases its stored body. **Stop AI & reveal origins** stops generation before publishing a limited origin disclosure. Platform reception does not prove that the author did not use an external AI. **Close session** stops receivers and AI. **New session** starts a fresh history and budget; AI still requires a manual start.
 
-The server binds only to `127.0.0.1`. Host and Origin checks, distinct role tokens, CSP and bounded inputs are enabled. Remote access/HTTPS/proxy deployment is not supported in this release. Plain text rendering intentionally does not fetch arbitrary avatar/emote URLs. Custom platform badges and image emotes are not yet rendered.
+The browser UI bundles the OFL-licensed Noto Sans KR variable font for Korean messages. By default the server binds to `127.0.0.1`. For an OBS PC on the same private LAN, set `network.bindHost: 0.0.0.0` and `network.publicBaseUrl: http://APP_PC_LAN_IP:3210` in ignored `config.yaml`, then restart. The admin page, admin API and OAuth callbacks remain loopback-only on the app PC; copy the reader or overlay link from admin to OBS. Allow TCP 3210 between those two PCs in the host firewall if needed. Host and Origin checks, distinct role tokens, CSP and bounded inputs are enabled. Internet-facing access, HTTPS and proxy deployment are not supported in this release. Plain text rendering intentionally does not fetch arbitrary avatar/emote URLs. Custom platform badges and image emotes are not yet rendered.
 
 ## Storage and deletion
 
@@ -147,7 +170,7 @@ Use **Delete all local data** to stop receivers and AI, clear chat, identity, hi
 - Startup failure: use Node 24, run setup, check independent tokens, strict YAML fields, a writable database and a free port.
 - Receiver `config_required` / `auth_required`: check the relevant `.env` variables and app approval, then restart receivers. Do not substitute demo input for a failed live connection.
 - YouTube `waiting_live`: verify the broadcast is live, chat is enabled and your credentials can access it. `quota_blocked` requires quota review; `ended` requires a new live video.
-- CHZZK `permission_blocked`: verify own-channel login and read scopes, then reauthorize. Silence during an active subscription is normal.
+- CHZZK authorization cannot start in demo mode or before `chzzk.enabled: true` and both Client ID/Secret are set. Register an app with chat-read and user-info scopes and an exact local callback; restart in live mode. `permission_blocked`: verify own-channel login and scopes, then reauthorize. Silence during an active subscription is normal.
 - Capture: verify FFmpeg/device name, OBS camera startup, Program selection and masks. The preview is already masked. Capture stderr is not exposed because it may contain local paths.
 - AI: check preview confirmation, frame freshness, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
 
