@@ -34,7 +34,7 @@ async function waitFor(fn: () => boolean) {
 }
 test("LAN overlay links work while administrator and OAuth routes stay local", async () => {
   const port = await freePort();
-  const publicBaseUrl = `http://10.10.142.3:${port}`;
+  const publicBaseUrl = `http://192.168.50.10:${port}`;
   const c = configSchema.parse({
     port,
     network: { bindHost: "0.0.0.0", publicBaseUrl },
@@ -47,8 +47,8 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     startInputs: false,
   });
   try {
-    const remoteAddress = "10.10.142.24";
-    const host = `10.10.142.3:${port}`;
+    const remoteAddress = "192.168.50.24";
+    const host = `192.168.50.10:${port}`;
     for (const path of ["/reader", "/overlay", "/health"])
       assert.equal(
         (await app.inject({ url: path, headers: { host }, remoteAddress }))

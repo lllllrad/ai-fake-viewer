@@ -13,10 +13,10 @@
 - Lockfile SHA-256: `2f1eb9c6156b5bd7845e8e41c54ec06d80be4e21e96fbd32a5cd0f823fca4b97`.
 - `npm run check`: PASS, TypeScript + production Vite build + **25 tests**, zero failures/skips on this Linux host.
 - `npm run test:browser`: PASS, no browser page errors. Admin, reader, overlay and 390-pixel-wide admin checks completed.
-- Authenticated MediaMTX smoke check: PASS. The approved RTMP container is running with a restart policy on app-PC LAN and loopback port 1935. A synthetic H264 publisher connected; a reader without credentials was rejected and a credentialed reader decoded a frame. No actual OBS stream was tested.
-- Live server LAN smoke check: PASS. `10.10.142.3:3210/overlay` and `/health` returned 200, while `/admin` returned 403 via the LAN address; admin and generated OBS links returned 200 and the LAN host respectively through loopback. No external OBS PC was tested.
+- Authenticated MediaMTX smoke check: PASS. The approved RTMP container ran with a restart policy on the app PC's LAN and loopback port 1935 during the test. A synthetic H264 publisher connected; a reader without credentials was rejected and a credentialed reader decoded a frame. No actual OBS stream was tested.
+- Live server LAN smoke check: PASS. The configured private-LAN `/overlay` and `/health` routes returned 200, while `/admin` returned 403 through that address; admin and generated OBS links returned 200 and the LAN host respectively through loopback. No external OBS PC was tested.
 - Actual demo entry point: PASS. HTTP health, authenticated status, three `demo_fixture` inputs, artificial frame reception and initial `ai: stopped` verified. SIGTERM shutdown completed; no demo server is intentionally left running.
-- Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). All seven repository Markdown files are English; the Korean handoff stays ignored under `.local/`.
+- Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). Repository-tracked Markdown is English; the Korean handoff stays ignored under `.local/`.
 
 The environment initially lacked Chromium shared libraries and all system fonts. Test-only libraries and English/Korean fonts were extracted under `/tmp`; no system package installation was performed. Browser checks used `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` pointing there. Initial browser failures were environment failures; the completed run above passed. The browser now bundles Noto Sans KR for Korean chat; the Linux browser check still used a temporary fontconfig setup. A bare headless Linux demo may still emit a fontconfig warning when drawing its optional SVG test-frame label; the artificial shapes and browser-level demo disclosure remain available.
 

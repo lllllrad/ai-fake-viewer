@@ -1,6 +1,6 @@
 # Live setup for a separate Linux OBS PC
 
-This is the operator runbook for the current two-PC setup. The app runs on the Linux PC that contains this repository. A second Linux PC runs OBS Studio and displays the web overlay. Both PCs are on the same private LAN. The app PC's current LAN address is `10.10.142.3`; replace it in the instructions if that address changes. Use [README.md](README.md) for design details and [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for what has and has not been tested.
+This runbook covers two Linux PCs on the same private LAN: one runs this application, and the other runs OBS Studio with its web overlay. Follow [README.md](README.md) for design details and [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for tested behavior and remaining live checks.
 
 The OBS Browser Source only **displays chat**. For AI to see the broadcast, OBS must also send its Program video to the app PC's RTMP server. If OBS already streams to YouTube or CHZZK, keep that destination and arrange a second output or relay for this RTMP feed.
 
@@ -16,25 +16,26 @@ npm run build
 
 `npm run setup` creates `.env` and `config.yaml` only if absent; it does not replace existing files. Keep `.env`, `config.yaml` and everything in `data/` private. Never commit or paste their token, password or full URL values. Edit them locally. The three generated values `ADMIN_TOKEN`, `READER_TOKEN` and `TOKEN_ENCRYPTION_KEY` must remain distinct and stable. Do not run `npm run demo` for a broadcast: demo mode deliberately creates artificial chat and frames.
 
-Set the network section of `config.yaml` to:
+On the app PC, run `ip -4 -brief address` and identify the IPv4 address of the network interface shared with the OBS PC. Ignore loopback, Docker and VPN interfaces. In the shell used for RTMP setup, enter that address with `read -rp "App PC LAN IPv4: " APP_PC_LAN_IP`. Replace the literal `APP_PC_LAN_IP` placeholder below with the address you chose; do not paste the placeholder into `config.yaml`. Set the network section of `config.yaml` to:
 
 ```yaml
 network:
   bindHost: 0.0.0.0
-  publicBaseUrl: http://10.10.142.3:3210
+  publicBaseUrl: http://APP_PC_LAN_IP:3210
 ```
 
 The app PC's administrator page and OAuth callbacks are available only through `http://127.0.0.1:3210`; the remote OBS PC uses the LAN reader and overlay links. Permit TCP 3210 and 1935 between these two PCs in the host firewall. Keep these ports on the private LAN, not an Internet port forward. If the app PC address or port changes, update `publicBaseUrl`, the RTMP publish URL and the CHZZK callback registration before restarting.
 
 ## 2. Check the RTMP service and connect OBS video
 
-On this app PC, private RTMP publisher and reader credentials have already been generated in `data/rtmp-urls.txt`, and `mixed-chat-rtmp` has been started. Check it with:
+Check whether this installation already has RTMP credentials and a container:
 
 ```sh
-docker ps --filter name=mixed-chat-rtmp
+test -f data/rtmp-urls.txt && echo "RTMP credentials exist"
+docker ps -a --filter name=mixed-chat-rtmp
 ```
 
-If that existing container is stopped, use `docker start mixed-chat-rtmp`. For a fresh installation that does not have `data/rtmp-urls.txt` or the container, run `scripts/setup-rtmp.sh 10.10.142.3`, review the generated private files, then run `scripts/start-rtmp.sh 10.10.142.3`. Do not run setup again to fix a stopped container: it deliberately refuses to overwrite credentials. The RTMP container uses Docker's `unless-stopped` restart policy; a manually stopped container remains stopped until you start it again. Its publisher and reader accounts have separate passwords. Only RTMP is exposed; no HLS, WebRTC or RTSP port is published.
+If both credentials and a stopped container exist, run `docker start mixed-chat-rtmp`. If credentials exist but the container is absent, run `scripts/start-rtmp.sh "$APP_PC_LAN_IP"`. On a fresh installation with neither, run `scripts/setup-rtmp.sh "$APP_PC_LAN_IP"`, review the generated private files, then run `scripts/start-rtmp.sh "$APP_PC_LAN_IP"`. Do not run setup again to fix a stopped container: it deliberately refuses to overwrite credentials. The RTMP container uses Docker's `unless-stopped` restart policy; a manually stopped container remains stopped until you start it again. Its publisher and reader accounts have separate passwords. Only RTMP is exposed; no HLS, WebRTC or RTSP port is published.
 
 Open `data/rtmp-urls.txt` **locally** and copy `OBS_PUBLISH_URL` privately to the OBS PC. Choose the output that matches your broadcast:
 
@@ -98,7 +99,7 @@ From the repository root on the app PC, start one server process:
 npm start
 ```
 
-Keep that process running. On this host, `mise exec node@24.21.0 -- npm start` selects the installed Node 24 runtime if plain `npm` points to another version. For a manually supervised terminal that survives SSH logout, start `tmux new -s mixed-chat`, run the start command inside it, detach with Ctrl+B then D, and return with `tmux attach -t mixed-chat`. Unlike the RTMP container, the app process does not automatically restart after reboot; start it again or install a service manager before unattended use. If another instance holds port 3210, stop it rather than running demo and live together. Open `http://127.0.0.1:3210/admin` on the app PC and sign in once with `ADMIN_TOKEN` from local `.env`; the session survives page reloads for up to seven days. The **Live setup** card should show each configured prerequisite, and the admin page must not show the demo-mode notice. The authenticated `/api/admin/status` response has `demo: false` when checked separately.
+Keep that process running. Verify `node --version` reports Node 24 before starting. For a manually supervised terminal that survives SSH logout, start `tmux new -s mixed-chat`, run the start command inside it, detach with Ctrl+B then D, and return with `tmux attach -t mixed-chat`. Unlike the RTMP container, the app process does not automatically restart after reboot; start it again or install a service manager before unattended use. If another instance holds port 3210, stop it rather than running demo and live together. Open `http://127.0.0.1:3210/admin` on the app PC and sign in once with `ADMIN_TOKEN` from local `.env`; the session survives page reloads for up to seven days. The **Live setup** card should show each configured prerequisite, and the admin page must not show the demo-mode notice. The authenticated `/api/admin/status` response has `demo: false` when checked separately.
 
 Use this order for the first rehearsal:
 
@@ -116,4 +117,4 @@ In admin, use **Stop AI now**, **Stop receivers** and **Stop capture** for a con
 
 The reader/overlay fragment grants read access, and both RTMP URLs contain credentials. Keep them private, use **Rotate reader token** if a web link leaks, and replace RTMP credentials and the container if an RTMP URL leaks. Changing `ADMIN_TOKEN` invalidates administrator sessions. Losing `TOKEN_ENCRYPTION_KEY` makes saved OAuth tokens unreadable and requires reauthorization. [README.md](README.md) documents data deletion and token handling in more detail.
 
-Local checks have verified the LAN overlay endpoint, local-only admin routes, authenticated synthetic RTMP publish/read, capture masking, login persistence and the browser UI. They do **not** prove that the separate OBS PC, CHZZK application, YouTube broadcast or your AI account works until you complete the live rehearsal above.
+The repository's [verification report](VERIFICATION_REPORT.md) records fixture, browser and synthetic RTMP checks. Those checks do **not** prove that your OBS PC, CHZZK application, YouTube broadcast or AI account works until you complete the live rehearsal above.
