@@ -9,10 +9,11 @@
 - Runtime: Node.js 24.21.0, npm 11.19.0.
 - Browser: Playwright 1.63.0, Chromium 153.0.8010.12, headless.
 - OBS: unavailable; version and physical camera behavior not verified.
-- FFmpeg: production executable not used; a controlled JPEG-emitting executable exercised the capture worker.
+- FFmpeg: the pinned container FFmpeg published and read a synthetic RTMP H264 stream; a controlled JPEG-emitting executable also exercised the capture worker. No external OBS stream was used.
 - Lockfile SHA-256: `2f1eb9c6156b5bd7845e8e41c54ec06d80be4e21e96fbd32a5cd0f823fca4b97`.
 - `npm run check`: PASS, TypeScript + production Vite build + **25 tests**, zero failures/skips on this Linux host.
 - `npm run test:browser`: PASS, no browser page errors. Admin, reader, overlay and 390-pixel-wide admin checks completed.
+- Authenticated MediaMTX smoke check: PASS. The approved RTMP container is running with a restart policy on app-PC LAN and loopback port 1935. A synthetic H264 publisher connected; a reader without credentials was rejected and a credentialed reader decoded a frame. No actual OBS stream was tested.
 - Live server LAN smoke check: PASS. `10.10.142.3:3210/overlay` and `/health` returned 200, while `/admin` returned 403 via the LAN address; admin and generated OBS links returned 200 and the LAN host respectively through loopback. No external OBS PC was tested.
 - Actual demo entry point: PASS. HTTP health, authenticated status, three `demo_fixture` inputs, artificial frame reception and initial `ai: stopped` verified. SIGTERM shutdown completed; no demo server is intentionally left running.
 - Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). All seven repository Markdown files are English; the Korean handoff stays ignored under `.local/`.
@@ -36,7 +37,7 @@ Screenshots and machine-readable browser timings are generated under ignored `te
 | CHZZK official OAuth/session | PASS: top-level token response, encrypted atomic rotation, concurrent refresh single-flight; Socket.IO 2.0.3 local SYSTEM/CHAT fixture | BLOCKED     | No approved client credentials, broadcaster OAuth, scopes or live own-channel session                                                  |
 | SOOP official SDK            | BLOCKED                                                                                                                                | BLOCKED     | Official distribution, method/event/auth contract and applicable approval are not established; adapter exposes `official_spec_pending` |
 | SOOP unofficial library      | PASS: explicit opt-in gate, version/integrity pin and installed type inspection                                                        | BLOCKED     | No streamer/terms review/live test; exact source-commit-to-tarball equivalence not established                                         |
-| OBS Program / RTMP input     | PASS: real JPEG bytes through RTMP-configured capture process; configured ROI becomes black; source-size changes invalidate approval   | BLOCKED     | No OBS/physical camera, real RTMP server or Studio Mode Program-versus-Preview test                                                    |
+| OBS Program / RTMP input     | PASS: real JPEG bytes through RTMP-configured capture process; configured ROI becomes black; source-size changes invalidate approval   | BLOCKED     | Local authenticated MediaMTX tested with synthetic frames; no external OBS/physical camera or Studio Mode Program-versus-Preview test  |
 | OpenAI API-key image model   | PASS: mock HTTP inspection verifies JPEG data URL, structured output, input counting, `store:false`, no tools                          | BLOCKED     | No key or selected model; no paid call, actual image comprehension or provider billing verified                                        |
 | ChatGPT subscription model   | PASS: OAuth PKCE/state/encrypted storage fixture and streamed completion/image payload fixture                                         | BLOCKED     | No interactive account consent or live model call; actual plan access and image comprehension unverified                               |
 
