@@ -149,12 +149,35 @@ test("ChatGPT inference requires completed stream and sends masked image with su
       seen.input[1].content[1].image_url,
       "data:image/jpeg;base64,aW1hZ2U=",
     );
+    const text = JSON.stringify(decision);
+    const deltaOnly = chatgptModel(
+      configSchema.parse({}).ai,
+      auth,
+      (async () =>
+        new Response(
+          [
+            { type: "response.output_text.delta", delta: text.slice(0, 18) },
+            { type: "response.output_text.delta", delta: text.slice(18) },
+            {
+              type: "response.completed",
+              response: { status: "completed", output: [], usage: {} },
+            },
+          ]
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join(""),
+          { headers: { "Content-Type": "text/event-stream" } },
+        )) as typeof fetch,
+    );
+    assert.equal(
+      (await deltaOnly(input, new AbortController().signal)).decision.action,
+      "skip",
+    );
     const interrupted = chatgptModel(
       configSchema.parse({}).ai,
       auth,
       (async () =>
         new Response(
-          'data: {"type":"response.output_text.delta"}\n\n',
+          'data: {"type":"response.output_text.delta","delta":"{}"}\n\n',
         )) as typeof fetch,
     );
     await assert.rejects(

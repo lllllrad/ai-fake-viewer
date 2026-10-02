@@ -40,10 +40,12 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     network: { bindHost: "0.0.0.0", publicBaseUrl },
     database: ":memory:",
   });
+  const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-lan-test-"));
   const { app } = await createApp(c, {
     adminToken: admin,
     readerToken: reader,
     encryptionKey,
+    chatgptTokenPath: join(chatgptDir, "tokens"),
     startInputs: false,
   });
   try {
@@ -84,6 +86,7 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     assert.equal(links.json().overlay, `${publicBaseUrl}/overlay#${reader}`);
   } finally {
     await app.close();
+    rmSync(chatgptDir, { recursive: true, force: true });
   }
 });
 test("A05, A11, A12, A18: authenticated API and two identical public streams", async () => {
@@ -103,10 +106,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
     readerToken: reader,
     encryptionKey,
     startInputs: false,
-    chatgptTokenPath: join(
-      mkdtempSync(join(tmpdir(), "chatgpt-api-test-")),
-      "tokens",
-    ),
+    chatgptTokenPath: join(chatgptDir, "tokens"),
   });
   await app.listen({ port, host: "127.0.0.1" });
   const host = `127.0.0.1:${port}`;

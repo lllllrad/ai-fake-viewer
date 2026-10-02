@@ -4,6 +4,9 @@ import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import { validateDecision, type Model, type ModelInput } from "./model.ts";
 import type { Decision } from "./contracts.ts";
+export class AiStartError extends Error {
+  statusCode = 409;
+}
 export class Scheduler {
   state = "stopped";
   controller?: AbortController;
@@ -36,17 +39,25 @@ export class Scheduler {
     public transcriber?: Transcriber,
   ) {}
   start() {
-    if (this.store.closed()) throw Error("Session is closed");
+    if (this.store.closed())
+      throw new AiStartError("Session is closed. Start a new session first.");
     if (
       this.config.ai.visualMode === "continuous" &&
       (!this.capture.confirmed || !this.capture.recent().length)
     )
-      throw Error("Review and confirm fresh masked Program preview first");
-    if (
-      !this.demo &&
-      (!this.config.policy.providerReviewed || !this.providerReady())
-    )
-      throw Error("Provider review and model connection required");
+      throw new AiStartError(
+        "Confirm a fresh masked Program preview before starting continuous video AI.",
+      );
+    if (!this.demo && !this.config.policy.providerReviewed)
+      throw new AiStartError(
+        "AI provider review is not recorded. After reviewing transcript, permitted chat, and masked-frame sharing, set policy.providerReviewed: true in config.yaml and restart.",
+      );
+    if (!this.demo && !this.providerReady())
+      throw new AiStartError(
+        this.config.ai.provider === "chatgpt_subscription"
+          ? "Connect ChatGPT and select a model in admin before starting AI."
+          : "Set OPENAI_API_KEY and OPENAI_MODEL in .env, then restart before starting AI.",
+      );
     this.stop();
     this.state = "running";
     this.timer = setInterval(() => void this.tick(), 1000);

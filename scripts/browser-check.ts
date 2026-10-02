@@ -1,9 +1,12 @@
 import { chromium } from "@playwright/test";
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
 const port = 33219;
+const chatgptDir = mkdtempSync(join(tmpdir(), "mixed-chat-browser-"));
 const admin = "a".repeat(64),
   reader = "r".repeat(64);
 const { app, store, capture } = await createApp(
@@ -13,6 +16,7 @@ const { app, store, capture } = await createApp(
     adminToken: admin,
     readerToken: reader,
     encryptionKey: "e".repeat(64),
+    chatgptTokenPath: join(chatgptDir, "tokens"),
     startInputs: false,
   },
 );
@@ -186,4 +190,5 @@ try {
 } finally {
   await browser.close();
   await app.close();
+  rmSync(chatgptDir, { recursive: true, force: true });
 }

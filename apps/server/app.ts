@@ -10,7 +10,7 @@ import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
-import { Scheduler } from "../../packages/scheduler.ts";
+import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
 import { mockModel, openaiModel, chatgptModel } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
@@ -152,9 +152,11 @@ export async function createApp(
     reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
       error: validation
         ? "Invalid request fields"
-        : req.url.startsWith("/api/admin/")
-          ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
-          : "Request failed",
+        : e instanceof AiStartError
+          ? e.message
+          : req.url.startsWith("/api/admin/")
+            ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
+            : "Request failed",
     });
   });
   app.get("/health", async () => ({ ok: true }));

@@ -211,6 +211,7 @@ export function chatgptModel(
     if (!r.ok || !r.body) throw Error("ChatGPT inference unavailable");
     let completed: any;
     let buffer = "";
+    let streamedText = "";
     let size = 0;
     const reader = r.body.getReader();
     const decoder = new TextDecoder();
@@ -239,6 +240,13 @@ export function chatgptModel(
             event.type === "error"
           )
             throw Error("ChatGPT response failed or incomplete");
+          if (event.type === "response.output_text.delta") {
+            if (typeof event.delta !== "string")
+              throw Error("Invalid ChatGPT text delta");
+            streamedText += event.delta;
+            if (streamedText.length > 10000)
+              throw Error("ChatGPT output too large");
+          }
           if (event.type === "response.completed") completed = event.response;
         }
       }
@@ -247,20 +255,28 @@ export function chatgptModel(
     }
     if (!completed || completed.status !== "completed")
       throw Error("ChatGPT stream ended before completion");
-    const output = (completed.output ?? [])
+    const completedText = (completed.output ?? [])
       .flatMap((v: any) => (v.type === "message" ? (v.content ?? []) : []))
       .filter((v: any) => v.type === "output_text")
       .map((v: any) => v.text)
       .join("");
-    if (output.length > 10000) throw Error("ChatGPT output too large");
+    const output = completedText || streamedText;
+    if (!output || output.length > 10000)
+      throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
     const usage = completed.usage;
     if (
       usage?.input_tokens > config.maxInputTokens ||
       usage?.output_tokens > config.maxOutputTokens
     )
       throw Error("ChatGPT token budget exceeded");
+    let decision: unknown;
+    try {
+      decision = JSON.parse(output);
+    } catch {
+      throw Error("ChatGPT decision JSON invalid");
+    }
     return {
-      decision: JSON.parse(output),
+      decision: decision as Decision,
       inputTokens: usage?.input_tokens,
       outputTokens: usage?.output_tokens,
     };

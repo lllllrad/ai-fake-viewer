@@ -719,6 +719,13 @@ function Admin() {
               >
                 Start AI
               </button>
+              {!status.demo && !status.setup.ai.providerReviewed && (
+                <p className="hint">
+                  Start AI is blocked: review AI-provider sharing of
+                  transcripts, permitted chat and masked frames, then set
+                  policy.providerReviewed: true in config.yaml and restart.
+                </p>
+              )}
               <p className="hint">
                 AI always starts manually. In on-request mode, transcription or
                 permitted chat starts a text-only decision; a fresh, confirmed

@@ -301,7 +301,10 @@ test("transcript log persists across restart and follows retention and deletion"
 });
 
 test("transcript export is available only to the local administrator", async () => {
-  const config = configSchema.parse({ database: ":memory:" });
+  const config = configSchema.parse({
+    database: ":memory:",
+    ai: { visualMode: "on_request" },
+  });
   const adminToken = "a".repeat(32);
   const directory = mkdtempSync(join(tmpdir(), "mixed-transcript-api-"));
   const { app, store } = await createApp(config, {
@@ -338,6 +341,16 @@ test("transcript export is available only to the local administrator", async () 
     );
     assert.equal(JSON.parse(allowed.body.trim()).text, "private speech");
     assert.equal(store.snapshot().messages.length, 0);
+    const blocked = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/start",
+      headers: {
+        host: `127.0.0.1:${config.port}`,
+        authorization: `Bearer ${adminToken}`,
+      },
+    });
+    assert.equal(blocked.statusCode, 409);
+    assert.match(blocked.json().error, /policy\.providerReviewed: true/);
   } finally {
     await app.close();
     rmSync(directory, { recursive: true, force: true });
