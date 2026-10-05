@@ -90,6 +90,8 @@ export class YoutubeNotices {
         let parts: string[];
         try {
           parts = noticeParts(next.text);
+          if (this.participation.profile.singleStepTest && parts.length !== 1)
+            throw Error("notice_too_long");
         } catch (error) {
           bot.failed(next.id);
           throw error;

@@ -64,6 +64,7 @@ export const configSchema = z
     chzzk: z
       .object({
         enabled: z.boolean().default(false),
+        allowBroadcasterTesting: z.boolean().default(false),
         consentNoticeEnabled: z.boolean().default(false),
         redirectUri: z
           .string()
@@ -73,6 +74,7 @@ export const configSchema = z
       .strict()
       .default({
         enabled: false,
+        allowBroadcasterTesting: false,
         consentNoticeEnabled: false,
         redirectUri: "http://127.0.0.1:3210/oauth/chzzk/callback",
       }),

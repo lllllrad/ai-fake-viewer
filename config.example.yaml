@@ -14,6 +14,7 @@ youtube:
   transport: grpc
   restFallback: true
 chzzk:
+  allowBroadcasterTesting: false # temporary own-channel participation testing
   enabled: false
   consentNoticeEnabled: false
   # Register this exact URL in the CHZZK developer console. For a public HTTPS callback, replace only the origin.
@@ -70,6 +71,7 @@ ai:
 # Fill only from this operator's actual approvals, public notices and API settings.
 # Empty/unconfirmed defaults intentionally block live collection/AI.
 privacy:
+  singleStepTest: false # temporary combined notice/consent; requires testReview
   audioEnabled: false # enable reviewed broadcast audio transcription and authenticated export
   # Optional only after an actual operator review for live testing; see LIVE_SETUP.md.
   # testReview:

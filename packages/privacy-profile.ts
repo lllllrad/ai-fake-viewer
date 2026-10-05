@@ -14,6 +14,7 @@ export const privacyProfileSchema = z
       .strict()
       .optional(),
     audioEnabled: z.boolean().default(false),
+    singleStepTest: z.boolean().default(false),
     operator: text,
     officer: text,
     contact: text,
@@ -112,6 +113,8 @@ export function profileFingerprint(p: PrivacyProfile) {
 }
 export function profileIssues(p: PrivacyProfile): string[] {
   const issues: string[] = [];
+  if (p.singleStepTest && !p.testReview)
+    issues.push("간소화 테스트에는 운영자 확인 기록이 필요합니다.");
   for (const key of [
     "operator",
     "officer",
@@ -177,6 +180,7 @@ export function assertProfileUpdate(
     JSON.stringify({
       testReview: p.testReview,
       audioEnabled: p.audioEnabled,
+      singleStepTest: p.singleStepTest,
       operator: p.operator,
       collection: p.collectionNotice,
       publication: p.publicationNotice,

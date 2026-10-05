@@ -55,7 +55,10 @@ export class NoticeBot {
         person.platform !== this.platform ||
         person.broadcaster !== this.broadcaster ||
         (person.author === this.broadcaster &&
-          !(this.platform === "youtube" && this.allowBroadcasterTesting)) ||
+          !(
+            ["youtube", "chzzk"].includes(this.platform) &&
+            this.allowBroadcasterTesting
+          )) ||
         p.profile.notices.botUserIds.includes(person.author) ||
         person.age === "blocked"
       )
@@ -87,7 +90,10 @@ export class NoticeBot {
         session: p.sessionId,
         kind,
         expiresAt: Date.now() + (this.platform === "soop" ? 15000 : 900000),
-        text: `${text} [안내 ${id.slice(0, 8)}]`,
+        text:
+          p.profile.singleStepTest && this.platform !== "soop"
+            ? text
+            : `${text} [안내 ${id.slice(0, 8)}]`,
       };
       this.state = "awaiting_echo";
       return { id, text: this.pending.text, expiresAt: this.pending.expiresAt };

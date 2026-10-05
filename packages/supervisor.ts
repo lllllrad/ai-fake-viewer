@@ -6,7 +6,10 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Store } from "./storage.ts";
 import type { Config } from "./config.ts";
 import { incomingSchema } from "./contracts.ts";
-import { runYoutube } from "./youtube.ts";
+import {
+  runYoutube,
+  ignoreYoutubeOwnMessage as ignoreOwnNoticeMessage,
+} from "./youtube.ts";
 import { ChzzkAuth, normalizeChzzk } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {
@@ -35,7 +38,12 @@ export class Supervisor {
     public youtubeAuth?: YoutubeAuth,
   ) {
     if (!demo && store.participation) {
-      this.chzzkNotices = new ChzzkNotices(store.participation, auth);
+      this.chzzkNotices = new ChzzkNotices(
+        store.participation,
+        auth,
+        fetch,
+        config.chzzk.allowBroadcasterTesting,
+      );
       store.on("reset", () => this.chzzkNotices?.reset());
     }
     if (!demo && store.participation && youtubeAuth) {
@@ -326,7 +334,11 @@ export class Supervisor {
                 const parsed = normalizeChzzk(m.data);
                 if (
                   parsed.channel !== subscribedChannel ||
-                  parsed.author === subscribedChannel
+                  ignoreOwnNoticeMessage(
+                    parsed,
+                    subscribedChannel,
+                    this.config.chzzk.allowBroadcasterTesting,
+                  )
                 )
                   return;
                 this.receive("chzzk", parsed);

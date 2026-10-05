@@ -156,3 +156,17 @@ refresh; sending resumes with the next unsent part. Withdrawal, target changes a
 explicit cancellation still reject late responses. All parts must be confirmed
 before a fresh consent command advances a stage; a confirmed introduction is not
 sent again merely because the receiver reconnects or the timer ticks.
+
+## Single-step test exception
+
+The explicitly requested temporary `privacy.singleStepTest` mode requires operator
+review evidence and a new notice version. It replaces the ordinary stage list with
+one combined test declaration. A first message schedules its fixed short notice;
+a fresh consent command after confirmed delivery records age self-declaration and
+activates participation. No automatic or administrator-granted consent is added.
+Repeated ordinary chat does not resend a delivered notice. Withdrawal, known child
+restrictions, exact-channel permissions and notice quotas remain enforced. YouTube
+and CHZZK enforce a one-message size bound; an overlong notice fails without a
+partial send. This is an abbreviated testing exception, not a claim that a short
+combined declaration satisfies every production consent requirement. See the
+[test runbook](../LIVE_SETUP.md#temporary-single-step-consent-test).

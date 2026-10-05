@@ -10,7 +10,7 @@ import {
 export type ParticipationState =
   "UNCONSENTED" | "WAITING_CONSENT" | "ACTIVE" | "WITHDRAWN" | "ENDED";
 export type ConsentStage =
-  "age" | "collection" | "publication" | "overseas" | "thirdParty";
+  "age" | "collection" | "publication" | "overseas" | "thirdParty" | "combined";
 export type Participant = {
   id: string;
   platform: string;
@@ -51,6 +51,7 @@ export class Participation {
     return JSON.stringify([platform, broadcaster, this.sessionId, author]);
   }
   stages(): ConsentStage[] {
+    if (this.profile.singleStepTest) return ["combined"];
     return [
       "age",
       "collection",
@@ -88,7 +89,7 @@ export class Participation {
         platform: m.platform,
         broadcaster: m.channel,
         author: m.author,
-        state: "UNCONSENTED",
+        state: this.profile.singleStepTest ? "WAITING_CONSENT" : "UNCONSENTED",
         epoch: 0,
         stage: 0,
         age: "unknown",
@@ -206,7 +207,8 @@ export class Participation {
     if (p.deliveredAt === null || at <= p.deliveredAt) return;
     const stage = this.stages()[p.stage];
     p.accepted.push(stage);
-    if (stage === "age") p.age = "self_declared_14_plus";
+    if (stage === "age" || stage === "combined")
+      p.age = "self_declared_14_plus";
     p.stage++;
     p.deliveredAt = null;
     p.observed = undefined;
@@ -243,6 +245,11 @@ export class Participation {
     const p = this.byId(id);
     const stage = this.stages()[p.stage];
     const profile = this.profile;
+    if (profile.singleStepTest)
+      return {
+        stage,
+        text: `테스트: 14세 이상·수집이용·방송공개·국외처리${profile.audioEnabled ? "·음성" : ""}${profile.thirdPartyNotice ? "·제3자제공" : ""} 동의 !동의 / 철회 !철회 ${profile.noticeUrl}`,
+      };
     const text =
       stage === "age"
         ? "이 앱은 만 14세 이상이라고 자기신고한 이용자를 대상으로 운영합니다. 본인이 만 14세 이상이면 새로운 !동의를 입력해 주세요. 이 명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로 확인되면 참여를 중단하며, 법정대리인 동의 확인 절차가 마련되기 전에는 참여할 수 없습니다."

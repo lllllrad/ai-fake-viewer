@@ -89,6 +89,11 @@ export function PrivacyPanel() {
         </p>
       )}
       {error && <p role="alert">{error}</p>}
+      {data.profile.singleStepTest && (
+        <p role="status">
+          간소화 테스트: 안내 1회 후 !동의 한 번으로 참여합니다.
+        </p>
+      )}
       {data.profile.testReview && (
         <p role="status" className="hint">
           운영자 확인 테스트 설정입니다. 국가·보존·영상 공개의 상세 문구는 정리

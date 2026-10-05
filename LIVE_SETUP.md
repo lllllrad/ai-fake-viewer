@@ -153,3 +153,23 @@ limits, not guaranteed platform quotas; platform errors still pause sends and
 failed attempts still consume the same budget. Shared traffic can add delay.
 Set the values in private YAML and use `sh run-command.sh just server-restart`;
 restart begins a new consent session. Defaults remain unchanged.
+
+## Temporary single-step consent test
+
+After explicit operator review, set `privacy.singleStepTest: true` together with
+`privacy.testReview`, a real public `privacy.noticeUrl`, and a new notice version.
+A first chat or consent command queues one short combined test notice, including
+age self-declaration, collection/use, publication, overseas processing and the
+notice link. Enabled audio and third-party scope are identified when applicable.
+One fresh consent command after confirmed delivery activates participation. A
+command before delivery never does. The normal four-stage flow remains the default;
+this abbreviated test flow does not certify the completeness of production notices.
+
+YouTube and CHZZK reject an overlong combined notice instead of splitting or
+truncating it. Their fixed numbered notice format stays excluded from broadcaster
+test input. Both `youtube.allowBroadcasterTesting` and
+`chzzk.allowBroadcasterTesting` are independent default-off test options. Explicit
+bot IDs remain excluded. Withdrawal and known-underage restrictions remain active.
+Use `just server-restart` through the repository wrapper after YAML changes; the
+restart clears the old participation session. Platform quota or permission errors
+still prevent actual delivery and cannot be removed by the simplified flow.
