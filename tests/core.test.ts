@@ -162,6 +162,36 @@ test("T05: REST / proto-loader snake_case enum contract agrees", () => {
   assert.equal(method.requestDeserialize(serialized).live_chat_id, "chat");
   client.close();
 });
+test("consented original chat is model evidence and triggers text-first generation", async () => {
+  let modelInput: ModelInput | undefined;
+  const h = harness(async (input: ModelInput) => {
+    modelInput = input;
+    return {
+      decision: {
+        action: "say",
+        text: "메시지 잘 봤어요.",
+        replyToMessageId: input.messages[0]?.id ?? null,
+        evidenceFrameIds: [],
+        evidenceMessageIds: [input.messages[0]?.id ?? ""],
+        evidenceTranscriptIds: [],
+      },
+    };
+  });
+  consent(h.s);
+  h.c.ai.visualMode = "on_request";
+  h.s.ingestBatch([
+    msg({ sourceId: "original", text: "원문 그대로 전달되는지 확인" }),
+  ]);
+  await h.ai.tick();
+  assert.equal(modelInput?.messages[0]?.text, "원문 그대로 전달되는지 확인");
+  assert.equal(
+    modelInput?.newMessages?.[0]?.text,
+    "원문 그대로 전달되는지 확인",
+  );
+  assert.equal(h.s.snapshot().messages.length, 2);
+  assert.equal(h.s.snapshot().messages[1]?.text, "메시지 잘 봤어요.");
+  h.s.close();
+});
 test("T04: video selection rejects arbitrary hosts, paths and protocols", () => {
   assert.equal(videoId("https://youtu.be/abcdefghijk"), "abcdefghijk");
   assert.equal(
