@@ -845,6 +845,23 @@ export async function createApp(
     const event = (e: PublicEvent) =>
       send({ type: "event", event: store.readerEvent(e) });
     const reset = () => send({ ...store.readerSnapshot(), demo: !!opts.demo });
+    const consentNotice = (notice: {
+      platform: string;
+      channel: string;
+      occurredAt: number;
+    }) => {
+      const enabled = store.consentNoticeEnabled(
+        notice.platform,
+        config[notice.platform as "youtube" | "chzzk" | "soop"]
+          ?.consentNoticeEnabled,
+      );
+      if (enabled)
+        send({
+          type: "consent_notice",
+          platform: notice.platform,
+          occurredAt: notice.occurredAt,
+        });
+    };
     socket.on("pong", () => {
       alive = true;
     });
@@ -875,6 +892,7 @@ export async function createApp(
         reset();
         store.on("event", event);
         store.on("reset", reset);
+        store.on("consent_notice", consentNotice);
       } catch {
         socket.close(1008);
       }
@@ -885,6 +903,7 @@ export async function createApp(
       sockets.delete(socket);
       store.off("event", event);
       store.off("reset", reset);
+      store.off("consent_notice", consentNotice);
     });
   });
   app.get("/api/admin/transcripts/export", async (_req, reply) => {
@@ -996,6 +1015,10 @@ export async function createApp(
     setup: {
       youtube: {
         enabled: config.youtube.enabled,
+        consentNoticeEnabled: store.consentNoticeEnabled(
+          "youtube",
+          config.youtube.consentNoticeEnabled,
+        ),
         credentialsConfigured: !!(
           process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
         ),
@@ -1004,6 +1027,10 @@ export async function createApp(
       },
       chzzk: {
         enabled: config.chzzk.enabled,
+        consentNoticeEnabled: store.consentNoticeEnabled(
+          "chzzk",
+          config.chzzk.consentNoticeEnabled,
+        ),
         credentialsConfigured: !!(
           process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
         ),
@@ -1011,6 +1038,10 @@ export async function createApp(
       },
       soop: {
         mode: config.soop.mode,
+        consentNoticeEnabled: store.consentNoticeEnabled(
+          "soop",
+          config.soop.consentNoticeEnabled,
+        ),
         streamerConfigured: !!config.soop.streamerId,
         credentialsConfigured: !!(
           process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET
@@ -1038,6 +1069,14 @@ export async function createApp(
     },
     messages: store.readerSnapshot().messages,
   }));
+  app.post("/api/admin/consent-notices/:platform", async (req, reply) => {
+    const platform = z
+      .enum(["youtube", "chzzk", "soop"])
+      .parse((req.params as any).platform);
+    const body = z.object({ enabled: z.boolean() }).strict().parse(req.body);
+    store.setConsentNoticeEnabled(platform, body.enabled);
+    return { ok: true, platform, enabled: body.enabled };
+  });
   app.get("/api/admin/links", async () => ({
     reader: `${publicOrigin}/reader#${readerToken}`,
     overlay: `${publicOrigin}/overlay#${readerToken}`,

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
@@ -26,6 +26,8 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
  CREATE TABLE IF NOT EXISTS viewer_consents(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author TEXT NOT NULL,granted INTEGER NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(session,platform,channel,author));
+ CREATE TABLE IF NOT EXISTS consent_notice_targets(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author_hash TEXT NOT NULL,state TEXT NOT NULL,last_notice INTEGER,PRIMARY KEY(session,platform,channel,author_hash));
+ CREATE TABLE IF NOT EXISTS consent_notice_state(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,last_notice INTEGER NOT NULL,PRIMARY KEY(session,platform,channel));
  CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT,type TEXT,target TEXT,at INTEGER,payload TEXT);
  CREATE TABLE IF NOT EXISTS connector_checkpoints(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,session TEXT,at INTEGER,reserved REAL,input INTEGER,output INTEGER,status TEXT);
@@ -184,6 +186,17 @@ export class Store extends EventEmitter {
               granted ? 1 : 0,
               Date.now(),
             );
+          this.db
+            .prepare(
+              "INSERT INTO consent_notice_targets(session,platform,channel,author_hash,state,last_notice) VALUES(?,?,?,?,?,NULL) ON CONFLICT(session,platform,channel,author_hash) DO UPDATE SET state=excluded.state",
+            )
+            .run(
+              this.sessionId,
+              m.platform,
+              m.channel,
+              this.viewerHash(m.platform, m.channel, m.author),
+              granted ? "consented" : "withdrawn",
+            );
           if (!granted) {
             const oldMessages = this.db
               .prepare(
@@ -222,8 +235,10 @@ export class Store extends EventEmitter {
               )
               .get(this.sessionId, m.platform, m.channel, m.author) as any
           )?.granted
-        )
+        ) {
+          this.recordConsentNoticeTarget(m);
           continue;
+        }
         let a = this.db
           .prepare(
             "SELECT * FROM actors_private WHERE session=? AND source=? AND author=?",
@@ -277,6 +292,8 @@ export class Store extends EventEmitter {
           .run(checkpoint.key, checkpoint.value);
     });
     for (const seq of seqs) this.emit("event", this.publicEvent(seq));
+    this.emitConsentNoticeIfDue();
+    this.emitConsentNoticeIfDue();
     if (seqs.length && this.originsRevealed()) {
       const colliding = this.collisionNameSet();
       const fresh = [...colliding].some(
@@ -286,6 +303,56 @@ export class Store extends EventEmitter {
       if (fresh) this.emit("reset");
     }
     return seqs;
+  }
+  private viewerHash(platform: string, channel: string, author: string) {
+    return createHash("sha256")
+      .update(`${platform}\0${channel}\0${author}`)
+      .digest("hex");
+  }
+  private recordConsentNoticeTarget(m: Incoming) {
+    const authorHash = this.viewerHash(m.platform, m.channel, m.author);
+    this.db
+      .prepare(
+        "INSERT INTO consent_notice_targets(session,platform,channel,author_hash,state,last_notice) VALUES(?,?,?,?, 'pending',NULL) ON CONFLICT(session,platform,channel,author_hash) DO NOTHING",
+      )
+      .run(this.sessionId, m.platform, m.channel, authorHash);
+  }
+  private emitConsentNoticeIfDue(now = Date.now()) {
+    const due = this.db
+      .prepare(
+        "SELECT platform,channel FROM consent_notice_targets WHERE session=? AND state='pending' GROUP BY platform,channel",
+      )
+      .all(this.sessionId) as any[];
+    for (const target of due) {
+      const state = this.db
+        .prepare(
+          "SELECT last_notice FROM consent_notice_state WHERE session=? AND platform=? AND channel=?",
+        )
+        .get(this.sessionId, target.platform, target.channel) as any;
+      if (state && now - state.last_notice < 30000) continue;
+      this.db
+        .prepare(
+          "INSERT INTO consent_notice_state(session,platform,channel,last_notice) VALUES(?,?,?,?) ON CONFLICT(session,platform,channel) DO UPDATE SET last_notice=excluded.last_notice",
+        )
+        .run(this.sessionId, target.platform, target.channel, now);
+      this.db
+        .prepare(
+          "UPDATE consent_notice_targets SET last_notice=? WHERE session=? AND platform=? AND channel=? AND state='pending'",
+        )
+        .run(now, this.sessionId, target.platform, target.channel);
+      this.emit("consent_notice", {
+        platform: target.platform,
+        channel: target.channel,
+        occurredAt: now,
+      });
+    }
+  }
+  pendingConsentNotice(platform: string, channel: string) {
+    return !!this.db
+      .prepare(
+        "SELECT 1 FROM consent_notice_targets WHERE session=? AND platform=? AND channel=? AND state='pending' LIMIT 1",
+      )
+      .get(this.sessionId, platform, channel);
   }
   publicMessage(id: string): PublicMessage | null {
     const m = this.db
@@ -507,6 +574,22 @@ export class Store extends EventEmitter {
       )?.value === "1"
     );
   }
+  consentNoticeEnabled(platform: string, defaultValue = false) {
+    const value = this.db
+      .prepare("SELECT value FROM runtime_flags WHERE key=?")
+      .get(`consent_notice:${platform}`) as any;
+    return value ? value.value === "1" : defaultValue;
+  }
+  setConsentNoticeEnabled(platform: string, enabled: boolean) {
+    this.db
+      .prepare(
+        "INSERT INTO runtime_flags(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      )
+      .run(`consent_notice:${platform}`, enabled ? "1" : "0");
+    this.audit(
+      `consent_notice.${platform}.${enabled ? "enabled" : "disabled"}`,
+    );
+  }
   setAiDesiredRunning(value: boolean) {
     this.db
       .prepare(
@@ -681,6 +764,21 @@ export class Store extends EventEmitter {
       this.db.prepare("DELETE FROM transcripts WHERE captured<?").run(before);
       this.db
         .prepare(
+          "DELETE FROM viewer_consents WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
+        )
+        .run(before);
+      this.db
+        .prepare(
+          "DELETE FROM consent_notice_targets WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
+        )
+        .run(before);
+      this.db
+        .prepare(
+          "DELETE FROM consent_notice_state WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
+        )
+        .run(before);
+      this.db
+        .prepare(
           "DELETE FROM actors_private WHERE id NOT IN (SELECT actor FROM messages)",
         )
         .run();
@@ -696,7 +794,7 @@ export class Store extends EventEmitter {
   }
   deleteAll() {
     this.db.exec(
-      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running';",
+      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
     );
     this.sessionId = randomUUID();
     this.db

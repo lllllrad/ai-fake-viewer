@@ -83,6 +83,28 @@ test("viewer chat is private until per-stream platform identity consents, and wi
   assert.equal(s.snapshot().messages.length, 0);
   s.close();
 });
+test("consent notices repeat per channel after 30 seconds and exclude withdrawn viewers", () => {
+  const s = new Store(":memory:");
+  const notices: unknown[] = [];
+  s.on("consent_notice", (notice) => notices.push(notice));
+  s.ingestBatch([msg({ text: "first private message" })]);
+  assert.equal(notices.length, 1);
+  s.ingestBatch([msg({ sourceId: "second", text: "still private" })]);
+  assert.equal(notices.length, 1);
+  s.db.exec("UPDATE consent_notice_state SET last_notice=last_notice-31000");
+  s.ingestBatch([msg({ sourceId: "third", text: "still waiting" })]);
+  assert.equal(notices.length, 2);
+  s.ingestBatch([msg({ sourceId: "withdraw", text: "!철회" })]);
+  assert.equal(s.pendingConsentNotice("youtube", "c"), false);
+  s.db.exec("UPDATE consent_notice_state SET last_notice=last_notice-31000");
+  s.ingestBatch([
+    msg({ sourceId: "after-withdraw", text: "do not remind me" }),
+  ]);
+  assert.equal(notices.length, 2);
+  s.setConsentNoticeEnabled("youtube", true);
+  assert.equal(s.consentNoticeEnabled("youtube"), true);
+  s.close();
+});
 test("AI desired running state survives a database-backed server restart", () => {
   const dir = mkdtempSync(join(tmpdir(), "ai-running-state-"));
   const path = join(dir, "state.sqlite");

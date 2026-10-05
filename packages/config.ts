@@ -37,6 +37,7 @@ export const configSchema = z
     youtube: z
       .object({
         enabled: z.boolean().default(false),
+        consentNoticeEnabled: z.boolean().default(false),
         video: z.string().default(""),
         channelId: z.string().default(""),
         transport: z.enum(["grpc", "rest"]).default("grpc"),
@@ -45,6 +46,7 @@ export const configSchema = z
       .strict()
       .default({
         enabled: false,
+        consentNoticeEnabled: false,
         video: "",
         channelId: "",
         transport: "grpc",
@@ -53,6 +55,7 @@ export const configSchema = z
     chzzk: z
       .object({
         enabled: z.boolean().default(false),
+        consentNoticeEnabled: z.boolean().default(false),
         redirectUri: z
           .string()
           .url()
@@ -61,6 +64,7 @@ export const configSchema = z
       .strict()
       .default({
         enabled: false,
+        consentNoticeEnabled: false,
         redirectUri: "http://127.0.0.1:3210/oauth/chzzk/callback",
       }),
     soop: z
@@ -68,6 +72,7 @@ export const configSchema = z
         mode: z
           .enum(["disabled", "official", "experimental_library"])
           .default("disabled"),
+        consentNoticeEnabled: z.boolean().default(false),
         experimentalConsent: z.boolean().default(false),
         streamerId: z
           .string()
@@ -81,6 +86,7 @@ export const configSchema = z
       .strict()
       .default({
         mode: "disabled",
+        consentNoticeEnabled: false,
         experimentalConsent: false,
         streamerId: "",
         redirectUri: "http://127.0.0.1:3210/oauth/soop/callback",

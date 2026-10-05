@@ -52,6 +52,7 @@ function PublicChat() {
   const [messages, setMessages] = useState<PublicMessage[]>([]);
   const [state, setState] = useState("Connecting");
   const [demo, setDemo] = useState(false);
+  const [consentNoticeAt, setConsentNoticeAt] = useState<number | null>(null);
   const [follow, setFollow] = useState(true);
   const end = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
@@ -80,6 +81,7 @@ function PublicChat() {
           seq.current = m.lastSeq;
           setMessages(m.messages);
           setDemo(m.demo);
+          setConsentNoticeAt(null);
           setState(m.closed ? "Session closed" : "Connected");
         } else if (m.type === "event") {
           const v = m.event;
@@ -95,6 +97,7 @@ function PublicChat() {
             );
           else if (v.type === "session.closed") setState("Session closed");
         }
+        if (m.type === "consent_notice") setConsentNoticeAt(m.occurredAt);
       };
       ws.onclose = (e) => {
         if (disposed) return;
@@ -113,6 +116,11 @@ function PublicChat() {
       ws?.close();
     };
   }, [token]);
+  useEffect(() => {
+    if (consentNoticeAt === null) return;
+    const timer = setTimeout(() => setConsentNoticeAt(null), 12000);
+    return () => clearTimeout(timer);
+  }, [consentNoticeAt]);
   useEffect(() => {
     if (follow && !overlay) end.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, follow, overlay]);
@@ -142,6 +150,13 @@ function PublicChat() {
         {disclosure}
       </aside>
       <section className="messages" aria-live="polite">
+        {consentNoticeAt !== null && (
+          <aside className="disclosure consent-notice" role="status">
+            개인정보 처리에 동의한 시청자의 채팅만 화면에 표시됩니다. 참여하려면
+            채팅에 <strong>!동의</strong>를 입력해 주세요. 동의는 현재 방송
+            세션에서 유효하며, 철회하려면 <strong>!철회</strong>를 입력하세요.
+          </aside>
+        )}
         {messages.length === 0 && (
           <p className="empty">Waiting for messages…</p>
         )}
@@ -1488,6 +1503,31 @@ function Admin() {
               <div className="section-title">
                 <h2>Live setup</h2>
               </div>
+              <h3>Consent notices</h3>
+              <p className="hint">
+                Enable only after the platform has approved outbound notice
+                text. When enabled, the read-only overlay explains that viewers
+                must type !동의 before their chat is shown. Notices repeat at
+                most once every 30 seconds while non-consenting chat continues;
+                viewers who type !철회 are excluded.
+              </p>
+              {(["youtube", "chzzk", "soop"] as const).map((platform) => (
+                <label key={platform}>
+                  <input
+                    type="checkbox"
+                    checked={status.setup[platform].consentNoticeEnabled}
+                    disabled={busy}
+                    onChange={(e) =>
+                      void post(`consent-notices/${platform}`, {
+                        enabled: e.target.checked,
+                      })
+                        .then(refresh)
+                        .catch((error) => setError(error.message))
+                    }
+                  />
+                  {platform.toUpperCase()} consent notice (approval required)
+                </label>
+              ))}
               <p>
                 YouTube:{" "}
                 {status.setup.youtube.enabled
