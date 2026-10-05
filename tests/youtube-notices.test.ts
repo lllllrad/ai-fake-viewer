@@ -258,6 +258,21 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
       ).statusCode,
       400,
     );
+    app.store.ingestBatch([
+      privacyMessage("u", "!동의", Date.now() + 1, { platform: "chzzk" }),
+    ]);
+    const chzzkPerson = app.participation!.get("chzzk", "fixture", "u")!;
+    assert.equal(
+      (
+        await app.app.inject({
+          method: "POST",
+          url: `/api/admin/privacy/participants/${chzzkPerson.id}/notice-delivered`,
+          headers,
+          payload: { delivered: true },
+        })
+      ).statusCode,
+      400,
+    );
     assert.equal(
       (
         await app.app.inject({

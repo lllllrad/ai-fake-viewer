@@ -43,7 +43,7 @@ Set private `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`, enable `youtube`, a
 
 ### CHZZK: official OAuth and user session
 
-Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. CHZZK has no automatic notice sender: the operator must actually deliver each notice through an approved channel, then confirm delivery before the fresh viewer command can advance participation. See the [platform behavior matrix](docs/behavior-requirements.md#platform-execution-and-notice-delivery).
+Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. The server automatically sends fixed participation introductions and stage notices using the official Chat API. Enable chat-message sending and user-info lookup permissions as well as chat receipt, then reauthorize the broadcaster account. Notices are split into messages of at most 100 characters; all parts must return a message ID before a fresh consent command can advance participation. No open administrator tab or manual delivery confirmation is required. See the [platform behavior matrix](docs/behavior-requirements.md#platform-execution-and-notice-delivery).
 
 ### SOOP: separate official and experimental paths
 

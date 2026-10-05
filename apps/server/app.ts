@@ -1054,6 +1054,7 @@ export async function createApp(
       pendingFollowups: pendingRights.size,
       noticeBot: noticeBot?.state ?? "disabled",
       youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
+      chzzkNoticeBot: supervisor.chzzkNotices?.state ?? "disabled",
       profile: config.privacy,
       issues: profileIssues(config.privacy),
       participants: participation
@@ -1099,7 +1100,7 @@ export async function createApp(
       void body;
       if (!participation) throw Error("Live 참여 상태가 없습니다.");
       if (
-        ["soop", "youtube"].includes(
+        ["soop", "youtube", "chzzk"].includes(
           participation.byId((req.params as any).id).platform,
         )
       )

@@ -19,13 +19,13 @@ Start with the [current behavior requirements and implementation status](behavio
 
 ## Ownership
 
-| Feature                                  | Source                                                                                                                          | Documents to update                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Startup, readiness and controls          | `apps/server/main.ts`, `apps/server/app.ts`, `apps/web/src/operations-dashboard.tsx`                                            | README, LIVE_SETUP, AI_FLOW, dashboard specification    |
-| Consent, withdrawal, names and summaries | `packages/participation.ts`, `packages/storage.ts`, `apps/web/src/privacy-panel.tsx`                                            | Privacy implementation, README, dashboard specification |
-| Personas and sessions                    | `packages/persona/`, `packages/scheduler.ts`, `packages/storage.ts`                                                             | Persona specification, AI_FLOW, TASKS                   |
-| Model input, prompts and budgets         | `packages/model.ts`, `packages/gate.ts`, `prompts/`                                                                             | AI_FLOW, README                                         |
-| Platform authentication and messages     | `packages/youtube*.ts`, `packages/chzzk.ts`, `packages/soop.ts`, `packages/notice-bot.ts`, `packages/supervisor.ts`, `workers/` | README, LIVE_SETUP, relevant research                   |
+| Feature                                  | Source                                                                                                                           | Documents to update                                     |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Startup, readiness and controls          | `apps/server/main.ts`, `apps/server/app.ts`, `apps/web/src/operations-dashboard.tsx`                                             | README, LIVE_SETUP, AI_FLOW, dashboard specification    |
+| Consent, withdrawal, names and summaries | `packages/participation.ts`, `packages/storage.ts`, `apps/web/src/privacy-panel.tsx`                                             | Privacy implementation, README, dashboard specification |
+| Personas and sessions                    | `packages/persona/`, `packages/scheduler.ts`, `packages/storage.ts`                                                              | Persona specification, AI_FLOW, TASKS                   |
+| Model input, prompts and budgets         | `packages/model.ts`, `packages/gate.ts`, `prompts/`                                                                              | AI_FLOW, README                                         |
+| Platform authentication and messages     | `packages/youtube*.ts`, `packages/chzzk*.ts`, `packages/soop.ts`, `packages/notice-bot.ts`, `packages/supervisor.ts`, `workers/` | README, LIVE_SETUP, relevant research                   |
 
 ## Maintenance rules
 

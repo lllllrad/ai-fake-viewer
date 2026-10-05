@@ -19,7 +19,7 @@ export class NoticeBot {
   constructor(
     private participation: Participation,
     private broadcaster: string,
-    private platform: "soop" | "youtube" = "soop",
+    private platform: "soop" | "youtube" | "chzzk" = "soop",
   ) {}
   reset() {
     this.pending = undefined;
@@ -84,7 +84,7 @@ export class NoticeBot {
         revision: p.revision,
         session: p.sessionId,
         kind,
-        expiresAt: Date.now() + (this.platform === "youtube" ? 900000 : 15000),
+        expiresAt: Date.now() + (this.platform === "soop" ? 15000 : 900000),
         text: `${text} [안내 ${id.slice(0, 8)}]`,
       };
       this.state = "awaiting_echo";

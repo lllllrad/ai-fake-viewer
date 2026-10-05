@@ -4,6 +4,14 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## CHZZK automatic participation notices — 2026-10-05
+
+Added a server-side CHZZK fixed-notice sender alongside the existing YouTube sender. The official Chat API documents a 100-character message limit and a returned message ID; the User API supplies the authenticated channel identity. Each notice part is rate-limited and acknowledged before recording delivery. The receiver excludes its own channel's messages, and sender work is bound to subscription, credentials, participation generation and session. Admin exposes CHZZK sending status and rejects manual delivery completion. Confirmed introductions do not repeat for later ordinary chat in the same session.
+
+Validation: `sh run-command.sh npm run check` passed (documentation/config validation, TypeScript/Vite build and 123 tests). Sender fixtures cover split delivery, subsequent consent, repeat suppression, withdrawal during refresh/write, wrong channel, missing permission/acknowledgement, retry pacing, stop/reset, credential replacement and supervisor integration. Existing YouTube regression checks passed; the manual-confirmation route test also covers CHZZK. `sh run-command.sh npm run test:browser` passed on Chromium 153.0.8010.12 with no browser/CSP errors. Changed runtime/test files passed the formatting check.
+
+No real viewer chat, platform sends or provider requests were used. Real CHZZK permissions, OAuth reauthorization, quotas and delivery remain operational acceptance. No running service was restarted; deploying this change requires a restart and a fresh memory-only participation session. This implementation supersedes the CHZZK automatic-sender gap recorded in the earlier documentation audit below.
+
 ## Current behavior documentation audit — 2026-10-05
 
 Compared the current specifications with server readiness, scheduler input selection, participation handling and platform notice delivery paths. Added a current behavior contract with a platform execution matrix; made CHZZK's missing automatic sender and SOOP's admin-tab dependency explicit. Corrected status-response terminology, API-key-only token counting and misleading legacy feature headings. This is a documentation audit, not a new runtime or real-platform acceptance run.

@@ -1,22 +1,8 @@
 import { NoticeBot } from "./notice-bot.ts";
 import type { Participation } from "./participation.ts";
-import type { YoutubeAuth } from "./youtube-auth.ts";
-// Conservative local 200-character message cap. Never truncate a notice or a URL.
-export function noticeParts(text: string, budget = 170) {
-  const chunks: string[] = [];
-  let chunk = "";
-  for (const word of text.split(/\s+/u)) {
-    if (word.length > budget) throw Error("notice_too_long");
-    if (chunk && chunk.length + word.length + 1 > budget) {
-      chunks.push(chunk);
-      chunk = "";
-    }
-    chunk += (chunk ? " " : "") + word;
-  }
-  if (chunk) chunks.push(chunk);
-  return chunks.map((s, i) => `[안내 ${i + 1}/${chunks.length}] ${s}`);
-}
-export class YoutubeNotices {
+import type { ChzzkAuth } from "./chzzk.ts";
+import { noticeParts } from "./youtube-notices.ts";
+export class ChzzkNotices {
   state = "waiting_connection";
   private target?: { chat: string; broadcaster: string };
   private bots = new Map<string, NoticeBot>();
@@ -33,7 +19,7 @@ export class YoutubeNotices {
   connected = false;
   constructor(
     private participation: Participation,
-    private auth: YoutubeAuth,
+    private auth: ChzzkAuth,
     private request: typeof fetch = fetch,
   ) {}
   resolve(chat: string, broadcaster: string) {
@@ -54,19 +40,15 @@ export class YoutubeNotices {
       this.state = "waiting_connection";
       return;
     }
-    if (!this.auth.connected) {
+    if (!this.auth.token) {
       this.state = "auth_required";
-      return;
-    }
-    if (this.auth.channelId !== target.broadcaster) {
-      this.state = "channel_mismatch";
       return;
     }
     this.busy = true;
     try {
       let bot = this.bots.get(target.broadcaster);
       if (!bot) {
-        bot = new NoticeBot(this.participation, target.broadcaster, "youtube");
+        bot = new NoticeBot(this.participation, target.broadcaster, "chzzk");
         this.bots.set(target.broadcaster, bot);
       }
       if (this.job && !bot.valid(this.job.id)) {
@@ -83,7 +65,7 @@ export class YoutubeNotices {
         first = true;
         let parts: string[];
         try {
-          parts = noticeParts(next.text);
+          parts = noticeParts(next.text, 70);
         } catch (error) {
           bot.failed(next.id);
           throw error;
@@ -99,14 +81,37 @@ export class YoutubeNotices {
       const job = this.job;
       if (!first && !bot.reservePart(job.id)) return;
       const token = await this.auth.access();
+      const credentials = this.auth.token;
       // OAuth refresh is asynchronous: recheck consent/session/target immediately before sending.
       const valid = () =>
         !signal.aborted &&
         this.connected &&
         this.target === target &&
         this.job === job &&
-        this.auth.channelId === target.broadcaster &&
+        !!credentials &&
+        this.auth.token === credentials &&
         bot!.valid(job.id);
+      if (!valid()) {
+        bot.failed(job.id);
+        this.job = undefined;
+        return;
+      }
+      const identity = await this.request(
+        "https://openapi.chzzk.naver.com/open/v1/users/me",
+        {
+          headers: { authorization: `Bearer ${token}` },
+          signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
+        },
+      );
+      if (!identity.ok)
+        throw Error(
+          identity.status === 401
+            ? "auth_required"
+            : "permission_or_quota_blocked",
+        );
+      const user = (await identity.json()) as any;
+      if (user.code !== 200 || user.content?.channelId !== target.broadcaster)
+        throw Error("channel_mismatch");
       if (!valid()) {
         bot.failed(job.id);
         this.job = undefined;
@@ -115,20 +120,14 @@ export class YoutubeNotices {
       const text = job.parts[job.index];
       this.state = "sending";
       const r = await this.request(
-        "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet",
+        "https://openapi.chzzk.naver.com/open/v1/chats/send",
         {
           method: "POST",
           headers: {
             authorization: `Bearer ${token}`,
             "content-type": "application/json",
           },
-          body: JSON.stringify({
-            snippet: {
-              liveChatId: target.chat,
-              type: "textMessageEvent",
-              textMessageDetails: { messageText: text },
-            },
-          }),
+          body: JSON.stringify({ message: text }),
           signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
         },
       );
@@ -158,10 +157,9 @@ export class YoutubeNotices {
         return;
       }
       if (
-        !b.id ||
-        b.snippet?.liveChatId !== target.chat ||
-        b.snippet?.authorChannelId !== target.broadcaster ||
-        b.snippet?.textMessageDetails?.messageText !== text
+        b.code !== 200 ||
+        typeof b.content?.messageId !== "string" ||
+        !b.content.messageId
       )
         throw Error("delivery_unconfirmed");
       if (++job.index === job.parts.length) {
@@ -173,10 +171,24 @@ export class YoutubeNotices {
       this.job?.bot.failed(this.job.id);
       this.job = undefined;
       this.state =
-        e instanceof Error && e.message === "notice_too_long"
-          ? "notice_too_long"
+        e instanceof Error &&
+        [
+          "notice_too_long",
+          "auth_required",
+          "permission_or_quota_blocked",
+          "channel_mismatch",
+        ].includes(e.message)
+          ? e.message
           : "delivery_unconfirmed";
-      this.blockedUntil = Date.now() + 60000;
+      this.blockedUntil =
+        Date.now() +
+        ([
+          "auth_required",
+          "permission_or_quota_blocked",
+          "channel_mismatch",
+        ].includes(this.state)
+          ? 300000
+          : 60000);
     } finally {
       this.busy = false;
     }

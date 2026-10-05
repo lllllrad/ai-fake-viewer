@@ -1,3 +1,4 @@
+import { ChzzkNotices } from "./chzzk-notices.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
 import { YoutubeNotices } from "./youtube-notices.ts";
 import { fork, type ChildProcess } from "node:child_process";
@@ -10,6 +11,7 @@ import { ChzzkAuth, normalizeChzzk } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {
   youtubeNotices?: YoutubeNotices;
+  chzzkNotices?: ChzzkNotices;
   private platformTasks = new Map<string, Promise<void>>();
   onBroadcastEnded?: () => void;
   states: Record<
@@ -32,6 +34,10 @@ export class Supervisor {
     public demo = false,
     public youtubeAuth?: YoutubeAuth,
   ) {
+    if (!demo && store.participation) {
+      this.chzzkNotices = new ChzzkNotices(store.participation, auth);
+      store.on("reset", () => this.chzzkNotices?.reset());
+    }
     if (!demo && store.participation && youtubeAuth) {
       this.youtubeNotices = new YoutubeNotices(
         store.participation,
@@ -60,6 +66,8 @@ export class Supervisor {
   }
   status(p: string, s: string) {
     const previous = this.states[p]?.state;
+    if (p === "chzzk" && this.chzzkNotices)
+      this.chzzkNotices.connected = s === "subscribed";
     if (p === "youtube" && this.youtubeNotices)
       this.youtubeNotices.connected = s.startsWith("subscribed:");
     if (p === "youtube" && s === "reconnecting" && this.states[p].state !== s)
@@ -172,7 +180,24 @@ export class Supervisor {
       (!this.store.participation ||
         this.states.chzzk.state !== "privacy_blocked")
     )
-      this.launch("chzzk", (signal) => this.chzzk(signal));
+      this.launch("chzzk", async (signal) => {
+        let pending: Promise<void> | undefined;
+        const timer = setInterval(() => {
+          if (!pending)
+            pending = (
+              this.chzzkNotices?.tick(signal) ?? Promise.resolve()
+            ).finally(() => {
+              pending = undefined;
+            });
+        }, 1000);
+        try {
+          await this.chzzk(signal);
+        } finally {
+          clearInterval(timer);
+          this.chzzkNotices?.reset();
+          await pending;
+        }
+      });
     if (
       this.config.soop.mode === "official" &&
       (!this.store.participation ||
@@ -282,6 +307,10 @@ export class Supervisor {
                   )
                     throw Error("permission_blocked");
                   subscribedChannel = e.data.channelId;
+                  this.chzzkNotices?.resolve(
+                    e.data.channelId,
+                    e.data.channelId,
+                  );
                   subscribed = true;
                   clearTimeout(timeout);
                   this.status("chzzk", "subscribed");
@@ -293,7 +322,11 @@ export class Supervisor {
                 }
               } else if (m.type === "CHAT" && subscribed) {
                 const parsed = normalizeChzzk(m.data);
-                if (parsed.channel !== subscribedChannel) return;
+                if (
+                  parsed.channel !== subscribedChannel ||
+                  parsed.author === subscribedChannel
+                )
+                  return;
                 this.receive("chzzk", parsed);
               }
             })().catch(() => {
@@ -313,6 +346,7 @@ export class Supervisor {
         this.status("chzzk", state);
         terminal = state !== "reconnecting";
       } finally {
+        this.chzzkNotices?.reset();
         signal.removeEventListener("abort", abort);
         child?.kill();
         if (key)
