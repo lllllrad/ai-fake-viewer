@@ -173,13 +173,36 @@ try {
         text:
           i === 11
             ? "<script>window.untrusted=true</script>"
-            : `[DEMO] Shared message ${i + 1} · 안녕 🎨`,
+            : `[DEMO] Shared message ${i + 1} · 코드 오류? 안녕 🎨`,
       },
     ]);
     await readerPage.locator(".message").nth(i).waitFor();
     await overlay.locator(".message").nth(i).waitFor();
     timing.push(performance.now() - start);
   }
+  const summaryCard = adminPage.getByRole("region", { name: "익명 채팅 요약" });
+  await expect(
+    summaryCard.getByText("주제: 개발·기술", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    summaryCard.getByText("분위기: 질문이 오감", { exact: true }),
+  ).toBeVisible();
+  assert.equal(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/admin/chat-summary/clear",
+        headers: { host: `127.0.0.1:${port}` },
+      })
+    ).statusCode,
+    401,
+  );
+  await summaryCard.getByRole("button", { name: "채팅 요약 초기화" }).click();
+  await expect(
+    summaryCard.getByText("공통 분위기를 요약할 채팅이 아직 부족합니다.", {
+      exact: true,
+    }),
+  ).toBeVisible();
   const readerText = await readerPage
     .locator(".message-main p")
     .allTextContents();

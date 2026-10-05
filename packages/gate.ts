@@ -45,6 +45,7 @@ export class DecisionGate {
       state: {
         description: input.description,
         persona: input.persona,
+        anonymousChatSummary: input.chatSummary ?? null,
         transcripts: (input.transcripts ?? []).slice(-12).map((t) => ({
           text: t.text.slice(0, 1000),
         })),

@@ -10,6 +10,14 @@ The production entry point starts configured receivers, capture and transcriptio
 
 Live AI start currently requires fresh video capture, running audio input and a ready model in **both visual modes**; platform receivers are optional. `on_request` omits images from the first inference and permits text-only ticks after start, but is not a text-only startup configuration. See `scheduler.readyCheck`, `readyComponents` and `resumeAiIfRequested` in [app.ts](apps/server/app.ts).
 
+## Withdrawal and anonymous chat summaries
+
+- Committed `!철회` erases the viewer's stored message bodies and emits context invalidation. The scheduler aborts generation, inspection, timing-filter and review requests; clears pending/manual/delayed replies and cached message versions; then waits for usable input. A response that cites only video is still discarded if its request contained withdrawn chat. Rolled-back batches emit no removal events.
+- Published AI messages record all input message dependencies, not only cited evidence. Withdrawal/hiding retracts dependent replies transitively, preventing paraphrases from returning as recent AI context. Existing persona publication manifests seed dependency records on upgrade; older standalone replies without recorded context can only be traced through explicit reply links. Session reaction results and manifests are scrubbed on chat removal. This cannot recall an already-sent provider request or copies captured elsewhere.
+- `Store.chatSummary()` regenerates the current rolling 120-second aggregate from up to 300 visible, still-consented human messages. Only fixed broad topic/expression labels supported by at least three distinct platform accounts and a coarse activity band are emitted. No names, raw text, IDs, quotations or free-form entities enter the summary. This threshold is a product suppression rule, not a guarantee against all inference from external information.
+- The current aggregate is cached in SQLite per stream session, without raw inputs or per-person summary records. Expired caches are removed during retention maintenance; every read recomputes from the live window. Withdrawal and hiding recalculate immediately. New sessions isolate summaries; data deletion removes them. Admin `POST /api/admin/chat-summary/clear` records a sequence cutoff, clears current aggregate context and cancels pending work; old messages do not repopulate it after restart.
+- `anonymousChatSummary` accompanies answer/review and optional Jev requests. It is uncertain shared background only, not a fresh event, personal memory, quote or valid evidence ID. The response must still cite available frame/chat/transcript evidence. No extra model call is used for summarization.
+
 ## Runtime overview
 
 ```mermaid

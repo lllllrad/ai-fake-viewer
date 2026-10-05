@@ -1,3 +1,4 @@
+import { summarizeChat, summaryWindowMs } from "./chat-summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID, createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -25,6 +26,9 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
+ CREATE TABLE IF NOT EXISTS chat_context_summaries(session TEXT PRIMARY KEY,payload TEXT NOT NULL,expires INTEGER NOT NULL,cutoff INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS ai_message_context(message_id TEXT NOT NULL,source_message_id TEXT NOT NULL,PRIMARY KEY(message_id,source_message_id));
+ CREATE INDEX IF NOT EXISTS ai_message_context_source ON ai_message_context(source_message_id);
  CREATE TABLE IF NOT EXISTS viewer_consents(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author TEXT NOT NULL,granted INTEGER NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(session,platform,channel,author));
  CREATE TABLE IF NOT EXISTS consent_notice_targets(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author_hash TEXT NOT NULL,state TEXT NOT NULL,last_notice INTEGER,PRIMARY KEY(session,platform,channel,author_hash));
  CREATE TABLE IF NOT EXISTS consent_notice_state(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,last_notice INTEGER NOT NULL,PRIMARY KEY(session,platform,channel));
@@ -117,6 +121,10 @@ export class Store extends EventEmitter {
     this.db.exec(
       "UPDATE persona_sessions SET control_epoch=control_epoch+1,updated=unixepoch('subsec')*1000 WHERE state='live'; UPDATE persona_reaction_attempts SET state='canceled',reason='server_restart',finished_at=unixepoch('subsec')*1000 WHERE state IN ('generating','candidate','dispatching');",
     );
+    this.db
+      .exec(`INSERT OR IGNORE INTO ai_message_context(message_id,source_message_id)
+      SELECT p.public_message_id,j.value FROM persona_reaction_attempts p,json_each(p.model_manifest,'$.inputMessages') j
+      WHERE p.public_message_id IS NOT NULL AND p.model_manifest IS NOT NULL AND j.type='text'`);
     const active = this.db
       .prepare(
         "SELECT id FROM sessions WHERE closed IS NULL ORDER BY started DESC LIMIT 1",
@@ -164,6 +172,7 @@ export class Store extends EventEmitter {
   }
   ingestBatch(items: Incoming[], checkpoint?: { key: string; value: string }) {
     const seqs: number[] = [];
+    let invalidated = false;
     this.transaction(() => {
       if (this.closed()) return;
       for (const raw of items) {
@@ -200,7 +209,7 @@ export class Store extends EventEmitter {
           if (!granted) {
             const oldMessages = this.db
               .prepare(
-                "SELECT id FROM messages WHERE session=? AND platform=? AND channel=? AND actor IN (SELECT id FROM actors_private WHERE session=? AND source=? AND author=?) AND hidden=0",
+                "SELECT id FROM messages WHERE session=? AND platform=? AND channel=? AND actor IN (SELECT id FROM actors_private WHERE session=? AND source=? AND author=?) ",
               )
               .all(
                 this.sessionId,
@@ -210,16 +219,11 @@ export class Store extends EventEmitter {
                 m.platform,
                 m.author,
               ) as any[];
-            const withdrawnSeqs = oldMessages.map((old) => {
-              this.db
-                .prepare("UPDATE messages SET hidden=1,text='' WHERE id=?")
-                .run(old.id);
-              const seq = this.event("message.hidden", old.id);
-              seqs.push(seq);
-              return seq;
-            });
-            for (const seq of withdrawnSeqs)
-              this.emit("event", this.publicEvent(seq));
+            this.eraseChatContext(
+              oldMessages.map((old) => old.id),
+              seqs,
+            );
+            invalidated = true;
           }
           this.audit(
             granted ? "viewer.consent.granted" : "viewer.consent.withdrawn",
@@ -291,6 +295,8 @@ export class Store extends EventEmitter {
           .prepare("INSERT OR REPLACE INTO connector_checkpoints VALUES(?,?)")
           .run(checkpoint.key, checkpoint.value);
     });
+    if (invalidated) this.emit("context_invalidated");
+    this.chatSummary();
     for (const seq of seqs) this.emit("event", this.publicEvent(seq));
     this.emitConsentNoticeIfDue();
     this.emitConsentNoticeIfDue();
@@ -522,22 +528,111 @@ export class Store extends EventEmitter {
         .all(this.sessionId, after) as any[]
     ).map((e) => this.publicEvent(e.seq));
   }
+  chatSummary(now = Date.now()) {
+    const prior = this.db
+      .prepare("SELECT cutoff FROM chat_context_summaries WHERE session=?")
+      .get(this.sessionId) as any;
+    const rows = this.db
+      .prepare(
+        `SELECT m.actor,m.text FROM messages m JOIN actors_private a ON a.id=m.actor
+      JOIN viewer_consents c ON c.session=m.session AND c.platform=m.platform AND c.channel=m.channel AND c.author=a.author
+      WHERE m.session=? AND m.hidden=0 AND m.platform<>'experiment' AND c.granted=1 AND m.received>? AND m.seq>?
+      ORDER BY m.seq DESC LIMIT 300`,
+      )
+      .all(this.sessionId, now - summaryWindowMs, prior?.cutoff ?? 0) as Array<{
+      actor: string;
+      text: string;
+    }>;
+    const summary = summarizeChat(rows);
+    this.db
+      .prepare(
+        "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires",
+      )
+      .run(
+        this.sessionId,
+        JSON.stringify(summary),
+        now + summaryWindowMs,
+        prior?.cutoff ?? 0,
+      );
+    return summary;
+  }
+  clearChatSummary() {
+    this.db
+      .prepare(
+        "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires,cutoff=excluded.cutoff",
+      )
+      .run(
+        this.sessionId,
+        JSON.stringify(summarizeChat([])),
+        Date.now() + summaryWindowMs,
+        this.lastSeq(),
+      );
+    this.emit("context_invalidated");
+    this.audit("chat_summary.cleared");
+    return this.chatSummary();
+  }
+  cancelChatContextAttempts() {
+    this.db
+      .prepare(
+        `UPDATE persona_reaction_attempts SET state='canceled',reason='chat_context_removed',result=NULL,model_manifest=NULL,finished_at=?
+      WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND state IN ('generating','candidate','dispatching')`,
+      )
+      .run(Date.now(), this.sessionId);
+  }
+  recordAiContext(messageId: string, sourceIds: string[]) {
+    const insert = this.db.prepare(
+      "INSERT OR IGNORE INTO ai_message_context VALUES(?,?)",
+    );
+    for (const id of sourceIds) insert.run(messageId, id);
+  }
+  // Called inside the removal transaction. Include indirect AI responses so that
+  // an earlier paraphrase cannot reintroduce withdrawn text into future inputs.
+  private eraseChatContext(ids: string[], seqs: number[]) {
+    const removed = new Set(ids);
+    for (const id of removed) {
+      const derived = this.db
+        .prepare(
+          `SELECT m.id FROM messages m WHERE m.session=? AND m.platform='experiment' AND
+        (m.reply=? OR m.id IN (SELECT message_id FROM ai_message_context WHERE source_message_id=?))`,
+        )
+        .all(this.sessionId, id, id) as any[];
+      for (const row of derived) removed.add(row.id);
+    }
+    for (const id of removed) {
+      this.db
+        .prepare("UPDATE messages SET hidden=1,text='' WHERE id=?")
+        .run(id);
+      seqs.push(this.event("message.hidden", id));
+      this.db
+        .prepare(
+          "DELETE FROM ai_message_context WHERE message_id=? OR source_message_id=?",
+        )
+        .run(id, id);
+    }
+    // In-flight models may have used any earlier context, not just cited IDs.
+    this.db
+      .prepare(
+        `UPDATE persona_reaction_attempts SET result=NULL,model_manifest=NULL,event_ids='[]',
+      state=CASE WHEN state IN ('generating','candidate','dispatching') THEN 'canceled' ELSE state END,
+      reason='chat_context_removed' WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?)`,
+      )
+      .run(this.sessionId);
+    this.chatSummary();
+  }
   hide(id: string) {
-    let seq = 0;
+    const seqs: number[] = [];
     this.transaction(() => {
-      const m = this.db
+      const row = this.db
         .prepare(
           "SELECT id FROM messages WHERE id=? AND session=? AND hidden=0",
         )
         .get(id, this.sessionId);
-      if (!m) return;
-      this.db
-        .prepare("UPDATE messages SET hidden=1,text='' WHERE id=?")
-        .run(id);
-      seq = this.event("message.hidden", id);
+      if (!row) return;
+      this.eraseChatContext([id], seqs);
       this.audit("message.hidden");
     });
-    if (seq) this.emit("event", this.publicEvent(seq));
+    if (seqs.length) this.emit("context_invalidated");
+    for (const seq of seqs) this.emit("event", this.publicEvent(seq));
   }
   context(allowed: string[]) {
     return (this.snapshot().messages.filter(Boolean) as PublicMessage[])
@@ -666,6 +761,14 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   purge(before: number) {
+    this.db
+      .prepare(
+        "DELETE FROM chat_context_summaries WHERE expires<? OR session IN (SELECT id FROM sessions WHERE closed<?)",
+      )
+      .run(Date.now(), before);
+    this.db.exec(
+      "DELETE FROM ai_message_context WHERE message_id NOT IN (SELECT id FROM messages) OR source_message_id NOT IN (SELECT id FROM messages)",
+    );
     if (
       !this.db
         .prepare("SELECT 1 FROM messages WHERE received<? LIMIT 1")
@@ -761,6 +864,10 @@ export class Store extends EventEmitter {
         .run(Date.now() - 90 * 86400000);
       this.db.prepare("DELETE FROM events WHERE at<?").run(before);
       this.db.prepare("DELETE FROM messages WHERE received<?").run(before);
+      this.db.exec(
+        "DELETE FROM ai_message_context WHERE message_id NOT IN (SELECT id FROM messages) OR source_message_id NOT IN (SELECT id FROM messages)",
+      );
+      this.chatSummary();
       this.db.prepare("DELETE FROM transcripts WHERE captured<?").run(before);
       this.db
         .prepare(
@@ -794,7 +901,7 @@ export class Store extends EventEmitter {
   }
   deleteAll() {
     this.db.exec(
-      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
+      "DELETE FROM chat_context_summaries; DELETE FROM ai_message_context; DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
     );
     this.sessionId = randomUUID();
     this.db

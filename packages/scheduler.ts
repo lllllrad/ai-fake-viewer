@@ -12,6 +12,7 @@ export class AiStartError extends Error {
 export class Scheduler {
   readyCheck?: () => string[];
   preparePersonas?: () => void;
+  private activeInput?: ModelInput;
   state = "stopped";
   controller?: AbortController;
   timer?: NodeJS.Timeout;
@@ -61,7 +62,27 @@ export class Scheduler {
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     public transcriber?: Transcriber,
     public gate = new DecisionGate(config.ai.gate),
-  ) {}
+  ) {
+    store.on("context_invalidated", () => this.invalidateChatContext());
+    store.on("reset", () => this.invalidateChatContext());
+  }
+  invalidateChatContext() {
+    this.generation++;
+    this.controller?.abort();
+    clearTimeout(this.dispatchTimer);
+    this.dispatchTimer = undefined;
+    for (const input of [this.activeInput, this.pending?.input]) {
+      if (!input) continue;
+      input.messages = [];
+      input.newMessages = [];
+      input.chatSummary = undefined;
+      input.reviewDraft = undefined;
+    }
+    this.pending = undefined;
+    this.store.cancelChatContextAttempts();
+    this.processedMessageVersions.clear();
+    if (this.state === "running") this.phase = "waiting_for_input";
+  }
   start() {
     if (this.store.closed())
       throw new AiStartError("Session is closed. Start a new session first.");
@@ -433,6 +454,8 @@ export class Scheduler {
       frames: frames.length,
     };
     const generation = this.generation;
+    input.chatSummary = this.store.chatSummary();
+    this.activeInput = input;
     const attemptId = activeMember && personaRuntime ? randomUUID() : undefined;
     if (attemptId && activeMember && personaRuntime)
       this.store.beginPersonaAttempt({
@@ -514,6 +537,7 @@ export class Scheduler {
           return;
         }
         input = { ...input, frames: this.capture.recent() };
+        this.activeInput = input;
         this.phase = "generating_draft_with_frame";
         r = await this.callModel(input, signal);
         if (
@@ -543,6 +567,7 @@ export class Scheduler {
         this.phase = "ai_review";
         this.reviews++;
         const reviewInput = { ...input, reviewDraft: d.text! };
+        this.activeInput = reviewInput;
         const reviewResult = await this.callModel(reviewInput, signal);
         if (
           generation !== this.generation ||
@@ -558,6 +583,7 @@ export class Scheduler {
       }
       if (
         this.store.closed() ||
+        input.messages.some((m) => !this.store.publicMessage(m.id)) ||
         (input.frames.length > 0 && !this.capture.recent().length) ||
         d.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
         d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)) ||
@@ -620,7 +646,7 @@ export class Scheduler {
         } else this.approve();
       }
     } catch (error) {
-      if (attemptId)
+      if (attemptId && generation === this.generation)
         this.store.finishPersonaAttempt(
           attemptId,
           "failed",
@@ -635,6 +661,7 @@ export class Scheduler {
         );
       }
     } finally {
+      this.activeInput = undefined;
       this.busy = false;
       if (generation === this.generation && this.state === "running") {
         if (!this.pending) this.phase = "random_wait";
@@ -692,6 +719,7 @@ export class Scheduler {
       p.expires < Date.now() ||
       this.state !== "running" ||
       this.store.closed() ||
+      p.input.messages.some((m) => !this.store.publicMessage(m.id)) ||
       (p.input.frames.length > 0 && !this.capture.recent().length) ||
       p.decision.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
       p.decision.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id))
@@ -753,6 +781,10 @@ export class Scheduler {
         this.phase = "suppressed";
         return;
       }
+      this.store.recordAiContext(
+        publicMessageId,
+        p.input.messages.map((m) => m.id),
+      );
       this.lastSpoke = now;
       this.phase = "published_local";
       this.personaTimes[p.persona] = now;
@@ -760,7 +792,7 @@ export class Scheduler {
       this.speechTimes.push(now);
       return;
     }
-    this.store.ingestBatch([
+    const published = this.store.ingestBatch([
       {
         platform: "experiment",
         channel: this.store.sessionId,
@@ -773,6 +805,16 @@ export class Scheduler {
         replyToId: d.replyToMessageId,
       },
     ]);
+    for (const seq of published) {
+      const message = this.store.publicEvent(seq).payload as {
+        id?: string;
+      } | null;
+      if (message?.id)
+        this.store.recordAiContext(
+          message.id,
+          p.input.messages.map((m) => m.id),
+        );
+    }
     this.lastSpoke = now;
     this.phase = "published_local";
     this.personaTimes[p.persona] = now;

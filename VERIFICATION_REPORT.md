@@ -4,6 +4,14 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Consent withdrawal and anonymous chat context — 2026-10-05
+
+- Withdrawal erases stored original bodies, cancels active gate/generation/review work and pending replies, clears scheduler text caches, scrubs session reaction outputs/manifests, and retracts tracked dependent AI messages transitively. Removal events now occur only after transaction commit.
+- Added a local fixed-category summary of the last 120 seconds of consented human chat, with three distinct platform accounts required per label. Stored/model-visible aggregates contain no raw text, names, account/message IDs or arbitrary extracted entities. Withdrawal/hiding recomputes the aggregate. Admin can inspect and clear it; the sequence cutoff survives SQLite restart.
+- `sh run-command.sh npm run check`: PASS, document/config validation, build and **76 tests**. New coverage includes per-label suppression, original-text exclusion, withdrawal/reconsent, restart/reset/expiry/deletion, cancellation during generation and review despite unrelated cited evidence, manual-candidate cancellation, transitive AI reply retraction, stored persona result/manifest erasure and transaction rollback without premature events.
+- `sh run-command.sh npm run test:browser`: PASS, topic/atmosphere display, clear action, local-admin authentication requirement, existing generation/reveal flows and desktop/mobile layout; no page errors. Chromium 153.0.8010.12, fixture receive-to-DOM p95 32 ms. No live provider calls were used.
+- Categories are heuristic aggregate observations, not a verified sentiment analysis. Prior external requests cannot be recalled. Dependency tracing backfills earlier persona manifests; legacy standalone messages lacking context records can only be linked through explicit replies. See [AI_FLOW](AI_FLOW.md#withdrawal-and-anonymous-chat-summaries) for scope and retention.
+
 ## Automatic research-informed personas — 2026-10-05
 
 - AI start and saved-intent recovery automatically prepare six synthetic viewers from the supplied local viewer research. No operator brief, candidate selection, audition or approval is required. Composition is local; actual responses still use the selected answer model. The admin studio is replaced by a read-only, collapsible cast summary.

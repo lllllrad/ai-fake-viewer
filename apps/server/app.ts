@@ -923,6 +923,7 @@ export async function createApp(
     ),
     aiDesiredRunning: store.aiDesiredRunning(),
     personas: personas.automaticSummary(),
+    chatSummary: store.chatSummary(),
     retentionDays: config.retentionDays,
     connectors: supervisor.states,
     audio: {
@@ -1144,6 +1145,9 @@ export async function createApp(
     await supervisor.stop();
     return { ok: true };
   });
+  app.post("/api/admin/chat-summary/clear", async () => ({
+    summary: store.clearChatSummary(),
+  }));
   app.post("/api/admin/ai/approve", async () => {
     scheduler.approve();
     return { ok: true };
@@ -1157,7 +1161,6 @@ export async function createApp(
       .string()
       .uuid()
       .parse((req.params as any).id);
-    scheduler.pending = undefined;
     store.hide(id);
     return { ok: true };
   });

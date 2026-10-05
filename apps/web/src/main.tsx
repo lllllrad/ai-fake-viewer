@@ -677,6 +677,37 @@ function Admin() {
               })
             }
           />
+          <section className="card" aria-label="익명 채팅 요약">
+            <h2>채팅 분위기·주제 요약</h2>
+            <p className="hint">
+              최근 2분의 동의한 채팅에서 여러 참여자에게 공통으로 나타난 표현만
+              요약합니다. 원문·닉네임은 포함하지 않으며, 동의 철회 시 다시
+              계산합니다.
+            </p>
+            {status.chatSummary?.state === "available" ? (
+              <>
+                <p>
+                  주제:{" "}
+                  {status.chatSummary.topics.join(" · ") ||
+                    "뚜렷한 공통 주제 없음"}
+                </p>
+                <p>
+                  분위기:{" "}
+                  {status.chatSummary.atmosphere.join(" · ") ||
+                    "뚜렷한 공통 표현 없음"}
+                </p>
+              </>
+            ) : (
+              <p>공통 분위기를 요약할 채팅이 아직 부족합니다.</p>
+            )}
+            <button
+              className="secondary"
+              disabled={busy || stale}
+              onClick={() => void action("chat-summary/clear")}
+            >
+              채팅 요약 초기화
+            </button>
+          </section>
           <section className="card persona-studio">
             <h2>자동 시청자 페르소나</h2>
             <p>

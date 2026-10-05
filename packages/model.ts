@@ -1,3 +1,4 @@
+import type { ChatSummary } from "./chat-summary.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -20,6 +21,7 @@ export interface ModelInput {
   newTranscripts?: Transcript[];
   messages: { id: string; speaker: string; text: string }[];
   newMessages?: { id: string; speaker: string; text: string }[];
+  chatSummary?: ChatSummary;
   reviewDraft?: string;
   persona: { name: string; style: string };
   description: string;
@@ -119,6 +121,7 @@ export function modelMessages(input: ModelInput) {
             description: input.description,
             reviewDraft: input.reviewDraft ?? null,
             recentContext: input.messages,
+            anonymousChatSummary: input.chatSummary ?? null,
             newMessages: input.newMessages ?? [],
             newTranscripts: (input.newTranscripts ?? []).map((t) => ({
               id: t.id,
