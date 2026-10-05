@@ -92,7 +92,10 @@ export class Supervisor {
     if (this.config.chzzk.enabled)
       this.launch("chzzk", (signal) => this.chzzk(signal));
     if (this.config.soop.mode === "official")
-      this.status("soop", "official_spec_pending");
+      this.status(
+        "soop",
+        this.config.soop.streamerId ? "awaiting_browser" : "config_required",
+      );
     else if (this.config.soop.mode === "experimental_library") {
       if (!this.config.soop.experimentalConsent)
         this.status("soop", "needs_approval");

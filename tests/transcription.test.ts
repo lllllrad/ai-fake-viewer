@@ -356,6 +356,8 @@ test("transcript export is available only to the local administrator", async () 
     readerToken: "b".repeat(32),
     encryptionKey: "c".repeat(64),
     chatgptTokenPath: join(directory, "chatgpt.tokens"),
+    chzzkTokenPath: join(directory, "chzzk.tokens"),
+    soopTokenPath: join(directory, "soop.tokens"),
     startInputs: false,
   });
   try {

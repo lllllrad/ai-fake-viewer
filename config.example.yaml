@@ -17,6 +17,8 @@ soop:
   mode: disabled
   experimentalConsent: false
   streamerId: ""
+  # Register this exact callback in the SOOP developer console.
+  redirectUri: http://127.0.0.1:3210/oauth/soop/callback
 capture:
   enabled: false
   ffmpeg: ffmpeg

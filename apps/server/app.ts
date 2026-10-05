@@ -15,6 +15,7 @@ import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
 import { mockModel, openaiModel, chatgptModel } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
+import { SoopAuth } from "../../packages/soop.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
 export function equal(a: unknown, b: string) {
   return (
@@ -33,6 +34,8 @@ export async function createApp(
     startInputs?: boolean;
     persistReaderToken?: (token: string) => void;
     chatgptTokenPath?: string;
+    chzzkTokenPath?: string;
+    soopTokenPath?: string;
   },
 ) {
   if (
@@ -70,10 +73,19 @@ export async function createApp(
         : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     transcriber,
   );
-  const auth = new ChzzkAuth(opts.encryptionKey);
+  const auth = new ChzzkAuth(
+    opts.encryptionKey,
+    opts.chzzkTokenPath ?? "data/chzzk.tokens",
+  );
+  const soopAuth = new SoopAuth(
+    opts.encryptionKey,
+    opts.soopTokenPath ?? "data/soop.tokens",
+  );
   const supervisor = new Supervisor(config, store, auth, !!opts.demo);
+  let soopAuthorizationPendingUntil = 0;
   let readerToken = opts.readerToken;
   const chzzkCallback = new URL(config.chzzk.redirectUri);
+  const soopCallback = new URL(config.soop.redirectUri);
   const origins = [
     `http://127.0.0.1:${config.port}`,
     `http://localhost:${config.port}`,
@@ -81,6 +93,7 @@ export async function createApp(
       ? [config.network.publicBaseUrl]
       : []),
     `${chzzkCallback.origin}`,
+    `${soopCallback.origin}`,
   ];
   const publicOrigin =
     config.network.bindHost === "0.0.0.0"
@@ -123,13 +136,16 @@ export async function createApp(
       .header("X-Content-Type-Options", "nosniff")
       .header(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self' https://static.sooplive.com; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://openapi.sooplive.com wss://chat-*.sooplive.com:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
     const requestPath = req.url.split("?", 1)[0];
     const isChzzkCallback = requestPath === "/oauth/chzzk/callback";
+    const isSoopCallback = requestPath === "/oauth/soop/callback";
     if (
       (req.url.startsWith("/api/admin/") ||
-        (req.url.startsWith("/oauth/") && !isChzzkCallback) ||
+        (req.url.startsWith("/oauth/") &&
+          !isChzzkCallback &&
+          !isSoopCallback) ||
         ["/admin", "/"].includes(req.url)) &&
       !isLoopback(req.ip)
     )
@@ -137,14 +153,17 @@ export async function createApp(
         .code(403)
         .send({ error: "Administrator access is local only" });
     const callbackHost = chzzkCallback.host;
+    const soopCallbackHost = soopCallback.host;
     const hostAllowed =
       hosts.includes(req.headers.host ?? "") ||
-      (isChzzkCallback && req.headers.host === callbackHost);
+      (isChzzkCallback && req.headers.host === callbackHost) ||
+      (isSoopCallback && req.headers.host === soopCallbackHost);
     if (!hostAllowed) return reply.code(403).send({ error: "Host rejected" });
     if (
       req.headers.origin &&
       !origins.includes(req.headers.origin) &&
-      !(isChzzkCallback && req.headers.origin === chzzkCallback.origin)
+      !(isChzzkCallback && req.headers.origin === chzzkCallback.origin) &&
+      !(isSoopCallback && req.headers.origin === soopCallback.origin)
     )
       return reply.code(403).send({ error: "Origin rejected" });
     if (req.url.startsWith("/api/admin/") && req.url !== "/api/admin/login") {
@@ -377,6 +396,11 @@ export async function createApp(
       soop: {
         mode: config.soop.mode,
         streamerConfigured: !!config.soop.streamerId,
+        credentialsConfigured: !!(
+          process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET
+        ),
+        tokenConfigured: !!soopAuth.token,
+        redirectUri: config.soop.redirectUri,
       },
       audio: {
         enabled: config.audio.enabled,
@@ -580,6 +604,146 @@ export async function createApp(
           "Set CHZZK_CLIENT_ID and CHZZK_CLIENT_SECRET in .env, then restart.",
       });
     return { url: auth.authorizationUrl(config.chzzk.redirectUri) };
+  });
+  app.post("/api/admin/soop/authorize", async (req, reply) => {
+    if (opts.demo)
+      return reply
+        .code(409)
+        .send({ error: "SOOP authorization is unavailable in demo mode." });
+    if (config.soop.mode !== "official")
+      return reply.code(409).send({
+        error: "Set soop.mode: official in config.yaml, then restart.",
+      });
+    if (!process.env.SOOP_CLIENT_ID || !process.env.SOOP_CLIENT_SECRET)
+      return reply.code(409).send({
+        error:
+          "Set SOOP_CLIENT_ID and SOOP_CLIENT_SECRET in .env, then restart.",
+      });
+    soopAuthorizationPendingUntil = Date.now() + 5 * 60 * 1000;
+    return {
+      url: soopAuth.authorizationUrl(process.env.SOOP_CLIENT_ID),
+    };
+  });
+  app.get("/api/admin/soop/chat-session", async (_req, reply) => {
+    if (opts.demo || config.soop.mode !== "official" || !config.soop.streamerId)
+      return reply
+        .code(409)
+        .send({ error: "SOOP official mode and streamer ID are required." });
+    if (!process.env.SOOP_CLIENT_ID || !process.env.SOOP_CLIENT_SECRET)
+      return reply
+        .code(409)
+        .send({ error: "SOOP developer app credentials are not configured." });
+    try {
+      return {
+        clientId: process.env.SOOP_CLIENT_ID,
+        accessToken: await soopAuth.access(
+          process.env.SOOP_CLIENT_ID,
+          process.env.SOOP_CLIENT_SECRET,
+        ),
+        streamerId: config.soop.streamerId,
+      };
+    } catch {
+      supervisor.status("soop", "auth_required");
+      return reply
+        .code(409)
+        .send({ error: "Authorize SOOP from the admin page first." });
+    }
+  });
+  app.post("/api/admin/soop/status", async (req) => {
+    const body = z
+      .object({
+        state: z.enum([
+          "connecting",
+          "subscribed",
+          "disconnected",
+          "permission_blocked",
+          "failed",
+        ]),
+      })
+      .parse(req.body);
+    supervisor.status("soop", body.state);
+    return { ok: true };
+  });
+  app.post("/api/admin/soop/message", async (req, reply) => {
+    if (opts.demo || config.soop.mode !== "official" || store.closed())
+      return reply.code(409).send({ error: "SOOP chat input is unavailable." });
+    if (supervisor.states.soop.state !== "subscribed")
+      return reply.code(409).send({
+        error: "SOOP chat is not connected to the configured broadcast.",
+      });
+    const body = z
+      .object({
+        userId: z.string().min(1).max(256),
+        userNickname: z.string().trim().min(1).max(120),
+        message: z.string().trim().min(1).max(4000),
+      })
+      .strict()
+      .parse(req.body);
+    supervisor.receive("soop", {
+      platform: "soop",
+      channel: config.soop.streamerId,
+      author: body.userId,
+      name: body.userNickname,
+      text: body.message,
+      sourceId: null,
+    });
+    return { ok: true };
+  });
+  app.post("/api/admin/soop/forget", async () => {
+    soopAuth.forget();
+    supervisor.status("soop", "auth_required");
+    return { ok: true };
+  });
+  app.get("/oauth/soop/callback", async (req, reply) => {
+    const query = z
+      .object({
+        code: z.string().min(1).max(2048).optional(),
+        error: z.string().optional(),
+      })
+      .parse(req.query);
+    if (
+      query.error ||
+      !query.code ||
+      soopAuthorizationPendingUntil < Date.now()
+    ) {
+      soopAuthorizationPendingUntil = 0;
+      supervisor.status("soop", "auth_required");
+      return reply
+        .code(400)
+        .type("text/html; charset=utf-8")
+        .send(
+          "<!doctype html><meta charset=utf-8><title>SOOP 연결 실패</title><h1>SOOP authorization failed</h1><p>승인 취소 또는 인증 시간이 만료됐습니다. 관리자 페이지에서 다시 시도하세요.</p>",
+        );
+    }
+    soopAuthorizationPendingUntil = 0;
+    try {
+      if (!process.env.SOOP_CLIENT_ID || !process.env.SOOP_CLIENT_SECRET)
+        throw Error("SOOP credentials are not configured");
+      await soopAuth.exchange(
+        query.code,
+        process.env.SOOP_CLIENT_ID,
+        process.env.SOOP_CLIENT_SECRET,
+        config.soop.redirectUri,
+      );
+      supervisor.status("soop", "auth_ready");
+      return reply
+        .type("text/html; charset=utf-8")
+        .send(
+          "<!doctype html><meta charset=utf-8><title>SOOP 연결 완료</title><h1>SOOP authorization complete</h1><p>인증이 저장됐습니다. 관리자 페이지에서 SOOP 채팅 연결을 시작하세요.</p><p><a href='/admin'>관리자 페이지로 돌아가기</a></p>",
+        );
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : "";
+      const message = reason.startsWith("SOOP_TOKEN_HTTP_")
+        ? `토큰 발급에 실패했습니다 (HTTP ${reason.slice("SOOP_TOKEN_HTTP_".length)}). 등록된 Redirect URI와 SOOP 앱 권한을 확인하세요.`
+        : "토큰 응답을 확인하지 못했습니다. 앱 등록 상태와 권한을 확인한 뒤 다시 시도하세요.";
+      supervisor.status("soop", "auth_failed");
+      return reply
+        .code(400)
+        .type("text/html; charset=utf-8")
+        .send(
+          `<!doctype html><meta charset=utf-8><title>SOOP 연결 실패</title><h1>SOOP authorization failed</h1><p>${message}</p>`,
+        );
+    }
   });
   app.post("/api/admin/chzzk/forget", async () => {
     await supervisor.stop();

@@ -34,6 +34,8 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
     readerToken: reader,
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(directory, "tokens"),
+    chzzkTokenPath: join(directory, "chzzk.tokens"),
+    soopTokenPath: join(directory, "soop.tokens"),
   });
   await app.listen({ host: "127.0.0.1", port: 0 });
   const port = (app.server.address() as { port: number }).port;

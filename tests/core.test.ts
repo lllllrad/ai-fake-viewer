@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, mkdtempSync, rmSync } from "node:fs";
+import { readFileSync, mkdtempSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../packages/storage.ts";
@@ -415,4 +415,59 @@ test("T09: source resolution change invalidates preview approval even after resi
   assert.equal(c.confirmed, false);
   assert.equal(c.state, "mask_review_required");
   assert.equal(c.frames.length, 1);
+});
+
+test("SOOP OAuth encrypts tokens at rest and refreshes through the official token endpoint", async () => {
+  const { SoopAuth } = await import("../packages/soop.ts");
+  const directory = mkdtempSync(join(tmpdir(), "soop-auth-test-"));
+  const path = join(directory, "soop.tokens");
+  const key = "a".repeat(64);
+  const requests: { url: string; body: URLSearchParams }[] = [];
+  let expiresIn = 3600;
+  const request: typeof fetch = async (input, init) => {
+    requests.push({
+      url: String(input),
+      body: new URLSearchParams(String(init?.body)),
+    });
+    return new Response(
+      JSON.stringify({
+        access_token: requests.length === 1 ? "access-one" : "access-two",
+        refresh_token: requests.length === 1 ? "refresh-one" : "refresh-two",
+        expires_in: expiresIn,
+        token_type: "Bearer",
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  };
+  try {
+    const auth = new SoopAuth(key, path, request);
+    await auth.exchange(
+      "one-use-code",
+      "client-id",
+      "client-secret",
+      "http://127.0.0.1:3210/oauth/soop/callback",
+    );
+    assert.equal(requests[0]?.url, "https://openapi.sooplive.com/auth/token");
+    assert.equal(requests[0]?.body.get("grant_type"), "authorization_code");
+    assert.equal(
+      requests[0]?.body.get("redirect_uri"),
+      "http://127.0.0.1:3210/oauth/soop/callback",
+    );
+    const bytes = readFileSync(path);
+    assert(!bytes.includes(Buffer.from("access-one")));
+    assert.equal(await auth.access("client-id", "client-secret"), "access-one");
+    expiresIn = 1;
+    auth.token!.expiresAt = Date.now() - 1000;
+    assert.equal(await auth.access("client-id", "client-secret"), "access-two");
+    assert.equal(requests[1]?.body.get("grant_type"), "refresh_token");
+    assert.equal(requests[1]?.body.get("refresh_token"), "refresh-one");
+    assert.equal(
+      new SoopAuth(key, path, request).token?.accessToken,
+      "access-two",
+    );
+    auth.forget();
+    assert.equal(existsSync(path), false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

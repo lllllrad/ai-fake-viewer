@@ -73,12 +73,17 @@ export const configSchema = z
           .string()
           .regex(/^[a-zA-Z0-9_-]*$/)
           .default(""),
+        redirectUri: z
+          .string()
+          .url()
+          .default("http://127.0.0.1:3210/oauth/soop/callback"),
       })
       .strict()
       .default({
         mode: "disabled",
         experimentalConsent: false,
         streamerId: "",
+        redirectUri: "http://127.0.0.1:3210/oauth/soop/callback",
       }),
     capture: z
       .object({
@@ -241,7 +246,7 @@ export const configSchema = z
         callback.protocol === "https:" ||
         (callback.protocol === "http:" && loopback);
       const validPort =
-        (callback.protocol === "https:" && !loopback) ||
+        callback.protocol === "https:" ||
         (callback.protocol === "http:" &&
           loopback &&
           callback.port === String(c.port));
@@ -259,6 +264,36 @@ export const configSchema = z
           path: ["chzzk", "redirectUri"],
           message:
             "CHZZK redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
+        });
+    } catch {
+      /* handled by URL schema */
+    }
+    try {
+      const callback = new URL(c.soop.redirectUri);
+      const validPath = callback.pathname === "/oauth/soop/callback";
+      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
+      const validProtocol =
+        callback.protocol === "https:" ||
+        (callback.protocol === "http:" && loopback);
+      const validPort =
+        callback.protocol === "https:" ||
+        (callback.protocol === "http:" &&
+          loopback &&
+          callback.port === String(c.port));
+      if (
+        !validPath ||
+        !validProtocol ||
+        !validPort ||
+        callback.username ||
+        callback.password ||
+        callback.search ||
+        callback.hash
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["soop", "redirectUri"],
+          message:
+            "SOOP redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
         });
     } catch {
       /* handled by URL schema */

@@ -39,6 +39,16 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     port,
     network: { bindHost: "0.0.0.0", publicBaseUrl },
     database: ":memory:",
+    chzzk: {
+      enabled: false,
+      redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
+    },
+    soop: {
+      mode: "disabled",
+      experimentalConsent: false,
+      streamerId: "",
+      redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback`,
+    },
   });
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-lan-test-"));
   const { app } = await createApp(c, {
@@ -46,6 +56,8 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     readerToken: reader,
     encryptionKey,
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
+    soopTokenPath: join(chatgptDir, "soop.tokens"),
     startInputs: false,
   });
   try {
@@ -58,12 +70,7 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
         200,
         path,
       );
-    for (const path of [
-      "/",
-      "/admin",
-      "/api/admin/status",
-      "/oauth/chzzk/callback",
-    ])
+    for (const path of ["/", "/admin", "/api/admin/status"])
       assert.equal(
         (
           await app.inject({
@@ -95,10 +102,15 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
   const c = configSchema.parse({
     port,
     database: ":memory:",
+    chzzk: {
+      enabled: false,
+      redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
+    },
     soop: {
       mode: "experimental_library",
       experimentalConsent: false,
       streamerId: "fixture",
+      redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback`,
     },
   });
   const { app, store, supervisor } = await createApp(c, {
@@ -107,6 +119,8 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
     encryptionKey,
     startInputs: false,
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
+    soopTokenPath: join(chatgptDir, "soop.tokens"),
   });
   await app.listen({ port, host: "127.0.0.1" });
   const host = `127.0.0.1:${port}`;

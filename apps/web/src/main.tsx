@@ -188,6 +188,221 @@ function PublicChat() {
     </main>
   );
 }
+function SoopConnector({
+  setup,
+  state,
+  refresh,
+}: {
+  setup: any;
+  state: string;
+  refresh: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const sdk = useRef<any>(undefined);
+  const verified = useRef(false);
+  const ready = useRef(false);
+  const roomVerified = useRef(false);
+  const post = async (path: string, body?: unknown) => {
+    const response = await fetch(`/api/admin/${path}`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers:
+        body === undefined ? undefined : { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) throw Error((await response.json()).error);
+    return response.json();
+  };
+  useEffect(
+    () => () => {
+      verified.current = false;
+      try {
+        sdk.current?.disconnect();
+      } catch {
+        /* already closed */
+      }
+    },
+    [],
+  );
+  const authorize = async () => {
+    setBusy(true);
+    setMessage("");
+    try {
+      const { url } = await post("soop/authorize");
+      location.assign(url);
+    } catch (error: any) {
+      setMessage(error.message);
+      setBusy(false);
+    }
+  };
+  const connect = async () => {
+    setBusy(true);
+    setMessage("Loading SOOP chat SDK…");
+    try {
+      const response = await fetch("/api/admin/soop/chat-session", {
+        credentials: "same-origin",
+      });
+      if (!response.ok) throw Error((await response.json()).error);
+      const auth = await response.json();
+      if (!(window as any).SOOP?.ChatSDK) {
+        await new Promise<void>((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src =
+            "https://static.sooplive.com/asset/app/chat-sdk/sooplive-chat-sdk.js";
+          script.onload = () => resolve();
+          script.onerror = () =>
+            reject(Error("Could not load the SOOP chat SDK."));
+          document.head.appendChild(script);
+        });
+      }
+      const chat = new (window as any).SOOP.ChatSDK(auth.clientId);
+      sdk.current = chat;
+      verified.current = false;
+      ready.current = false;
+      roomVerified.current = false;
+      chat.setAuth(auth.accessToken);
+      chat.handleReady(() => {
+        ready.current = true;
+        verified.current = roomVerified.current;
+        if (!verified.current) return;
+        void post("soop/status", { state: "subscribed" }).then(refresh);
+        setMessage(
+          "Connected to your SOOP broadcast. Keep this admin tab open.",
+        );
+        setBusy(false);
+      });
+      chat.handleMessageReceived((action: string, data: any) => {
+        if (
+          action !== "MESSAGE" ||
+          !verified.current ||
+          !data ||
+          typeof data !== "object"
+        )
+          return;
+        void post("soop/message", {
+          userId: data.userId,
+          userNickname: data.userNickname,
+          message: data.message,
+        }).catch(() => {});
+      });
+      chat.handleChatClosed(() => {
+        verified.current = false;
+        void post("soop/status", { state: "disconnected" })
+          .then(refresh)
+          .catch(() => {});
+        setMessage("SOOP chat disconnected. Reconnect from this page.");
+      });
+      chat.handleError(() => {
+        verified.current = false;
+        void post("soop/status", { state: "failed" })
+          .then(refresh)
+          .catch(() => {});
+        setMessage(
+          "SOOP could not connect. Check your live broadcast and app permissions.",
+        );
+        setBusy(false);
+      });
+      await chat.connect();
+      const room = await chat.getRoomInfo();
+      if (room.bjId !== auth.streamerId) {
+        verified.current = false;
+        chat.disconnect();
+        sdk.current = undefined;
+        await post("soop/status", { state: "failed" });
+        throw Error(
+          "The connected SOOP account does not match soop.streamerId.",
+        );
+      }
+      roomVerified.current = true;
+      verified.current = ready.current;
+      setMessage(
+        ready.current
+          ? "Connected to your SOOP broadcast. Keep this admin tab open."
+          : "Connected to the configured broadcast; waiting for SDK ready signal…",
+      );
+    } catch (error: any) {
+      verified.current = false;
+      try {
+        sdk.current?.disconnect();
+      } catch {
+        /* not connected */
+      }
+      sdk.current = undefined;
+      void post("soop/status", { state: "failed" })
+        .then(refresh)
+        .catch(() => {});
+      setMessage(error.message);
+      setBusy(false);
+    }
+  };
+  const disconnect = async () => {
+    verified.current = false;
+    try {
+      sdk.current?.disconnect();
+    } catch {
+      /* already disconnected */
+    }
+    sdk.current = undefined;
+    await post("soop/status", { state: "disconnected" });
+    setMessage("SOOP chat disconnected.");
+    await refresh();
+  };
+  return (
+    <section className="card">
+      <div className="eyebrow">SOOP CHAT / OFFICIAL SDK</div>
+      <h2>
+        <span className="dot" />
+        {state}
+      </h2>
+      <p>
+        {setup.mode === "disabled"
+          ? "Set soop.mode: official in config.yaml."
+          : !setup.streamerConfigured
+            ? "Set your SOOP streamer ID in config.yaml."
+            : setup.credentialsConfigured
+              ? "SOOP developer app credentials are configured."
+              : "Add SOOP_CLIENT_ID and SOOP_CLIENT_SECRET to .env after app approval."}
+      </p>
+      <p className="hint">Registered callback: {setup.redirectUri}</p>
+      <p className="hint">
+        The official SDK runs in this browser and only connects to your own live
+        broadcast. Keep this admin tab open while receiving chat.
+      </p>
+      <div className="toolbar">
+        <button
+          disabled={
+            busy || setup.mode !== "official" || !setup.credentialsConfigured
+          }
+          onClick={() => void authorize()}
+        >
+          Authorize SOOP
+        </button>
+        <button
+          className="secondary"
+          disabled={
+            busy ||
+            !setup.tokenConfigured ||
+            !setup.streamerConfigured ||
+            setup.mode !== "official"
+          }
+          onClick={() => void connect()}
+        >
+          Connect SOOP chat
+        </button>
+        <button
+          className="secondary"
+          disabled={busy || !sdk.current}
+          onClick={() => void disconnect()}
+        >
+          Disconnect SOOP
+        </button>
+      </div>
+      {message && <p role="status">{message}</p>}
+    </section>
+  );
+}
+
 function Admin() {
   const [session, setSession] = useState<
     "checking" | "signed_in" | "signed_out"
@@ -395,14 +610,6 @@ function Admin() {
                 Registered callback: {status.setup.chzzk.redirectUri}
               </p>
               <p>
-                SOOP:{" "}
-                {status.setup.soop.mode === "disabled"
-                  ? "disabled"
-                  : status.setup.soop.streamerConfigured
-                    ? status.setup.soop.mode
-                    : "add streamer ID"}
-              </p>
-              <p>
                 Groq speech:{" "}
                 {status.setup.audio.enabled
                   ? status.setup.audio.credentialsConfigured &&
@@ -436,13 +643,15 @@ function Admin() {
               </p>
             </section>
           )}
+          <SoopConnector
+            setup={status.setup.soop}
+            state={status.connectors.soop.state}
+            refresh={refresh}
+          />
           <div className="grid connections">
             {Object.entries(status.connectors).map(([p, s]: [string, any]) => (
               <section className="card" key={p}>
-                <div className="eyebrow">
-                  {p.toUpperCase()}
-                  {p === "soop" ? " / CHECK PATH" : ""}
-                </div>
+                <div className="eyebrow">{p.toUpperCase()}</div>
                 <h2>
                   <span className="dot" />
                   {s.state}

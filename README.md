@@ -72,7 +72,7 @@ Tokens rotate through a single-flight refresh and are atomically saved in AES-25
 
 ### SOOP: separate official and experimental paths
 
-`soop.mode: official` reports `official_spec_pending`. No SDK methods or endpoints were invented. Provide verified official SDK documentation, distribution and applicable approvals before that path can be completed.
+See [SOOP official chat](#soop-official-chat) for the browser SDK setup and app approval requirements.
 
 The optional unofficial adapter uses the installed and type-checked `soop-extension@1.3.3` receive/disconnect API. It does not request a password, expose chat writing or bypass restricted broadcasts. After independently reviewing the library, platform terms and your intended public broadcast:
 
@@ -221,3 +221,18 @@ npm run test:browser
 Linux browser tests may also require the system libraries listed by Playwright. The browser check writes only artificial-data screenshots and timing results into ignored `test-results/`. It uses a fixed test port 33219. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for actual results and [TASKS.md](TASKS.md) for T01–T12 status.
 
 Code layout: `apps/server` hosts HTTP/WS, `apps/web` contains React views, `packages` contains shared contracts/storage/connectors/model logic, and `workers` isolates legacy clients and capture. Run `npm run build` after web edits; `npm run dev` watches server code only. FFmpeg, OBS, platform apps and model credentials are installed/configured independently.
+
+### SOOP official chat
+
+The official SOOP chat connector is ready for use once the SOOP developer application has been approved. It uses SOOP's browser-only Chat SDK, so the signed-in administrator page must stay open during chat reception, and the SDK can connect only to the authenticated account's own live broadcast. The app checks that the connected broadcaster ID matches `soop.streamerId`. This integration receives chat only; it does not send messages.
+
+1. Register the exact callback URL from `soop.redirectUri` in the SOOP developer console. The local default is `http://127.0.0.1:3210/oauth/soop/callback`; use the configured port. If login is done from a different machine, use a public HTTPS callback routed to the server.
+2. Ensure the app approval includes the official Chat SDK and `broad_access_chatinfo` consent scope.
+3. Set `SOOP_CLIENT_ID` and `SOOP_CLIENT_SECRET` in `.env`, set `soop.mode: official` and your account ID in `soop.streamerId` in `config.yaml`, then restart the server.
+4. Sign in to `/admin`, select **Authorize SOOP**, approve the requested access, return to the admin page and select **Connect SOOP chat** while your own broadcast is live.
+
+The access and refresh tokens are encrypted with `TOKEN_ENCRYPTION_KEY` and never sent to the browser except for the short-lived access token needed by the official SDK. The SOOP SDK itself is loaded from SOOP only when the administrator presses Connect.
+
+Official references: [Chat SDK overview](https://developers.sooplive.com/docs/chatsdk/overview), [OAuth](https://developers.sooplive.com/docs/chatsdk/oauth), [connection and room info](https://developers.sooplive.com/docs/chatsdk/connection), [message retrieval](https://developers.sooplive.com/docs/chatsdk/get-message), [OpenAPI token exchange](https://developers.sooplive.com/docs/api/auth-token).
+
+The separately consent-gated `experimental_library` adapter remains available for evaluation; it is not used by the official mode.
