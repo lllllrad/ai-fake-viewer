@@ -648,3 +648,11 @@ input:focus-visible {
 .input-problems li {
   margin-bottom: 8px;
 }
+
+.reveal-status {
+  display: inline-flex;
+  align-items: center;
+  color: #a9bfbb;
+  font-size: 13px;
+  padding: 10px 4px;
+}

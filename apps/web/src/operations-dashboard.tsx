@@ -130,22 +130,27 @@ export function OperationsDashboard({
         >
           AI 채팅 생성 {running ? "켜짐 · 끄기" : "꺼짐 · 켜기"}
         </button>
-        <button
-          className="secondary"
-          disabled={busy || stale || status.originsRevealed !== false}
-          onClick={onReveal}
-        >
-          {status.originsRevealed === true
-            ? "AI 정체 공개됨"
-            : "누가 AI인지 밝히기"}
-        </button>
+        {status.originsRevealed === true ? (
+          <span className="reveal-status" role="status">
+            AI 채팅에 ‘AI 생성’ 표시 중
+          </span>
+        ) : (
+          <button
+            className="secondary"
+            disabled={busy || stale || status.originsRevealed !== false}
+            onClick={onReveal}
+          >
+            AI 채팅에 ‘AI 생성’ 표시하기
+          </button>
+        )}
         <button className="secondary" onClick={() => onAction("ai/stop")}>
           AI 긴급 중지
         </button>
       </div>
       <p className="hint">
-        정체를 공개하면 AI 생성을 중지하고 리더·오버레이에 이름과 출처를
-        표시합니다. 이 세션에서는 다시 숨길 수 없습니다.
+        표시하기를 누르면 AI 생성을 중지하고 리더·오버레이의 AI 채팅에 ‘AI 생성’
+        표시를 붙이며, 참여자의 이름과 출처도 공개합니다. 이 세션에서는 다시
+        숨길 수 없습니다.
       </p>
       <div className="operations-summary" role="status">
         <strong>

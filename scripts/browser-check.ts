@@ -267,13 +267,20 @@ try {
     .getByText("[DEMO] Receiver continues after AI stop")
     .waitFor();
   adminPage.once("dialog", (dialog) => void dialog.dismiss());
-  await dashboard.getByRole("button", { name: "누가 AI인지 밝히기" }).click();
+  await dashboard
+    .getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" })
+    .click();
   assert.equal(store.originsRevealed(), false);
   adminPage.once("dialog", (dialog) => void dialog.accept());
-  await dashboard.getByRole("button", { name: "누가 AI인지 밝히기" }).click();
+  await dashboard
+    .getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" })
+    .click();
   await expect(
-    dashboard.getByRole("button", { name: "AI 정체 공개됨" }),
-  ).toBeDisabled();
+    dashboard.getByText("AI 채팅에 ‘AI 생성’ 표시 중", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    dashboard.getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" }),
+  ).toHaveCount(0);
   await readerPage.getByText("AI 생성", { exact: true }).waitFor();
   await overlay.getByText("AI 생성", { exact: true }).waitFor();
   assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
@@ -297,7 +304,7 @@ try {
   await adminPage.evaluate(() => scrollTo(0, 0));
   await expect(aiToggle).toBeInViewport();
   await expect(
-    dashboard.getByRole("button", { name: "AI 정체 공개됨" }),
+    dashboard.getByText("AI 채팅에 ‘AI 생성’ 표시 중", { exact: true }),
   ).toBeInViewport();
   assert(
     await adminPage.evaluate(

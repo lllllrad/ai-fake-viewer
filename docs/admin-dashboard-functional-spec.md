@@ -28,7 +28,7 @@
 | 상태 갱신 계약        | `generatedAt` 기준 2초 폴링, 10초 이상 오래된 응답·조회 실패·필수 상태 누락 시 시작 차단; 신선한 영상만 정상으로 판정; 정상 계측값은 상세 보기로 이동 | 장기 네트워크 장애 검증             |
 | UI-01/02/03           | 불완전 상태 응답, 새로고침, 오래된 응답, 키보드 스위치, 390px 모바일 제어 및 page error 없음 검증                                                     | 전체 접근성 감사는 별도             |
 
-`GET /api/admin/status`는 `generatedAt`(응답 생성 epoch ms)과 `originsRevealed`(현재 스트림 공개 여부)를 추가로 제공한다. 글로벌 `POST /api/admin/ai/start`는 준비 검사 후 현재 live 페르소나가 비무장이라면 재무장한다. `POST /api/admin/reveal`은 생성과 live 페르소나를 함께 중지해 공개 후 재시작 의도가 남지 않게 한다. 공개는 현재 세션에서 되돌리는 토글이 아니다.
+`GET /api/admin/status`는 `generatedAt`(응답 생성 epoch ms)과 `originsRevealed`(현재 스트림 공개 여부)를 추가로 제공한다. 글로벌 `POST /api/admin/ai/start`는 준비 검사 후 현재 live 페르소나가 비무장이라면 재무장한다. `POST /api/admin/reveal`은 생성과 live 페르소나를 함께 중지해 공개 후 재시작 의도가 남지 않게 한다. 공개는 현재 세션에서 되돌리는 토글이 아니다. 버튼은 `AI 채팅에 ‘AI 생성’ 표시하기`로 동작을 명시하고, 공개 후에는 버튼 대신 `AI 채팅에 ‘AI 생성’ 표시 중` 상태 문구를 보여준다.
 
 ## 1. 제품 원칙
 
