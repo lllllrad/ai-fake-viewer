@@ -6,6 +6,8 @@ A local, read-only broadcast chat aggregator with screen-aware AI characters. Yo
 
 See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow, and editable prompt files under [prompts/](prompts/).
 
+The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). This operating dashboard is the first section of the admin page; persona authoring and detailed settings follow it.
+
 ## Quick start
 
 Install Node.js **24.x** (including npm), then run from this repository:
