@@ -95,3 +95,11 @@ Live chat, consent and personas are memory-only. The wrapper uses `ulimit -c 0` 
 Fastify body logging is disabled. The UI does not persist chat in localStorage/IndexedDB. Do not add real chat to SDK debug logs, browser network exports, prompt traces, external error collection, fixtures or screenshots. Test artifacts use synthetic data only.
 
 The live app does not open legacy chat databases. Before migration, stop the old process and identify its SQLite/WAL/SHM files, transcript exports, recovery copies and backups for cleanup. Credentials and the minimal rights database have separate purposes and lifetimes. Reference removal and file deletion are not guarantees of physical forensic erasure.
+
+## Diagnose local live setup
+
+Run `sh run-command.sh npm run setup:check` after editing `.env` or `config.yaml`. This reads local configuration and saved authorization metadata without refreshing tokens, contacting providers, starting receivers or sending notices/model requests. It prints missing fields and credential presence, never token values, account identifiers or raw configuration. Exit code 1 means configuration/authorization metadata is incomplete; even exit code 0 is not proof of actual permissions or privacy approval. Existing environment variables have the same precedence as app startup.
+
+`npm run setup` creates missing local files and includes YouTube/SOOP OAuth fields for new installations. It does not overwrite existing files. Consult [.env.example](../.env.example) for additions to an existing `.env`; keep existing API keys and encryption/access keys. YouTube automatic sending requires both client ID and client secret plus broadcaster OAuth authorization; an API key alone supports receipt only. After changing CHZZK app credentials or scopes, reconnect the broadcaster account.
+
+Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../LIVE_SETUP.md). For synthetic UI/consent/pipeline testing without a live profile, `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.

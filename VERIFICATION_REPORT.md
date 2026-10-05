@@ -4,6 +4,12 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Local live-test setup diagnostics — 2026-10-05
+
+Added `sh run-command.sh npm run setup:check`, a read-only local configuration/credential-presence check. It does not refresh tokens or contact providers and reports missing privacy fields, authentication/model mismatches, broadcaster approvals and notice-rate confirmation without printing secrets. New-install setup includes YouTube/SOOP OAuth fields; `.env.example` distinguishes receipt-only API keys from OAuth sending credentials. Existing local files are not overwritten by the setup command.
+
+Validation: `sh run-command.sh npm run check` passed (documentation/config validation, TypeScript/Vite build and 131 tests). Running `setup:check` against the incomplete local live profile correctly exited 1 and listed remaining prerequisites. Separately, a user-authorized CHZZK account-information lookup returned a permission error; saved-token presence is not reported as successful live authorization. No real chat was collected or sent, no model request was made, and the running service was not restarted. Supplied operator/contact data and local configuration edits remain outside Git. Actual public-notice availability, account permissions and complete live acceptance remain pending.
+
 ## Privacy contract review addendum PC01–PC12 — 2026-10-05
 
 Reconciled the review addendum with existing owning clauses in the [privacy evidence map](docs/privacy-review-evidence.md). Preserved current input, consent, summary and storage boundaries instead of treating overview omissions as missing features. The older CHZZK manual-path wording conflicts with the explicit automatic-guidance request already implemented in `841e06c`; this review retains that automatic path and records the scope difference. Final public-policy text and actual account/platform/contact evidence remain operational acceptance.

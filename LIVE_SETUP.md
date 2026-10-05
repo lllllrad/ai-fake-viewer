@@ -18,7 +18,7 @@ Populate `privacy` in `config.yaml` from the actual operator's decisions:
 - Actual publication platforms/channels, video retention and overseas review, separately from AI transfers.
 - Per-platform/broadcaster permissions for receipt, fixed notices, screen publication and external AI, with contract evidence and dates. Confirm allowed notice rates and own/other bot IDs.
 
-No blank value means “implicitly approved.” Read the current profile in admin before starting. Profile changes invalidate consent; restarting with edited YAML clears session data. The authenticated profile PUT endpoint affects only the current process, not YAML.
+Use `sh run-command.sh npm run setup:check` to list local configuration and authorization prerequisites without exposing secrets or calling providers. No blank value means “implicitly approved.” Read the current profile in admin before starting. Profile changes invalidate consent; restarting with edited YAML clears session data. The authenticated profile PUT endpoint affects only the current process, not YAML.
 
 ## 3. Configure the model and permitted inputs
 
