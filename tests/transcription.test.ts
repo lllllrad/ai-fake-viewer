@@ -45,14 +45,11 @@ test("Groq Whisper receives bounded WAV chunks and keeps transcript private", as
   }) as typeof fetch;
   try {
     const config = configSchema.parse({
-      audio: { enabled: true, url: audioUrl, maxRequests: 1, language: "ko" },
+      audio: { url: audioUrl, maxRequests: 1, language: "ko" },
     });
     const store = new Store(":memory:");
-    const transcription = new Transcriber(
-      config.audio,
-      true,
-      request,
-      (entry) => store.recordTranscript(entry),
+    const transcription = new Transcriber(config.audio, request, (entry) =>
+      store.recordTranscript(entry),
     );
     transcription.state = "receiving";
     const pcm = Buffer.alloc(320000);
@@ -95,7 +92,6 @@ test("automatic language detection omits the provider language parameter", async
       let seen = false;
       const transcription = new Transcriber(
         configSchema.parse({ audio }).audio,
-        true,
         (async (_url, init) => {
           seen = true;
           const body = init!.body as FormData;
@@ -396,7 +392,7 @@ test("transcript export is available only to the local administrator", async () 
       },
     });
     assert.equal(blocked.statusCode, 409);
-    assert.match(blocked.json().error, /policy\.providerReviewed: true/);
+    assert.match(blocked.json().error, /필수 입력/);
   } finally {
     await app.close();
     rmSync(directory, { recursive: true, force: true });

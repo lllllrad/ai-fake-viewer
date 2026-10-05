@@ -87,7 +87,6 @@ export const configSchema = z
       }),
     capture: z
       .object({
-        enabled: z.boolean().default(false),
         ffmpeg: z.string().default("ffmpeg"),
         backend: z
           .enum(["dshow", "v4l2", "avfoundation", "rtmp"])
@@ -100,7 +99,6 @@ export const configSchema = z
       })
       .strict()
       .default({
-        enabled: false,
         ffmpeg: "ffmpeg",
         backend: "dshow",
         device: "OBS Virtual Camera",
@@ -111,7 +109,6 @@ export const configSchema = z
       }),
     audio: z
       .object({
-        enabled: z.boolean().default(false),
         ffmpeg: z.string().default("ffmpeg"),
         url: z.string().max(1024).default(""),
         language: z
@@ -126,32 +123,11 @@ export const configSchema = z
       })
       .strict()
       .default({
-        enabled: false,
         ffmpeg: "ffmpeg",
         url: "",
         chunkSeconds: 10,
         maxRequests: 360,
         language: "",
-      }),
-    policy: z
-      .object({
-        youtubeAiContextApproved: z.boolean().default(false),
-        chzzkAiContextApproved: z.boolean().default(false),
-        soopAiContextApproved: z.boolean().default(false),
-        reviewReference: z.string().max(1000).default(""),
-        providerReviewed: z.boolean().default(false),
-        groqAudioReviewed: z.boolean().default(false),
-        typesafeReviewed: z.boolean().default(false),
-      })
-      .strict()
-      .default({
-        youtubeAiContextApproved: false,
-        chzzkAiContextApproved: false,
-        soopAiContextApproved: false,
-        reviewReference: "",
-        providerReviewed: false,
-        groqAudioReviewed: false,
-        typesafeReviewed: false,
       }),
     ai: z
       .object({
@@ -328,7 +304,7 @@ export const configSchema = z
         path: ["ai", "gate", "enabled"],
         message: "The text-only Jev gate requires ai.visualMode: on_request",
       });
-    if (c.audio.enabled) {
+    if (c.audio.url) {
       let valid = false;
       try {
         const url = new URL(c.audio.url);
@@ -384,17 +360,6 @@ export const configSchema = z
         code: "custom",
         message:
           "Money budgets require verified input/output prices and priceCheckedAt",
-      });
-    if (
-      Object.entries(c.policy).some(
-        ([k, v]) => k.endsWith("Approved") && v === true,
-      ) &&
-      !c.policy.reviewReference
-    )
-      ctx.addIssue({
-        code: "custom",
-        message:
-          "AI context approval requires a documented policy review reference",
       });
     if (new Set(c.ai.personas.map((p) => p.name)).size !== c.ai.personas.length)
       ctx.addIssue({ code: "custom", message: "Persona names must be unique" });

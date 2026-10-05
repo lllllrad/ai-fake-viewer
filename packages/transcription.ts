@@ -40,18 +40,13 @@ export class Transcriber {
   transcripts: Transcript[] = [];
   constructor(
     public config: Config["audio"],
-    public reviewed: boolean,
     public request: typeof fetch = fetch,
     public onTranscript?: (entry: Transcript) => boolean,
   ) {}
   start() {
     if (this.child) return;
-    if (!this.config.enabled) {
-      this.state = "disabled";
-      return;
-    }
-    if (!this.reviewed) {
-      this.state = "review_required";
+    if (!this.config.url) {
+      this.state = "config_required";
       return;
     }
     if (!process.env.GROQ_API_KEY) {
@@ -109,7 +104,7 @@ export class Transcriber {
       return;
     }
     const key = process.env.GROQ_API_KEY;
-    if (!key || !this.reviewed) return;
+    if (!key) return;
     this.busy = true;
     this.requests++;
     const generation = this.generation;

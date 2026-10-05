@@ -12,13 +12,22 @@ import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
 import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
-import { mockModel, openaiModel, chatgptModel, limitModelConcurrency } from "../../packages/model.ts";
+import {
+  mockModel,
+  openaiModel,
+  chatgptModel,
+  limitModelConcurrency,
+} from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
 import { PersonaService } from "../../packages/persona/service.ts";
-import { chatgptPersonaGenerator, demoPersonaGenerator, openaiPersonaGenerator } from "../../packages/persona/generator.ts";
+import {
+  chatgptPersonaGenerator,
+  demoPersonaGenerator,
+  openaiPersonaGenerator,
+} from "../../packages/persona/generator.ts";
 import { hash as canonicalHash } from "../../packages/persona/contracts.ts";
 import { PersonaError } from "../../packages/persona/contracts.ts";
 export function equal(a: unknown, b: string) {
@@ -51,19 +60,33 @@ export async function createApp(
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   const store = new Store(config.database);
   const capture = new Capture(config.capture, !!opts.demo);
-  const transcriber = new Transcriber(
-    config.audio,
-    config.policy.groqAudioReviewed,
-    fetch,
-    (entry) => store.recordTranscript(entry),
+  const transcriber = new Transcriber(config.audio, fetch, (entry) =>
+    store.recordTranscript(entry),
   );
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
   );
-  const personaModel = limitModelConcurrency(opts.demo ? mockModel : config.ai.provider === "chatgpt_subscription" ? chatgptModel(config.ai, chatgpt) : openaiModel(config.ai),2);
-  const personaGenerator = opts.demo ? demoPersonaGenerator() : config.ai.provider === "chatgpt_subscription" ? chatgptPersonaGenerator(chatgpt) : openaiPersonaGenerator(config.ai);
-  const personas = new PersonaService(store, personaModel, config, personaGenerator, !!opts.demo);
+  const personaModel = limitModelConcurrency(
+    opts.demo
+      ? mockModel
+      : config.ai.provider === "chatgpt_subscription"
+        ? chatgptModel(config.ai, chatgpt)
+        : openaiModel(config.ai),
+    2,
+  );
+  const personaGenerator = opts.demo
+    ? demoPersonaGenerator()
+    : config.ai.provider === "chatgpt_subscription"
+      ? chatgptPersonaGenerator(chatgpt)
+      : openaiPersonaGenerator(config.ai);
+  const personas = new PersonaService(
+    store,
+    personaModel,
+    config,
+    personaGenerator,
+    !!opts.demo,
+  );
   const scheduler = new Scheduler(
     store,
     capture,
@@ -85,6 +108,91 @@ export async function createApp(
     opts.soopTokenPath ?? "data/soop.tokens",
   );
   const supervisor = new Supervisor(config, store, auth, !!opts.demo);
+  const receiverConfigured = () =>
+    (config.youtube.enabled &&
+      !!(process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN) &&
+      !!(config.youtube.video || config.youtube.channelId)) ||
+    (config.chzzk.enabled &&
+      !!process.env.CHZZK_CLIENT_ID &&
+      !!process.env.CHZZK_CLIENT_SECRET &&
+      !!auth.token) ||
+    (config.soop.mode === "official" &&
+      !!config.soop.streamerId &&
+      !!soopAuth.token);
+  scheduler.readyCheck = () => {
+    if (opts.demo) return [];
+    const missing: string[] = [];
+    if (
+      !config.capture.programConfirmed ||
+      !config.capture.masks.length ||
+      !capture.confirmed ||
+      !capture.latest() ||
+      Date.now() - capture.latest()!.capturedAt > 10000
+    )
+      missing.push("검증된 마스크 Program 캡처");
+    if (
+      !config.audio.url ||
+      !process.env.GROQ_API_KEY ||
+      !["listening", "receiving"].includes(transcriber.state)
+    )
+      missing.push("실행 중인 오디오 자막 입력");
+    if (!scheduler.providerReady()) missing.push("연결된 AI 모델");
+    return missing;
+  };
+  const readyComponents = () => {
+    if (opts.demo)
+      return {
+        ready: true,
+        checks: [
+          { id: "capture", label: "데모 영상 입력", ready: true },
+          { id: "audio", label: "데모 음성 입력", ready: true },
+          {
+            id: "receiver",
+            label: "데모 채팅 입력",
+            ready: true,
+            optional: true,
+          },
+          { id: "model", label: "데모 AI 모델", ready: true },
+        ],
+      };
+    const checks = [
+      {
+        id: "capture",
+        label: "마스크 적용 및 확인된 영상",
+        ready:
+          !!capture.confirmed &&
+          !!capture.latest() &&
+          Date.now() - capture.latest()!.capturedAt <= 10000,
+      },
+      {
+        id: "audio",
+        label: "실행 중인 음성 자막 입력",
+        ready: ["listening", "receiving"].includes(transcriber.state),
+      },
+      {
+        id: "receiver",
+        label: "선택 플랫폼 채팅 수신기",
+        optional: true,
+        ready:
+          !receiverConfigured() ||
+          Object.values(supervisor.states).some((connector) =>
+            [
+              "connecting",
+              "connected",
+              "streaming",
+              "polling",
+              "receiving",
+            ].includes(connector.state),
+          ),
+      },
+      { id: "model", label: "AI 모델", ready: scheduler.providerReady() },
+    ];
+    return { ready: checks.every((c) => c.ready || c.optional), checks };
+  };
+  supervisor.onBroadcastEnded = () => {
+    scheduler.stop("broadcast_ended");
+    personas.stopActive("broadcast_ended");
+  };
   let soopAuthorizationPendingUntil = 0;
   let readerToken = opts.readerToken;
   const chzzkCallback = new URL(config.chzzk.redirectUri);
@@ -183,7 +291,10 @@ export async function createApp(
   });
   app.setErrorHandler((e, req, reply) => {
     const validation = e instanceof z.ZodError;
-    if(e instanceof PersonaError)return reply.code(e.statusCode).send({error:{code:e.code,message:e.message,retryable:e.retryable}});
+    if (e instanceof PersonaError)
+      return reply.code(e.statusCode).send({
+        error: { code: e.code, message: e.message, retryable: e.retryable },
+      });
     reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
       error: validation
         ? "Invalid request fields"
@@ -195,25 +306,106 @@ export async function createApp(
     });
   });
   app.addHook("preHandler", async (req, reply) => {
-    if(!req.url.startsWith('/api/admin/persona/')||req.method==='GET') return;
-    const key=req.headers['idempotency-key'];
-    if(typeof key!=='string'||key.length<8||key.length>128) return reply.code(400).send({error:{code:'IDEMPOTENCY_KEY_REQUIRED',message:'Provide an Idempotency-Key for this mutation.',retryable:false}});
-    const pathname=req.url.split('?',1)[0];const params=req.params as any;const sessionId=typeof params?.id==='string'?params.id:store.sessionId;const operation=`${req.method}:${pathname}`;const requestHash=canonicalHash({method:req.method,url:pathname,body:req.body??null});
-    const existing=store.db.prepare('SELECT request_hash,result,status_code FROM persona_operator_commands WHERE session_id=? AND operation=? AND id=?').get(sessionId,operation,key) as any;
-    if(existing){
-      if(existing.request_hash!==requestHash) return reply.code(409).send({error:{code:'IDEMPOTENCY_KEY_CONFLICT',message:'This key was already used for a different request.',retryable:false}});
-      if(existing.status_code===0) return reply.code(409).send({error:{code:'IDEMPOTENCY_IN_PROGRESS',message:'The original request is still processing.',retryable:true}});
+    if (!req.url.startsWith("/api/admin/persona/") || req.method === "GET")
+      return;
+    const key = req.headers["idempotency-key"];
+    if (typeof key !== "string" || key.length < 8 || key.length > 128)
+      return reply.code(400).send({
+        error: {
+          code: "IDEMPOTENCY_KEY_REQUIRED",
+          message: "Provide an Idempotency-Key for this mutation.",
+          retryable: false,
+        },
+      });
+    const pathname = req.url.split("?", 1)[0];
+    const params = req.params as any;
+    const sessionId =
+      typeof params?.id === "string" ? params.id : store.sessionId;
+    const operation = `${req.method}:${pathname}`;
+    const requestHash = canonicalHash({
+      method: req.method,
+      url: pathname,
+      body: req.body ?? null,
+    });
+    const existing = store.db
+      .prepare(
+        "SELECT request_hash,result,status_code FROM persona_operator_commands WHERE session_id=? AND operation=? AND id=?",
+      )
+      .get(sessionId, operation, key) as any;
+    if (existing) {
+      if (existing.request_hash !== requestHash)
+        return reply.code(409).send({
+          error: {
+            code: "IDEMPOTENCY_KEY_CONFLICT",
+            message: "This key was already used for a different request.",
+            retryable: false,
+          },
+        });
+      if (existing.status_code === 0)
+        return reply.code(409).send({
+          error: {
+            code: "IDEMPOTENCY_IN_PROGRESS",
+            message: "The original request is still processing.",
+            retryable: true,
+          },
+        });
       return reply.code(existing.status_code).send(JSON.parse(existing.result));
     }
-    try{store.db.prepare("INSERT INTO persona_operator_commands(id,session_id,operation,request_hash,result,status_code,created) VALUES(?,?,?,?, 'null',0,?)").run(key,sessionId,operation,requestHash,Date.now());}
-    catch{return reply.code(409).send({error:{code:'IDEMPOTENCY_IN_PROGRESS',message:'The original request is still processing.',retryable:true}});}
-    (req as any).personaIdempotency={key,sessionId,operation,requestHash};
+    try {
+      store.db
+        .prepare(
+          "INSERT INTO persona_operator_commands(id,session_id,operation,request_hash,result,status_code,created) VALUES(?,?,?,?, 'null',0,?)",
+        )
+        .run(key, sessionId, operation, requestHash, Date.now());
+    } catch {
+      return reply.code(409).send({
+        error: {
+          code: "IDEMPOTENCY_IN_PROGRESS",
+          message: "The original request is still processing.",
+          retryable: true,
+        },
+      });
+    }
+    (req as any).personaIdempotency = {
+      key,
+      sessionId,
+      operation,
+      requestHash,
+    };
   });
   app.addHook("onSend", async (req, reply, payload) => {
-    const context=(req as any).personaIdempotency;if(!context)return payload;
-    if(reply.statusCode>=200&&reply.statusCode<300){
-      try{const value=typeof payload==='string'?JSON.parse(payload):JSON.parse(Buffer.from(payload as any).toString('utf8'));store.db.prepare('UPDATE persona_operator_commands SET result=?,status_code=? WHERE id=? AND session_id=? AND operation=?').run(JSON.stringify(value),reply.statusCode,context.key,context.sessionId,context.operation);}catch{store.db.prepare('DELETE FROM persona_operator_commands WHERE id=? AND session_id=? AND operation=?').run(context.key,context.sessionId,context.operation);}
-    }else store.db.prepare('DELETE FROM persona_operator_commands WHERE id=? AND session_id=? AND operation=?').run(context.key,context.sessionId,context.operation);
+    const context = (req as any).personaIdempotency;
+    if (!context) return payload;
+    if (reply.statusCode >= 200 && reply.statusCode < 300) {
+      try {
+        const value =
+          typeof payload === "string"
+            ? JSON.parse(payload)
+            : JSON.parse(Buffer.from(payload as any).toString("utf8"));
+        store.db
+          .prepare(
+            "UPDATE persona_operator_commands SET result=?,status_code=? WHERE id=? AND session_id=? AND operation=?",
+          )
+          .run(
+            JSON.stringify(value),
+            reply.statusCode,
+            context.key,
+            context.sessionId,
+            context.operation,
+          );
+      } catch {
+        store.db
+          .prepare(
+            "DELETE FROM persona_operator_commands WHERE id=? AND session_id=? AND operation=?",
+          )
+          .run(context.key, context.sessionId, context.operation);
+      }
+    } else
+      store.db
+        .prepare(
+          "DELETE FROM persona_operator_commands WHERE id=? AND session_id=? AND operation=?",
+        )
+        .run(context.key, context.sessionId, context.operation);
     return payload;
   });
   app.get("/health", async () => ({ ok: true }));
@@ -237,92 +429,402 @@ export async function createApp(
 
   // P0 persona authoring and session control. These routes are operator-only;
   // public stream projections continue to use the existing allowlisted schema.
-  app.post("/api/admin/persona/sessions", async (req) => personas.createBrief(req.body));
-  app.get("/api/admin/persona/templates", async () => ({ templates: personas.templates() }));
-  app.post("/api/admin/persona/templates", async (req) => personas.createTemplate(req.body));
-  app.post("/api/admin/persona/sessions/:id/nickname-denylist", async (req) => {const body=z.object({name:z.string().trim().min(1).max(60),reason:z.string().trim().min(1).max(200)}).strict().parse(req.body);return personas.denyNickname(z.string().uuid().parse((req.params as any).id),body.name,body.reason);});
-  app.get("/api/admin/persona/sessions/:id", async (req) => personas.getSession(z.string().uuid().parse((req.params as any).id)));
+  app.post("/api/admin/persona/sessions", async (req) =>
+    personas.createBrief(req.body),
+  );
+  app.get("/api/admin/persona/templates", async () => ({
+    templates: personas.templates(),
+  }));
+  app.post("/api/admin/persona/templates", async (req) =>
+    personas.createTemplate(req.body),
+  );
+  app.post("/api/admin/persona/sessions/:id/nickname-denylist", async (req) => {
+    const body = z
+      .object({
+        name: z.string().trim().min(1).max(60),
+        reason: z.string().trim().min(1).max(200),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.denyNickname(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.name,
+      body.reason,
+    );
+  });
+  app.get("/api/admin/persona/sessions/:id", async (req) =>
+    personas.getSession(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    ),
+  );
   app.post("/api/admin/persona/sessions/:id/candidates", async (req) => {
-    const body = z.object({ count: z.number().int().min(1).max(24).optional() }).strict().parse(req.body ?? {});
-    return personas.createCandidates(z.string().uuid().parse((req.params as any).id), body.count);
+    const body = z
+      .object({ count: z.number().int().min(1).max(24).optional() })
+      .strict()
+      .parse(req.body ?? {});
+    return personas.createCandidates(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.count,
+    );
   });
-  app.get("/api/admin/persona/sessions/:id/candidates", async (req) => personas.listCandidates(z.string().uuid().parse((req.params as any).id)));
-  app.post("/api/admin/persona/sessions/:id/clone", async (req) => {const body=z.object({source_version_id:z.string().uuid()}).strict().parse(req.body);return personas.clone(z.string().uuid().parse((req.params as any).id),body.source_version_id);});
+  app.get("/api/admin/persona/sessions/:id/candidates", async (req) =>
+    personas.listCandidates(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    ),
+  );
+  app.post("/api/admin/persona/sessions/:id/clone", async (req) => {
+    const body = z
+      .object({ source_version_id: z.string().uuid() })
+      .strict()
+      .parse(req.body);
+    return personas.clone(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.source_version_id,
+    );
+  });
   app.post("/api/admin/persona/sessions/:id/auditions", async (req) => {
-    const body = z.object({ version_ids: z.array(z.string().uuid()).min(1).max(24) }).strict().parse(req.body);
-    return personas.audition(z.string().uuid().parse((req.params as any).id), body.version_ids);
+    const body = z
+      .object({ version_ids: z.array(z.string().uuid()).min(1).max(24) })
+      .strict()
+      .parse(req.body);
+    return personas.audition(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.version_ids,
+    );
   });
-  app.get("/api/admin/persona/jobs/:id", async (req) => personas.job(z.string().uuid().parse((req.params as any).id)));
-  app.post("/api/admin/persona/jobs/:id/cancel", async (req) => { z.object({}).strict().parse(req.body??{});return personas.cancelJob(z.string().uuid().parse((req.params as any).id)); });
+  app.get("/api/admin/persona/jobs/:id", async (req) =>
+    personas.job(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    ),
+  );
+  app.post("/api/admin/persona/jobs/:id/cancel", async (req) => {
+    z.object({})
+      .strict()
+      .parse(req.body ?? {});
+    return personas.cancelJob(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    );
+  });
   app.post("/api/admin/persona/versions/:id/approve", async (req) => {
-    const body = z.object({ hash: z.string().length(64), evaluation_id: z.string().uuid(), reviewer_decision: z.unknown() }).strict().parse(req.body);
-    return personas.approve(z.string().uuid().parse((req.params as any).id), body);
+    const body = z
+      .object({
+        hash: z.string().length(64),
+        evaluation_id: z.string().uuid(),
+        reviewer_decision: z.unknown(),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.approve(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body,
+    );
   });
-  app.post("/api/admin/persona/versions/:id/regenerate", async (req) => {const body=z.object({session_id:z.string().uuid(),source_hash:z.string().length(64),locked_paths:z.array(z.string()).max(30).default([]),dimensions:z.array(z.string()).max(30).default([]),nickname_only:z.boolean().default(false)}).strict().parse(req.body);return personas.regenerate(body.session_id,z.string().uuid().parse((req.params as any).id),body.source_hash,body.locked_paths,body.dimensions,body.nickname_only);});
-  app.post("/api/admin/persona/versions/:id/retire", async (req) => {const body=z.object({expected_hash:z.string().length(64),reason:z.string().trim().min(1).max(300)}).strict().parse(req.body);return personas.retireVersion(z.string().uuid().parse((req.params as any).id),body.expected_hash,body.reason);});
+  app.post("/api/admin/persona/versions/:id/regenerate", async (req) => {
+    const body = z
+      .object({
+        session_id: z.string().uuid(),
+        source_hash: z.string().length(64),
+        locked_paths: z.array(z.string()).max(30).default([]),
+        dimensions: z.array(z.string()).max(30).default([]),
+        nickname_only: z.boolean().default(false),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.regenerate(
+      body.session_id,
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.source_hash,
+      body.locked_paths,
+      body.dimensions,
+      body.nickname_only,
+    );
+  });
+  app.post("/api/admin/persona/versions/:id/retire", async (req) => {
+    const body = z
+      .object({
+        expected_hash: z.string().length(64),
+        reason: z.string().trim().min(1).max(300),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.retireVersion(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_hash,
+      body.reason,
+    );
+  });
   app.put("/api/admin/persona/sessions/:id/cast", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive(), members: z.array(z.object({ version_id: z.string().uuid(), display_name: z.string().trim().min(1).max(60).optional() }).strict()) }).strict().parse(req.body);
-    return personas.putCast(z.string().uuid().parse((req.params as any).id), body.expected_revision, body.members);
+    const body = z
+      .object({
+        expected_revision: z.number().int().positive(),
+        members: z.array(
+          z
+            .object({
+              version_id: z.string().uuid(),
+              display_name: z.string().trim().min(1).max(60).optional(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.putCast(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+      body.members,
+    );
   });
   app.post("/api/admin/persona/sessions/:id/freeze", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive(), disclosure_confirmed: z.literal(true), policy: z.unknown().optional() }).strict().parse(req.body);
-    return personas.freeze(z.string().uuid().parse((req.params as any).id), body.expected_revision, body.disclosure_confirmed, body.policy);
+    const body = z
+      .object({
+        expected_revision: z.number().int().positive(),
+        disclosure_confirmed: z.literal(true),
+        policy: z.unknown().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    return personas.freeze(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+      body.disclosure_confirmed,
+      body.policy,
+    );
   });
   app.post("/api/admin/persona/sessions/:id/start", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive(), arm_ai: z.boolean() }).strict().parse(req.body);
-    const id = z.string().uuid().parse((req.params as any).id);
+    const body = z
+      .object({
+        expected_revision: z.number().int().positive(),
+        arm_ai: z.boolean(),
+      })
+      .strict()
+      .parse(req.body);
+    const id = z
+      .string()
+      .uuid()
+      .parse((req.params as any).id);
     const state = personas.start(id, body.expected_revision, body.arm_ai);
     if (body.arm_ai) {
-      try { scheduler.start(); }
-      catch (error) { scheduler.stop("preflight_failed"); personas.stop(id, "preflight_failed"); throw error; }
-    }
+      try {
+        scheduler.start();
+      } catch (error) {
+        scheduler.stop("preflight_failed");
+        personas.stop(id, "preflight_failed");
+        throw error;
+      }
+    } else scheduler.stop("persona_started_disarmed");
     return state;
   });
   app.post("/api/admin/persona/sessions/:id/ai/stop", async (req) => {
-    const body = z.object({ reason: z.string().trim().min(1).max(200).optional() }).strict().parse(req.body ?? {});
+    const body = z
+      .object({ reason: z.string().trim().min(1).max(200).optional() })
+      .strict()
+      .parse(req.body ?? {});
     scheduler.stop("persona_emergency_stop");
-    return personas.stop(z.string().uuid().parse((req.params as any).id), body.reason);
+    return personas.stop(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.reason,
+    );
   });
   app.post("/api/admin/persona/sessions/:id/ai/arm", async (req) => {
-    const body = z.object({ expected_control_epoch: z.number().int().nonnegative() }).strict().parse(req.body);
-    const id = z.string().uuid().parse((req.params as any).id);
+    const body = z
+      .object({ expected_control_epoch: z.number().int().nonnegative() })
+      .strict()
+      .parse(req.body);
+    const id = z
+      .string()
+      .uuid()
+      .parse((req.params as any).id);
     const state = personas.arm(id, body.expected_control_epoch);
-    try { scheduler.start(); }
-    catch (error) { scheduler.stop("preflight_failed"); personas.stop(id, "preflight_failed"); throw error; }
+    try {
+      scheduler.start();
+    } catch (error) {
+      scheduler.stop("preflight_failed");
+      personas.stop(id, "preflight_failed");
+      throw error;
+    }
     return state;
   });
   app.post("/api/admin/persona/sessions/:id/pause", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
-    scheduler.stop("persona_paused"); return personas.pause(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+    const body = z
+      .object({ expected_revision: z.number().int().positive() })
+      .strict()
+      .parse(req.body);
+    scheduler.stop("persona_paused");
+    return personas.pause(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+    );
   });
   app.post("/api/admin/persona/sessions/:id/resume", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
-    return personas.resume(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+    const body = z
+      .object({ expected_revision: z.number().int().positive() })
+      .strict()
+      .parse(req.body);
+    return personas.resume(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+    );
   });
   app.post("/api/admin/persona/sessions/:id/end", async (req) => {
-    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
-    scheduler.stop("persona_ended"); return personas.end(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+    const body = z
+      .object({ expected_revision: z.number().int().positive() })
+      .strict()
+      .parse(req.body);
+    scheduler.stop("persona_ended");
+    return personas.end(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+    );
   });
   app.patch("/api/admin/persona/sessions/:id/policy", async (req) => {
-    const body=z.object({expected_revision:z.number().int().positive(),policy:z.unknown()}).strict().parse(req.body);
+    const body = z
+      .object({
+        expected_revision: z.number().int().positive(),
+        policy: z.unknown(),
+      })
+      .strict()
+      .parse(req.body);
     scheduler.stop("persona_policy_changed");
-    const state=personas.updatePolicy(z.string().uuid().parse((req.params as any).id),body.expected_revision,body.policy);
-    if(state.state==='live'&&state.armed){try{scheduler.start();}catch(error){scheduler.stop('preflight_failed');personas.stop(state.id,'preflight_failed');throw error;}}
+    const state = personas.updatePolicy(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.expected_revision,
+      body.policy,
+    );
+    if (state.state === "live" && state.armed) {
+      try {
+        scheduler.start();
+      } catch (error) {
+        scheduler.stop("preflight_failed");
+        personas.stop(state.id, "preflight_failed");
+        throw error;
+      }
+    }
     return state;
   });
-  app.patch("/api/admin/persona/sessions/:id/members/:memberId", async (req) => {
-    const body=z.object({expected_member_epoch:z.number().int().nonnegative(),presence:z.enum(['present','departed']).optional(),muted:z.boolean().optional(),attention:z.number().min(0).max(1).optional(),current_focus_tags:z.array(z.string().trim().min(1).max(60)).max(20).optional()}).strict().parse(req.body);
-    const result=personas.updateMember(z.string().uuid().parse((req.params as any).id),z.string().uuid().parse((req.params as any).memberId),body.expected_member_epoch,body);
-    const pending=scheduler.pending;
-    if(pending&&pending.memberId===(req.params as any).memberId){if(pending.attemptId)store.finishPersonaAttempt(pending.attemptId,'canceled','member_state_changed');scheduler.pending=undefined;}
-    return result;
-  });
+  app.patch(
+    "/api/admin/persona/sessions/:id/members/:memberId",
+    async (req) => {
+      const body = z
+        .object({
+          expected_member_epoch: z.number().int().nonnegative(),
+          presence: z.enum(["present", "departed"]).optional(),
+          muted: z.boolean().optional(),
+          attention: z.number().min(0).max(1).optional(),
+          current_focus_tags: z
+            .array(z.string().trim().min(1).max(60))
+            .max(20)
+            .optional(),
+        })
+        .strict()
+        .parse(req.body);
+      const result = personas.updateMember(
+        z
+          .string()
+          .uuid()
+          .parse((req.params as any).id),
+        z
+          .string()
+          .uuid()
+          .parse((req.params as any).memberId),
+        body.expected_member_epoch,
+        body,
+      );
+      const pending = scheduler.pending;
+      if (pending && pending.memberId === (req.params as any).memberId) {
+        if (pending.attemptId)
+          store.finishPersonaAttempt(
+            pending.attemptId,
+            "canceled",
+            "member_state_changed",
+          );
+        scheduler.pending = undefined;
+      }
+      return result;
+    },
+  );
   app.post("/api/admin/persona/sessions/:id/reveal", async (req) => {
-    const body=z.object({confirmed:z.literal(true)}).strict().parse(req.body);
-    return personas.reveal(z.string().uuid().parse((req.params as any).id),body.confirmed);
+    const body = z
+      .object({ confirmed: z.literal(true) })
+      .strict()
+      .parse(req.body);
+    return personas.reveal(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+      body.confirmed,
+    );
   });
-  app.get("/api/admin/persona/sessions/:id/report", async (req) => personas.report(z.string().uuid().parse((req.params as any).id)));
-  app.get("/api/admin/persona/sessions/:id/replay", async (req) => personas.replay(z.string().uuid().parse((req.params as any).id)));
+  app.get("/api/admin/persona/sessions/:id/report", async (req) =>
+    personas.report(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    ),
+  );
+  app.get("/api/admin/persona/sessions/:id/replay", async (req) =>
+    personas.replay(
+      z
+        .string()
+        .uuid()
+        .parse((req.params as any).id),
+    ),
+  );
 
   app.get("/stream", { websocket: true }, (socket, req) => {
     if (!req.headers.origin || !origins.includes(req.headers.origin)) {
@@ -398,6 +900,10 @@ export async function createApp(
     demo: !!opts.demo,
     sessionId: store.sessionId,
     closed: store.closed(),
+    broadcastEnded: Object.values(supervisor.states).some(
+      (connector) => connector.state === "ended",
+    ),
+    aiDesiredRunning: store.aiDesiredRunning(),
     retentionDays: config.retentionDays,
     connectors: supervisor.states,
     audio: {
@@ -417,7 +923,6 @@ export async function createApp(
       lastFrameAt: capture.latest()?.capturedAt ?? null,
       dimensions: capture.dimensions,
       lastError: capture.lastError,
-      enabled: config.capture.enabled,
       programConfirmed: config.capture.programConfirmed,
       ffmpeg: config.capture.ffmpeg,
       backend: config.capture.backend,
@@ -445,11 +950,6 @@ export async function createApp(
         contextWindowSeconds: config.ai.contextWindowSeconds,
         visualMode: config.ai.visualMode,
         last: scheduler.lastInput,
-        platformTextApproved: {
-          youtube: config.policy.youtubeAiContextApproved,
-          chzzk: config.policy.chzzkAiContextApproved,
-          soop: config.policy.soopAiContextApproved,
-        },
         availableTools: [],
       },
       pending: scheduler.pending
@@ -485,6 +985,7 @@ export async function createApp(
       maxCalls: config.ai.maxCalls,
       provider: config.ai.provider,
       visualMode: config.ai.visualMode,
+      readiness: readyComponents(),
       model: opts.demo
         ? "mock"
         : config.ai.provider === "chatgpt_subscription"
@@ -518,17 +1019,13 @@ export async function createApp(
         redirectUri: config.soop.redirectUri,
       },
       audio: {
-        enabled: config.audio.enabled,
         credentialsConfigured: !!process.env.GROQ_API_KEY,
-        reviewed: config.policy.groqAudioReviewed,
       },
       capture: {
-        enabled: config.capture.enabled,
         maskConfigured: config.capture.masks.length > 0,
       },
       ai: {
         provider: config.ai.provider,
-        providerReviewed: config.policy.providerReviewed,
         connected:
           config.ai.provider === "chatgpt_subscription"
             ? !!chatgpt.active?.refreshToken
@@ -539,7 +1036,6 @@ export async function createApp(
             : !!process.env.OPENAI_MODEL,
       },
     },
-    policy: config.policy,
     messages: store.readerSnapshot().messages,
   }));
   app.get("/api/admin/links", async () => ({
@@ -577,13 +1073,45 @@ export async function createApp(
     capture.confirm();
     return { ok: true };
   });
-  app.post("/api/admin/ai/start", async () => {
+  app.post("/api/admin/ai/start", async (_req, reply) => {
+    if (!opts.demo) {
+      if (["stopped", "config_required"].includes(capture.state))
+        capture.start();
+      if (
+        ["stopped", "disabled", "config_required"].includes(transcriber.state)
+      )
+        transcriber.start();
+      if (receiverConfigured()) supervisor.start();
+      if (!readyComponents().ready)
+        return reply.code(409).send({
+          error: "필수 입력을 모두 준비한 뒤 AI를 시작하세요.",
+          readiness: readyComponents(),
+        });
+    }
     scheduler.start();
+    return { ok: true, started: true, readiness: readyComponents() };
+  });
+  app.post("/api/admin/pipeline/start", async () => {
+    if (store.closed()) throw Error("Session closed");
+    capture.start();
+    transcriber.start();
+    if (receiverConfigured()) supervisor.start();
+    return { ok: true, readiness: readyComponents() };
+  });
+  app.post("/api/admin/pipeline/stop", async () => {
+    scheduler.stop();
+    personas.stopActive("operator_stop");
+    capture.stop();
+    transcriber.stop();
+    await supervisor.stop();
     return { ok: true };
   });
   app.post("/api/admin/ai/stop", async () => {
     scheduler.stop();
     personas.stopActive("operator_stop");
+    capture.stop();
+    transcriber.stop();
+    await supervisor.stop();
     return { ok: true };
   });
   app.post("/api/admin/ai/approve", async () => {
@@ -933,7 +1461,7 @@ export async function createApp(
   store.purge(Date.now() - config.retentionDays * 86400000);
   app.addHook("onClose", async () => {
     clearInterval(retention);
-    scheduler.stop();
+    scheduler.stop("server_shutdown", true);
     await supervisor.stop();
     capture.stop();
     transcriber.stop();
@@ -943,7 +1471,41 @@ export async function createApp(
   if (opts.startInputs !== false && !store.closed()) {
     supervisor.start();
     capture.start();
-    if (!opts.demo) transcriber.start();
+    transcriber.start();
   }
-  return { app, store, capture, scheduler, supervisor, transcriber };
+  const resumeAiIfRequested = () => {
+    if (
+      store.closed() ||
+      (!store.aiDesiredRunning() && !store.personaRuntime()?.armed)
+    )
+      return false;
+    if (!capture.latest() || Date.now() - capture.latest()!.capturedAt > 10000)
+      return false;
+    try {
+      if (!capture.confirmed) {
+        if (!config.capture.programConfirmed) return false;
+        capture.confirm();
+      }
+    } catch {
+      return false;
+    }
+    try {
+      scheduler.start();
+      return true;
+    } catch {
+      scheduler.stop("restart_preflight_failed");
+      personas.stopActive("restart_preflight_failed");
+      return false;
+    }
+  };
+  return {
+    app,
+    store,
+    capture,
+    scheduler,
+    supervisor,
+    transcriber,
+    personas,
+    resumeAiIfRequested,
+  };
 }

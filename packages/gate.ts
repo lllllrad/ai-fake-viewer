@@ -12,7 +12,7 @@ const jevFalseCriterion = promptText("jev_criteria_false.md");
 
 const gateResponse = z.object({
   answers: z.object({
-    bad_timing: z.object({
+    should_respond: z.object({
       type: z.literal("noul"),
       noul: z.number().min(0).max(1),
     }),
@@ -45,25 +45,16 @@ export class DecisionGate {
       state: {
         description: input.description,
         persona: input.persona,
-        new_transcripts: (input.newTranscripts ?? []).slice(-12).map((t) => ({
+        transcripts: (input.transcripts ?? []).slice(-12).map((t) => ({
           text: t.text.slice(0, 1000),
         })),
-        new_messages: (input.newMessages ?? []).slice(-12).map((m) => ({
+        messages: input.messages.slice(-30).map((m) => ({
           speaker: m.speaker.slice(0, 80),
           text: m.text.slice(0, 1000),
         })),
-        recent_context: {
-          transcripts: (input.transcripts ?? []).slice(-12).map((t) => ({
-            text: t.text.slice(0, 1000),
-          })),
-          messages: input.messages.slice(-30).map((m) => ({
-            speaker: m.speaker.slice(0, 80),
-            text: m.text.slice(0, 1000),
-          })),
-        },
       },
       questions: {
-        bad_timing: {
+        should_respond: {
           type: "noul",
           instructions: jevTimingPrompt,
           criteria: {
@@ -95,8 +86,8 @@ export class DecisionGate {
       if (!result.ok) throw Error("TypeSafe gate request failed");
       const raw = await result.text();
       if (raw.length > 8192) throw Error("TypeSafe gate response too large");
-      const probability = gateResponse.parse(JSON.parse(raw)).answers.bad_timing
-        .noul;
+      const probability = gateResponse.parse(JSON.parse(raw)).answers
+        .should_respond.noul;
       requestSignal.throwIfAborted();
       this.probability = probability;
       const suppress = probability >= this.config.threshold;

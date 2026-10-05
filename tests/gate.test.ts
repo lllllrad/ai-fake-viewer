@@ -24,21 +24,22 @@ const input: ModelInput = {
 };
 function harness(
   request: typeof fetch,
-  options: { enabled?: boolean; demo?: boolean; maxRequests?: number } = {},
+  options: {
+    enabled?: boolean;
+    demo?: boolean;
+    maxRequests?: number;
+    threshold?: number;
+  } = {},
 ) {
   const config = configSchema.parse({
-    policy: {
-      providerReviewed: true,
-      typesafeReviewed: true,
-      chzzkAiContextApproved: true,
-      reviewReference: "fixture",
-    },
     ai: {
       visualMode: "on_request",
       gate: {
+        threshold: options.threshold ?? 0.8,
         enabled: options.enabled ?? true,
         maxRequests: options.maxRequests ?? 10,
       },
+      pacing: { minSeconds: 20, maxSeconds: 20 },
     },
   });
   const store = new Store(":memory:");
@@ -111,28 +112,28 @@ test("Jev uses the documented text-only API and inclusive probability threshold"
   process.env.TYPESAFE_API_KEY = "fixture-typesafe-key";
   try {
     let calls = 0;
-    const gate = new DecisionGate(configSchema.parse({}).ai.gate, (async (
-      url,
-      init,
-    ) => {
-      calls++;
-      assert.equal(url, "https://api.typesafe.ai/v1/systemone");
-      assert.equal(init!.method, "POST");
-      assert.equal(
-        (init!.headers as Record<string, string>).Authorization,
-        "Bearer fixture-typesafe-key",
-      );
-      const body = JSON.parse(init!.body as string);
-      assert.equal(body.model, "jev-latest");
-      assert.equal(body.questions.should_respond.type, "noul");
-      assert.equal(body.state.transcripts[0].text, "화면을 봐 주세요");
-      assert.equal(body.state.frames, undefined);
-      assert.equal(body.state.transcripts[0].id, undefined);
-      assert.equal(body.state.messages[0].id, undefined);
-      assert.equal(body.state.messages[0].text.length, 1000);
-      assert(!String(init!.body).includes("secret-image"));
-      return response(calls === 1 ? 0.49 : 0.5);
-    }) as typeof fetch);
+    const gate = new DecisionGate(
+      configSchema.parse({ ai: { gate: { threshold: 0.5 } } }).ai.gate,
+      (async (url, init) => {
+        calls++;
+        assert.equal(url, "https://api.typesafe.ai/v1/systemone");
+        assert.equal(init!.method, "POST");
+        assert.equal(
+          (init!.headers as Record<string, string>).Authorization,
+          "Bearer fixture-typesafe-key",
+        );
+        const body = JSON.parse(init!.body as string);
+        assert.equal(body.model, "jev-latest");
+        assert.equal(body.questions.should_respond.type, "noul");
+        assert.equal(body.state.transcripts[0].text, "화면을 봐 주세요");
+        assert.equal(body.state.frames, undefined);
+        assert.equal(body.state.transcripts[0].id, undefined);
+        assert.equal(body.state.messages[0].id, undefined);
+        assert.equal(body.state.messages[0].text.length, 1000);
+        assert(!String(init!.body).includes("secret-image"));
+        return response(calls === 1 ? 0.49 : 0.5);
+      }) as typeof fetch,
+    );
     const state = {
       ...input,
       messages: [
@@ -140,8 +141,8 @@ test("Jev uses the documented text-only API and inclusive probability threshold"
       ],
       frames: [{ bytes: Buffer.from("secret-image") }],
     } as ModelInput;
-    assert.equal(await gate.allow(state, new AbortController().signal), false);
     assert.equal(await gate.allow(state, new AbortController().signal), true);
+    assert.equal(await gate.allow(state, new AbortController().signal), false);
     assert.equal(gate.filtered, 1);
   } finally {
     if (oldKey === undefined) delete process.env.TYPESAFE_API_KEY;
@@ -154,6 +155,7 @@ test("gate blocks answer-model spending, deduplicates input, and enforces its se
   process.env.TYPESAFE_API_KEY = "fixture";
   const h = harness((async () => response(0.1)) as typeof fetch, {
     maxRequests: 1,
+    threshold: 0.05,
   });
   try {
     await h.scheduler.tick();
@@ -179,10 +181,13 @@ test("allowed input reaches model and unauthorized platform text stays out of Je
   const oldKey = process.env.TYPESAFE_API_KEY;
   process.env.TYPESAFE_API_KEY = "fixture";
   let sent = "";
-  const h = harness((async (_url, init) => {
-    sent = String(init!.body);
-    return response(0.9);
-  }) as typeof fetch);
+  const h = harness(
+    (async (_url, init) => {
+      sent = String(init!.body);
+      return response(0.9);
+    }) as typeof fetch,
+    { threshold: 0.95 },
+  );
   try {
     h.store.ingestBatch([
       {
@@ -200,12 +205,13 @@ test("allowed input reaches model and unauthorized platform text stays out of Je
         text: "APPROVED",
       },
     ]);
+    h.scheduler.lastAttempt = 0;
     await h.scheduler.tick();
     assert.equal(h.calls(), 1);
     assert.equal(h.store.usage().calls, 1);
     assert(sent.includes("APPROVED"));
+    assert(sent.includes("UNAPPROVED"));
     for (const forbidden of [
-      "UNAPPROVED",
       "private-chzzk",
       "Private CHZZK",
       "private-youtube",
@@ -323,25 +329,22 @@ test("gate timeout skips the answer model", async () => {
   }
 });
 
-test("starting an enabled gate requires TypeSafe review and credentials", () => {
-  const oldKey = process.env.TYPESAFE_API_KEY;
-  delete process.env.TYPESAFE_API_KEY;
+test("Jev is optional and does not require a second policy enable flag", () => {
   const h = harness(fetch);
   try {
-    h.config.policy.typesafeReviewed = false;
-    assert.throws(() => h.scheduler.start(), /typesafeReviewed/);
-    h.config.policy.typesafeReviewed = true;
-    assert.throws(() => h.scheduler.start(), /TYPESAFE_API_KEY/);
+    h.scheduler.start();
+    assert.equal(h.scheduler.state, "running");
   } finally {
     h.close();
-    if (oldKey !== undefined) process.env.TYPESAFE_API_KEY = oldKey;
   }
 });
 
 test("Jev runs once before a text decision and its subsequent masked-frame inspection", async () => {
   const oldKey = process.env.TYPESAFE_API_KEY;
   process.env.TYPESAFE_API_KEY = "fixture";
-  const h = harness((async () => response(0.9)) as typeof fetch);
+  const h = harness((async () => response(0.9)) as typeof fetch, {
+    threshold: 0.95,
+  });
   const frameCounts: number[] = [];
   h.capture.add(
     {
@@ -367,6 +370,7 @@ test("Jev runs once before a text decision and its subsequent masked-frame inspe
     };
   };
   try {
+    h.scheduler.lastAttempt = 0;
     await h.scheduler.tick();
     assert.deepEqual(frameCounts, [0, 1]);
     assert.equal(h.gate.requests, 1);

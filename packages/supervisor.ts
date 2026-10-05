@@ -7,6 +7,7 @@ import { runYoutube } from "./youtube.ts";
 import { ChzzkAuth, normalizeChzzk } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {
+  onBroadcastEnded?: () => void;
   states: Record<
     string,
     {
@@ -46,9 +47,11 @@ export class Supervisor {
     });
   }
   status(p: string, s: string) {
+    const previous = this.states[p]?.state;
     if (p === "youtube" && s === "reconnecting" && this.states[p].state !== s)
       this.states[p].recoveries++;
     this.states[p].state = s;
+    if (s === "ended" && previous !== "ended") this.onBroadcastEnded?.();
   }
   receive(p: string, m: unknown) {
     try {

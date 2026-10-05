@@ -67,11 +67,10 @@ export class Capture {
       this.timer = setInterval(() => void tick(), 3000);
       return;
     }
-    if (!this.config.enabled || !this.config.programConfirmed) {
+    if (!this.config.programConfirmed) {
       this.state = "config_required";
-      this.lastError = !this.config.enabled
-        ? "Capture is disabled in config.yaml."
-        : "Set capture.programConfirmed: true after verifying OBS Program output.";
+      this.lastError =
+        "Set capture.programConfirmed: true after verifying OBS Program output.";
       return;
     }
     this.lastError = "";

@@ -43,6 +43,18 @@ test("A01–A04: account identity, repeated content, ID deduplication and mutati
   assert.equal(s.snapshot().messages[3]!.text, "updated");
   s.close();
 });
+test("AI desired running state survives a database-backed server restart", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ai-running-state-"));
+  const path = join(dir, "state.sqlite");
+  const first = new Store(path);
+  first.setAiDesiredRunning(true);
+  first.close();
+  const restarted = new Store(path);
+  assert.equal(restarted.aiDesiredRunning(), true);
+  restarted.setAiDesiredRunning(false);
+  restarted.close();
+  rmSync(dir, { recursive: true, force: true });
+});
 test("A05–A06: committed cursor, rollback, replay and hidden content never resurrect", () => {
   const s = new Store(":memory:");
   const events: any[] = [];
@@ -290,7 +302,7 @@ test("A13: call and money limits survive restart; provider failures retain reser
   s.close();
   rmSync(dir, { recursive: true, force: true });
 });
-test("A17: unapproved platform context excluded and raw IDs not sent to model", async () => {
+test("A17: configured platform context enters the model without raw account IDs", async () => {
   let input: ModelInput | undefined;
   const h = harness(async (i: ModelInput) => {
     input = i;
@@ -301,8 +313,9 @@ test("A17: unapproved platform context excluded and raw IDs not sent to model", 
     msg({ platform: "experiment", text: "include me" }),
   ]);
   await h.ai.tick();
-  assert.equal(input!.messages.length, 1);
-  assert.equal(input!.messages[0].text, "include me");
+  assert.equal(input!.messages.length, 2);
+  assert(input!.messages.some((m) => m.text === "include me"));
+  assert(input!.messages.some((m) => m.text === "exclude me"));
   assert(!JSON.stringify(input).includes("PRIVATE"));
   h.s.close();
 });
@@ -373,7 +386,7 @@ test("A20: strict configuration rejects typos, invalid masks and unsupported bli
     { round_blind: true },
     { capture: { masks: [{ x: 0.9, y: 0, width: 0.5, height: 0.5 }] } },
     { ai: { maxUsd: 1 } },
-    { policy: { youtubeAiContextApproved: true } },
+    { policy: { obsolete: true } },
   ])
     assert.throws(() => configSchema.parse(v));
 });

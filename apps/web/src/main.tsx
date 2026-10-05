@@ -415,13 +415,30 @@ function Admin() {
   const [chatgptModels, setChatgptModels] = useState<
     { slug: string; name: string }[]
   >([]);
-  const [personaBrief, setPersonaBrief] = useState({ session_title: "", topic: "", audience_intent: "엔터테인먼트", public_context: "", private_production_context: "", language: "ko-KR", tone_policy: "모욕, 사칭, 개인정보 추측 금지", cast_mode: "fresh", candidate_count: 12, cast_size: 6, game_mode: true });
+  const [personaBrief, setPersonaBrief] = useState({
+    session_title: "",
+    topic: "",
+    audience_intent: "엔터테인먼트",
+    public_context: "",
+    private_production_context: "",
+    language: "ko-KR",
+    tone_policy: "모욕, 사칭, 개인정보 추측 금지",
+    cast_mode: "fresh",
+    candidate_count: 12,
+    cast_size: 6,
+    game_mode: true,
+  });
   const [personaSession, setPersonaSession] = useState<any>();
   const [personaCandidates, setPersonaCandidates] = useState<any[]>([]);
   const [personaAudition, setPersonaAudition] = useState<any>();
-  const [personaGenerationProgress, setPersonaGenerationProgress] = useState<{done:number;total:number}>();
+  const [personaGenerationProgress, setPersonaGenerationProgress] = useState<{
+    done: number;
+    total: number;
+  }>();
   const [selectedPersonaIds, setSelectedPersonaIds] = useState<string[]>([]);
-  const [personaLocks, setPersonaLocks] = useState<Record<string,string[]>>({});
+  const [personaLocks, setPersonaLocks] = useState<Record<string, string[]>>(
+    {},
+  );
   const api = async (path: string, method = "GET") => {
     const r = await fetch(`/api/admin/${path}`, {
       method,
@@ -437,26 +454,46 @@ function Admin() {
     const r = await fetch(`/api/admin/${path}`, {
       method: "POST",
       credentials: "same-origin",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() },
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
       body: JSON.stringify(body),
     });
     if (!r.ok) throw Error((await r.json()).error);
     return r.json();
   };
   const postPatch = async (path: string, body: unknown) => {
-    const r=await fetch(`/api/admin/${path}`,{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json','Idempotency-Key':crypto.randomUUID()},body:JSON.stringify(body)});
-    if(!r.ok) throw Error((await r.json()).error); return r.json();
+    const r = await fetch(`/api/admin/${path}`, {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID(),
+      },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw Error((await r.json()).error);
+    return r.json();
   };
   const loadPersona = async (id: string) => {
     const s = await (await api(`persona/sessions/${id}`)).json();
     setPersonaSession(s);
-    const c=await (await api(`persona/sessions/${id}/candidates`)).json();setPersonaCandidates(c);setSelectedPersonaIds(c.slice(0,s.brief.cast_size).map((v:any)=>v.id));
+    const c = await (await api(`persona/sessions/${id}/candidates`)).json();
+    setPersonaCandidates(c);
+    setSelectedPersonaIds(c.slice(0, s.brief.cast_size).map((v: any) => v.id));
   };
   const personaAction = async (fn: () => Promise<void>) => {
-    setBusy(true); setError("");
-    try { await fn(); await refresh(); }
-    catch (e: any) { setError(e.message); }
-    finally { setBusy(false); }
+    setBusy(true);
+    setError("");
+    try {
+      await fn();
+      await refresh();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
   };
   const loadChatgptModels = async () => {
     try {
@@ -544,6 +581,41 @@ function Admin() {
       setBusy(false);
     }
   };
+  const startPipeline = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await api("pipeline/start", "POST");
+      for (let attempt = 0; attempt < 60; attempt++) {
+        const next = await (await api("status")).json();
+        setStatus(next);
+        const frameFresh =
+          next.capture.lastFrameAgeMs !== null &&
+          next.capture.lastFrameAgeMs <= 10000;
+        if (frameFresh && !next.capture.confirmed) {
+          if (
+            !window.confirm(
+              "마스킹된 Program 미리보기를 확인했고, 가려야 할 영역이 모두 가려졌나요? 확인 후 AI 입력으로 승인합니다.",
+            )
+          )
+            throw Error("영상 미리보기 확인이 필요합니다.");
+          await api("capture/confirm", "POST");
+        }
+        if (next.ai.readiness.ready) {
+          await api("ai/start", "POST");
+          await refresh();
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      throw Error("필수 입력 준비 시간 초과. 대시보드 상태를 확인하세요.");
+    } catch (e: any) {
+      setError(e.message);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
   if (session === "checking")
     return (
       <main className="login">
@@ -600,44 +672,810 @@ function Admin() {
       ) : (
         <>
           <section className="card persona-studio">
-            <div className="section-title"><h2>Persona studio · P0</h2><span>세션별 새 출연진 · 로컬 오버레이 전용</span></div>
-            {!personaSession ? <>
-              <div className="persona-fields">
-                <label>방송 제목<input value={personaBrief.session_title} onChange={e=>setPersonaBrief({...personaBrief,session_title:e.target.value})} /></label>
-                <label>주제<input value={personaBrief.topic} onChange={e=>setPersonaBrief({...personaBrief,topic:e.target.value})} /></label>
-                <label>시청 경험 의도<input value={personaBrief.audience_intent} onChange={e=>setPersonaBrief({...personaBrief,audience_intent:e.target.value})} /></label>
-                <label>공개 맥락<textarea value={personaBrief.public_context} onChange={e=>setPersonaBrief({...personaBrief,public_context:e.target.value})} /></label>
-                <label>비공개 제작 참고<textarea value={personaBrief.private_production_context} onChange={e=>setPersonaBrief({...personaBrief,private_production_context:e.target.value})} /></label>
-                <label>후보 수<input type="number" min={1} max={24} value={personaBrief.candidate_count} onChange={e=>setPersonaBrief({...personaBrief,candidate_count:Number(e.target.value)})} /></label>
-                <label>선정 인원<input type="number" min={1} max={12} value={personaBrief.cast_size} onChange={e=>setPersonaBrief({...personaBrief,cast_size:Number(e.target.value)})} /></label>
-              </div>
-              <p className="hint">비공개 제작 참고는 후보 생성·오디션·실시간 모델 입력에서 제외됩니다. audience disclosure를 확인한 뒤 출연진을 동결해야 합니다.</p>
-              <button disabled={busy || !personaBrief.session_title || !personaBrief.topic} onClick={()=>void personaAction(async()=>{ const s=await post("persona/sessions",personaBrief); setPersonaSession(s); let job=await post(`persona/sessions/${s.id}/candidates`,{}); while(job.status==="queued"||job.status==="running"){await new Promise(r=>setTimeout(r,1000));job=await (await api(`persona/jobs/${job.id}`)).json();setPersonaGenerationProgress({done:job.progress,total:job.total});} if(job.status!=="succeeded")throw Error(job.error??"Persona generation failed");const candidates=job.result??[];setPersonaCandidates(candidates);setSelectedPersonaIds(candidates.slice(0,personaBrief.cast_size).map((v:any)=>v.id));setPersonaGenerationProgress(undefined); })}>브리프 저장 및 모델로 후보 생성</button>
-              {personaGenerationProgress&&<p role="status">모델 후보 생성 {personaGenerationProgress.done}/{personaGenerationProgress.total}</p>}
-            </> : <>
-              <p><strong>{personaSession.brief.session_title}</strong> · {personaSession.state} · revision {personaSession.revision} · {personaSession.armed ? "AI armed" : "AI disarmed"}</p>
-              {personaSession.state === "draft" && <>
-                <p className="hint">출연진 {selectedPersonaIds.length}/{personaSession.brief.cast_size} 선택 · 각 후보에서 잠금할 차원을 지정한 뒤 행동 또는 닉네임만 다시 생성할 수 있습니다.</p><div className="persona-candidates">{personaCandidates.map((v:any)=><article className="persona-candidate" key={v.id}>
-                  <label><input type="checkbox" checked={selectedPersonaIds.includes(v.id)} onChange={e=>setSelectedPersonaIds(ids=>e.target.checked?[...ids,v.id]:ids.filter(id=>id!==v.id))}/> 출연 후보에 포함</label>
-                  <h3>{v.definition.display_name_suggestion} <small>{v.status}</small></h3><p>{v.definition.core.viewing_motive}</p><p><b>관심:</b> {v.definition.core.interests.join(", ")} · <b>관찰:</b> {v.definition.core.observation_focus.join(", ")}</p><p><b>침묵:</b> {v.definition.participation.stay_silent_when.join(", ")}</p>
-                  <details><summary>캐릭터 카드와 예시 보기</summary><p><b>지식 경계:</b> {v.definition.knowledge.map((k:any)=>`${k.topic} (${k.level}): ${k.boundary}`).join(" · ")}</p><p><b>긍정 예시:</b> {v.definition.examples.map((x:any)=>`${x.action}: ${x.text??x.situation}`).join(" / ")}</p><p><b>금지 예시:</b> {v.definition.negative_examples.map((x:any)=>`${x.situation}: ${x.unacceptable_behavior}`).join(" / ")}</p></details>
-                  <div className="persona-locks">{["core.interests","knowledge","voice.typical_length","core.observation_focus"].map(path=><label key={path}><input type="checkbox" checked={(personaLocks[v.id]??[]).includes(path)} onChange={e=>setPersonaLocks(old=>({...old,[v.id]:e.target.checked?[...(old[v.id]??[]),path]:(old[v.id]??[]).filter(p=>p!==path)}))}/> 잠금 {path}</label>)}</div>
-                  <button disabled={busy} onClick={()=>void personaAction(async()=>{let job=await post(`persona/versions/${v.id}/regenerate`,{session_id:personaSession.id,source_hash:v.hash,locked_paths:personaLocks[v.id]??[],dimensions:["core.viewing_motive","core.interests","core.observation_focus","knowledge","participation.base_propensity"]});while(job.status==="queued"||job.status==="running"){await new Promise(r=>setTimeout(r,500));job=await (await api(`persona/jobs/${job.id}`)).json();}if(job.status!=="succeeded")throw Error(job.error??"Regeneration failed");const next=job.result[0];setPersonaCandidates(cs=>[...cs,next]);setPersonaLocks(old=>({...old,[next.id]:old[v.id]??[]}));setSelectedPersonaIds(ids=>[...ids,next.id]);setPersonaAudition(undefined);})}>잠금 차원 유지 후 모델로 재생성</button><button disabled={busy} onClick={()=>void personaAction(async()=>{let job=await post(`persona/versions/${v.id}/regenerate`,{session_id:personaSession.id,source_hash:v.hash,nickname_only:true});while(job.status==="queued"||job.status==="running"){await new Promise(r=>setTimeout(r,500));job=await (await api(`persona/jobs/${job.id}`)).json();}if(job.status!=="succeeded")throw Error(job.error??"Regeneration failed");const next=job.result[0];setPersonaCandidates(cs=>[...cs,next]);setPersonaLocks(old=>({...old,[next.id]:old[v.id]??[]}));setSelectedPersonaIds(ids=>[...ids,next.id]);setPersonaAudition(undefined);})}>닉네임만 모델로 재생성</button>
-                  {personaAudition?.candidates?.find((x:any)=>x.version_id===v.id) && <div className="hint">12개 공통 시나리오 · 결정 검사 {personaAudition.candidates.find((x:any)=>x.version_id===v.id).deterministic.passed ? "통과" : "실패"}{personaAudition.candidates.find((x:any)=>x.version_id===v.id).results.map((o:any)=><p key={o.key}><b>{o.scenario}:</b> {o.action}{o.output?` — ${o.output}`:""}</p>)}</div>}
-                  <label>검토 점수 (일관성 / 차별성 / 자연스러움 / 관련성 각각 1–5)<input data-score={v.id} placeholder="4,4,4,4" /></label>
-                </article>)}</div>
-                <button disabled={busy || selectedPersonaIds.length===0} onClick={()=>void personaAction(async()=>{let job=await post(`persona/sessions/${personaSession.id}/auditions`,{version_ids:selectedPersonaIds});setPersonaAudition(job);while(job.status==="queued"||job.status==="running"){await new Promise(r=>setTimeout(r,1000));job=await (await api(`persona/jobs/${job.id}`)).json();setPersonaAudition(job);}if(job.status!=="succeeded")throw Error(job.error??"Audition failed");setPersonaAudition({id:job.id,fixture_set:"p0-v1",candidates:job.result});})}>선택 후보 공통 오디션 실행</button>
-                <button disabled={busy || !personaAudition} onClick={()=>void personaAction(async()=>{ for(const v of personaCandidates.filter((x:any)=>selectedPersonaIds.includes(x.id)&&personaAudition.candidates?.some((c:any)=>c.version_id===x.id))){ const input=document.querySelector(`[data-score="${v.id}"]`) as HTMLInputElement; const scores=(input?.value||"").split(",").map(Number); if(scores.length!==4||scores.some(x=>!Number.isInteger(x)||x<1||x>5)) continue; await post(`persona/versions/${v.id}/approve`,{hash:v.hash,evaluation_id:personaAudition.id,reviewer_decision:{approved:true,coherence:scores[0],distinction:scores[1],naturalness:scores[2],relevance:scores[3]}}); } await loadPersona(personaSession.id); })}>기준 충족 후보 승인</button>
-                <label className="persona-approval"><input type="checkbox" id="persona-disclosure" /> 시청자에게 합성 참여자가 포함됨을 알렸습니다.</label>
-                <button disabled={busy || personaCandidates.filter((v:any)=>v.status==="approved"&&selectedPersonaIds.includes(v.id)).length!==personaSession.brief.cast_size} onClick={()=>void personaAction(async()=>{ const selected=personaCandidates.filter((v:any)=>v.status==="approved"&&selectedPersonaIds.includes(v.id)); const cast=await fetch(`/api/admin/persona/sessions/${personaSession.id}/cast`,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json","Idempotency-Key":crypto.randomUUID()},body:JSON.stringify({expected_revision:personaSession.revision,members:selected.map((v:any)=>({version_id:v.id}))})});if(!cast.ok)throw Error((await cast.json()).error);const frozen=await post(`persona/sessions/${personaSession.id}/freeze`,{expected_revision:personaSession.revision+1,disclosure_confirmed:(document.querySelector("#persona-disclosure") as HTMLInputElement).checked});setPersonaSession(frozen);})}>선정 인원으로 동결</button>
-              </>}
-              {personaSession.state === "ready" && <button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/start`,{expected_revision:personaSession.revision,arm_ai:false}))) }>AI 비활성으로 라이브 세션 시작</button>}
-              {personaSession.state === "live" && <><p className="hint">동결된 cast가 기존 모델 및 로컬 overlay publication path를 사용합니다. 세션 재시작 후에는 AI가 자동으로 다시 무장되지 않습니다.</p><label>AI 최소 발행 간격 (ms)<input type="number" min={0} max={60000} step={500} value={personaSession.policy.minimum_global_gap_ms} onChange={e=>setPersonaSession({...personaSession,policy:{...personaSession.policy,minimum_global_gap_ms:Number(e.target.value)}})}/></label><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await postPatch(`persona/sessions/${personaSession.id}/policy`,{expected_revision:personaSession.revision,policy:personaSession.policy}))) }>정책 저장 · 진행 중 반응 무효화</button>{!personaSession.armed&&<button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/ai/arm`,{expected_control_epoch:personaSession.control_epoch}))) }>AI 발행 무장</button>}<div className="persona-candidates">{personaSession.cast.map((m:any)=><article className="persona-candidate" key={m.member_id}><h3>{m.display_name} <small>{m.status}{m.muted?" · muted":""}</small></h3><p>관심 태그: {JSON.parse(m.focus_tags||"[]").join(", ")||"없음"} · attention {m.attention}</p><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await postPatch(`persona/sessions/${personaSession.id}/members/${m.member_id}`,{expected_member_epoch:m.epoch,muted:!m.muted}))) }>{m.muted?"음소거 해제":"음소거"}</button><button disabled={busy||m.status==="departed"} onClick={()=>void personaAction(async()=>setPersonaSession(await postPatch(`persona/sessions/${personaSession.id}/members/${m.member_id}`,{expected_member_epoch:m.epoch,presence:"departed"}))) }>퇴장</button><button disabled={busy||m.status==="present"} onClick={()=>void personaAction(async()=>setPersonaSession(await postPatch(`persona/sessions/${personaSession.id}/members/${m.member_id}`,{expected_member_epoch:m.epoch,presence:"present"}))) }>재입장</button></article>)}</div><button className="stop" onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/ai/stop`,{reason:"operator_stop"}))) }>AI 긴급 정지</button><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/pause`,{expected_revision:personaSession.revision}))) }>세션 일시정지</button><button className="danger" disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/end`,{expected_revision:personaSession.revision}))) }>세션 종료</button>{!personaSession.armed&&personaSession.brief.game_mode&&<button disabled={busy} onClick={()=>void personaAction(async()=>{await post(`persona/sessions/${personaSession.id}/reveal`,{confirmed:window.confirm("합성 참여자 신원을 공개할까요? 이 작업은 되돌릴 수 없습니다.")});await loadPersona(personaSession.id);})}>신원 공개</button>}</>}
-              {personaSession.state === "paused" && <><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/resume`,{expected_revision:personaSession.revision}))) }>세션 재개 (AI 비활성)</button><button className="danger" disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/end`,{expected_revision:personaSession.revision}))) }>세션 종료</button></>}
-              {personaSession.state === "ended" && <button disabled={busy} onClick={()=>void personaAction(async()=>{const r=await api(`persona/sessions/${personaSession.id}/report`);setPersonaAudition(await r.json());})}>세션 리뷰 보고서</button>}
-              {personaSession.state === "ended" && personaAudition?.members && <pre className="persona-report">{JSON.stringify(personaAudition,null,2)}</pre>}
-              <button className="secondary" disabled={busy} onClick={()=>void personaAction(async()=>{setPersonaSession(undefined);setPersonaCandidates([]);setPersonaAudition(undefined);})}>새 브리프</button>
-            </>}
+            <div className="section-title">
+              <h2>Persona studio · P0</h2>
+              <span>세션별 새 출연진 · 로컬 오버레이 전용</span>
+            </div>
+            {!personaSession ? (
+              <>
+                <div className="persona-fields">
+                  <label>
+                    방송 제목
+                    <input
+                      value={personaBrief.session_title}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          session_title: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    주제
+                    <input
+                      value={personaBrief.topic}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          topic: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    시청 경험 의도
+                    <input
+                      value={personaBrief.audience_intent}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          audience_intent: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    공개 맥락
+                    <textarea
+                      value={personaBrief.public_context}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          public_context: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    비공개 제작 참고
+                    <textarea
+                      value={personaBrief.private_production_context}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          private_production_context: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    후보 수
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={personaBrief.candidate_count}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          candidate_count: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    선정 인원
+                    <input
+                      type="number"
+                      min={1}
+                      max={12}
+                      value={personaBrief.cast_size}
+                      onChange={(e) =>
+                        setPersonaBrief({
+                          ...personaBrief,
+                          cast_size: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+                <p className="hint">
+                  비공개 제작 참고는 후보 생성·오디션·실시간 모델 입력에서
+                  제외됩니다. audience disclosure를 확인한 뒤 출연진을 동결해야
+                  합니다.
+                </p>
+                <button
+                  disabled={
+                    busy || !personaBrief.session_title || !personaBrief.topic
+                  }
+                  onClick={() =>
+                    void personaAction(async () => {
+                      const s = await post("persona/sessions", personaBrief);
+                      setPersonaSession(s);
+                      let job = await post(
+                        `persona/sessions/${s.id}/candidates`,
+                        {},
+                      );
+                      while (
+                        job.status === "queued" ||
+                        job.status === "running"
+                      ) {
+                        await new Promise((r) => setTimeout(r, 1000));
+                        job = await (
+                          await api(`persona/jobs/${job.id}`)
+                        ).json();
+                        setPersonaGenerationProgress({
+                          done: job.progress,
+                          total: job.total,
+                        });
+                      }
+                      if (job.status !== "succeeded")
+                        throw Error(job.error ?? "Persona generation failed");
+                      const candidates = job.result ?? [];
+                      setPersonaCandidates(candidates);
+                      setSelectedPersonaIds(
+                        candidates
+                          .slice(0, personaBrief.cast_size)
+                          .map((v: any) => v.id),
+                      );
+                      setPersonaGenerationProgress(undefined);
+                    })
+                  }
+                >
+                  브리프 저장 및 모델로 후보 생성
+                </button>
+                {personaGenerationProgress && (
+                  <p role="status">
+                    모델 후보 생성 {personaGenerationProgress.done}/
+                    {personaGenerationProgress.total}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p>
+                  <strong>{personaSession.brief.session_title}</strong> ·{" "}
+                  {personaSession.state} · revision {personaSession.revision} ·{" "}
+                  {personaSession.armed ? "AI armed" : "AI disarmed"}
+                </p>
+                {personaSession.state === "draft" && (
+                  <>
+                    <p className="hint">
+                      출연진 {selectedPersonaIds.length}/
+                      {personaSession.brief.cast_size} 선택 · 각 후보에서 잠금할
+                      차원을 지정한 뒤 행동 또는 닉네임만 다시 생성할 수
+                      있습니다.
+                    </p>
+                    <div className="persona-candidates">
+                      {personaCandidates.map((v: any) => (
+                        <article className="persona-candidate" key={v.id}>
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={selectedPersonaIds.includes(v.id)}
+                              onChange={(e) =>
+                                setSelectedPersonaIds((ids) =>
+                                  e.target.checked
+                                    ? [...ids, v.id]
+                                    : ids.filter((id) => id !== v.id),
+                                )
+                              }
+                            />{" "}
+                            출연 후보에 포함
+                          </label>
+                          <h3>
+                            {v.definition.display_name_suggestion}{" "}
+                            <small>{v.status}</small>
+                          </h3>
+                          <p>{v.definition.core.viewing_motive}</p>
+                          <p>
+                            <b>관심:</b>{" "}
+                            {v.definition.core.interests.join(", ")} ·{" "}
+                            <b>관찰:</b>{" "}
+                            {v.definition.core.observation_focus.join(", ")}
+                          </p>
+                          <p>
+                            <b>침묵:</b>{" "}
+                            {v.definition.participation.stay_silent_when.join(
+                              ", ",
+                            )}
+                          </p>
+                          <details>
+                            <summary>캐릭터 카드와 예시 보기</summary>
+                            <p>
+                              <b>지식 경계:</b>{" "}
+                              {v.definition.knowledge
+                                .map(
+                                  (k: any) =>
+                                    `${k.topic} (${k.level}): ${k.boundary}`,
+                                )
+                                .join(" · ")}
+                            </p>
+                            <p>
+                              <b>긍정 예시:</b>{" "}
+                              {v.definition.examples
+                                .map(
+                                  (x: any) =>
+                                    `${x.action}: ${x.text ?? x.situation}`,
+                                )
+                                .join(" / ")}
+                            </p>
+                            <p>
+                              <b>금지 예시:</b>{" "}
+                              {v.definition.negative_examples
+                                .map(
+                                  (x: any) =>
+                                    `${x.situation}: ${x.unacceptable_behavior}`,
+                                )
+                                .join(" / ")}
+                            </p>
+                          </details>
+                          <div className="persona-locks">
+                            {[
+                              "core.interests",
+                              "knowledge",
+                              "voice.typical_length",
+                              "core.observation_focus",
+                            ].map((path) => (
+                              <label key={path}>
+                                <input
+                                  type="checkbox"
+                                  checked={(personaLocks[v.id] ?? []).includes(
+                                    path,
+                                  )}
+                                  onChange={(e) =>
+                                    setPersonaLocks((old) => ({
+                                      ...old,
+                                      [v.id]: e.target.checked
+                                        ? [...(old[v.id] ?? []), path]
+                                        : (old[v.id] ?? []).filter(
+                                            (p) => p !== path,
+                                          ),
+                                    }))
+                                  }
+                                />{" "}
+                                잠금 {path}
+                              </label>
+                            ))}
+                          </div>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void personaAction(async () => {
+                                let job = await post(
+                                  `persona/versions/${v.id}/regenerate`,
+                                  {
+                                    session_id: personaSession.id,
+                                    source_hash: v.hash,
+                                    locked_paths: personaLocks[v.id] ?? [],
+                                    dimensions: [
+                                      "core.viewing_motive",
+                                      "core.interests",
+                                      "core.observation_focus",
+                                      "knowledge",
+                                      "participation.base_propensity",
+                                    ],
+                                  },
+                                );
+                                while (
+                                  job.status === "queued" ||
+                                  job.status === "running"
+                                ) {
+                                  await new Promise((r) => setTimeout(r, 500));
+                                  job = await (
+                                    await api(`persona/jobs/${job.id}`)
+                                  ).json();
+                                }
+                                if (job.status !== "succeeded")
+                                  throw Error(
+                                    job.error ?? "Regeneration failed",
+                                  );
+                                const next = job.result[0];
+                                setPersonaCandidates((cs) => [...cs, next]);
+                                setPersonaLocks((old) => ({
+                                  ...old,
+                                  [next.id]: old[v.id] ?? [],
+                                }));
+                                setSelectedPersonaIds((ids) => [
+                                  ...ids,
+                                  next.id,
+                                ]);
+                                setPersonaAudition(undefined);
+                              })
+                            }
+                          >
+                            잠금 차원 유지 후 모델로 재생성
+                          </button>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void personaAction(async () => {
+                                let job = await post(
+                                  `persona/versions/${v.id}/regenerate`,
+                                  {
+                                    session_id: personaSession.id,
+                                    source_hash: v.hash,
+                                    nickname_only: true,
+                                  },
+                                );
+                                while (
+                                  job.status === "queued" ||
+                                  job.status === "running"
+                                ) {
+                                  await new Promise((r) => setTimeout(r, 500));
+                                  job = await (
+                                    await api(`persona/jobs/${job.id}`)
+                                  ).json();
+                                }
+                                if (job.status !== "succeeded")
+                                  throw Error(
+                                    job.error ?? "Regeneration failed",
+                                  );
+                                const next = job.result[0];
+                                setPersonaCandidates((cs) => [...cs, next]);
+                                setPersonaLocks((old) => ({
+                                  ...old,
+                                  [next.id]: old[v.id] ?? [],
+                                }));
+                                setSelectedPersonaIds((ids) => [
+                                  ...ids,
+                                  next.id,
+                                ]);
+                                setPersonaAudition(undefined);
+                              })
+                            }
+                          >
+                            닉네임만 모델로 재생성
+                          </button>
+                          {personaAudition?.candidates?.find(
+                            (x: any) => x.version_id === v.id,
+                          ) && (
+                            <div className="hint">
+                              12개 공통 시나리오 · 결정 검사{" "}
+                              {personaAudition.candidates.find(
+                                (x: any) => x.version_id === v.id,
+                              ).deterministic.passed
+                                ? "통과"
+                                : "실패"}
+                              {personaAudition.candidates
+                                .find((x: any) => x.version_id === v.id)
+                                .results.map((o: any) => (
+                                  <p key={o.key}>
+                                    <b>{o.scenario}:</b> {o.action}
+                                    {o.output ? ` — ${o.output}` : ""}
+                                  </p>
+                                ))}
+                            </div>
+                          )}
+                          <label>
+                            검토 점수 (일관성 / 차별성 / 자연스러움 / 관련성
+                            각각 1–5)
+                            <input data-score={v.id} placeholder="4,4,4,4" />
+                          </label>
+                        </article>
+                      ))}
+                    </div>
+                    <button
+                      disabled={busy || selectedPersonaIds.length === 0}
+                      onClick={() =>
+                        void personaAction(async () => {
+                          let job = await post(
+                            `persona/sessions/${personaSession.id}/auditions`,
+                            { version_ids: selectedPersonaIds },
+                          );
+                          setPersonaAudition(job);
+                          while (
+                            job.status === "queued" ||
+                            job.status === "running"
+                          ) {
+                            await new Promise((r) => setTimeout(r, 1000));
+                            job = await (
+                              await api(`persona/jobs/${job.id}`)
+                            ).json();
+                            setPersonaAudition(job);
+                          }
+                          if (job.status !== "succeeded")
+                            throw Error(job.error ?? "Audition failed");
+                          setPersonaAudition({
+                            id: job.id,
+                            fixture_set: "p0-v1",
+                            candidates: job.result,
+                          });
+                        })
+                      }
+                    >
+                      선택 후보 공통 오디션 실행
+                    </button>
+                    <button
+                      disabled={busy || !personaAudition}
+                      onClick={() =>
+                        void personaAction(async () => {
+                          for (const v of personaCandidates.filter(
+                            (x: any) =>
+                              selectedPersonaIds.includes(x.id) &&
+                              personaAudition.candidates?.some(
+                                (c: any) => c.version_id === x.id,
+                              ),
+                          )) {
+                            const input = document.querySelector(
+                              `[data-score="${v.id}"]`,
+                            ) as HTMLInputElement;
+                            const scores = (input?.value || "")
+                              .split(",")
+                              .map(Number);
+                            if (
+                              scores.length !== 4 ||
+                              scores.some(
+                                (x) => !Number.isInteger(x) || x < 1 || x > 5,
+                              )
+                            )
+                              continue;
+                            await post(`persona/versions/${v.id}/approve`, {
+                              hash: v.hash,
+                              evaluation_id: personaAudition.id,
+                              reviewer_decision: {
+                                approved: true,
+                                coherence: scores[0],
+                                distinction: scores[1],
+                                naturalness: scores[2],
+                                relevance: scores[3],
+                              },
+                            });
+                          }
+                          await loadPersona(personaSession.id);
+                        })
+                      }
+                    >
+                      기준 충족 후보 승인
+                    </button>
+                    <label className="persona-approval">
+                      <input type="checkbox" id="persona-disclosure" />{" "}
+                      시청자에게 합성 참여자가 포함됨을 알렸습니다.
+                    </label>
+                    <button
+                      disabled={
+                        busy ||
+                        personaCandidates.filter(
+                          (v: any) =>
+                            v.status === "approved" &&
+                            selectedPersonaIds.includes(v.id),
+                        ).length !== personaSession.brief.cast_size
+                      }
+                      onClick={() =>
+                        void personaAction(async () => {
+                          const selected = personaCandidates.filter(
+                            (v: any) =>
+                              v.status === "approved" &&
+                              selectedPersonaIds.includes(v.id),
+                          );
+                          const cast = await fetch(
+                            `/api/admin/persona/sessions/${personaSession.id}/cast`,
+                            {
+                              method: "PUT",
+                              credentials: "same-origin",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "Idempotency-Key": crypto.randomUUID(),
+                              },
+                              body: JSON.stringify({
+                                expected_revision: personaSession.revision,
+                                members: selected.map((v: any) => ({
+                                  version_id: v.id,
+                                })),
+                              }),
+                            },
+                          );
+                          if (!cast.ok) throw Error((await cast.json()).error);
+                          const frozen = await post(
+                            `persona/sessions/${personaSession.id}/freeze`,
+                            {
+                              expected_revision: personaSession.revision + 1,
+                              disclosure_confirmed: (
+                                document.querySelector(
+                                  "#persona-disclosure",
+                                ) as HTMLInputElement
+                              ).checked,
+                            },
+                          );
+                          setPersonaSession(frozen);
+                        })
+                      }
+                    >
+                      선정 인원으로 동결
+                    </button>
+                  </>
+                )}
+                {personaSession.state === "ready" && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void personaAction(async () =>
+                        setPersonaSession(
+                          await post(
+                            `persona/sessions/${personaSession.id}/start`,
+                            {
+                              expected_revision: personaSession.revision,
+                              arm_ai: false,
+                            },
+                          ),
+                        ),
+                      )
+                    }
+                  >
+                    AI 비활성으로 라이브 세션 시작
+                  </button>
+                )}
+                {personaSession.state === "live" && (
+                  <>
+                    <p className="hint">
+                      동결된 cast가 기존 모델 및 로컬 overlay publication path를
+                      사용합니다. 세션 재시작 후에는 AI가 자동으로 다시 무장되지
+                      않습니다.
+                    </p>
+                    <label>
+                      AI 최소 발행 간격 (ms)
+                      <input
+                        type="number"
+                        min={0}
+                        max={60000}
+                        step={500}
+                        value={personaSession.policy.minimum_global_gap_ms}
+                        onChange={(e) =>
+                          setPersonaSession({
+                            ...personaSession,
+                            policy: {
+                              ...personaSession.policy,
+                              minimum_global_gap_ms: Number(e.target.value),
+                            },
+                          })
+                        }
+                      />
+                    </label>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await postPatch(
+                              `persona/sessions/${personaSession.id}/policy`,
+                              {
+                                expected_revision: personaSession.revision,
+                                policy: personaSession.policy,
+                              },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      정책 저장 · 진행 중 반응 무효화
+                    </button>
+                    {!personaSession.armed && (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void personaAction(async () =>
+                            setPersonaSession(
+                              await post(
+                                `persona/sessions/${personaSession.id}/ai/arm`,
+                                {
+                                  expected_control_epoch:
+                                    personaSession.control_epoch,
+                                },
+                              ),
+                            ),
+                          )
+                        }
+                      >
+                        AI 발행 무장
+                      </button>
+                    )}
+                    <div className="persona-candidates">
+                      {personaSession.cast.map((m: any) => (
+                        <article
+                          className="persona-candidate"
+                          key={m.member_id}
+                        >
+                          <h3>
+                            {m.display_name}{" "}
+                            <small>
+                              {m.status}
+                              {m.muted ? " · muted" : ""}
+                            </small>
+                          </h3>
+                          <p>
+                            관심 태그:{" "}
+                            {JSON.parse(m.focus_tags || "[]").join(", ") ||
+                              "없음"}{" "}
+                            · attention {m.attention}
+                          </p>
+                          <button
+                            disabled={busy}
+                            onClick={() =>
+                              void personaAction(async () =>
+                                setPersonaSession(
+                                  await postPatch(
+                                    `persona/sessions/${personaSession.id}/members/${m.member_id}`,
+                                    {
+                                      expected_member_epoch: m.epoch,
+                                      muted: !m.muted,
+                                    },
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            {m.muted ? "음소거 해제" : "음소거"}
+                          </button>
+                          <button
+                            disabled={busy || m.status === "departed"}
+                            onClick={() =>
+                              void personaAction(async () =>
+                                setPersonaSession(
+                                  await postPatch(
+                                    `persona/sessions/${personaSession.id}/members/${m.member_id}`,
+                                    {
+                                      expected_member_epoch: m.epoch,
+                                      presence: "departed",
+                                    },
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            퇴장
+                          </button>
+                          <button
+                            disabled={busy || m.status === "present"}
+                            onClick={() =>
+                              void personaAction(async () =>
+                                setPersonaSession(
+                                  await postPatch(
+                                    `persona/sessions/${personaSession.id}/members/${m.member_id}`,
+                                    {
+                                      expected_member_epoch: m.epoch,
+                                      presence: "present",
+                                    },
+                                  ),
+                                ),
+                              )
+                            }
+                          >
+                            재입장
+                          </button>
+                        </article>
+                      ))}
+                    </div>
+                    <button
+                      className="stop"
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await post(
+                              `persona/sessions/${personaSession.id}/ai/stop`,
+                              { reason: "operator_stop" },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      AI 긴급 정지
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await post(
+                              `persona/sessions/${personaSession.id}/pause`,
+                              { expected_revision: personaSession.revision },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      세션 일시정지
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await post(
+                              `persona/sessions/${personaSession.id}/end`,
+                              { expected_revision: personaSession.revision },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      세션 종료
+                    </button>
+                    {!personaSession.armed &&
+                      personaSession.brief.game_mode && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void personaAction(async () => {
+                              await post(
+                                `persona/sessions/${personaSession.id}/reveal`,
+                                {
+                                  confirmed: window.confirm(
+                                    "합성 참여자 신원을 공개할까요? 이 작업은 되돌릴 수 없습니다.",
+                                  ),
+                                },
+                              );
+                              await loadPersona(personaSession.id);
+                            })
+                          }
+                        >
+                          신원 공개
+                        </button>
+                      )}
+                  </>
+                )}
+                {personaSession.state === "paused" && (
+                  <>
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await post(
+                              `persona/sessions/${personaSession.id}/resume`,
+                              { expected_revision: personaSession.revision },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      세션 재개 (AI 비활성)
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() =>
+                        void personaAction(async () =>
+                          setPersonaSession(
+                            await post(
+                              `persona/sessions/${personaSession.id}/end`,
+                              { expected_revision: personaSession.revision },
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      세션 종료
+                    </button>
+                  </>
+                )}
+                {personaSession.state === "ended" && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void personaAction(async () => {
+                        const r = await api(
+                          `persona/sessions/${personaSession.id}/report`,
+                        );
+                        setPersonaAudition(await r.json());
+                      })
+                    }
+                  >
+                    세션 리뷰 보고서
+                  </button>
+                )}
+                {personaSession.state === "ended" &&
+                  personaAudition?.members && (
+                    <pre className="persona-report">
+                      {JSON.stringify(personaAudition, null, 2)}
+                    </pre>
+                  )}
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    void personaAction(async () => {
+                      setPersonaSession(undefined);
+                      setPersonaCandidates([]);
+                      setPersonaAudition(undefined);
+                    })
+                  }
+                >
+                  새 브리프
+                </button>
+              </>
+            )}
           </section>
           {status.demo && (
             <aside className="demo">
@@ -673,20 +1511,15 @@ function Admin() {
               </p>
               <p>
                 Groq speech:{" "}
-                {status.setup.audio.enabled
-                  ? status.setup.audio.credentialsConfigured &&
-                    status.setup.audio.reviewed
-                    ? "ready to transcribe"
-                    : "add GROQ_API_KEY and review audio sharing"
-                  : "disabled in config.yaml"}
+                {status.setup.audio.credentialsConfigured
+                  ? "configured"
+                  : "add GROQ_API_KEY"}
               </p>
               <p>
                 Program camera:{" "}
-                {status.setup.capture.enabled
-                  ? status.setup.capture.maskConfigured
-                    ? "review masked preview"
-                    : "configure privacy masks"
-                  : "disabled in config.yaml"}
+                {status.setup.capture.maskConfigured
+                  ? "review masked preview"
+                  : "configure privacy masks"}
               </p>
               <p>
                 AI:{" "}
@@ -695,9 +1528,6 @@ function Admin() {
                   : status.setup.ai.provider === "chatgpt_subscription"
                     ? "connect ChatGPT and select a model below"
                     : "set OPENAI_API_KEY and OPENAI_MODEL"}
-                {status.setup.ai.providerReviewed
-                  ? ""
-                  : "; provider review required"}
               </p>
               <p className="hint">
                 Save config.yaml and .env locally, then restart the server.
@@ -841,13 +1671,12 @@ function Admin() {
                 </p>
               )}
               <p className="hint">
-                Config: capture{" "}
-                {status.capture.enabled ? "enabled" : "disabled"} · FFmpeg{" "}
-                {status.capture.ffmpeg}. For OBS Virtual Camera, select Program
-                output in OBS, then use Start capture here. For remote OBS,
-                configure capture.backend: rtmp and its private reader URL.
-                Start streaming/virtual camera before expecting frames. Verify
-                Program output and masks before confirming.
+                Config: capture · FFmpeg {status.capture.ffmpeg}. For OBS
+                Virtual Camera, select Program output in OBS, then use Start
+                capture here. For remote OBS, configure capture.backend: rtmp
+                and its private reader URL. Start streaming/virtual camera
+                before expecting frames. Verify Program output and masks before
+                confirming.
               </p>
               <div className="toolbar">
                 <button onClick={() => void action("capture/start")}>
@@ -923,11 +1752,39 @@ function Admin() {
             </section>
             <section className="card">
               <div className="section-title">
-                <h2>AI pipeline</h2>
+                <h2>AI pipeline · 전체 상태 및 제어</h2>
                 <span className="status">
                   {status.ai.state === "running" ? "AI running" : "AI stopped"}{" "}
                   · {status.ai.phase}
                 </span>
+              </div>
+              <ul className="readiness-list">
+                {status.ai.readiness.checks.map((check: any) => (
+                  <li
+                    key={check.id}
+                    className={check.ready ? "ready" : "not-ready"}
+                  >
+                    {check.ready ? "●" : "○"} {check.label}
+                    {check.optional ? " (선택)" : ""}
+                  </li>
+                ))}
+              </ul>
+              <div className="toolbar">
+                <button
+                  disabled={
+                    busy || status.closed || status.ai.state === "running"
+                  }
+                  onClick={() => void startPipeline()}
+                >
+                  전체 시작 (입력 + AI)
+                </button>
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => void action("pipeline/stop")}
+                >
+                  전체 중지 (AI·영상·오디오·수신기)
+                </button>
               </div>
               <p>
                 {status.ai.state === "running"
@@ -1072,18 +1929,21 @@ function Admin() {
               <div className="toolbar">
                 <button
                   disabled={
-                    busy || status.closed || status.ai.state === "running"
+                    busy ||
+                    status.closed ||
+                    status.ai.state === "running" ||
+                    !status.ai.readiness.ready
                   }
                   onClick={() => {
                     if (
                       status.ai.visualMode === "continuous" ||
                       status.capture.confirmed
                     ) {
-                      void action("ai/start");
+                      void startPipeline();
                     } else if (status.capture.state === "stopped") {
-                      void action("capture/start");
+                      void startPipeline();
                     } else {
-                      void action("ai/start");
+                      void startPipeline();
                     }
                   }}
                 >
@@ -1099,20 +1959,10 @@ function Admin() {
                   </button>
                 )}
               </div>
-              {!status.demo && !status.setup.ai.providerReviewed && (
-                <p className="hint">
-                  Start AI is blocked: review AI-provider sharing of
-                  transcripts, permitted chat and masked frames, then set
-                  policy.providerReviewed: true in config.yaml and restart.
-                </p>
-              )}
               <p className="hint">
-                AI always starts manually. In on-request mode, transcription or
-                permitted chat starts a text-only decision; a fresh, confirmed
-                masked frame is sent only if AI requests visual inspection. If
-                capture is stopped, Start AI first starts video capture so a
-                requested inspection can work. Receivers and transcription
-                continue when AI stops.
+                AI는 직접 켜야 생성되며 서버 재시작 후 이전 실행 상태가
+                복구됩니다. 방송 종료 시 자동 중지됩니다. 필수 입력을 모두 켜고
+                영상 마스크를 확인한 뒤 AI를 시작하세요.
               </p>
               <p className="hint">
                 {status.ai.manualApproval
@@ -1184,21 +2034,11 @@ function Admin() {
               <details>
                 <summary>Data processing review</summary>
                 <p>
-                  YouTube: {String(status.policy.youtubeAiContextApproved)} ·
-                  CHZZK: {String(status.policy.chzzkAiContextApproved)} · SOOP:{" "}
-                  {String(status.policy.soopAiContextApproved)}
+                  Input source: all configured platform receivers and live
+                  speech transcription.
                 </p>
-                <p>
-                  Review:{" "}
-                  {status.policy.reviewReference ||
-                    "Not recorded. Platform text excluded from model context."}
-                </p>
-                <p>
-                  Provider review: {String(status.policy.providerReviewed)}.
-                  Groq audio review: {String(status.policy.groqAudioReviewed)}.
-                  Record the applicable terms review in config.yaml; operator
-                  consent alone does not establish platform permission.
-                </p>
+                <p>Personal data is processed only while AI is enabled.</p>
+                <p>Raw audio and unmasked frames are not sent or retained.</p>
               </details>
             </section>
           </div>
@@ -1238,7 +2078,7 @@ function Admin() {
                 className="secondary"
                 onClick={() => void action("reveal")}
               >
-                Stop AI & reveal origins
+                Stop AI & show who was AI in the overlay
               </button>
               <button
                 className="secondary"
@@ -1268,13 +2108,15 @@ function Admin() {
                 onClick={() => {
                   if (
                     confirm(
-                      "Permanently delete all local chat, transcripts, identities, usage and history? Receivers will stop.",
+                      "방송 데이터, 대화, 자막, AI 신원, 사용량과 기록을 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
                     )
                   )
                     void action("data/delete");
                 }}
               >
-                Delete all local data
+                {status.broadcastEnded || status.closed
+                  ? "방송 종료 후 데이터 삭제"
+                  : "로컬 데이터 전체 삭제"}
               </button>
             </div>
             <p className="hint">
