@@ -1,6 +1,6 @@
 # Upstream contract review
 
-Reviewed 2026-10-02. Documentation review establishes implementation contracts, not live-account acceptance or legal permission.
+Historical external-document review dated 2026-10-02. This is not live-account acceptance or legal permission. Implementation decisions below describe that revision: current public messages are blinded until reveal, and viewer consent now gates storage/display/context with all supported platforms eligible after consent. The old per-platform AI-context approval configuration has been removed; see [current behavior](../README.md#persona-studio-and-viewer-consent).
 
 | Area                 | Primary source                                                                                      | Implementation decision                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -15,7 +15,7 @@ Reviewed 2026-10-02. Documentation review establishes implementation contracts, 
 | Input limit          | [OpenAI token counting](https://developers.openai.com/api/docs/guides/token-counting)               | Count input before generation and reject over-limit requests                                                     |
 | Data policy          | [YouTube developer policies](https://developers.google.com/youtube/terms/developer-policies)        | Follow-up operator review required; no legal compliance claim; source labels and model-context default exclusion |
 
-YouTube policy content and account-specific processing permissions are not resolved by a checkbox or a nonempty review reference. Image masking requires actual operator review of all layouts. Default processing permissions for all platform text remain off.
+YouTube policy content and account-specific processing permissions are not resolved by a checkbox or a nonempty review reference. Image masking requires actual operator review of all layouts. At that revision, platform AI-context flags defaulted off. This no longer describes the current configuration.
 
 ## Remaining behavior limits
 

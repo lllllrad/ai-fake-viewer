@@ -2,7 +2,11 @@
 
 Checked 2026-10-02. Official and experimental paths have independent statuses.
 
-## Official path — BLOCKED
+## Current repository implementation
+
+Code review on 2026-10-05 found an implemented official OAuth and browser SDK path in [packages/soop.ts](../packages/soop.ts), [server routes](../apps/server/app.ts) and [administrator UI](../apps/web/src/main.tsx). The signed-in admin page hosts the SDK and receives messages for the authenticated broadcaster. See the [current setup guide](../README.md#soop-official-chat). This is code evidence, not new verification of the external SDK contract, account approval or live reception.
+
+## Historical official investigation — 2026-10-02
 
 The [official overview](https://developers.sooplive.com/docs/chatsdk/overview) returned no readable detailed contract through the available documentation retrieval. The [getting-started entry](https://developers.sooplive.co.kr/docs/chatsdk/getting-started) is a follow-up location provided by the handoff, not a verified API contract.
 
@@ -16,7 +20,7 @@ The [official overview](https://developers.sooplive.com/docs/chatsdk/overview) r
 | Reconnect/heartbeat/limits/end notifications      | Not established |
 | Redisplay/model processing permissions            | Not established |
 
-`mode: official` therefore reports `official_spec_pending` and makes no connection. No unofficial fallback is performed.
+At the time of this investigation, `mode: official` reported `official_spec_pending` and made no connection. That implementation description is superseded by the official browser SDK path above; the original investigation results are retained as historical evidence.
 
 ## Experimental path — implemented, live validation BLOCKED
 

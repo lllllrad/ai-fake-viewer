@@ -6,21 +6,24 @@ database: data/chat.sqlite
 retentionDays: 7
 youtube:
   enabled: false
+  consentNoticeEnabled: false
+  channelId: "" # optional UC channel ID for active-live discovery
   video: ""
   transport: grpc
   restFallback: true
 chzzk:
   enabled: false
+  consentNoticeEnabled: false
   # Register this exact URL in the CHZZK developer console. For a public HTTPS callback, replace only the origin.
   redirectUri: http://127.0.0.1:3210/oauth/chzzk/callback
 soop:
   mode: disabled
+  consentNoticeEnabled: false
   experimentalConsent: false
   streamerId: ""
   # Register this exact callback in the SOOP developer console.
   redirectUri: http://127.0.0.1:3210/oauth/soop/callback
 capture:
-  enabled: false
   ffmpeg: ffmpeg
   backend: dshow # rtmp for a separate OBS PC and a local/LAN RTMP server
   device: OBS Virtual Camera
@@ -31,27 +34,18 @@ capture:
   # Include every chat overlay and any private area in every scene.
   masks: []
 audio:
-  enabled: false
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
   url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
   language: ko # input language (ISO-639-1); "" for automatic detection
   chunkSeconds: 10
   maxRequests: 360
-policy:
-  youtubeAiContextApproved: false
-  chzzkAiContextApproved: false
-  soopAiContextApproved: false
-  reviewReference: ""
-  providerReviewed: false
-  groqAudioReviewed: false
-  typesafeReviewed: false
 ai:
   provider: chatgpt_subscription # or openai_api
   manualApproval: false # publish locally without human review
   reviewDraft: true # run a second model pass over each proposed reply
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   gate:
-    enabled: false # requires on_request, TYPESAFE_API_KEY and typesafeReviewed
+    enabled: false # requires on_request and TYPESAFE_API_KEY
     model: jev-latest
     threshold: 0.8 # suppress only when Jev is sure timing is bad
     maxRequests: 360 # per process; separate from answer-model calls

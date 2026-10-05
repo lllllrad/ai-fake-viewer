@@ -2,11 +2,11 @@
 
 A local, read-only broadcast chat aggregator with screen-aware AI characters. YouTube, CHZZK and optional experimental SOOP receivers feed one SQLite event stream. The reader and OBS overlay share that stream. AI messages are published only inside this application.
 
-**For the separate Linux OBS PC and live credentials, follow [LIVE_SETUP.md](LIVE_SETUP.md) in order.** **Ready for a local demo. Live broadcasting requires your credentials, policy review, OBS setup and the live checks in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).** SOOP's official SDK integration remains blocked pending its verified contract. No live platform or paid model call was used during development.
+**For the separate Linux OBS PC and live credentials, follow [LIVE_SETUP.md](LIVE_SETUP.md) in order.** **Ready for a local demo. Live broadcasting requires your credentials, policy review, OBS setup and the live checks in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).** The official SOOP OAuth/browser SDK path is implemented; account approval and live reception remain unverified. Historical fixture and limited live checks are recorded separately in the verification report.
 
 See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow, and editable prompt files under [prompts/](prompts/).
 
-The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). This operating dashboard is the first section of the admin page; persona authoring and detailed settings follow it.
+The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). That document describes the target layout; the current UI still places Persona studio first. Its implementation-gap table records the outstanding work. See the [documentation index](docs/README.md) for document ownership and status.
 
 ## Quick start
 
@@ -29,7 +29,17 @@ Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated loca
 6. **Stop AI now** cancels pending generation and approval without stopping chat receivers.
 7. Press **Ctrl+C** to stop the foreground demo. The detached live server can be stopped with `mise exec -- just server-stop`. A still-running demo process keeps producing artificial messages even if you edit config.yaml.
 
-Demo data uses `data/demo.sqlite`; live mode uses `database` from `config.yaml`. Starting either mode never automatically starts AI. Use **New session** after a closed session. Start only one server process per database and port.
+Demo data uses `data/demo.sqlite`; live mode uses `database` from `config.yaml`. A new database starts with AI stopped. For an open session, the entry point starts configured inputs and may restore previously saved AI running intent or an armed persona session after fresh-frame confirmation and readiness checks. Use **Stop AI** before shutting down if you do not want automatic recovery. Use **New session** after a closed session. Start only one server process per database and port.
+
+## Persona studio and viewer consent
+
+[The persona implementation specification](docs/ai-viewer-persona-system-spec.md) covers the implemented P0 authoring flow: create a public/private brief, generate candidates, lock fields or regenerate, audition, score and approve, then freeze a cast with disclosure confirmation. Start the persona session and arm AI after inputs are ready. Live controls include mute, departure/re-entry, pause/resume, stop, end and explicit identity reveal. Resuming a paused persona session does not re-arm AI. Without an active live persona session, the scheduler uses `ai.personas` from YAML. Authoring calls and their limits are separate from live generation; the specification records current budgeting and UI limitations.
+
+Platform viewers must send `!동의` before their ordinary messages enter the stored/displayed conversation. Consent is scoped to platform, channel, viewer ID and the current stream session. `!철회` revokes consent and hides that viewer's earlier messages from public display and future AI context. These commands are not displayed as chat. A new stream session requires fresh consent; hiding cannot undo a previous external model request.
+
+Per-platform consent-notice toggles default off and persist in SQLite when changed in admin. They control notices in this application's reader/overlay, not native platform messages. Enabling notices does not bypass the consent gate or control model-context inclusion. Consented visible messages from all supported platforms are eligible for AI context; there are no per-platform AI-context approval flags in the current schema. The notice includes both commands, is throttled per platform/channel for at least 30 seconds, and is not repeated for a withdrawn viewer during that session.
+
+In current live mode, **starting AI requires confirmed fresh masked video, running Groq audio input, and a ready model even with `on_request`**. Platform chat is optional. `on_request` controls whether images accompany a model request; it does not remove the server's start prerequisites.
 
 ## Live configuration
 
@@ -43,7 +53,7 @@ mise exec -- just server-start
 
 Use `mise exec -- just server-restart` after editing `config.yaml` or `.env`, `mise exec -- just server-status` to check it, `mise exec -- just server-logs` to follow its log, and `mise exec -- just server-stop` to stop it. The PID and log are stored in ignored `.local/server.pid` and `.local/server.log`.
 
-The `justfile` uses the Node.js and just versions pinned in `mise.toml`. Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. The provided `.local` handoff did not include its proposed YAML or environment example, so [config.example.yaml](config.example.yaml) defines the implemented schema. API keys belong in `.env`; private RTMP read URLs may appear only in ignored local `config.yaml`. Windows PowerShell supports the same npm commands.
+The `justfile` uses the Node.js and just versions pinned in `mise.toml`. Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. [config.example.yaml](config.example.yaml) documents configuration examples; [packages/config.ts](packages/config.ts) defines the accepted schema and defaults. API keys belong in `.env`; private RTMP read URLs may appear only in ignored local `config.yaml`. Windows PowerShell supports the same npm commands.
 
 ### YouTube: official gRPC and REST
 
@@ -68,7 +78,7 @@ Register an application with **chat message read** and **user information read**
 
 Select **Authorize CHZZK**, sign in as the broadcaster and approve the requested read permissions. After the callback, return to admin and select **Start receivers**. Only the authenticated user's own channel is subscribed. Status becomes `subscribed` after the server confirms the CHAT subscription, not merely when the socket opens.
 
-Socket.IO client **2.0.3** runs in a separate process. Compatible Engine.IO 3 and parser 3 security updates are pinned via npm overrides and tested with a local socket fixture. Three moderate dependency advisories remain; see [research/dependencies.md](research/dependencies.md). Real CHZZK compatibility still requires an approved app and live test.
+Socket.IO client **2.0.3** runs in a separate process. Compatible Engine.IO 3 and parser 3 security updates are pinned via npm overrides and tested with a local socket fixture. The 2026-10-02 dependency review recorded three moderate advisories; see [research/dependencies.md](research/dependencies.md). Real CHZZK compatibility still requires an approved app and live test.
 
 Tokens rotate through a single-flight refresh and are atomically saved in AES-256-GCM encrypted `data/chzzk.tokens`. Keep `TOKEN_ENCRYPTION_KEY` in `.env`; losing it requires reauthorization. After revocation, select **Authorize CHZZK** again. A 401 marks authentication as requiring operator attention; restarting receivers can refresh an expired stored token. To remove local CHZZK credentials, stop the server and remove `data/chzzk.tokens`, or use the authenticated `POST /api/admin/chzzk/forget` endpoint. Revoke the app in CHZZK itself to remove upstream authorization.
 
@@ -99,7 +109,6 @@ In OBS, start **Virtual Camera** and select **Program** output. Confirm in Studi
 
 ```yaml
 capture:
-  enabled: true
   ffmpeg: ffmpeg
   backend: dshow
   device: OBS Virtual Camera
@@ -126,7 +135,6 @@ On the separate Linux OBS PC, set a Custom stream service Server URL to `OBS_PUB
 
 ```yaml
 capture:
-  enabled: true
   ffmpeg: scripts/ffmpeg-docker.sh
   backend: rtmp
   url: "APP_READ_URL_FROM_PRIVATE_FILE"
@@ -143,7 +151,7 @@ Use the exact private read URL in your ignored local config; never commit that U
 
 ## Groq speech and AI model data review
 
-Set `GROQ_API_KEY` in private `.env`, then configure `audio.enabled: true`, `audio.url` to the private RTMP read URL, and `policy.groqAudioReviewed: true` after reviewing audio sharing. The first RTMP audio track is converted to 10-second, 16 kHz mono WAV chunks and sent to [Groq Whisper transcription](https://console.groq.com/docs/speech-to-text). Near-silent chunks are skipped locally. Recent transcripts enter AI context automatically; each successful transcript is also saved in the private SQLite log for later review, without being posted as public chat. `audio.maxRequests` caps calls per app process; a restart resets that cap. A live transcription response was observed on the app PC, but the physical audio source and speech accuracy were not independently verified. See [LIVE_SETUP.md](LIVE_SETUP.md) for the exact two-PC setup.
+Set `GROQ_API_KEY` in private `.env`, review audio sharing and configure `audio.url` to the private RTMP read URL. Audio starts when a URL and key are configured; there is no separate audio-enable or review flag. The first RTMP audio track is converted to 10-second, 16 kHz mono WAV chunks and sent to [Groq Whisper transcription](https://console.groq.com/docs/speech-to-text). Near-silent chunks are skipped locally. Recent transcripts enter AI context automatically; each successful transcript is also saved in the private SQLite log for later review, without being posted as public chat. `audio.maxRequests` caps calls per app process; a restart resets that cap. A live transcription response was observed on the app PC, but the physical audio source and speech accuracy were not independently verified. See [LIVE_SETUP.md](LIVE_SETUP.md) for the exact two-PC setup.
 
 Set `audio.language: ko` for a Korean broadcast (`en` for English, `ja` for Japanese). Groq accepts an ISO-639-1 input language hint to improve transcription accuracy. Omit the setting or use `audio.language: ""` to keep automatic detection. Restart after changing the setting; this affects transcription, not AI reply language.
 
@@ -154,8 +162,6 @@ With `ai.visualMode: on_request`, the AI first receives transcript/permitted cha
 [Jev's System One API](https://docs.typesafe.ai/api) can decide whether recent text warrants a reaction before spending an answer-model call. It is disabled by default. Set `TYPESAFE_API_KEY` in `.env`, review sharing transcripts and permitted chat with TypeSafe, and merge this into `config.yaml`:
 
 ```yaml
-policy:
-  typesafeReviewed: true
 ai:
   visualMode: on_request
   gate:
@@ -168,7 +174,7 @@ ai:
 
 Restart the app, then start AI. The filter sends bounded recent transcripts, permitted pseudonymous chat, the broadcast description and selected persona to TypeSafe. It never sends images or audio. Jev answers only whether this is **clearly a bad time** to speak. A probability at or above `threshold` suppresses the response; uncertain or neutral results pass to the answer model. The default `0.8` is intentionally conservative. Existing cooldowns, chat activity limits and input deduplication run first. An allowed reaction may still be skipped by the answer model, or request a masked image using the existing inspection flow; inspection is not filtered a second time.
 
-The admin AI card displays filter state, checks, filtered inputs, errors and the latest probability. A timeout, HTTP error, invalid response or reaching `maxRequests` stops the entire AI scheduler; restart AI after resolving the issue. This filter cap counts attempts per process and resets on app restart; its usage and billing are separate from `ai.maxCalls` and `ai.maxUsd`. Stopping AI cancels an in-flight check. Demo mode bypasses the filter without making requests.
+The admin AI card displays filter state, checks, filtered inputs, errors and the latest probability. A timeout, HTTP error or invalid response skips that reaction without an answer-model call; later new input may be evaluated. Reaching `maxRequests` stops AI with `gate_budget_exhausted`. Missing credentials raise an error and stop the scheduler. This filter cap counts attempts per process and resets on app restart; its usage and billing are separate from `ai.maxCalls` and `ai.maxUsd`. Stopping AI cancels an in-flight check. Demo mode bypasses the filter without making requests.
 
 The filter requires `on_request` mode because [Jev accepts text only](https://docs.typesafe.ai/models). Use continuous mode with the filter disabled for image-driven reactions. Korean decision quality and the best threshold need evaluation with real broadcast samples; fixture tests verify integration behavior, not model judgment.
 
@@ -178,12 +184,12 @@ The default `ai.provider: chatgpt_subscription` uses OpenAI's [Sign in with Chat
 
 This flow requires a ChatGPT plan and feature availability for your account. A live text-only decision reached manual approval on this app PC; each new account still needs its own authorization and verification. It is distinct from ordinary API-key billing. ChatGPT subscription requests use account-specific model slugs, `store: false`, `stream: true`, and accept output only after the completion event. The app enforces a persisted call limit and local request/output bounds; exact pre-call input token counting and USD budgets are unavailable for this provider. `ai.maxInputTokens` and `ai.maxOutputTokens` reject a completed response that reports usage above those values but cannot prevent that call. Review usage and app limits in ChatGPT Settings. The selected model must support images and structured output. Structured text output succeeded in a live call; image comprehension remains unverified.
 
-For an independently billed API key, set `ai.provider: openai_api`, `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. Choose a model available to your API account that supports image input, Responses structured output and input token counting. The API-key path uses pre-call token counting and can use `ai.maxUsd` when verified prices are configured. Both providers require `policy.providerReviewed: true` after reviewing their handling of uploaded images and chat. `store: false` does not mean all provider logs are disabled.
-Platform text is excluded from model context by default. Enabling any of `youtubeAiContextApproved`, `chzzkAiContextApproved` or `soopAiContextApproved` requires a nonempty `policy.reviewReference` pointing to your substantive review record. These settings record a decision; they do not grant platform permission. Image masks remain required whenever images may be uploaded, including when YouTube text processing is disabled. Do not enable a data path the applicable terms do not permit. R03 is only partially available with the conservative defaults.
+For an independently billed API key, set `ai.provider: openai_api`, `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. Choose a model available to your API account that supports image input, Responses structured output and input token counting. The API-key path uses pre-call token counting and can use `ai.maxUsd` when verified prices are configured. Review the provider handling of uploaded images and chat before use; the current schema has no `policy.providerReviewed` flag. `store: false` does not mean all provider logs are disabled.
+Platform messages are blocked until viewer consent. Once consented and visible, messages from all three supported platforms are eligible for model context. The old `policy.*` settings, including platform AI-context approvals, are no longer accepted by the strict schema. Consent and a working receiver do not establish platform permission; applicable processing review remains an operator responsibility. Image masks remain required before image upload.
 
-The AI checks new transcript chunks and newly received permitted messages against a rolling `ai.contextWindowSeconds` of surrounding transcripts and chat. Each distinct input is evaluated once; skipped or answered chunks are not replayed as new events. After each decision, the next decision waits a newly randomized interval between `ai.pacing.minSeconds` and `ai.pacing.maxSeconds`, independently of audio chunk length. Defaults are a 35–95 second interval and a 120 second context window. The model receives bounded recent transcripts and permitted text, recent spectator replies and one character's style; it receives masked JPEGs only in continuous mode or after an on-request inspection. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. With `ai.reviewDraft: true` (default), the same selected model receives a second call to reject or lightly edit the draft; this is not an independent review or a safety guarantee. Messages publish automatically by default (`ai.manualApproval: false`) after AI review. Set it to `true` to add a human approval queue. Pending approvals expire after 30 seconds and are invalidated by stopping, hiding evidence or stale input. See [AI_FLOW.md](AI_FLOW.md) for the stage-by-stage inputs.
+The AI checks new transcript chunks and newly received permitted messages against a rolling `ai.contextWindowSeconds` of surrounding transcripts and chat. Each distinct input is evaluated once; skipped or answered chunks are not replayed as new events. After each decision, the next decision waits a newly randomized interval between `ai.pacing.minSeconds` and `ai.pacing.maxSeconds`, independently of audio chunk length. Defaults are a 35–95 second interval and a 120 second context window. The model receives bounded recent transcripts and permitted text, recent spectator replies and one character's style; it receives masked JPEGs only in continuous mode or after an on-request inspection. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. With `ai.reviewDraft: true` (default), the same selected model receives a second call to reject or lightly edit the draft; this is not an independent review or a safety guarantee. Messages publish automatically by default (`ai.manualApproval: false`) after AI review. Set it to `true` to add a human approval queue. Legacy pending approvals expire after 30 seconds; persona candidates use their configured reaction TTL (12 seconds by default) and are invalidated by stopping, hiding evidence or stale input. See [AI_FLOW.md](AI_FLOW.md) for the stage-by-stage inputs.
 
-Calls are limited per session, persisted across restarts, with one generation at a time, at least 20 seconds between attempts and messages, at least 45 seconds per character, and at most three messages per minute. Busy human chat suppresses generation. Synthetic message arrival alone does not trigger another response. Unchanged frames can skip inference.
+Calls are limited per session, persisted across restarts, with one generation at a time, configurable randomized pacing (35–95 seconds by default), per-character cooldown based on the minimum pacing interval, and at most three messages per minute. Persona sessions add their own limits. Busy human chat suppresses generation. Synthetic message arrival alone does not trigger another response. Unchanged frames can skip inference.
 
 `ai.maxCalls` always applies. For the ChatGPT subscription provider, monetary estimates are unavailable and `ai.maxUsd` must stay null. On the API-key provider, without verified prices the UI displays **Cost estimate unavailable**. To enable `ai.maxUsd`, provide both per-million token prices and `priceCheckedAt`. Maximum input/output cost is reserved before requests; successful usage is settled afterward. Failed requests retain the conservative reservation. For the API-key provider, input token counting must succeed and fit the configured limit before paid generation begins. Prices and provider charges remain your responsibility; this is an estimate, not a billing guarantee.
 
@@ -220,13 +226,13 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Linux browser tests may also require the system libraries listed by Playwright. The browser check writes only artificial-data screenshots and timing results into ignored `test-results/`. It uses a fixed test port 33219. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for actual results and [TASKS.md](TASKS.md) for T01–T12 status.
+Linux browser tests may also require the system libraries listed by Playwright. The browser check writes only artificial-data screenshots and timing results into ignored `test-results/`. It uses a fixed test port 33219. See [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md) for actual results and [TASKS.md](TASKS.md) for implementation and remaining acceptance status.
 
 Code layout: `apps/server` hosts HTTP/WS, `apps/web` contains React views, `packages` contains shared contracts/storage/connectors/model logic, and `workers` isolates legacy clients and capture. Run `npm run build` after web edits; `npm run dev` watches server code only. FFmpeg, OBS, platform apps and model credentials are installed/configured independently.
 
 ### SOOP official chat
 
-The official SOOP chat connector is ready for use once the SOOP developer application has been approved. It uses SOOP's browser-only Chat SDK, so the signed-in administrator page must stay open during chat reception, and the SDK can connect only to the authenticated account's own live broadcast. The app checks that the connected broadcaster ID matches `soop.streamerId`. This integration receives chat only; it does not send messages.
+The official SOOP chat connector has an OAuth/browser SDK implementation, but successful live reception has not been established by the recorded checks. It uses SOOP's browser-only Chat SDK, so the signed-in administrator page must stay open during chat reception, and the SDK can connect only to the authenticated account's own live broadcast. The app checks that the connected broadcaster ID matches `soop.streamerId`. This integration receives chat only; it does not send messages.
 
 1. Register the exact callback URL from `soop.redirectUri` in the SOOP developer console. The local default is `http://127.0.0.1:3210/oauth/soop/callback`; use the configured port. If login is done from a different machine, use a public HTTPS callback routed to the server.
 2. Ensure the app approval includes the official Chat SDK and `broad_access_chatinfo` consent scope.

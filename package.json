@@ -13,10 +13,11 @@
     "build": "tsc --noEmit && vite build",
     "test": "tsx --test tests/*.test.ts",
     "setup": "tsx scripts/setup.ts",
-    "check": "npm run build && npm test",
+    "check": "npm run docs:check && npm run build && npm test",
     "test:browser": "tsx scripts/browser-check.ts",
-    "format": "prettier --write apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md",
-    "format:check": "prettier --check apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md"
+    "format": "prettier --write apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md docs/**/*.md",
+    "format:check": "prettier --check apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md docs/**/*.md",
+    "docs:check": "tsx scripts/check-docs.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

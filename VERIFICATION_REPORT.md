@@ -1,5 +1,18 @@
 # Verification report
 
+## Evidence scope
+
+This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
+
+## Documentation reconciliation — 2026-10-05
+
+- Compared tracked guidance against server startup/readiness, persona contracts/service/generator, scheduler, storage, UI, consent and gate behavior. Added the missing persona reference and an implementation-gap table for the target dashboard.
+- `mise exec -- npm run check`: PASS — local document links, TypeScript/Vite build and 58 fixture tests, zero failures/skips. No live service or paid model request was used for this documentation update.
+- `npm run docs:check` now also validates `config.example.yaml` against the strict configuration schema. Removed obsolete `capture.enabled`, `audio.enabled` and `policy.*` keys from examples; these previously caused startup validation failure.
+- Link-checker positive/negative fixtures: PASS for valid local/reference links, ignored fenced examples, missing files, missing heading anchors and undefined references. External URLs are not fetched.
+- Changed-file Prettier checks and `git diff --check`: PASS. Full `npm run format:check` reports existing formatting issues in `packages/model.ts`, `packages/persona/contracts.ts`, `packages/persona/generator.ts`, `packages/persona/service.ts` and `tests/persona.test.ts`; these files were not changed in this documentation update.
+- Browser/live-platform/OBS acceptance: NOT_RUN for this update. No application runtime behavior was changed. Remaining dashboard and persona gaps are documented rather than marked complete.
+
 ## Result and environment
 
 **Local demo and automated implementation checks: PASS. Complete live-broadcast acceptance: BLOCKED.** No fixture or mock result below represents successful live platform reception or real model vision.
@@ -16,7 +29,7 @@
 - Authenticated MediaMTX smoke check: PASS. The approved RTMP container ran with a restart policy on the app PC's LAN and loopback port 1935 during the test. A synthetic H264 publisher connected; a reader without credentials was rejected and a credentialed reader decoded a frame. No actual OBS stream was tested.
 - Live server LAN smoke check: PASS. The configured private-LAN `/overlay` and `/health` routes returned 200, while `/admin` returned 403 through that address; admin and generated OBS links returned 200 and the LAN host respectively through loopback. No external OBS PC was tested.
 - Actual demo entry point: PASS. HTTP health, authenticated status, three `demo_fixture` inputs, artificial frame reception and initial `ai: stopped` verified. SIGTERM shutdown completed; no demo server is intentionally left running.
-- Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). Repository-tracked Markdown is English; the Korean handoff stays ignored under `.local/`.
+- Formatting and whitespace checks: PASS (`npm run format:check`, `git diff --check`). This historical check predates the tracked Korean specifications now under `docs/`.
 
 The environment initially lacked Chromium shared libraries and all system fonts. Test-only libraries and English/Korean fonts were extracted under `/tmp`; no system package installation was performed. Browser checks used `LD_LIBRARY_PATH` and `FONTCONFIG_FILE` pointing there. Initial browser failures were environment failures; the completed run above passed. The browser now bundles Noto Sans KR for Korean chat; the Linux browser check still used a temporary fontconfig setup. A bare headless Linux demo may still emit a fontconfig warning when drawing its optional SVG test-frame label; the artificial shapes and browser-level demo disclosure remain available.
 

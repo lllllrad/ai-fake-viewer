@@ -2,13 +2,21 @@
 
 This is the implementation reference for understanding and improving the chat pipeline. It documents what each stage receives, the exact prompt or request fields, available tools, outputs, budgets, failure behavior, runtime indicators, and source files to edit. Keep this page in sync whenever prompts, schemas, inputs, tools, provider calls, or scheduler transitions change.
 
+## Runtime scope and startup
+
+This page describes the shared response pipeline. [Persona studio](docs/ai-viewer-persona-system-spec.md) adds authoring, approved cast snapshots, presence-limited context, weighted selection, session controls and publication checks. Without an active live persona session, YAML `ai.personas` supplies the characters. Candidate generation uses a separate prompt in `packages/persona/generator.ts`; it does not use `prompts/answer.md`. Auditions use the shared answer model with twelve text fixtures. Authoring usage is not a unified part of the live scheduler budget.
+
+The production entry point starts configured receivers, capture and transcription for an open stream session. On restart it may restore persisted AI running intent or an armed persona session after a fresh frame, capture confirmation and readiness checks. `capture.programConfirmed` can allow that runtime confirmation to be restored automatically. Stop AI before shutdown to clear the running intent. In-flight persona reactions are canceled on restart.
+
+Live AI start currently requires confirmed fresh masked capture, running audio input and a ready model in **both visual modes**; platform receivers are optional. `on_request` omits images from the first inference and permits text-only ticks after start, but is not a text-only startup configuration. See `scheduler.readyCheck`, `readyComponents` and `resumeAiIfRequested` in [app.ts](apps/server/app.ts).
+
 ## Runtime overview
 
 ```mermaid
 flowchart TD
   A[RTMP audio] --> B[PCM chunks, default 10s]
   B --> C[Groq Whisper transcription]
-  D[Platform chat] --> E[Context approval filter]
+  D[Platform chat] --> E[Viewer consent and visible-message filter]
   C --> F[New events + rolling text context]
   E --> F
   G[OBS Virtual Camera or RTMP video] --> H[Local masks and short frame buffer]
@@ -22,7 +30,8 @@ flowchart TD
   M -->|Yes; text only| N[Jev bad-timing veto]
   N -->|Clearly bad, probability >= threshold| O[Suppress this reaction]
   N -->|Uncertain / not clearly bad| P[Answer model]
-  N -->|Provider error or cap exhausted| Q[Stop entire AI scheduler]
+  N -->|Provider error| O
+  N -->|Cap exhausted| Q[Stop entire AI scheduler]
   M -->|No| P
   P -->|inspect requested| R[App adds fresh, confirmed masked frames]
   R --> S[Answer model follow-up]
@@ -59,7 +68,7 @@ flowchart TD
 ### 2. Video capture and masking
 
 - **Purpose:** provide visual evidence when the selected AI mode can use images.
-- **Input:** either the configured local camera device (OBS Virtual Camera in Program mode) or configured private RTMP reader URL. Video capture does **not** automatically start with the server. Admin **Start capture** launches FFmpeg. Start AI also starts capture if it is stopped and video has not been confirmed.
+- **Input:** either the configured local camera device (OBS Virtual Camera in Program mode) or configured private RTMP reader URL. The production entry point starts configured capture for an open session. Admin **Start capture** can start it again; Start AI also starts stopped inputs before checking readiness.
 - **Processing:** FFmpeg emits frames at `capture.intervalMs` (1–5 seconds). Privacy rectangles are applied locally before resizing and memory buffering. Up to 10 masked frames / 30 seconds are kept; model requests use at most three recent frames, each no older than 10 seconds. Frames are never persisted by this app.
 - **Confirmation:** operator must inspect the masked preview and confirm it. Confirmation is invalidated by source dimension changes, capture failures, or stopping capture. A mask configuration is required before image upload.
 - **Modes:** `on_request` has no image in the first answer-model call; an `inspect` decision may cause an app-mediated follow-up with fresh, confirmed masked frames. `continuous` requires fresh confirmed frames before AI can start and supplies them in the initial call.
@@ -71,19 +80,21 @@ flowchart TD
 
 - **Purpose:** decide whether a new observation is eligible for an AI call and independently pace reactions.
 - **New inputs:** unseen transcript IDs and new/changed permitted chat message versions. In `on_request` mode, at least one new transcript or permitted chat event is needed. Already consumed events are not replayed as new.
-- **Context:** surrounding transcripts and permitted chat in the rolling `ai.contextWindowSeconds` window (default 120 seconds). Platform messages are excluded unless that platform's `*AiContextApproved` flag is enabled. Such flags record the operator's data review and do not grant platform permission. The application also supplies the persona's previous locally published replies through recent chat context.
+- **Context:** surrounding transcripts and permitted chat in the rolling `ai.contextWindowSeconds` window (default 120 seconds). Platform messages require viewer consent and must remain visible. All supported platforms are allowed by `Scheduler.allowed()`; per-platform model-context approval flags no longer exist. The application also supplies the persona's previous locally published replies through recent chat context.
 - **Eligibility controls:** noisy spectator chat (>15 external messages/minute), already frequent AI speech (3/minute), per-persona cooldown (`ai.pacing.minSeconds`), and repeated input/frame hashes can suppress a call before a provider is contacted. After a decision, the next delay is an integer randomly selected from `ai.pacing.minSeconds` to `maxSeconds` (defaults 35–95 seconds), independently of audio chunking.
 - **Current payload counts:** `lastInput` records new/context transcripts, new/context messages, and frames for the latest eligible attempt; it does not expose the text itself. The admin has a retained transcript log and message conversation for inspecting actual observations.
+- **Persona branch:** an active live cast adds presence-window filtering, participation probability and weighted member selection, member cooldown, activity-band caps and epoch/hash checks before publication. These constraints supplement the common pacing and rate limits above. See the [persona specification](docs/ai-viewer-persona-system-spec.md) for policy defaults and fields not yet wired into runtime.
 - **Source:** `packages/scheduler.ts` (`tick`, event dedupe, eligibility, pacing, phase changes), `packages/storage.ts` (`context` and retained messages), `packages/config.ts` (bounds/defaults).
 
 ### 4. Jev timing veto (optional)
 
 - **Purpose:** answer only: “Is this clearly a bad time to add one short fictional spectator message?” It is not a relevance ranker or reply generator.
-- **Input:** JSON state includes broadcast description and selected persona; up to 12 new transcript texts (1,000 chars each); up to 12 new chat entries (speaker label up to 80 chars, text up to 1,000); up to 12 recent transcript texts; up to 30 recent chat entries. It includes text only: no audio, image, credentials, or origin table.
+- **Input:** JSON state includes broadcast description and selected persona; up to 12 recent transcript texts (1,000 chars each) and up to 30 recent chat entries (speaker label up to 80 chars, text up to 1,000). The current gate does not serialize separate new-input arrays. It includes text only: no audio, image, credentials, or origin table.
 - **Editable prompt files:** [`prompts/jev_timing.md`](prompts/jev_timing.md) is the main Jev instruction; [`prompts/jev_criteria_true.md`](prompts/jev_criteria_true.md) and [`prompts/jev_criteria_false.md`](prompts/jev_criteria_false.md) define the Noul labels. Edit these text files directly. Runtime loading and request assembly live in [`packages/gate.ts`](packages/gate.ts), `DecisionGate.allow()`. If changing the response key or output shape, also update `gateResponse` and scheduler threshold handling.
-- **Output schema:** `{ answers: { bad_timing: { type: "noul", noul: number 0..1 } } }`.
-- **Policy:** when probability is at least `ai.gate.threshold` (default 0.8), suppress only this reaction. Below threshold, pass to answer generation. If provider call fails, response is invalid, or the per-process `ai.gate.maxRequests` cap is exhausted, stop the whole AI scheduler. Jev uses `ai.gate.timeoutMs` (default 3 seconds); its request count/billing is separate from answer-model budgets.
-- **Prerequisites:** `ai.visualMode: on_request`, `TYPESAFE_API_KEY`, and `policy.typesafeReviewed: true` for live mode. Demo bypasses Jev.
+- **Output schema:** `{ answers: { should_respond: { type: "noul", noul: number 0..1 } } }`.
+- **Wire-name caveat:** `should_respond` is the actual response key, but the prompt asks whether timing is bad. A high score suppresses a response despite the key name.
+- **Policy:** when probability is at least `ai.gate.threshold` (default 0.8), suppress only this reaction. Below threshold, pass to answer generation. A provider error, timeout or invalid response suppresses that reaction and allows later new inputs. Cap exhaustion stops the scheduler with `gate_budget_exhausted`. Missing credentials throw and stop it with `model_error`. Jev uses `ai.gate.timeoutMs` (default 3 seconds); its request count/billing is separate from answer-model budgets.
+- **Prerequisites:** `ai.visualMode: on_request` and `TYPESAFE_API_KEY` for live mode; no second policy-enable flag exists. Demo bypasses Jev.
 - **Runtime checks:** Admin AI card shows gate state, requests/cap, bad-timing veto count, errors and probability/threshold.
 - **Source:** `packages/gate.ts` (request payload, exact question, parse and threshold), `packages/scheduler.ts` (veto/fail-stop policy), `packages/config.ts` (gate settings and compatibility validation).
 
@@ -96,7 +107,7 @@ flowchart TD
 - **Actions:** `say` (draft text and evidence), `skip` (no message), or `inspect` (only honored in `on_request` without frames; app validates current confirmed/fresh frames then calls the model again). Inspection is not a callable tool and cannot choose a URL, file or camera source.
 - **Output schema:** strict JSON fields `action`, `text`, `replyToMessageId`, `evidenceFrameIds`, `evidenceMessageIds`, `evidenceTranscriptIds`; action enum is `say | skip | inspect`. `say` requires nonempty text <=120 Unicode characters, at most two lines, and at least one evidence ID. Evidence/reply IDs must exist in current input. Output is checked for several obvious unsafe patterns. These checks do not prove truth or guarantee safety.
 - **Provider calls:** OpenAI API mode sends Responses API with strict JSON schema, `store:false`, configured output token limit, and first performs input token counting. ChatGPT subscription mode sends the same prompt/schema to Responses API with `store:false`, streaming enabled and waits for completion. Neither enables provider tools. Each request is capped locally at 8 MiB.
-- **Budgets/failure:** every generation/follow-up/review call reserves one `ai.maxCalls` call and applicable configured USD budget. Any provider, parse, token-limit or budget error stops AI with a state visible in Admin. Per attempt timeout is 30 seconds; Stop AI aborts the active request.
+- **Budgets/failure:** every generation/follow-up/review call reserves one `ai.maxCalls` call and applicable configured USD budget. Any provider, parse, token-limit or budget error stops AI with a state visible in Admin. Legacy attempt timeout is 30 seconds; persona sessions use `model_timeout_ms` (6 seconds by default); Stop AI aborts the active request.
 - **Source:** `packages/model.ts` (`ModelInput`, `modelMessages`, provider requests), `packages/contracts.ts` (strict decision schema), `packages/scheduler.ts` (`inspect` orchestration, budget reservations, validation), `packages/config.ts` (model limits).
 
 ### 6. AI draft review (default enabled)
@@ -114,7 +125,7 @@ flowchart TD
 ### 7. Human review and local publication
 
 - **Purpose:** optional operator approval after AI review; then publication inside this application only.
-- **Human review:** `ai.manualApproval: true` places the final text in Admin. It expires after 30 seconds and can be invalidated when AI is stopped, session closes, evidence goes stale, or cited content is hidden. Approve publishes locally; reject discards.
+- **Human review:** `ai.manualApproval: true` places the final text in Admin. The legacy candidate expires after 30 seconds; persona candidates use their reaction TTL (12 seconds by default, measured from the triggering observation). Either can be invalidated when AI is stopped, session closes, evidence goes stale, or cited content is hidden. Approve publishes locally; reject discards.
 - **Automatic mode:** default `ai.manualApproval: false` publishes after validation and optional AI review.
 - **Publication boundary:** inserted as an `experiment` message in the local SQLite event stream. This app does not post AI responses to YouTube, CHZZK, or SOOP. Reader/overlay use a blinded pseudonymous representation until origins are explicitly revealed.
 - **Tools:** model has none. Only local scheduler code calls the store; human approval is an authenticated Admin action.
@@ -122,20 +133,20 @@ flowchart TD
 
 ## Prompt and tool inventory
 
-| AI/provider stage | Prompt/config source                                                                                                                                     | Callable tools | Application-mediated action                                   |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------: | ------------------------------------------------------------- |
-| Groq Whisper      | Form fields in `packages/transcription.ts`; language from `audio.language`                                                                               |           None | FFmpeg captures audio and creates WAV chunks                  |
-| TypeSafe Jev      | [`prompts/jev_timing.md`](prompts/jev_timing.md), `prompts/jev_criteria_*.md`; loaded by [`packages/gate.ts`](packages/gate.ts)                          |           None | Scheduler suppresses one reaction or stops on service failure |
-| Answer generation | [`prompts/answer.md`](prompts/answer.md); loaded by [`packages/model.ts`](packages/model.ts); schema in [`packages/contracts.ts`](packages/contracts.ts) |           None | May request `inspect`; app can attach fresh masked frames     |
-| Draft review      | [`prompts/review.md`](prompts/review.md); loaded by [`packages/model.ts`](packages/model.ts); same schema                                                |           None | App may accept/edit/reject; no other follow-up                |
-| Human review      | No AI prompt                                                                                                                                             |            N/A | Authenticated human approves/rejects local pending message    |
+| AI/provider stage | Prompt/config source                                                                                                                                     | Callable tools | Application-mediated action                                      |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------: | ---------------------------------------------------------------- |
+| Groq Whisper      | Form fields in `packages/transcription.ts`; language from `audio.language`                                                                               |           None | FFmpeg captures audio and creates WAV chunks                     |
+| TypeSafe Jev      | [`prompts/jev_timing.md`](prompts/jev_timing.md), `prompts/jev_criteria_*.md`; loaded by [`packages/gate.ts`](packages/gate.ts)                          |           None | Scheduler suppresses a reaction; stops when its cap is exhausted |
+| Answer generation | [`prompts/answer.md`](prompts/answer.md); loaded by [`packages/model.ts`](packages/model.ts); schema in [`packages/contracts.ts`](packages/contracts.ts) |           None | May request `inspect`; app can attach fresh masked frames        |
+| Draft review      | [`prompts/review.md`](prompts/review.md); loaded by [`packages/model.ts`](packages/model.ts); same schema                                                |           None | App may accept/edit/reject; no other follow-up                   |
+| Human review      | No AI prompt                                                                                                                                             |            N/A | Authenticated human approves/rejects local pending message       |
 
 No model can call a platform API, post a message, access the filesystem, read secrets, start/stop capture, or invoke an arbitrary HTTP endpoint. `availableTools` in admin status is an empty list. `inspect` is a constrained response action handled by app code, not a model tool.
 
 ## Fast improvement workflow
 
 1. **Choose the stage** in the overview and stage reference; confirm its intended responsibility and failure policy.
-2. **Inspect actual inputs** using the admin transcript/message views and latest input counts. Never assume a platform source enters context: verify its `*AiContextApproved` flag and recent count.
+2. **Inspect actual inputs** using the admin transcript/message views and latest input counts. Never assume a platform source enters context: verify viewer consent, visibility and recent count.
 3. **Edit the right artifact:** Jev instructions in `prompts/jev_timing.md` and its criteria files; answer/reviewer prompts in `prompts/answer.md` and `prompts/review.md`; response shape in `packages/contracts.ts`; scheduling/context in `packages/scheduler.ts`; upstream conversion in `packages/transcription.ts` or capture workers; settings/bounds in `packages/config.ts`; runtime visibility in `apps/server/app.ts` and `apps/web/src/main.tsx`.
 4. **Keep the schema and docs synchronized.** If adding a model action or tool, define permissions and validation in app code, constrain it in schema, document exact input/output and failure modes here, then expose it in the admin status only if it truly exists.
 5. **Validate without paid services:** `npm run build` checks TypeScript and web bundle. Existing fixture tests can check request bodies, schema and failure behavior; they cannot establish model quality. Real provider judgment requires a separately reviewed sample and provider call.
@@ -163,11 +174,11 @@ Admin `/api/admin/status` exposes scheduler state/phase, latest context counts, 
 - `AI running · random_wait`: waiting for configured randomized interval.
 - `jev_timing_filter`, `generating_draft`, `generating_draft_with_frame`, `ai_review`: provider stage currently active.
 - `awaiting_human_review`: draft awaits the operator; other input capture continues.
-- `budget_exhausted`, `jev_provider_error`, `model_error`: AI stopped on the named failure; inspect gate/provider status and budgets before restarting.
+- `budget_exhausted`, `gate_budget_exhausted`, `model_error`: AI stopped on the named failure; inspect gate/provider status and budgets before restarting.
 - `Program input · connecting` with no frame: FFmpeg started but no decodable image has arrived. Check the selected camera/backend, Program output, RTMP URL/network and FFmpeg path.
 - `failed` or `reconnecting`: capture worker failed; use the displayed exit/error detail and check OBS output/capture configuration.
 - A fresh frame is shown only if it is <=10 seconds old. Preview confirmation is separate from `capture.programConfirmed` in local configuration.
 
 ## Privacy and boundaries
 
-Provider review flags are operator records, not proof of platform permission. Audio is sent to Groq only when transcription is enabled and reviewed. Transcript and approved chat text may go to TypeSafe if Jev is enabled and to the selected answer provider. Masked images may go to the answer provider under its reviewed configuration; Jev never receives them. The app does not save raw audio, prompts, or frame images. Retained transcript/chat logs remain local to the configured database and are subject to retention/deletion settings. Keep API keys, encrypted token files, RTMP URLs and exports private.
+Current configuration has no provider-review flags. Configured audio and a Groq key enable transcription when inputs start. Transcripts and consented visible chat may go to TypeSafe if Jev is enabled and to the selected answer provider. Masked images may go to the answer provider after capture checks; Jev never receives them. The app does not save raw audio or frame images. Persona authoring persists public planning input in model-run manifests, definitions, audition outputs and review records; live persona attempts also retain decisions and metadata. Do not interpret this as a no-model-data-storage system. Retained transcript/chat logs remain local to the configured database and are subject to retention/deletion settings. Keep API keys, encrypted token files, RTMP URLs and exports private.
