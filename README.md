@@ -25,7 +25,7 @@ UI controls and viewer commands are described in English here; the app retains l
 
 The first exact consent command starts guidance; it does not grant participation. Each delivered notice requires a new explicit command: age 14+ self-declaration, collection/use, broadcast/recording/publication, overseas processing, and third-party provision if applicable. Until every required stage succeeds, ordinary text is discarded before display, storage or AI processing. Account identity is scoped to platform, broadcaster and this broadcast session. Uncertain command order requires verification of the actual observed live command; old commands cannot be invented or approved on the viewer's behalf.
 
-The withdrawal command invalidates the consent generation immediately, removes original and identifiable derived context, cancels queued/in-flight AI work and retracts tracked dependent replies. Late results cannot be published. Previously approved fixed-category anonymous topic/mood context may remain only until the session ends. the participation-status command lets an operator confirm the account's current participation state. Commands are not chat or AI input.
+The withdrawal command invalidates the consent generation immediately, removes original and identifiable derived context, cancels queued/in-flight AI work and retracts tracked dependent replies. Late results cannot be published. Previously approved fixed-category anonymous topic/mood context may remain only until the session ends. The participation-status command lets an operator confirm the account's current participation state. Commands are not chat or AI input.
 
 The **Privacy and participation** panel exposes staged guidance, explicit age self-declaration (not age verification), age blocking and separate external/VOD follow-up work. The official SOOP SDK automatically sends a fixed non-display/participation notice after unconsented ordinary chat, and sends the next consent-stage notice when ready. Account/global limits apply before each attempt; the authenticated broadcaster’s matching MESSAGE echo confirms delivery. Keep the connected admin tab open. Failed or unconfirmed delivery never grants consent. Legacy overlay-notice switches are informational, not viewer consent.
 
@@ -43,7 +43,7 @@ Set private `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`, enable `youtube`, a
 
 ### CHZZK: official OAuth and user session
 
-Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI.
+Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. CHZZK has no automatic notice sender: the operator must actually deliver each notice through an approved channel, then confirm delivery before the fresh viewer command can advance participation. See the [platform behavior matrix](docs/behavior-requirements.md#platform-execution-and-notice-delivery).
 
 ### SOOP: separate official and experimental paths
 
@@ -57,7 +57,7 @@ Set `soop.mode: official`, `soop.streamerId`, registered callback and private `S
 
 The current live profile disables capture at the processing boundary: other on-screen chat cannot reliably be consent-filtered. The status card shows **Unused**. Neither `programConfirmed` nor a mask-confirmation button is required. Existing capture/mask utilities remain for synthetic tests and future separately reviewed input profiles; changing `capture` configuration does not enable them in live mode.
 
-### OBS on a separate Linux PC: optional RTMP input
+### OBS on a separate Linux PC: legacy RTMP input (disabled live)
 
 Use the app's OBS Browser Source overlay for publication. RTMP capture/audio utilities remain in the repository, but the live privacy profile does not start or upload their inputs. See [live setup](LIVE_SETUP.md) for LAN reader/overlay access.
 
@@ -65,7 +65,7 @@ Use the app's OBS Browser Source overlay for publication. RTMP capture/audio uti
 
 Audio capture, transcription storage and transcript export are blocked in live mode, including authenticated export requests. This avoids reintroducing unconsented chat spoken by a broadcaster. Setting an audio URL/key cannot bypass the block.
 
-### Optional Jev filter before answer generation
+### Legacy Jev filter (disabled live)
 
 Jev is a legacy/demo component, not an optional live provider. Enabling `ai.gate` makes live AI unavailable; there is no automatic provider fallback.
 
@@ -73,7 +73,7 @@ Jev is a legacy/demo component, not an optional live provider. Enabling `ai.gate
 
 Live requests contain only the current permitted text, synthetic persona style and approved anonymous categories. Each API stage rechecks consent revision/profile and current messages immediately before sending. Requests use `store:false`, no provider tools, no persistent conversation/file upload and no response chaining. An image inspection request has no available live frames and cannot enable capture.
 
-`store:false` does not mean every provider log is deleted; regional and retention options require actual account eligibility and matching notices. See [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). Token counting and generation use the same configured endpoint with no global fallback. Optional draft review uses the same approved API provider. Manual approval can be enabled with `ai.manualApproval`.
+`store:false` does not mean every provider log is deleted; regional and retention options require actual account eligibility and matching notices. See [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). In API-key mode, token counting and generation use the same configured endpoint with no global fallback. Sign in with ChatGPT uses its supported Responses API endpoint without that token-counting preflight. Optional draft review uses the same approved API provider. Manual approval can be enabled with `ai.manualApproval`.
 
 Call/input/output limits and optional verified-price USD estimates still apply. Counters are session memory, so restart resets local limits; use provider account limits for cross-restart spending controls. Cost estimates are not billing guarantees.
 

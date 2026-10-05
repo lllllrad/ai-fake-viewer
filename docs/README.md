@@ -1,6 +1,6 @@
 # Documentation index and maintenance
 
-Use implementation documents for current behavior. Requirements and historical verification records are separate evidence.
+Start with the [current behavior requirements and implementation status](behavior-requirements.md), including the platform execution/delivery matrix. Follow its links to owning specifications. Requirements, implementation limitations and historical verification records are separate evidence.
 
 | Document                                                                                                 | Purpose                                                                                   |
 | -------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |

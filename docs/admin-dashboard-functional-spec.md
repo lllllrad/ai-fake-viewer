@@ -42,13 +42,13 @@ Use short healthy, unused, preparing, failed and stale states. Hide platform/tra
 | AI           | Enable switch, failed prerequisites, emergency stop; model/budget details collapsed               |
 | Privacy      | Incomplete-profile warning, actual notice/consent stage and unsaved rights-task warning           |
 
-Poll every two seconds using `generatedAt`. Responses API older than ten seconds, failed reads or missing required state block start. Stop remains available.
+Poll every two seconds using `generatedAt`. Status data older than ten seconds, failed reads or missing required state block start. Stop remains available.
 
 ## 4. Controls
 
 ### 4.1 AI generation and disclosure
 
-The AI generation switch checks server readiness, automatically composes six personas and starts them. There are no operator authoring, audition or approval forms in the live UI. Stop cancels generation, review and pending publication independently of receivers. Restart does not resume AI automatically.
+The AI generation switch checks server readiness, automatically composes six personas and starts them. There are no operator authoring, audition or approval forms in the live UI. Stop cancels generation, review and pending publication independently of receivers. Restart does not resume AI automatically. AI can be enabled before fresh permitted chat arrives; it waits for input rather than producing unsolicited messages. Enabling AI does not start receivers.
 
 The disclosure action explicitly identifies that it will label AI-generated chat. Confirmation disarms generation and the cast, then reveals origin labels. A status replaces the button afterward; disclosure is irreversible within the session. Actual viewer and synthetic persona names are visible both before and after disclosure.
 
@@ -62,7 +62,7 @@ Starting inputs does not start AI. Separate all-input stop from individual recei
 
 Legacy overlay notice switches are informational, not delivery or consent. Their runtime values are memory-only and restart from YAML defaults. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send fixed non-display introductions and stage notices. Neither sends AI replies or viewer text.
 
-Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control.
+Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control. CHZZK has no automatic sender: operators must actually deliver its notices before using manual delivery confirmation. See the [platform behavior matrix](behavior-requirements.md#platform-execution-and-notice-delivery).
 
 ## 5. Participation and privacy
 

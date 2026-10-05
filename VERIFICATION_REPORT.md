@@ -2,7 +2,13 @@
 
 ## Evidence scope
 
-This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the latest milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
+This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
+
+## Current behavior documentation audit — 2026-10-05
+
+Compared the current specifications with server readiness, scheduler input selection, participation handling and platform notice delivery paths. Added a current behavior contract with a platform execution matrix; made CHZZK's missing automatic sender and SOOP's admin-tab dependency explicit. Corrected status-response terminology, API-key-only token counting and misleading legacy feature headings. This is a documentation audit, not a new runtime or real-platform acceptance run.
+
+Validation: `sh run-command.sh npm run docs:check` passed for 21 Markdown files and 131 local links, language/terminology and example configuration. No runtime code was changed; browser/unit/live-platform checks were not rerun for this documentation-only change.
 
 ## CSP and English documentation — 2026-10-06
 

@@ -47,15 +47,15 @@ Disabled live because screen chat cannot be reliably consent-filtered. No frame 
 
 ### 3. Event selection and scheduler
 
-New permitted human text triggers evaluation within `ai.contextWindowSeconds`; synthetic replies alone do not trigger loops. Random pacing, global/per-character cooldown, session budgets and busy-chat suppression apply. Current message DTOs, recent synthetic replies, automatic persona style and approved fixed summaries are explicit model context. Consent revision is captured with the input. Queue, review and publication invalidation uses the existing scheduler/persona cancellation controls.
+Enabled AI waits when no new permitted human text is available; readiness alone does not guarantee generation. New permitted human text triggers evaluation within `ai.contextWindowSeconds`; synthetic replies alone do not trigger loops. Random pacing, global/per-character cooldown, session budgets and busy-chat suppression apply. Current message DTOs, recent synthetic replies, automatic persona style and approved fixed summaries are explicit model context. Consent revision is captured with the input. Queue, review and publication invalidation uses the existing scheduler/persona cancellation controls.
 
-### 4. Jev timing veto (optional)
+### 4. Legacy Jev timing veto (disabled live)
 
 Legacy utility only. Enabling it blocks live readiness rather than transmitting text to TypeSafe.
 
 ### 5. Answer generation and inspection
 
-Both adapters check profile/model/revision, absence of live frames/transcripts and current permission for every input message before token counting and again immediately before the Responses API request. In API-key mode token counting and the Responses API use the configured endpoint; subscription mode uses its supported public Responses API endpoint; no silent region/provider fallback. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
+Both adapters check profile/model/revision, absence of live frames/transcripts and current permission for every input message during preparation and immediately before the Responses API request. Only API-key mode performs token counting, with a permission check before that request too; token counting and inference use the configured endpoint. Sign in with ChatGPT uses its supported public Responses API endpoint without the API-key token-counting preflight. Neither mode silently falls back to another region/provider. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
 
 ### 6. AI draft review (default enabled)
 
