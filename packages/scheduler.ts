@@ -20,6 +20,15 @@ export class Scheduler {
   lastExternal = 0;
   processedTranscriptIds = new Set<string>();
   processedMessageVersions = new Map<string, string>();
+  reviews = 0;
+  phase = "stopped";
+  lastInput = {
+    newTranscripts: 0,
+    contextTranscripts: 0,
+    newMessages: 0,
+    contextMessages: 0,
+    frames: 0,
+  };
   personaTimes: number[] = [];
   speechTimes: number[] = [];
   skips = 0;
@@ -74,6 +83,7 @@ export class Scheduler {
     }
     this.stop();
     this.state = "running";
+    this.phase = "waiting_for_input";
     this.timer = setInterval(() => void this.tick(), 1000);
     void this.tick();
   }
@@ -85,6 +95,7 @@ export class Scheduler {
     this.pending = undefined;
     this.lastAttempt = 0;
     this.state = state;
+    this.phase = state;
     this.store.audit(`ai.${state}`);
   }
   allowed() {
@@ -108,7 +119,10 @@ export class Scheduler {
       if (this.pending.expires < now) this.pending = undefined;
       else return;
     }
-    if (this.busy || now < this.lastAttempt) return;
+    if (this.busy || now < this.lastAttempt) {
+      if (!this.busy) this.phase = "random_wait";
+      return;
+    }
     const contextFloor = now - this.config.ai.contextWindowSeconds * 1000;
     const recent = this.store
       .snapshot()
@@ -169,8 +183,10 @@ export class Scheduler {
       this.config.ai.visualMode === "on_request" &&
       !newTranscripts.length &&
       !triggerMessage
-    )
+    ) {
+      this.phase = "waiting_for_input";
       return;
+    }
     if (
       hash === this.lastHash &&
       (this.config.ai.visualMode === "on_request" ||
@@ -192,6 +208,13 @@ export class Scheduler {
       newMessages,
       persona: c.personas[persona],
       description: c.description,
+    };
+    this.lastInput = {
+      newTranscripts: newTranscripts.length,
+      contextTranscripts: transcripts.length,
+      newMessages: newMessages.length,
+      contextMessages: messages.length,
+      frames: frames.length,
     };
     const generation = this.generation;
     this.controller = new AbortController();
@@ -215,6 +238,7 @@ export class Scheduler {
           );
       };
       if (!this.demo && c.gate.enabled) {
+        this.phase = "jev_timing_filter";
         consumeNewInput();
         const allowed = await this.gate.allow(input, signal);
         if (
@@ -225,8 +249,8 @@ export class Scheduler {
           return;
         if (!allowed) {
           this.skips++;
-          if (this.gate.state === "budget_exhausted")
-            this.stop("gate_budget_exhausted");
+          if (this.gate.state !== "suppressed_bad_timing")
+            this.stop(`jev_${this.gate.state}`);
           return;
         }
         // Evidence may expire or be hidden while the gate is evaluating.
@@ -238,6 +262,7 @@ export class Scheduler {
       } else {
         consumeNewInput();
       }
+      this.phase = "generating_draft";
       let r = await this.callModel(input, signal);
       if (
         generation !== this.generation ||
@@ -256,6 +281,7 @@ export class Scheduler {
           return;
         }
         input = { ...input, frames: this.capture.recent() };
+        this.phase = "generating_draft_with_frame";
         r = await this.callModel(input, signal);
         if (
           generation !== this.generation ||
@@ -272,6 +298,23 @@ export class Scheduler {
       if (d.action === "skip") {
         this.skips++;
         return;
+      }
+      if (c.reviewDraft) {
+        this.phase = "ai_review";
+        this.reviews++;
+        const reviewInput = { ...input, reviewDraft: d.text! };
+        const reviewResult = await this.callModel(reviewInput, signal);
+        if (
+          generation !== this.generation ||
+          signal.aborted ||
+          this.state !== "running"
+        )
+          return;
+        d = validateDecision(reviewResult.decision, reviewInput);
+        if (d.action === "skip" || d.action === "inspect") {
+          this.skips++;
+          return;
+        }
       }
       if (
         this.store.closed() ||
@@ -294,7 +337,8 @@ export class Scheduler {
         ),
         generation,
       };
-      if (!c.manualApproval) this.approve();
+      if (c.manualApproval) this.phase = "awaiting_human_review";
+      else this.approve();
     } catch (error) {
       if (generation === this.generation) {
         this.rejects++;
@@ -307,6 +351,7 @@ export class Scheduler {
     } finally {
       this.busy = false;
       if (generation === this.generation && this.state === "running") {
+        if (!this.pending) this.phase = "random_wait";
         const { minSeconds, maxSeconds } = c.pacing;
         const intervalSeconds =
           minSeconds +
@@ -364,6 +409,7 @@ export class Scheduler {
     )
       return;
     const now = Date.now();
+    this.phase = "publishing_local";
     this.store.ingestBatch([
       {
         platform: "experiment",
@@ -375,6 +421,7 @@ export class Scheduler {
       },
     ]);
     this.lastSpoke = now;
+    this.phase = "published_local";
     this.personaTimes[p.persona] = now;
     this.speechTimes = this.speechTimes.filter((t) => t > now - 60000);
     this.speechTimes.push(now);

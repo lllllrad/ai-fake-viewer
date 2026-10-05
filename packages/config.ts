@@ -17,7 +17,7 @@ const gateSchema = z
   .object({
     enabled: z.boolean().default(false),
     model: z.string().trim().min(1).max(100).default("jev-latest"),
-    threshold: z.number().min(0).max(1).default(0.5),
+    threshold: z.number().min(0).max(1).default(0.8),
     maxRequests: z.number().int().min(1).max(10000).default(360),
     timeoutMs: z.number().int().min(100).max(10000).default(3000),
   })
@@ -165,6 +165,7 @@ export const configSchema = z
           .default({ minSeconds: 35, maxSeconds: 95 }),
         contextWindowSeconds: z.number().int().min(30).max(300).default(120),
         manualApproval: z.boolean().default(false),
+        reviewDraft: z.boolean().default(true),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
@@ -206,6 +207,7 @@ export const configSchema = z
         pacing: { minSeconds: 35, maxSeconds: 95 },
         contextWindowSeconds: 120,
         manualApproval: false,
+        reviewDraft: true,
         visualMode: "continuous",
         maxCalls: 100,
         maxInputTokens: 24000,

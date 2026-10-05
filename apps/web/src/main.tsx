@@ -610,8 +610,10 @@ function Admin() {
             </section>
             <section className="card">
               <div className="section-title">
-                <h2>AI characters</h2>
-                <span className="status">{status.ai.state}</span>
+                <h2>AI pipeline</h2>
+                <span className="status">
+                  {status.ai.phase} · {status.ai.state}
+                </span>
               </div>
               <div className="metric">
                 {status.ai.usage.calls}
@@ -638,10 +640,10 @@ function Admin() {
                 <p>
                   Jev filter: {status.ai.gate.state} · {status.ai.gate.requests}{" "}
                   / {status.ai.gate.maxRequests} checks ·{" "}
-                  {status.ai.gate.filtered} filtered · {status.ai.gate.errors}{" "}
-                  errors
+                  {status.ai.gate.filtered} bad-timing vetoes ·{" "}
+                  {status.ai.gate.errors} errors
                   {status.ai.gate.probability !== null &&
-                    ` · response probability ${Math.round(status.ai.gate.probability * 100)}% (threshold ${Math.round(status.ai.gate.threshold * 100)}%)`}
+                    ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
                 </p>
               )}
               {status.ai.provider === "chatgpt_subscription" &&
@@ -757,6 +759,53 @@ function Admin() {
                   ? "Messages wait for your approval before publication."
                   : "Messages publish automatically. Open Reader to watch without generation details; origins stay hidden until you reveal them."}
               </p>
+              <details>
+                <summary>AI inputs, tools and review</summary>
+                <p>
+                  Audio arrives as {status.ai.input.audioChunkSeconds}s chunks (
+                  {status.ai.input.audioLanguage}); transcription text enters
+                  AI, raw audio does not. Each decision gets{" "}
+                  {status.ai.input.last.newTranscripts} new /{" "}
+                  {status.ai.input.last.contextTranscripts} recent transcript
+                  chunks and {status.ai.input.last.newMessages} new /{" "}
+                  {status.ai.input.last.contextMessages} recent permitted chat
+                  messages from a {status.ai.input.contextWindowSeconds}s
+                  window.
+                </p>
+                <p>
+                  Visual mode: {status.ai.input.visualMode};{" "}
+                  {status.ai.input.last.frames} frames in the last decision. In
+                  on-request mode the first call has no image; an inspect
+                  decision lets the app send a fresh masked frame in a follow-up
+                  call. Jev sees text only.
+                </p>
+                <p>
+                  Platform text context approved: YouTube{" "}
+                  {String(status.ai.input.platformTextApproved.youtube)}, CHZZK{" "}
+                  {String(status.ai.input.platformTextApproved.chzzk)}, SOOP{" "}
+                  {String(status.ai.input.platformTextApproved.soop)}. Other
+                  input includes the broadcast description, persona style,
+                  pseudonymous speaker labels and recent spectator messages.
+                </p>
+                <p>
+                  Available model tools: none. The model cannot call tools,
+                  access files, control capture, or post to a platform. The
+                  application validates each decision and publishes approved
+                  messages only to this app's local conversation.
+                </p>
+                <p>
+                  Draft review:{" "}
+                  {status.ai.reviewDraft
+                    ? `enabled · ${status.ai.reviewCount} review calls`
+                    : "disabled"}
+                  . The selected answer model gets a second call to reject or
+                  refine each proposed message. Each pass counts toward
+                  ai.maxCalls.{" "}
+                  {status.ai.manualApproval
+                    ? "A person must then approve publication."
+                    : "Human approval is off."}
+                </p>
+              </details>
               {status.ai.pending && (
                 <div className="pending">
                   <span className="eyebrow">AWAITING REVIEW</span>

@@ -279,6 +279,22 @@ export async function createApp(
       pacing: config.ai.pacing,
       contextWindowSeconds: config.ai.contextWindowSeconds,
       busy: scheduler.busy,
+      phase: scheduler.phase,
+      reviewDraft: config.ai.reviewDraft,
+      reviewCount: scheduler.reviews,
+      input: {
+        audioChunkSeconds: config.audio.chunkSeconds,
+        audioLanguage: config.audio.language || "auto",
+        contextWindowSeconds: config.ai.contextWindowSeconds,
+        visualMode: config.ai.visualMode,
+        last: scheduler.lastInput,
+        platformTextApproved: {
+          youtube: config.policy.youtubeAiContextApproved,
+          chzzk: config.policy.chzzkAiContextApproved,
+          soop: config.policy.soopAiContextApproved,
+        },
+        availableTools: [],
+      },
       pending: scheduler.pending
         ? {
             text: scheduler.pending.decision.text,
@@ -297,7 +313,7 @@ export async function createApp(
         filtered: scheduler.gate.filtered,
         errors: scheduler.gate.errors,
         probability: scheduler.gate.probability,
-        threshold: config.ai.gate.threshold,
+        suppressThreshold: config.ai.gate.threshold,
       },
       skips: scheduler.skips,
       rejects: scheduler.rejects,

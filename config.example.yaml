@@ -44,12 +44,13 @@ policy:
   typesafeReviewed: false
 ai:
   provider: chatgpt_subscription # or openai_api
-  manualApproval: false # publish locally without reviewing each message
+  manualApproval: false # publish locally without human review
+  reviewDraft: true # run a second model pass over each proposed reply
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   gate:
     enabled: false # requires on_request, TYPESAFE_API_KEY and typesafeReviewed
     model: jev-latest
-    threshold: 0.5
+    threshold: 0.8 # suppress only when Jev is sure timing is bad
     maxRequests: 360 # per process; separate from answer-model calls
     timeoutMs: 3000
   pacing:
