@@ -365,6 +365,7 @@ export async function createApp(
           process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
         ),
         videoConfigured: !!config.youtube.video,
+        channelConfigured: !!config.youtube.channelId,
       },
       chzzk: {
         enabled: config.chzzk.enabled,

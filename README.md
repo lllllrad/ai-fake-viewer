@@ -25,19 +25,23 @@ Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated loca
 4. Watch it appear in the shared conversation without approval. Set `ai.manualApproval: true` only if you want to review each message.
 5. Select **Reader & OBS links**. Open the reader link and copy the overlay link to an OBS Browser Source.
 6. **Stop AI now** cancels pending generation and approval without stopping chat receivers.
-7. Press **Ctrl+C** in the terminal to stop the whole application. Then use `npm start` for live mode. A still-running `npm run demo` process keeps producing artificial messages even if you edit config.yaml.
+7. Press **Ctrl+C** to stop the foreground demo. The detached live server can be stopped with `mise exec -- just server-stop`. A still-running demo process keeps producing artificial messages even if you edit config.yaml.
 
 Demo data uses `data/demo.sqlite`; live mode uses `database` from `config.yaml`. Starting either mode never automatically starts AI. Use **New session** after a closed session. Start only one server process per database and port.
 
 ## Live configuration
 
-Edit the generated `config.yaml` and `.env`, then restart with:
+Install the pinned tools once, then run the live server detached from the terminal:
 
 ```sh
-npm start
+mise trust
+mise install
+mise exec -- just server-start
 ```
 
-Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. The provided `.local` handoff did not include its proposed YAML or environment example, so [config.example.yaml](config.example.yaml) defines the implemented schema. API keys belong in `.env`; private RTMP read URLs may appear only in ignored local `config.yaml`. Windows PowerShell supports the same npm commands.
+Use `mise exec -- just server-restart` after editing `config.yaml` or `.env`, `mise exec -- just server-status` to check it, `mise exec -- just server-logs` to follow its log, and `mise exec -- just server-stop` to stop it. The PID and log are stored in ignored `.local/server.pid` and `.local/server.log`.
+
+The `justfile` uses the Node.js and just versions pinned in `mise.toml`. Configuration is validated with a strict schema. Unknown keys, out-of-bounds masks and incomplete monetary budgets fail at startup. The provided `.local` handoff did not include its proposed YAML or environment example, so [config.example.yaml](config.example.yaml) defines the implemented schema. API keys belong in `.env`; private RTMP read URLs may appear only in ignored local `config.yaml`. Windows PowerShell supports the same npm commands.
 
 ### YouTube: official gRPC and REST
 
@@ -46,12 +50,13 @@ Set `YOUTUBE_API_KEY` to a key for a project with YouTube Data API access, or se
 ```yaml
 youtube:
   enabled: true
-  video: "https://www.youtube.com/watch?v=YOUR_VIDEO_ID"
+  video: ""
+  channelId: "UCxxxxxxxxxxxxxxxxxxxxxx" # replace with the real channel ID
   transport: grpc
   restFallback: true
 ```
 
-Use an actual 11-character video ID or supported YouTube watch/live/short-link URL. The server extracts the ID and calls fixed Google hosts; it never fetches the submitted URL directly. The gRPC `StreamList` connection is preferred. Repeated unavailable/unimplemented transport failures can fall back to official REST. REST observes `pollingIntervalMillis`. Set `transport: rest` to test REST explicitly.
+Set either an actual 11-character video ID or supported YouTube watch/live/short-link URL, or set `channelId` (a 24-character YouTube channel ID beginning with `UC`) to discover that channel’s active public live broadcast automatically. The channel lookup uses YouTube `search.list`, which is limited to 100 calls per day, then reads `activeLiveChatId` from the selected live video. If the channel is not live when receivers start, status becomes `waiting_live`; use **Start receivers** after the broadcast begins. The server calls fixed Google hosts and never fetches a submitted URL directly. The gRPC `StreamList` connection is preferred. Repeated unavailable/unimplemented transport failures can fall back to official REST. REST observes `pollingIntervalMillis`. Set `transport: rest` to test REST explicitly.
 
 The complete official protocol sample, original hash, Apache license and one necessary import correction are in [vendor/youtube](vendor/youtube/NOTICE.md). gRPC and REST have separate checkpoints. Message ID deduplication protects reconnects and fallback overlap; missing messages during outages cannot be ruled out. Only ordinary text events are displayed. Native moderation, donation, sticker and membership events are not implemented.
 

@@ -89,13 +89,15 @@ export async function googleJson(
       ? "ended"
       : reason === "invalidPageToken"
         ? "invalid_cursor"
-        : r.status === 401
-          ? "auth_required"
-          : r.status === 403
-            ? String(reason).includes("quota")
-              ? "quota_blocked"
-              : "permission_blocked"
-            : "reconnecting";
+        : reason === "invalidChannelId"
+          ? "config_required"
+          : r.status === 401
+            ? "auth_required"
+            : r.status === 403
+              ? String(reason).includes("quota")
+                ? "quota_blocked"
+                : "permission_blocked"
+              : "reconnecting";
     throw new UpstreamError(
       state,
       Number(r.headers.get("retry-after") ?? 0) * 1000,
@@ -124,7 +126,12 @@ export function makeGrpcClient() {
   );
 }
 export async function runYoutube(
-  config: { video: string; transport: "grpc" | "rest"; restFallback: boolean },
+  config: {
+    video: string;
+    channelId?: string;
+    transport: "grpc" | "rest";
+    restFallback: boolean;
+  },
   store: Store,
   signal: AbortSignal,
   status: (s: string) => void,
@@ -134,10 +141,36 @@ export async function runYoutube(
     return;
   }
   let chat: string;
+  let selectedVideo = config.video.trim();
   try {
+    if (!selectedVideo && config.channelId?.trim()) {
+      const channelId = config.channelId.trim();
+      if (!/^UC[\w-]{22}$/.test(channelId)) {
+        status("config_required");
+        return;
+      }
+      const live = await googleJson(
+        "search",
+        {
+          part: "snippet",
+          channelId,
+          eventType: "live",
+          type: "video",
+          maxResults: "5",
+        },
+        signal,
+      );
+      selectedVideo =
+        live.items?.find((item: any) => typeof item.id?.videoId === "string")
+          ?.id.videoId ?? "";
+      if (!selectedVideo) {
+        status("waiting_live");
+        return;
+      }
+    }
     const b = await googleJson(
       "videos",
-      { part: "liveStreamingDetails", id: videoId(config.video) },
+      { part: "liveStreamingDetails", id: videoId(selectedVideo) },
       signal,
     );
     chat = b.items?.[0]?.liveStreamingDetails?.activeLiveChatId;

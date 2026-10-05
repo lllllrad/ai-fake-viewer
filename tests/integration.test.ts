@@ -329,6 +329,54 @@ test("T04/A19: REST pacing honors upstream interval; read-only outbound methods"
     s.close();
   }
 });
+test("YouTube channel ID resolves its active live chat automatically", async () => {
+  const oldFetch = globalThis.fetch;
+  const oldKey = process.env.YOUTUBE_API_KEY;
+  process.env.YOUTUBE_API_KEY = "fixture-key";
+  const requests: string[] = [];
+  const controller = new AbortController();
+  let polls = 0;
+  globalThis.fetch = (async (url: any) => {
+    const parsed = new URL(String(url));
+    requests.push(parsed.toString());
+    if (parsed.pathname.endsWith("/search"))
+      return Response.json({
+        items: [{ id: { kind: "youtube#video", videoId: "abcdefghijk" } }],
+      });
+    if (parsed.pathname.endsWith("/videos"))
+      return Response.json({
+        items: [{ liveStreamingDetails: { activeLiveChatId: "channel-chat" } }],
+      });
+    polls++;
+    if (polls === 2) controller.abort();
+    return Response.json({ items: [], pollingIntervalMillis: 1000 });
+  }) as any;
+  const store = new Store(":memory:");
+  try {
+    await runYoutube(
+      {
+        video: "",
+        channelId: "UC1234567890123456789012",
+        transport: "rest",
+        restFallback: true,
+      },
+      store,
+      controller.signal,
+      () => {},
+    );
+    assert.equal(polls, 2);
+    assert(requests[0].includes("eventType=live"));
+    assert(requests[0].includes("channelId=UC1234567890123456789012"));
+    assert(requests[1].includes("id=abcdefghijk"));
+    assert(requests[2].includes("liveChatId=channel-chat"));
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldKey === undefined) delete process.env.YOUTUBE_API_KEY;
+    else process.env.YOUTUBE_API_KEY = oldKey;
+    store.close();
+  }
+});
+
 test("T10/A10/A19: Responses receives real image bytes, structured output and no tools", async () => {
   const old = globalThis.fetch;
   const oldKey = process.env.OPENAI_API_KEY,

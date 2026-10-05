@@ -396,9 +396,10 @@ function Admin() {
                 YouTube:{" "}
                 {status.setup.youtube.enabled
                   ? status.setup.youtube.credentialsConfigured &&
-                    status.setup.youtube.videoConfigured
+                    (status.setup.youtube.videoConfigured ||
+                      status.setup.youtube.channelConfigured)
                     ? "ready to test"
-                    : "add API key or access token and live video ID"
+                    : "add API key or access token and video or channel ID"
                   : "disabled in config.yaml"}
               </p>
               <p>

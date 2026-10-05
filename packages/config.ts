@@ -38,6 +38,7 @@ export const configSchema = z
       .object({
         enabled: z.boolean().default(false),
         video: z.string().default(""),
+        channelId: z.string().default(""),
         transport: z.enum(["grpc", "rest"]).default("grpc"),
         restFallback: z.boolean().default(true),
       })
@@ -45,6 +46,7 @@ export const configSchema = z
       .default({
         enabled: false,
         video: "",
+        channelId: "",
         transport: "grpc",
         restFallback: true,
       }),
