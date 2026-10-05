@@ -1,137 +1,133 @@
-# AI Viewer Persona System 구현 명세
+# AI viewer persona system implementation specification
 
-자동 생성·메모리 전용 개인정보 프로필 반영. 이 문서는 현재 저장소에 구현된 P0 동작과 한계를 기록한다. 유실된 원본 기획서를 복원했다고 가정하지 않는다. 관리자 화면의 목표 배치는 [운영 대시보드 요구사항](admin-dashboard-functional-spec.md), 공통 모델 흐름은 [AI_FLOW](../AI_FLOW.md)를 따른다.
+This document records implemented P0 behavior and limitations, including automatic composition and memory-only privacy controls. It does not claim to reconstruct a missing original specification. See the [dashboard specification](admin-dashboard-functional-spec.md) for UI goals and [AI_FLOW](../AI_FLOW.md) for the shared model pipeline.
 
-## 범위와 구현 근거
+## Scope and implementation evidence
 
-페르소나는 플랫폼 계정이 아니라 앱 내부의 합성 시청자다. 응답은 로컬 리더와 OBS 오버레이에만 게시한다. 기본 출연진은 로컬 규칙으로 자동 구성하며 실제 채팅 생성에는 선택된 모델을 사용한다. 데모의 채팅 모델은 fixture다.
+Personas are synthetic viewers inside the app, not platform accounts. Their responses appear only in the local reader and OBS overlay. Local rules compose the default cast; the selected model generates chat. Demo chat uses fixtures.
 
-| 책임                       | 구현 근거                                                             |
-| -------------------------- | --------------------------------------------------------------------- |
-| 정의·브리프·정책 스키마    | [contracts.ts](../packages/persona/contracts.ts)                      |
-| 후보 모델 입력과 생성      | [generator.ts](../packages/persona/generator.ts)                      |
-| 버전·오디션·승인·세션 제어 | [service.ts](../packages/persona/service.ts)                          |
-| 관측 선택·발언·검토·취소   | [scheduler.ts](../packages/scheduler.ts)                              |
-| 저장·재시작·게시 검증·보존 | [storage.ts](../packages/storage.ts)                                  |
-| 인증된 API와 관리자 UI     | [app.ts](../apps/server/app.ts), [main.tsx](../apps/web/src/main.tsx) |
-| 자동 검증                  | [persona.test.ts](../tests/persona.test.ts)                           |
+| Responsibility                                | Source                                                                |
+| --------------------------------------------- | --------------------------------------------------------------------- |
+| Definition, brief and policy schemas          | [contracts.ts](../packages/persona/contracts.ts)                      |
+| Candidate model input/generation              | [generator.ts](../packages/persona/generator.ts)                      |
+| Versions, auditions, approval and sessions    | [service.ts](../packages/persona/service.ts)                          |
+| Observations, speech, review and cancellation | [scheduler.ts](../packages/scheduler.ts)                              |
+| Storage, publication guards and retention     | [storage.ts](../packages/storage.ts)                                  |
+| Authenticated APIs and UI                     | [app.ts](../apps/server/app.ts), [main.tsx](../apps/web/src/main.tsx) |
+| Regression coverage                           | [persona.test.ts](../tests/persona.test.ts)                           |
 
-## 기본 동작: 자동 생성
+## Default behavior: automatic composition
 
-운영자는 페르소나를 만들거나 승인하지 않는다. AI 사용을 수동으로 켤 때 서버 스케줄러가 `ensureAutomaticCast()`를 실행한다. 활성 출연진이 없으면 방송 설명에서 공개 맥락을 가져와 여섯 정의를 만들고 스키마·닉네임 중복 검사를 거쳐 스냅샷과 입장 구간을 저장한다. 별도 모델 호출, 브리프, 오디션, 점수, 고지 확인은 필요 없다. 입력 준비 검사는 그대로 적용한다.
+Operators do not create or approve personas. Manual AI start invokes `ensureAutomaticCast()`. Without an active cast, the scheduler uses public context from the broadcast description, creates six definitions, checks schema/name collisions and records snapshots and presence intervals. No separate model call, brief, audition, rating or disclosure acknowledgement is required for composition. Normal input readiness still applies.
 
-[automatic.ts](../packages/persona/automatic.ts)는 사용자 제공 로컬 조사 `./.local/docs/real_viewer_persona_research_v0.1.md`의 동기를 다음과 같이 반영한다. 로컬 조사 파일은 배포 의존성이 아니며, 아래 근거 ID는 그 문서의 출처 번호다.
+[automatic.ts](../packages/persona/automatic.ts) reflects motivations from the user-supplied local research `./.local/docs/real_viewer_persona_research_v0.1.md`. The private research is not a deployment dependency. Evidence IDs below refer to that source's references.
 
-| 반영한 동기                 | 조사 근거             | 참여 행동                                      |
-| --------------------------- | --------------------- | ---------------------------------------------- |
-| 다른 활동 옆의 배경 청취    | R02·R03 개인 자기보고 | 낮은 발화 성향, 놓친 장면을 안다고 하지 않음   |
-| 이해하려는 호기심           | R05 관전 연구         | 선택 이유와 새로운 개념에 관심                 |
-| 배우고 직접 시도하려는 동기 | R05 관전 연구         | 방법 차이에 반응하되 전문성·경험을 꾸미지 않음 |
-| 대리 경험과 반응의 재미     | R04 자기보고·R05 연구 | 뜻밖의 결과에 짧게 반응                        |
-| 관심사 교류                 | R06·R07 연구          | 다른 관점·질문에 합류, 바쁜 채팅에는 침묵      |
-| 방송인의 시도를 응원        | R08 인터뷰            | 작은 진전에 반응, 후원·구독·친분을 꾸미지 않음 |
+| Motivation                                      | Research evidence             | Participation behavior                                                      |
+| ----------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
+| Background listening alongside other activities | R02/R03 personal self-reports | Low speech propensity; no claims about missed scenes                        |
+| Curiosity and understanding                     | R05 spectator research        | Interest in decisions and new concepts                                      |
+| Learning and trying things                      | R05 spectator research        | React to methods without fabricated expertise/experience                    |
+| Vicarious experience and reaction               | R04 self-report/R05 research  | Short responses to unexpected outcomes                                      |
+| Shared interests                                | R06/R07 research              | Join questions/perspectives; remain quiet in busy chat                      |
+| Supporting the broadcaster's attempts           | R08 interviews                | Respond to progress without invented donations, subscriptions or friendship |
 
-여섯 명은 제품의 기본 구성이지 현재 국내 시청자의 구성비가 아니다. 말투는 동기와 독립적으로 선택하며 짧은 반응·문맥 생략·격식 혼합이라는 R09의 표현 관찰만 참고한다. 특정 나이·성별·직업에 말투를 배정하거나 실제 사람의 사례와 채팅을 합쳐 복제하지 않는다. 예문은 합성 예시이며 실제 채팅 원문이 아니다. 밈은 고정 사전으로 주입하지 않으며 확인하지 못한 출처나 채널 내부 농담을 꾸미지 않게 한다. 침묵과 실제 채팅량에 따른 참여 감소는 R10–R13의 참여 맥락을 참고한 설계다.
+Six characters are a product default, not an estimate of domestic audience proportions. Voice is selected independently of motivation. R09 informs brief reactions, omitted context and mixed formality, without assigning voice to demographic stereotypes or combining real people/chat into replicas. Examples are synthetic. The system does not inject a fixed meme dictionary or invent unverified sources/channel jokes. Silence and reduced participation during busy chat reflect design informed by R10–R13.
 
-동기·관심·지식 경계·말투·발언/침묵 조건 전체가 모델의 페르소나 입력으로 전달된다. 참여 성향은 스케줄러의 선택 확률·가중치에도 쓰인다. 모델은 관련성이 없거나 정보가 부족하면 응답을 생략할 수 있다.
+The model receives motivation, interests, knowledge boundaries, voice and speech/silence conditions. Propensity also affects scheduler probability/weights. The model may skip when irrelevant or underinformed.
 
-같은 프로세스의 방송 세션에서 AI만 중지·재시작하면 정의·이름을 재사용한다. 방송 종료 또는 서버 재기동 시 출연진도 지우며 복원하지 않는다. `New session`으로 방송 세션이 바뀌면 다음 AI 시작에서 새 출연진을 생성한다. 기존 live 출연진은 교체하지 않는다. 기본 UI는 읽기 전용 요약이며 생성·선택·승인·무장 폼을 제공하지 않는다.
+Stopping and restarting only AI within the same process/broadcast session reuses definitions and names. Broadcast end or server restart clears the cast without recovery. A new stream session creates a new cast on its next AI start; an existing live cast is not replaced. The UI exposes a read-only summary, not authoring, selection, approval or arming forms.
 
-자동 구성 provenance에는 `automatic-research-composition`, 조사 버전, 근거 ID, `human_review: false`를 저장한다. 내부 `approved` 상태는 스키마와 이름 검사를 통과해 출연진에 사용할 수 있다는 뜻이며, 사람의 품질 평가를 받은 것으로 기록하지 않는다. 운영자 점수나 모델 오디션 기록을 만들지 않는다.
+Provenance records `automatic-research-composition`, research version, evidence IDs and `human_review: false`. Internal `approved` means schema/name checks passed, not human quality approval. No operator ratings or model auditions are fabricated.
 
-## 기존 작성·승인 API (호환성)
+## Legacy authoring and approval APIs
 
-**아래는 데모·독립 라이브러리의 기존 작성 경로 설명이다. 라이브 개인정보 프로필은 persona 변경 API를 차단하며 자동 생성과 공통 AI 제어만 사용한다.** 기본 UI나 자동 생성 경로에서는 호출하지 않는다.
+**These are legacy demo/standalone-library paths. The live privacy profile blocks persona mutation APIs and uses automatic composition plus shared AI controls.** The default UI does not invoke these paths.
 
-1. 브리프를 작성하면 `draft` 세션을 만든다. 제목, 주제, 시청 의도, 공개 맥락, 비공개 제작 맥락, 언어, 톤 정책, 후보 수, 출연진 수, 게임 모드를 저장한다. 후보 기본값은 12명(1–24), 출연진은 6명(1–12)이며 출연진 수는 후보 수를 넘을 수 없다. `cast_mode`는 `fresh`만 지원한다.
-2. 여섯 기본 행동 템플릿을 바탕으로 후보를 비동기 생성한다. 모델에는 공개 기획 정보와 행동 템플릿만 전달한다. 비공개 제작 맥락은 전달하지 않으며, 출력 누출 검사도 수행한다. 이 검사는 문자열 기반이므로 의미적 누출을 완전히 검증하지 않는다.
-3. 후보의 관심사, 지식 경계, 말투, 참여 성향, 발언·침묵 예시를 검토한다. 닉네임 충돌과 동일한 정의를 검사한다. 닉네임 비교는 NFKC 정규화, 소문자화, 공백·일부 기호 제거를 사용한다.
-4. 잠글 필드와 재생성할 차원을 선택하거나 닉네임만 재생성한다. 새 버전을 저장하고 기존 버전은 보존한다. 새 버전은 다시 승인해야 한다. API에는 템플릿 개정, 닉네임 금지 목록, 복제, 버전 폐기도 있다. 복제는 새 정체성을 만들고 기억을 복사하지 않는다.
-5. 선택한 후보마다 `p0-v1`의 12개 시나리오로 오디션을 실행한다. 성공·실패, 지식 밖 설명, 조용한 상황, 이미 답한 질문, 늦은 입장, 시청자 정정, 오래된 화면, 비공개 계획, 악성 채팅, AI 연속 발언, 허구의 과거 경험을 다룬다. 닉네임·비공개 맥락·침묵 예시·후보 간 중복 발언 예시 검사도 수행한다.
-6. 성공한 오디션과 동일한 정의 해시를 대상으로 운영자가 승인한다. 일관성·차별성·자연스러움·관련성은 각각 1–5점이며, 각 항목 3점 이상 및 평균 4점 이상이어야 한다. 모델이 이 점수를 자동으로 부여하지 않는다.
-7. 승인된 동일 세션의 버전으로 정해진 인원만큼 출연진을 구성하고 합성 시청자 고지를 확인한 뒤 동결한다. 정의 스냅샷과 해시를 보관하고 `ready`로 전환한다.
+1. Creating a brief creates a `draft` session with title, topic, viewer intent, public/private production context, locale, tone policy, candidate/cast counts and game mode. Candidate default/range: 12, 1–24. Cast default/range: 6, 1–12, never above candidate count. Only `cast_mode: fresh` is supported.
+2. Candidate generation is asynchronous and uses six base behavioral templates. Only public planning and templates enter the model. Private production context is excluded, with an additional string-based output leak check that cannot guarantee semantic non-disclosure.
+3. Review interests, knowledge boundaries, voice, propensity and speech/silence examples. Check duplicate definitions and names using NFKC normalization, lowercase and removal of whitespace/some punctuation.
+4. Lock fields and regenerate selected dimensions or names. Store a new version while retaining older ones; approve the new version again. APIs also support template revisions, name denylists, cloning and retirement. Cloning creates a new identity without copying memory.
+5. Run the `p0-v1` audition's 12 scenarios, covering success/failure, knowledge limits, quiet moments, answered questions, late arrival, viewer corrections, stale images, private plans, hostile chat, consecutive AI speech and invented past experience. Also check names, private-context leakage, silence examples and duplicate examples across candidates.
+6. An operator approves the exact definition hash that passed audition. Consistency, distinction, naturalness and relevance each score 1–5; each must be at least 3 and the mean at least 4. The model does not automatically award these ratings.
+7. Build the required cast from approved versions in the same session, confirm synthetic-viewer disclosure and freeze. Store definition snapshots/hashes and transition to `ready`.
 
-정의는 `core`, `knowledge`, `voice`, `participation`, `examples`, `negative_examples`와 버전 식별자를 포함한다. 예시는 4–12개이며 침묵 예시를 적어도 하나 포함한다. 부정 예시는 2–10개다. 실제 요청 필드와 범위의 기준은 위 스키마다.
+Definitions include `core`, `knowledge`, `voice`, `participation`, `examples`, `negative_examples` and version identifiers. Provide 4–12 examples including silence, and 2–10 negative examples. The schema is authoritative for exact fields/ranges.
 
-## 세션과 라이브 제어
+## Sessions and live controls
 
-페르소나 세션은 채팅 저장소의 스트림 세션(`source_session`)에 소속된다. 관리자 하단의 `New session`은 스트림 세션을 바꾸는 작업이며 다음 자동 출연진의 범위를 바꾼다.
+Persona sessions belong to the stream Store's `source_session`. The admin new-session action changes the stream session and the scope of the next automatic cast.
 
-| 현재 상태                 | 작업                            | 결과                                                      |
-| ------------------------- | ------------------------------- | --------------------------------------------------------- |
-| `draft`                   | 승인 출연진 구성·고지 확인·동결 | `ready`, AI 비무장                                        |
-| `ready`                   | 시작                            | `live`; `arm_ai`에 따라 AI 시작, 준비 검사 실패 시 비무장 |
-| `live`                    | AI 중지                         | 세션 유지, 비무장, 진행 중 반응 취소                      |
-| `live`                    | 일시정지                        | `paused`, 비무장, 관측 구간 닫기                          |
-| `paused`                  | 재개                            | `live`, 계속 비무장; AI 재무장 별도 필요                  |
-| `ready`, `live`, `paused` | 종료                            | `ended`, 비무장, 출연진 퇴장, 보고서 생성                 |
+| State                     | Action                                                 | Result                                                        |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------- |
+| `draft`                   | Assemble approved cast, acknowledge disclosure, freeze | `ready`, disarmed                                             |
+| `ready`                   | Start                                                  | `live`; arm according to `arm_ai`, disarm on failed readiness |
+| `live`                    | Stop AI                                                | Preserve session, disarm, cancel work                         |
+| `live`                    | Pause                                                  | `paused`, disarm, close observation interval                  |
+| `paused`                  | Resume                                                 | `live`, still disarmed until separately armed                 |
+| `ready`, `live`, `paused` | End                                                    | `ended`, disarm, remove presence and generate report          |
 
-관리자 최상단의 공통 AI 사용 스위치는 live 페르소나도 중지·재무장한다. 상단 정체 공개는 AI 생성과 live 페르소나를 함께 비무장한 뒤 공개한다.
+The primary AI switch controls the live cast too. Disclosure disarms generation and the live cast before revealing origin labels. Viewer nicknames and synthetic persona names stay visible throughout.
 
-라이브/일시정지 상태에서 멤버 입장·퇴장, 음소거, 주의도, 현재 관심 태그를 API로 바꿀 수 있다. 기본 UI는 읽기 전용 자동 페르소나 요약과 공통 AI 켜기/끄기·정체 공개를 제공한다. 제어 변경은 해당 반응을 취소하고 epoch를 증가시킨다. 정책 변경도 진행 중 후보를 무효화한다.
+Legacy APIs can change presence, mute, attention and interest tags during live/paused sessions. Live server mutation restrictions still apply. Changes cancel affected reactions and increment epochs; policy updates invalidate pending candidates. The default UI remains read-only apart from shared AI/disclosure controls.
 
-시작에는 현재 운영 프로필과 선택한 OpenAI 서비스의 모델 준비 검사를 적용한다. 영상·음성 입력은 차단되어 필수 조건이 아니다. 실제 채팅은 플랫폼별 수신·화면 공개·외부 AI 승인과 단계별 현재 동의를 모두 충족해야 한다. [개인정보 구현](privacy-implementation.md)을 따른다.
+Start requires the current operating profile and selected Responses API authentication/model readiness. Screen/audio are disabled and are not prerequisites. Human chat needs platform receipt/publication/external-AI approvals and current staged consent. See [privacy implementation](privacy-implementation.md). Restart starts a new memory session, without restoring execution intent or arming.
 
-서버 재시작은 새 메모리 세션이다. 저장된 실행 의도나 무장 상태를 복구하지 않으며 AI는 수동으로 시작한다.
+## Observation and speech selection
 
-## 관측과 발언 선택
+Server AI start creates an automatic live cast when needed and uses its frozen snapshots. Only compatibility use of the scheduler without the server preparation hook falls back to YAML `ai.personas`. The most recently created live session is selected; parallel multi-session operation and a hard single-live-session constraint are not guaranteed.
 
-서버의 AI 시작은 활성 `live` 세션이 없으면 자동 생성하므로 출연진 스냅샷을 사용한다. 서버 준비 훅 없이 스케줄러를 직접 사용하는 호환 경로만 YAML `ai.personas`를 사용한다. 현재 저장소는 가장 최근 생성된 live 세션을 선택한다. 여러 live 세션의 병렬 운영이나 단일 live 세션 강제 제약은 보장하지 않는다.
+Presence intervals constrain message sequences/timestamps and legacy transcript/frame capture times. Absent/paused periods are not presented as observed. Interests, mentions, attention, propensity and recent speech select one character or silence. Model input includes the full approved definition and public brief.
 
-입장 구간의 메시지 시퀀스와 시각, 자막·프레임 수집 시각으로 멤버에게 노출 가능한 맥락을 제한한다. 퇴장·일시정지 구간을 관측한 것처럼 전달하지 않는다. 관심 태그, 언급, 주의도, 참여 확률, 최근 발언을 반영해 한 명을 선택하거나 침묵한다. 모델에는 전체 승인 정의와 공개 브리프를 전달한다.
+Shared scheduler checks remain: fresh input, randomized pacing, suppression above 15 external messages/minute, and at most three AI messages/minute. Persona policy cannot raise these shared limits.
 
-공통 스케줄러의 새 입력 검사, 무작위 대기, 분당 외부 메시지 15개 초과 시 억제, 분당 AI 발언 3개 제한도 계속 적용된다. 페르소나 정책만으로 이 공통 제한을 늘릴 수 없다.
+| Policy                               | Default/current enforcement                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------- |
+| Global speech interval               | At least five seconds, plus shared randomized pacing                            |
+| Individual cooldown                  | Greater of 30 seconds and `ai.pacing.minSeconds`                                |
+| Consecutive speech by one persona    | At most two                                                                     |
+| Activity-dependent AI cap            | Per 60 seconds: external 0–4 => 4; 5–19 => 2; 20+ => 1; shared cap also applies |
+| Response delay                       | 500–2500 ms                                                                     |
+| Reaction TTL / fresh observation age | 12 seconds each                                                                 |
+| Model timeout                        | Six seconds                                                                     |
+| Live calls                           | 300, also bounded by shared Store usage and `ai.maxCalls`                       |
+| Authoring calls                      | 200, with candidate/scenario-count checks                                       |
 
-| 페르소나 정책                | 기본값과 현재 적용                                                                |
-| ---------------------------- | --------------------------------------------------------------------------------- |
-| 전체 발언 간격               | 최소 5초; 공통 무작위 pacing도 적용                                               |
-| 개인 쿨다운                  | 30초와 `ai.pacing.minSeconds` 중 큰 값                                            |
-| 동일 인물 연속 발언          | 최대 2회                                                                          |
-| 활동량별 AI 상한             | 60초간 외부 메시지 0–4개: 4회, 5–19개: 2회, 20개 이상: 1회; 공통 제한과 함께 적용 |
-| 응답 지연                    | 500–2500ms                                                                        |
-| 반응 TTL / 새 관측 최대 나이 | 각각 12초                                                                         |
-| 모델 타임아웃                | 6초                                                                               |
-| 라이브 호출 상한             | 300; 공통 저장소 사용량과 `ai.maxCalls` 제한도 적용                               |
-| 작성 작업 호출 상한          | 200; 후보 생성 수와 오디션 시나리오 수 검사                                       |
+Live output uses shared `say / skip / inspect`, not the persona contract's separate `send / skip` schema. After model draft review and optional human review, publication rechecks arming/state, definition hash, policy revision, member epoch, expiry, duplication and frequency. Attempts/publication are recorded locally.
 
-실제 라이브 응답은 공통 `say / skip / inspect` 스키마를 사용한다. 페르소나 계약 파일의 `send / skip` 응답 스키마가 라이브 공급자 출력 계약으로 연결된 것은 아니다. AI 초안 검토와 선택적 사람 승인을 거친 뒤 게시 직전에 세션 무장·상태, 정의 해시, 정책 revision, 멤버 epoch, 만료·중복·빈도를 다시 검사한다. 게시와 시도 기록은 로컬 저장소에서 처리한다.
+## APIs and concurrent changes
 
-## API와 동시 변경 보호
+The following table describes legacy/demo contracts. Live mutation is restricted to shared AI controls. Paths are under `/api/admin/persona`, with administrator authentication and same-origin protections. Mutations require an 8–128-character `Idempotency-Key`. Different bodies under the same path/key conflict; in-progress and completed retries are distinguished. Use `expected_revision` for sessions, `expected_member_epoch` for members and `expected_control_epoch` for arming. Exact bodies are in [server routes](../apps/server/app.ts).
 
-아래 표는 레거시/데모 API 계약이다. 라이브는 조회만 허용하며 변경은 공통 AI 제어 경로로 제한한다. 모든 경로는 `/api/admin/persona` 아래이며 관리자 인증과 기존 동일 출처 보호를 적용한다. 변경 요청에는 8–128자 `Idempotency-Key`가 필요하다. 같은 경로·키의 다른 본문은 충돌로 거부하고, 처리 중인 요청과 완료된 재요청을 구분한다. 세션 변경에는 `expected_revision`, 멤버 변경에는 `expected_member_epoch`, 재무장에는 `expected_control_epoch`를 사용한다. 정확한 본문 필드는 [서버 라우트](../apps/server/app.ts)에서 확인한다.
+| Operation                 | Method/path                                                                         |
+| ------------------------- | ----------------------------------------------------------------------------------- |
+| Brief/session             | `POST /sessions`, `GET /sessions/:id`                                               |
+| Templates                 | `GET /templates`, `POST /templates`                                                 |
+| Candidates                | `POST /sessions/:id/candidates`, `GET /sessions/:id/candidates`                     |
+| Name denylist/clone       | `POST /sessions/:id/nickname-denylist`, `POST /sessions/:id/clone`                  |
+| Regenerate/approve/retire | `POST /versions/:id/regenerate`, `/approve`, `/retire`                              |
+| Auditions/jobs            | `POST /sessions/:id/auditions`, `GET /jobs/:id`, `POST /jobs/:id/cancel`            |
+| Cast/freeze               | `PUT /sessions/:id/cast`, `POST /sessions/:id/freeze`                               |
+| Lifecycle                 | `POST /sessions/:id/start`, `/pause`, `/resume`, `/end`                             |
+| AI controls               | `POST /sessions/:id/ai/arm`, `/ai/stop`                                             |
+| Policy/member             | `PATCH /sessions/:id/policy`, `PATCH /sessions/:id/members/:memberId`               |
+| Disclosure/report/replay  | `POST /sessions/:id/reveal`, `GET /sessions/:id/report`, `GET /sessions/:id/replay` |
 
-| 기능                  | 경로와 메서드                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------- |
-| 브리프 생성·조회      | `POST /sessions`, `GET /sessions/:id`                                               |
-| 템플릿 조회·개정      | `GET /templates`, `POST /templates`                                                 |
-| 후보 생성·조회        | `POST /sessions/:id/candidates`, `GET /sessions/:id/candidates`                     |
-| 금지 닉네임·복제      | `POST /sessions/:id/nickname-denylist`, `POST /sessions/:id/clone`                  |
-| 재생성·승인·폐기      | `POST /versions/:id/regenerate`, `/approve`, `/retire`                              |
-| 오디션·작업 조회·취소 | `POST /sessions/:id/auditions`, `GET /jobs/:id`, `POST /jobs/:id/cancel`            |
-| 출연진·동결           | `PUT /sessions/:id/cast`, `POST /sessions/:id/freeze`                               |
-| 라이프사이클          | `POST /sessions/:id/start`, `/pause`, `/resume`, `/end`                             |
-| AI 제어               | `POST /sessions/:id/ai/arm`, `/ai/stop`                                             |
-| 정책·멤버 변경        | `PATCH /sessions/:id/policy`, `PATCH /sessions/:id/members/:memberId`               |
-| 공개·보고·리플레이    | `POST /sessions/:id/reveal`, `GET /sessions/:id/report`, `GET /sessions/:id/replay` |
+## Storage and publication boundaries
 
-## 저장과 공개 경계
+Briefs, versions, frozen casts, presence, jobs, model metadata, auditions, ratings, audit entries, reactions and publication records live in the process's memory SQLite and do not survive end/restart. Public views do not receive operational information or private briefs. Identity disclosure is a one-time confirmed action on a disarmed `live` or `ended` session.
 
-브리프, 정의 버전, 출연진 스냅샷, 입장 구간, 작업, 모델 실행 메타데이터, 오디션 결과, 운영자 점수, 감사 기록, 반응 시도와 게시 결과를 앱 프로세스의 메모리 SQLite에 저장한다. 종료·재시작 후 남지 않는다. 공개 화면에는 운영 정보나 비공개 브리프를 전달하지 않는다. 정체성 공개는 비무장 상태의 `live` 또는 `ended` 세션에서 명시적 확인 후 한 번 수행한다.
+Reports aggregate member publication counts/reactions. `usage` is shared stream Store usage, not an independent persona-session bill. Replay reads stored administrator records, not a model rerun. Details may disappear after retention cleanup. Standalone Store/service fixture retention is not the live persistence policy. No long-term memory storage/retrieval pipeline is connected.
 
-보고서는 멤버별 게시 수와 반응 결과를 집계한다. `usage`는 공통 스트림 저장소 사용량이므로 페르소나 세션만의 독립 청구 합계로 해석하면 안 된다. 리플레이는 관리자용 저장 기록 조회이며 모델을 다시 실행하는 기능이 아니다. 보존 정리 후에는 상세 결과가 없어질 수 있다.
+## Remaining implementation and verification
 
-라이브 앱의 모든 페르소나 기록은 세션 메모리 수명이다. 독립 Store/서비스 fixture에 남아 있는 일수별 보존 코드는 라이브 영속 저장 정책이 아니다. 장기 기억 저장·검색 파이프라인은 연결돼 있지 않다.
+- Schema fields do not prove runtime support. Multiple selections per event group, general reaction queues, AI trigger depth, automatic schema repair, memory retrieval and per-persona token limits are not guaranteed complete pipelines.
+- Authoring is separate from live scheduling; do not assume the shared live USD budget covers generation, regeneration and auditions.
+- Demo candidates may share examples and fail cross-candidate audition checks. Demo auditions return `skip` and do not establish character quality.
+- The automatic overview comes from the status API and survives page reload within the session. Legacy authoring/replay APIs have no dedicated UI.
+- Fixtures cover private-context exclusion/leak rejection, approval/freezing/policy/disclosure transitions and retention deletion. Real-model naturalness, platform receipt and full browser authoring flows require separate validation.
 
-## 남은 구현과 검증
+## Withdrawal and aggregate context
 
-- 정책 스키마에 존재하는 모든 값이 런타임 기능을 뜻하지 않는다. 이벤트 그룹당 복수 선택, 범용 반응 큐, AI 트리거 깊이, 스키마 자동 수리, 기억 검색, 페르소나별 입력·출력 토큰 한도는 완성된 파이프라인으로 보장하지 않는다.
-- 작성 호출은 라이브 스케줄러와 별도 경로다. 공통 라이브 USD 예산이 작성·재생성·오디션 전체를 제한한다고 가정하면 안 된다.
-- 기본 데모 후보는 같은 발언 예시를 사용하므로 복수 후보 오디션의 중복 예시 검사를 통과하지 못할 수 있다. 데모 오디션 모델은 모두 `skip`을 반환하며 실제 캐릭터 품질의 증거가 아니다.
-- 자동 요약은 상태 API에서 매번 조회하므로 새로고침 후에도 유지된다. 기존 수동 작성·리플레이 API는 별도 UI를 제공하지 않는다.
-- 회귀 fixture는 생성 입력에서 비공개 맥락 제외, 누출 거부, 승인·동결·정책·공개 전이, 보존 삭제를 다룬다. 실제 모델의 캐릭터 품질, 실제 플랫폼 수신, 브라우저 전체 작성 흐름은 별도 검증해야 한다.
+Withdrawal/hiding removes raw text and invalidates ongoing reactions. Scheduler caches/drafts and session reaction results/model manifests are cleared; recorded input dependencies conservatively remove directly and indirectly dependent published AI output. Persona definitions remain because they are not generated from participant raw text.
 
-## 동의 철회와 집계 맥락
-
-철회·숨김은 원문 삭제와 함께 진행 중 페르소나 반응을 무효화한다. 스케줄러 캐시·대기 초안, 해당 방송 세션의 반응 결과·모델 manifest를 비우며, 기록된 입력 의존관계에 따라 이미 게시된 AI 응답도 간접 의존까지 제거한다. 페르소나 정의 자체는 실제 참여자의 원문으로 생성하지 않으므로 유지한다.
-
-별도의 `anonymousChatSummary`는 최근 2분간 동의한 실제 채팅의 고정 주제·분위기 범주만 담는다. 범주별 서로 다른 계정 3명 이상이 필요하다. 철회 전 승인된 출처 없는 고정 범주는 현재 세션에서 유지할 수 있지만 철회 원문으로 새 요약을 만들지 않는다. 세션 종료 시 모두 지운다. 과거 개인 기억이나 발언의 사실 근거로 사용할 수 없다. 보존·초기화·모델 전달 범위는 [AI_FLOW](../AI_FLOW.md#withdrawal-and-anonymous-chat-summaries)를 따른다.
+`anonymousChatSummary` contains only fixed topic/mood categories from recent two-minute permitted human chat, with at least three distinct accounts supporting each category. Preapproved categories without provenance may remain for the session; withdrawn text never creates a new summary. End clears all categories. These are not personal memories or evidence of past statements. See [AI_FLOW](../AI_FLOW.md#withdrawal-and-anonymous-chat-summaries).

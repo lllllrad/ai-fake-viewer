@@ -1,85 +1,89 @@
-# 관리자 운영 대시보드 기능 명세
+# Admin dashboard functional specification
 
-문서 버전 1.4 · 코드 대조 2026-10-05. 상단 운영 우선순위는 유지하고, 라이브 개인정보·단계별 동의·메모리 수명은 [개인정보 구현](privacy-implementation.md)을 따른다. 실제 플랫폼·제공자 승인까지 완료됐다는 뜻은 아니다.
+Version 1.5. Operating controls remain the first priority. [Privacy implementation](privacy-implementation.md) defines live participation, staged consent and memory lifetime. Implementation evidence does not establish platform or provider approval.
 
-## 현재 구현과 요구사항의 차이
+## Implementation and requirement gaps
 
-| 요구      | 현재 구현                                                                                  | 남은 인수                           |
-| --------- | ------------------------------------------------------------------------------------------ | ----------------------------------- |
-| 첫 화면   | 운영 대시보드가 첫 section; 입력 상태와 AI 제어 다음 개인정보·참여·익명 요약·자동 페르소나 | 전체 접근성 감사                    |
-| 준비도    | 서버 프로필/선택한 서비스 모델 검사, 상단 실패 이유와 관련 설정 이동                       | 실제 계약·설정 확인                 |
-| 입력      | 공식 승인 수신기만 허용; 화면·음성은 미동의 내용 제외가 불확실해 사용 안 함                | 별도 검토 없는 입력 활성화 불가     |
-| 긴급 중지 | 오래된 상태에도 AI 중지 가능; 수신 중지와 별개                                             | 장기 네트워크 장애                  |
-| 정체 공개 | 명시적 확인 후 AI 비무장, 닉네임 유지, 플랫폼 및 AI 생성 표시                              | 실제 안내문과 일치 확인             |
-| 재시작    | 메모리 새 세션, 동의·출연진·원문 복구 없음, AI 수동 시작                                   | 서비스/OS 운영 리허설               |
-| 참여 안내 | 실제 수신 명령·전달 확인 보조, 별도 단계와 연령 차단                                       | 실제 승인 발송 경로와 SDK 순서 확인 |
-| 철회      | 원문·파생 삭제, AI 취소, 기존 승인 익명 범주만 세션 유지                                   | 외부 기록/VOD 실제 조치             |
-| 권리행사  | 별도 최소 작업, 영상 목록, 앱/외부/영상/사본 각각 확인                                     | 대상 확인·편집·결과 통지 운영       |
+| Requirement    | Current behavior                                                                                            | Remaining acceptance                            |
+| -------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                              | Full accessibility audit                        |
+| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings             | Actual contracts and account configuration      |
+| Inputs         | Approved official receivers; screen/audio unused because nonparticipant content cannot be excluded reliably | Review before enabling alternative input        |
+| Emergency stop | Available even with stale status; independent of receiver stop                                              | Extended network failure                        |
+| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                            | Match the actual viewer notice                  |
+| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                                   | Host/service rehearsal                          |
+| Guidance       | Automatic fixed notices, observed-command assistance, separate consent stages and child restrictions        | Real delivery permissions and event ordering    |
+| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session           | Provider/VOD actions                            |
+| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks                     | Target identification, editing and notification |
 
-기준 코드는 [operations-dashboard.tsx](../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx), [main.tsx](../apps/web/src/main.tsx), [서버](../apps/server/app.ts)다. 데모는 인공 화면과 mock AI를 사용하며 라이브 프로필의 실제 승인 증거가 아니다.
+Sources: [operations-dashboard.tsx](../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx), [main.tsx](../apps/web/src/main.tsx) and [server](../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
 
-## 1. 제품 원칙
+## 1. Product principles
 
-운영자는 첫 화면에서 AI 실행 여부와 현재 허용된 입력 상태를 알아야 한다. 정상 연결의 내부 코드·수신 횟수를 기본 화면에 나열하지 않는다. 불명확/오래된 상태를 정상으로 표시하지 않고, 문제와 다음 조치를 함께 표시한다. 동의 전 본문 차단은 안내 토글·관리자 권한으로 우회하지 않는다.
+The operator must immediately understand whether AI is running and which inputs are available. Do not show transport codes, internal counters or verbose healthy-state details on the primary dashboard. Do not present unknown or stale state as healthy. Explain the problem and next action. Notice toggles and administrator privileges cannot bypass viewer consent.
 
-## 2. 첫 화면 배치
+## 2. First-screen layout
 
-첫 section은 **방송 상태 및 AI 제어**다. 송출 화면, 실제 채팅 정보, 음성 인식 transcript 카드와 AI 사용 스위치·긴급 중지·정체 공개를 우선 배치한다. 라이브에서는 화면·음성을 사용 안 함으로 명시하고 이것을 복구해야 할 필수 입력으로 안내하지 않는다. 다음은 개인정보·참여 관리, 익명 주제·분위기, 자동 시청자 요약이다. 연결/모델 상세는 기본 닫힘으로 둔다.
+The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Live screen/audio inputs are explicitly unused, not mandatory prerequisites awaiting confirmation. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
 
-가림 영역 확인 버튼이나 `capture.confirmed` / `programConfirmed` 시작 조건은 없다. 이 프로필의 입력 차단은 미동의 정보의 우회 유입 방지이며 운영자가 가림을 확인해서 해제하는 제어가 아니다.
+There is no mask-confirmation control or `capture.confirmed` / `programConfirmed` start gate. Input restrictions prevent unconsented information from bypassing text filtering; a manual mask acknowledgement does not lift them.
 
-## 기본 표시와 상세 정보
+## Basic status and details
 
-정상일 때는 `정상`, 사용하지 않으면 `사용 안 함`, 준비/오류/오래된 상태는 해당 의미의 짧은 문구를 쓴다. `YOUTUBE`, `connecting`, `grpc`, 내부 카운터를 정상 카드에 노출하지 않는다. 연결 상세는 문제 해결에 필요할 때 펼친다. 모바일에서도 주요 AI 제어를 찾을 수 있어야 한다.
+Use short healthy, unused, preparing, failed and stale states. Hide platform/transport names and counts in the normal summary; expand connection details for diagnosis. Mobile users must be able to find AI controls. Do not rely on color alone.
 
-## 3. 상단에 보여야 하는 상태
+## 3. Primary state
 
-| 영역           | 기본 표시와 동작                                                     |
-| -------------- | -------------------------------------------------------------------- |
-| 방송 세션      | 열림/종료, 새 세션/명시적 종료; 연결 불확실 시 종료 여부를 직접 확인 |
-| 송출 화면·음성 | 라이브는 사용 안 함과 개인정보 입력 제한 설명; 데모는 합성 입력 상태 |
-| 실제 채팅      | 정상/미준비/문제 요약; 미승인 채널은 시작하지 않음                   |
-| AI             | 사용 스위치, 준비 실패 이유, 긴급 중지; 상세 모델/예산은 접기        |
-| 개인정보       | 프로필 미확정 경고, 실제 안내·동의 단계, 외부 후속 작업 미저장 경고  |
+| Area         | Display and behavior                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------- |
+| Session      | Open/closed, new session and explicit close; uncertain connectivity is not proof of broadcast end |
+| Screen/audio | Unused with the input restriction explained; demo shows synthetic state                           |
+| Real chat    | Healthy/not ready/problem summary; unapproved channels cannot start                               |
+| AI           | Enable switch, failed prerequisites, emergency stop; model/budget details collapsed               |
+| Privacy      | Incomplete-profile warning, actual notice/consent stage and unsaved rights-task warning           |
 
-상태는 색상만으로 전달하지 않는다. `generatedAt` 기준 2초 폴링, 10초 이상 오래된 응답·조회 실패·필수 상태 누락 시 시작을 차단한다. 오래된 상태에서도 중지는 가능하다.
+Poll every two seconds using `generatedAt`. Responses API older than ten seconds, failed reads or missing required state block start. Stop remains available.
 
-## 4. 주요 토글과 제어
+## 4. Controls
 
-### 4.1 AI 생성
+### 4.1 AI generation and disclosure
 
-`AI 채팅 생성 사용`은 서버 준비 검사 후 여섯 페르소나를 자동 생성하고 시작한다. 운영자 작성/오디션/승인 폼은 없다. 중지는 진행 중 생성·검토·게시 대기를 취소하며 수신기와 별개다. 서버 재시작 후 자동 실행하지 않는다.
+The AI generation switch checks server readiness, automatically composes six personas and starts them. There are no operator authoring, audition or approval forms in the live UI. Stop cancels generation, review and pending publication independently of receivers. Restart does not resume AI automatically.
 
-`AI 채팅에 ‘AI 생성’ 표시하기`는 확인 후 생성과 출연진을 비무장하고 출처를 공개한다. 이후 버튼 대신 `AI 채팅에 ‘AI 생성’ 표시 중`을 표시한다. 현재 세션에서 되돌리는 토글이 아니다.
+The disclosure action explicitly identifies that it will label AI-generated chat. Confirmation disarms generation and the cast, then reveals origin labels. A status replaces the button afterward; disclosure is irreversible within the session. Actual viewer and synthetic persona names are visible both before and after disclosure.
 
-### 4.2 입력 일괄 제어
+Authentication uses **Sign in with ChatGPT** when `chatgpt_subscription` is selected. Inference uses the **Responses API** with either that account's eligible ChatGPT plan usage or an explicitly configured API key. Authentication/billing and inference are distinct concepts.
 
-입력 시작은 AI 시작이 아니다. 전체 중지와 개별 수신기를 구분하고 서버에서 승인·설정을 재검사한다. 라이브 화면·음성 경로는 시작 요청을 거부한다. 연결 끊김은 실제 방송 종료라고 단정하지 않으며 운영자가 종료를 확인해 **Close session**으로 정리할 수 있다.
+### 4.2 Input controls
 
-### 4.3 안내 제어
+Starting inputs does not start AI. Separate all-input stop from individual receiver state, and recheck settings/approvals on the server. Live screen/audio start requests are rejected. If end detection is uncertain, the operator explicitly closes the session.
 
-기존 플랫폼별 오버레이 안내 토글은 정보 표시용이며 실제 플랫폼 발송이나 동의 부여가 아니다. 프로세스 메모리만 사용하므로 런타임 토글은 재시작 후 복구하지 않고 YAML 기본값을 다시 적용한다. SOOP는 공식 SDK, YouTube는 서버 OAuth/API로 미동의 채팅의 미표시 안내와 단계별 고정 안내를 자동 발송한다. YouTube 계정 연결·해제는 연결 상세에서 수행한다. 참여 패널에서 연결 대기·승인 필요·전달 확인 중·미확인 상태를 표시하며 수동 전달 완료 버튼은 제공하지 않는다. 계정별/전체 발송 제한과 실제 SDK echo 확인을 적용한다. 관리자 탭의 SOOP 연결을 유지해야 한다. YouTube는 서버 수신기 실행을 유지하며 관리자 탭을 닫아도 발송한다. 긴 안내는 전체 조각의 발송 응답 확인 후 단계 전달을 완료한다.
+### 4.3 Guidance and connection controls
 
-## 5. 시청자 동의 안내 및 개인정보 상태
+Legacy overlay notice switches are informational, not delivery or consent. Their runtime values are memory-only and restart from YAML defaults. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send fixed non-display introductions and stage notices. Neither sends AI replies or viewer text.
 
-첫 `!동의`는 안내를 시작한다. 연령, 수집·이용, 영상 공개, 국외 처리, 필요한 제3자 제공을 각각 안내·전달하고 새로운 명령으로 확인한다. 참가자 목록은 최소 계정·단계·연령·수신 명령만 보이고 미동의 일반 본문은 표시하지 않는다. 관리자 단독 ACTIVE 전환은 없다. 순서 미확정 SDK 이벤트는 실제 새 명령인지 확인해야 하며 오래된 이벤트를 승인할 수 없다.
+Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control.
 
-`!철회`는 어느 단계든 처리하고 세대 무효화·원문/파생 삭제·AI 취소를 수행한다. 기존 승인 익명 범주는 세션 종료까지 유지할 수 있다. `!참여상태`는 운영자가 현재 계정 상태를 확인할 수 있게 한다. 만 14세 이상 자기신고를 실제 연령 검증과 구분해 표시한다. 알려진 14세 미만/신고 모순은 참여 차단 버튼으로 처리하며 법정대리인 동의 확인 기능이 없어 본인 명령으로 활성화하지 않는다.
+## 5. Participation and privacy
 
-프로필을 변경하면 기존 동의를 승계하지 않는다. 새 세션은 모든 계정 미참여로 시작한다. 단계·안내 제한·세부 API는 [개인정보 구현](privacy-implementation.md)을 따른다.
+The first exact consent command begins guidance. Age self-declaration, collection/use, video publication, overseas processing and any third-party provision are separate delivered stages, each requiring a fresh command. The participant list shows only minimal account, stage, age status and observed commands; unconsented ordinary text is absent. Administrators cannot set ACTIVE directly. SDK events with uncertain ordering require verification of the specific newly observed command, not old retransmissions.
 
-## 6. 권리행사와 영상
+Withdrawal invalidates consent, removes raw/derived context and cancels AI. Previously approved anonymous categories may remain until session end. A status command lets the operator inspect current participation. Age is shown as self-declared 14+, not verified. Known under-14 or contradictory declarations are blocked. There is no guardian-consent verification workflow, and self-issued commands cannot override the restriction.
 
-철회 시 송출/외부 처리 이력이 있으면 최소 정보의 후속 작업을 만든다. 방송 종료 후 접수도 가능하며 연락처는 선택이고 불필요한 신분증/원문 입력 필드는 없다. 앱 조치와 제공자·공개 영상·원본/편집/재업로드 사본 조치를 별개로 확인해야 완료로 닫는다. 직접 통제할 수 없는 기록은 제한 사유를 안내한다. 처리 상태 화면이 실제 외부 삭제를 수행했다고 주장하지 않는다.
+Profile changes invalidate old consent; processing-scope updates require a new notice version. New sessions begin without participation. Exact localized command strings and stage behavior are defined in [participation.ts](../packages/participation.ts); see [privacy implementation](privacy-implementation.md) for limits and APIs.
 
-콘텐츠 목록에는 플랫폼, 영상/사본 위치, 방송 시각과 공개 상태만 등록한다. 영상의 장기 공개를 막거나 모든 VOD를 자동 삭제하지 않는다. 해결 후 불필요한 요청 정보는 별도 삭제한다. 세션 전체 삭제가 미해결 권리행사 작업을 지우지 않는다.
+## 6. Rights and video
 
-## 7. 데이터/API 계약
+Withdrawal creates minimal follow-up work when there is display/external-processing history. Requests remain possible after a session ends. Contact details are optional; no unnecessary ID-document or raw-chat input field exists. App, provider, public video and original/edited/reuploaded copies require separate checks before completion. Notify limitations for records outside operator control. Status updates do not perform external deletion.
 
-`GET /api/admin/status`는 세션, 입력, AI 준비도, `privacy` 상태와 생성 시각을 제공한다. `GET /api/admin/privacy`는 공개 프로필/미충족 항목, 현재 참여 상태, 최소 후속 작업 및 영상 목록을 제공한다. 변경 API는 인증·로컬/Origin 검사를 적용한다. 브라우저 확인값만으로 서버 검증을 우회하지 않는다.
+The optional content list records platform, location, broadcast time and publication state. Automatic editing, per-viewer indexes and exhaustive causal tracking are not mandatory. Long-term VOD publication is not automatically prohibited or deleted. Remove resolved request data when no longer needed. Session deletion does not remove unresolved rights tasks.
 
-공개 reader/overlay는 현재 유효 세대만 투영하며 관리자 계정 목록·동의 정보·권리행사 작업을 받지 않는다. 재접속 시 허용된 현재 스냅샷으로 교체한다. 웹 저장소에 일반 채팅을 보존하지 않는다.
+## 7. Data and API contract
 
-## 8. 필수 인수 테스트
+`GET /api/admin/status` returns session, inputs, readiness, privacy state and generation time. `GET /api/admin/privacy` returns public profile/issues, current participants, minimal rights tasks and optional video inventory. Mutations enforce authentication and local/Origin boundaries; browser confirmations cannot bypass server checks.
 
-자동 검증은 [브라우저 점검](../scripts/browser-check.ts), [참여 UI 점검](../scripts/privacy-browser-check.ts), [개인정보 테스트](../tests/privacy-requirements.test.ts)를 따른다. 대시보드 첫 배치, 정상 정보 축약, 오래된 상태 차단, 키보드·모바일 제어, 원문 미노출, 실제 관측 명령 확인, 연령 차단, 앱만 완료된 요청의 종결 거부와 브라우저 오류를 확인한다. 실제 플랫폼/계약/영상 조치는 별도 운영 인수이며 자동 PASS로 대체하지 않는다.
+Reader/overlay messages are projected from current permitted consent generations. They do not receive administrative account lists, consent records or rights tasks. Reconnection replaces content with the current filtered snapshot. Ordinary chat is not saved in browser storage.
+
+## 8. Acceptance
+
+Use [browser checks](../scripts/browser-check.ts), [privacy UI checks](../scripts/privacy-browser-check.ts) and [privacy tests](../tests/privacy-requirements.test.ts). Verify first-screen placement, concise healthy status, stale-state blocking, keyboard/mobile controls, raw-text exclusion, observed-command handling, child restrictions, refusal to close app-only rights tasks and absence of browser/CSP errors. Platform contracts, real delivery and external/video actions remain operational acceptance, not synthetic PASS claims.

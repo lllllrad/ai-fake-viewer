@@ -50,6 +50,10 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await app.listen({ port, host: "127.0.0.1" });
     const page = await context.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
+    page.on("console", (message) => {
+      if (/Content.Security.Policy|invalid source/i.test(message.text()))
+        errors.push(message.text());
+    });
     await page.goto(`http://127.0.0.1:${port}/admin`);
     await page.getByLabel("Access token").fill(token);
     await page.getByRole("button", { name: "Connect", exact: true }).click();

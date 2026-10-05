@@ -1,3 +1,4 @@
+import { documentationIssues } from "./documentation-policy.ts";
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, extname, resolve } from "node:path";
@@ -83,7 +84,10 @@ function check(file: string, target: string) {
   }
 }
 for (const file of files) {
-  const text = prose(readFileSync(resolve(root, file), "utf8"));
+  const source = readFileSync(resolve(root, file), "utf8");
+  for (const issue of documentationIssues(source))
+    failures.push(`${file}: ${issue}`);
+  const text = prose(source);
   const definitions = new Map<string, string>();
   const normalize = (label: string) =>
     label.trim().replace(/\s+/g, " ").toLowerCase();
@@ -120,6 +124,6 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Checked ${files.length} Markdown files and ${checked} local links; example configuration matches the schema.`,
+    `Checked ${files.length} Markdown files and ${checked} local links, English/official terminology; example configuration matches the schema.`,
   );
 }

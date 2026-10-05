@@ -1,90 +1,94 @@
-# 개인정보·참여·철회 구현
+# Privacy, participation and withdrawal implementation
 
-2026-10-06 변경 요구 대조. 로컬 입력 자료 `02_implementation_requirements.md` v1.0에 `03_requirements_delta.md`를 우선 적용한 요구를 저장소 구현과 운영 절차로 옮긴 문서다. 입력 자료 자체나 그 자료가 참조하는 미제공 방침/심사 문서를 공개 저장소에 복제하지 않는다. 실제 승인, 법적 처리 근거와 개별 요약의 익명성을 인증하는 문서가 아니다.
+Reconciled with the 2026-10-06 local requirements delta, which takes precedence over the earlier `02_implementation_requirements.md` v1.0. Private input files and unavailable policy/review documents are not reproduced in the public repository. This document does not certify actual approvals, legal bases or the anonymity of particular summaries.
 
-## 현재 운영 경계
+## Current operating boundary
 
-라이브 앱은 동의된 텍스트만 선택한 OpenAI 서비스(API 또는 ChatGPT 구독)로 처리한다. 화면·음성은 미동의 채팅의 우회 유입을 확실히 제외할 수 없어 차단한다. ChatGPT 구독 또는 API 키 방식을 명시적으로 선택한다. Groq·Jev·비공식 SOOP 어댑터나 선택하지 않은 서비스로 자동 전환하지 않는다. 데모와 독립 라이브러리의 과거 기능은 현재 운영 프로필과 구분한다.
+Live processing sends only consented text to the **Responses API**, using either an API key or **Sign in with ChatGPT** for eligible ChatGPT plan usage. Authentication/contract selection is explicit. No automatic fallback to another service, Groq, Jev or unofficial SOOP is allowed. Screen/audio remain disabled because nonparticipant chat cannot reliably be excluded from those inputs. Demo and legacy standalone libraries are separate from live operation.
 
-운영자는 `privacy`에 실제 공개 정보, 안내 버전, 국외 처리 A/B, 제공자 모델·국가·보존·하위처리·검토 근거, 영상 공개 채널·기간, 플랫폼별 수신/안내/화면 공개/AI 처리 승인을 설정한다. 승인 자료를 가진 것과 참인 값을 설정하는 것은 운영자 책임이며 소프트웨어가 확인된 것으로 추정하지 않는다. 기본값은 미확정이다. [설정 예시](../config.example.yaml)는 승인 완료 예시가 아니다.
+Operators populate `privacy` with actual public information, notice versions, overseas-processing basis A/B, provider model/countries/retention/subprocessors/evidence, video channels/periods and platform receipt/notice/publication/external-AI approvals. Software does not infer approval from configured booleans. Defaults are unconfirmed; the [example configuration](../config.example.yaml) is not an approved deployment profile.
 
-## 참여 상태와 안내
+## Participation and guidance
 
-키는 플랫폼 + 방송자 + 앱 방송 세션 + 플랫폼 사용자 ID다. 상태는 `UNCONSENTED → WAITING_CONSENT → ACTIVE`, 철회는 어느 단계든 `WITHDRAWN`, 세션 종료는 전체 초기화다. 원래 닉네임으로 식별하거나 다른 플랫폼/세션과 동의를 공유하지 않는다.
+Participation is keyed by platform, broadcaster, app stream session and original platform user ID. States are `UNCONSENTED → WAITING_CONSENT → ACTIVE`, with `WITHDRAWN` from any stage and full clearing on session end. Nicknames do not identify consent, and consent is not shared across platforms or sessions. Exact localized consent, withdrawal and status commands are defined in [participation.ts](../packages/participation.ts).
 
-첫 정확한 `!동의`는 안내 시작이다. 만 14세 이상 자기신고, 수집·이용, 송출·녹화·다시보기·편집본 공개, 국외 처리, 필요 시 제3자 제공을 각 단계에서 안내하고 실제 전달 이후 새 `!동의`로 확인한다. 현재 운영 대상은 만 14세 이상 자기신고 이용자이며 상태는 `self_declared_14_plus`다. 채팅 명령이나 플랫폼 가입을 실제 연령 검증으로 기록하지 않는다. 만 14세 미만으로 확인되거나 신고와 모순되는 정보가 있으면 운영자가 차단한다. 법정대리인 동의 확인 기능이 없어 해당 이용자의 참여는 허용하지 않으며 본인의 명령·철회·프로필 변경으로 차단을 해제하지 않는다. 이는 선택한 운영 절차이지 모든 이용자의 연령 검증을 보편적 법적 의무로 단정하는 문구가 아니다. 명령을 인용한 일반 문장은 명령이 아니다. 타임스탬프·이벤트 ID가 불확실하면 자동 승인을 하지 않으며, 관리자는 실제 관측된 새 명령만 60초 이내 확인할 수 있다. 오래된/중복 이벤트는 재활성화하지 않는다. 순서가 없는 SDK의 수동 확인 참여는 연결 끊김 후 다시 동의해야 한다.
+The first exact consent command begins guidance. Self-declared age 14+, collection/use, live/recorded/VOD/edited-video publication, overseas processing and any third-party provision are separate stages. Each must be delivered before a fresh consent command advances it. Current operation targets self-declared 14+ users, recorded as `self_declared_14_plus`. Neither a chat command nor platform membership is age verification. Known under-14 users or contradictory declarations are blocked. There is no guardian-consent verification workflow, so those users cannot participate or remove the block through their own commands, withdrawal or profile changes. This is an operating procedure, not a claim of universal legal age-verification requirements.
 
-미동의 계정의 일반 채팅은 폐기한 뒤 메모리에 안내 필요 여부만 남긴다. 공식 SOOP SDK `sendMessage(message)`로 “동의 절차를 완료하지 않은 채팅은 이 앱의 방송 화면에 표시되거나 AI 입력으로 사용되지 않는다”는 고정 안내를 자동 발송한다. 전달이 확인된 계정에는 같은 방송 세션의 후속 일반 채팅이나 관리자 재연결을 이유로 이 안내를 반복하지 않는다. 전달 실패·미확인은 기존 발송 제한 내에서 재시도할 수 있다. 안내 이력은 메모리에만 유지하므로 새 세션이나 서버 재시작 뒤에는 다시 안내할 수 있다. 시청자가 `!동의`로 참여 절차를 시작하면 각 단계의 고정 안내도 자동 발송한다. 명령 이벤트의 순서 확인 보조와 안내 발송은 별개이며, SOOP·YouTube 안내에 운영자 전달 완료 버튼은 없다.
+Quoted commands are ordinary text, not consent. Uncertain event timestamps/IDs never automatically grant consent; administrators can confirm only the exact newly observed command within 60 seconds. Old/duplicate events cannot reactivate users. Participation accepted through manual ordering assistance must be renewed after that platform connection is lost.
 
-발송 전에 계정별 간격과 전역 분당 제한을 예약하며 실패도 발송 시도로 계산한다. 기본 간격 30초·분당 2회는 제품 설정이며 SOOP가 보장한 허용량이 아니다. 승인된 실제 제한을 확인해야 한다. 여러 관리자 탭은 하나의 15초 유효 발송 작업을 공유해 중복 발송을 막는다. 1초 주기로 대기 작업을 확인하되 연결·승인 미확정이면 보내지 않는다. 미확인/실패 시 동의 단계를 진행하지 않고 제한 간격 후 다시 시도한다. 봇 자기 계정과 설정된 다른 봇은 제외하며 철회한 계정에는 자동 권유를 반복하지 않는다. 전달 확인 이후 최초 안내는 일반 채팅에 반응해 반복하지 않는다.
+Unconsented ordinary text is discarded after command/notice classification. Only notice-needed state remains in memory. SOOP sends the fixed non-display/participation introduction through the official SDK `sendMessage(message)` and automatically sends each stage after the viewer starts participation. Confirmed introductions do not repeat for later ordinary chat or admin reconnection within the same session. Failed/unconfirmed delivery may retry within limits. A new session or server restart clears notice history. SOOP and YouTube have no operator delivery-completion button; actual-command ordering assistance is a separate function.
 
-SDK 발송 메서드의 반환을 성공으로 간주하지 않는다. 개인정보가 아닌 무작위 안내 확인코드를 포함한 동일 문구가 인증된 방송자 계정의 MESSAGE로 돌아왔을 때만 현재 세션·프로필·동의 세대·단계를 재확인하고 전달 시각을 기록한다. 다른 계정의 복사 문구, 오래된 응답, 타임아웃은 단계 동의를 열지 않는다. 관리자 탭을 닫거나 연결이 끊기면 발송을 중지한다. 수신되는 모든 원문/AI 응답을 발송할 수 있는 API는 없으며 발송 내용은 서버의 고정 안내 렌더러만 정한다.
+Account intervals and global per-minute limits reserve attempts before sending and include failures. Defaults of 30 seconds/two attempts per minute are app settings, not platform-guaranteed quotas. Confirm actual permitted limits. SOOP admin tabs share a 15-second dispatch lease, preventing concurrent duplicates, and poll pending work every second. Unconfirmed delivery does not advance consent. Own/configured bot accounts and withdrawn participants do not trigger unsolicited guidance.
 
-공식 계약 근거는 [SOOP 채팅 메시지 전송](https://developers.sooplive.com/docs/chatsdk/send-message)과 [메시지 조회](https://developers.sooplive.com/docs/chatsdk/get-message)이며, 확인 범위는 [조사 기록](../research/soop-official-verification.md)에 남긴다. 실제 앱의 발송 승인과 라이브 수신 확인은 별도 운영 인수다. `!참여상태`는 관리자 참여 목록에서 확인하며 지원되지 않는 개인 메시지를 가정하지 않는다.
+SOOP method return is not delivery proof. A nonidentifying random notice code and exact fixed text must return as a MESSAGE from the authenticated broadcaster. The app rechecks session, profile, consent generation and stage before recording delivery time. Copied text from another account, old responses and timeouts cannot open the next stage. Closing/disconnecting the admin tab stops SOOP sending. No endpoint can send arbitrary raw chat or AI replies.
 
-## 원문·요약·경쟁 상태
+Official contracts: [SOOP send-message](https://developers.sooplive.com/docs/chatsdk/send-message), [get-message](https://developers.sooplive.com/docs/chatsdk/get-message). Scope is recorded in [SOOP research](../research/soop-official-verification.md). Actual app approval and live delivery require operational acceptance. Status commands expose state to the administrator; unsupported private-message capabilities are not assumed.
 
-최소 명령 판별과 동의 검사가 저장/표시/요약보다 먼저 실행된다. 원문은 메모리 SQLite에만 존재하며 공개 DTO를 만들 때 현재 동의 세대를 재검사한다. 앱에는 실제 플랫폼 닉네임과 합성 페르소나 이름을 처음부터 표시하며 임시 표시명 생성·종료 후 원래 이름 복구는 하지 않는다. 정체 공개는 출처/AI 표시만 바꾼다. 동명이인도 내부 플랫폼 사용자 ID로 동의를 구분한다. AI 입력의 별도 작성자 필드에는 계정 ID, 실제 닉네임과 동의 기록을 보내지 않고 불투명한 세션 내 화자 키만 사용한다. 본문 자체의 개인정보까지 완전히 탐지한다는 보장은 하지 않는다.
+## Raw text, summaries and races
 
-철회 시 세대를 동기적으로 무효화하고 이전 원문과 식별 가능한 파생 문맥, 대응표, 대기 초안과 캐시를 제거한다. 진행 중 요청을 취소하며 늦게 도착한 응답도 버린다. 생성·토큰 계산 직전 프로필/세대/허용 메시지를 다시 검사한다. 이미 전송된 요청이 제공자 내부에서도 취소됐다고 표시하지 않는다. 기록된 의존관계의 AI 출력은 보수적으로 제거한다.
+Command classification and consent checks run before storage, display or summarization. Raw text exists only in memory SQLite. Public DTOs recheck current consent generations. Actual platform nicknames and synthetic persona names are visible from the start: no temporary display-name generation or end-of-session name restoration. Disclosure changes origin/AI labels only. Duplicate nicknames remain distinct by platform user ID. Model author metadata contains opaque session speaker keys, not original account IDs, nicknames or consent records. This does not guarantee removal of personal information within message text itself.
 
-익명 영역은 로컬 고정 주제·분위기 범주만 허용한다. 현재 동의된 최근 실제 채팅에서 서로 다른 계정 3명 이상이 뒷받침하는 범주를 승격한다. 직접 인용, 개인 일화, 희소 사건·시간·장소, 링크·연락처, 닉네임, 원문 ID나 출처 연결표를 넣지 않는다. 이 제한은 법적 익명성 인증이 아니며 식별 우려가 있으면 관리자 초기화로 폐기한다. 철회 전에 승인된 범주는 현재 세션에서 유지하되 철회 원문으로 새 요약을 만들지 않는다. 종료 때 익명 영역도 삭제한다.
+Withdrawal synchronously invalidates consent, removes old raw text, identifiable derived context, mappings, pending drafts and caches, and cancels requests. Late responses are discarded. Profile/generation/message permission is rechecked before token counting and transmission. Already transmitted provider requests are not described as remotely canceled or erased. AI output with recorded direct or indirect dependencies is removed conservatively.
 
-## 저장 수명과 권리행사
+The anonymous area permits only fixed local topic/mood labels. Each label requires support from at least three distinct currently consented recent human accounts. No direct quotes, personal stories, rare events/times/places, links, contact details, nicknames, message IDs or provenance maps are retained there. This restriction is not legal anonymity certification; clear categories through the admin reset if identification is a concern. Categories approved before withdrawal can remain in the current session, but withdrawn text never enters a new summarization request. Session end deletes this area too.
 
-앱 Store는 `:memory:`만 사용한다. 채팅, 동의·철회, 대응표, 출연진, 반응 기록, 익명 요약, 예산, 대기 작업은 종료/재시작 후 복원되지 않는다. 디스크 transcript/JSONL 경로는 라이브에서 차단한다. 기존 채팅 DB는 읽지 않으며 업그레이드 시 운영자가 옛 DB·내보내기·백업을 식별해 정리해야 한다. [마이그레이션 절차](../README.md#storage-and-deletion) 참조.
+## Storage lifetime and rights requests
 
-권리행사 예외 저장소 `privacy.rightsDatabase`에는 계정·세션·영상 구간·필요한 API 요청 ID·선택 연락처·처리 상태만 별도로 둔다. 원문·일반 동의자 명단을 넣지 않고 AI에 보내지 않는다. 파일 권한은 소유자 전용이다. 철회 시 표시 또는 외부 요청 이력이 있으면 앱 원문 제거 후 작업을 만든다. 저장 실패 시 세션 메모리에서 재시도하고 관리자에 미저장 경고를 표시한다. 디스크 장애가 지속되는 상태에서 강제 종료하면 미저장 작업을 잃을 수 있으므로 경고를 해결한 뒤 종료한다.
+The live Store uses only `:memory:`. Chat, participation, mappings, cast, reactions, summaries, budgets and pending work do not recover after end/restart. Disk transcript/JSONL export is blocked live. Legacy chat databases are not opened; operators identify and clean old databases/exports/backups during [migration](../README.md#storage-and-deletion).
 
-상태는 접수, 대상 확인, 앱 조치 완료, 외부·영상 조치 확인 중, 완료/제한 사유 안내로 구분한다. 앱·제공자·영상·원본/편집/재업로드 사본을 각각 확인해야 완료로 닫을 수 있다. 운영자가 실조치를 수행하고 결과를 안내한 뒤 불필요해진 작업 정보를 삭제한다. 방송 종료 후에도 공개 연락처로 접수해 최소 자료로 대상을 확인한다. 추가 회원가입/신분증 필드는 없다. 영상 목록은 콘텐츠 단위이며 시청자별 영구 발언 색인이 아니다. 장기 VOD를 자동으로 전부 삭제하지 않는다.
+The separate `privacy.rightsDatabase` contains only minimal account/session/video scope, relevant provider request IDs, optional contact and handling status. It excludes raw chat/general participant lists and is never model input. File access is owner-only. Withdrawal creates follow-up work after local raw deletion when publication or external requests occurred. Failed persistence retries from session memory with an unsaved-task warning. Forced shutdown during persistent disk failure can lose unsaved work; resolve that warning before shutdown.
 
-서버 HTTP 본문 로깅은 꺼져 있고 브라우저는 원문을 localStorage/IndexedDB로 저장하지 않는다. 인공 테스트만 보고서/스크린샷으로 남긴다. 실행 래퍼는 core dump를 끄지만 OS 자동 덤프·스왑·백업 정책은 [개발환경](development.md) 절차로 따로 확인한다. 메모리 해제가 포렌식 소거를 보장하지 않는다.
+States distinguish intake, identification, app completion, pending external/video work and completed/limited outcomes. App, provider, video and original/edited/reuploaded copies must be checked independently before closure. Operators perform actual actions, notify outcomes and remove unnecessary resolved records. Post-session intake remains available through public contact with minimal identifying information; no additional registration or ID-document field is required. Optional content inventory is not a permanent per-viewer statement index. Long-term VODs are not automatically deleted.
 
-## API와 코드 소유 범위
+HTTP body logging is disabled; browser localStorage/IndexedDB does not retain ordinary chat. Reports/screenshots use synthetic input. The wrapper disables ordinary core dumps; OS dumps, swap and backups require separate [host review](development.md). Memory release is not a forensic-erasure guarantee.
 
-| 경계                 | 코드 / 관리자 API                                                                                                                                    |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 프로필과 변경 무효화 | [privacy-profile.ts](../packages/privacy-profile.ts), `GET /api/admin/privacy`, `PUT /api/admin/privacy/profile`                                     |
-| 실제 명령/연령/안내  | [participation.ts](../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`       |
-| 원문/투영/익명 영역  | [storage.ts](../packages/storage.ts), 기존 요약 초기화·숨김·세션 종료 API                                                                            |
-| 외부 전송 재검사     | [app.ts](../apps/server/app.ts), [model.ts](../packages/model.ts), [scheduler.ts](../packages/scheduler.ts)                                          |
-| 최소 후속 작업       | [rights.ts](../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos` |
-| 운영 화면            | [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx)                                                                                               |
+## APIs and ownership
 
-프로필 PUT은 현재 프로세스에만 적용한다. 영속 변경은 YAML을 편집한다. 프로필의 중요 변경은 기존 동의를 승계하지 않고 입력·생성을 중지하고 원문을 제거한다. 권리행사 DB 경로 변경에는 재시작이 필요하다. 모든 관리자 API는 기존 인증·로컬 관리자/Origin 경계를 적용한다.
+| Boundary                           | Code / admin API                                                                                                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Profile and invalidation           | [privacy-profile.ts](../packages/privacy-profile.ts), `GET /api/admin/privacy`, `PUT /api/admin/privacy/profile`                                                                     |
+| Commands, age and delivery         | [participation.ts](../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`; manual delivery only where supported |
+| Projection, raw text and summaries | [storage.ts](../packages/storage.ts), summary reset/hide/session-close APIs                                                                                                          |
+| Pre-send authorization             | [app.ts](../apps/server/app.ts), [model.ts](../packages/model.ts), [scheduler.ts](../packages/scheduler.ts)                                                                          |
+| Minimal follow-up                  | [rights.ts](../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`                                 |
+| Admin UI                           | [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx)                                                                                                                               |
 
-## 인수 테스트와 운영에서 확인할 항목
+Profile PUT applies only to the current process; persistent changes belong in YAML. Important changes stop inputs/generation, invalidate old consent and remove raw context. Rights database path changes require restart. Administrator APIs enforce authentication and local/Origin boundaries.
 
-자동 검증은 [privacy-requirements.test.ts](../tests/privacy-requirements.test.ts), 기존 동의/페르소나/스케줄러 통합 테스트와 [브라우저 점검](../scripts/privacy-browser-check.ts)에 있다. 결과 숫자는 [검증 기록](../VERIFICATION_REPORT.md)에 남긴다.
+## Acceptance and operational checks
 
-| 인수 ID | 구현·검증 범위                                                                     | 별도 운영 확인                             |
-| ------- | ---------------------------------------------------------------------------------- | ------------------------------------------ |
-| T01–04  | 기본 거부, 정확한 명령, 안내 실패/단계, 완료 후 메시지                             | 실제 안내 전달과 플랫폼 이벤트 순서        |
-| T05–08  | 계정/플랫폼/방송/세션 격리, 오래된 명령, 철회 후 새 세대                           | 실제 SDK 재연결 이벤트 계약                |
-| T09–12  | 기존 철회 취소/늦은 응답/파생 출력/스냅샷 테스트, API 단계 간 재검사               | 이미 전달된 요청의 제공자 조치             |
-| T13–15  | 고정 범주, 출처 없는 승인 요약 유지, 원문 제거, 외부 요약 없음                     | 방송 맥락과 결합한 식별 가능성             |
-| T16     | 강제 메모리 Store, 종료·새 세션 초기화, 복구 금지                                  | 호스트 강제 종료/서비스 배포               |
-| T17     | 로깅 비활성, 브라우저 저장소 점검, synthetic 산출물, 세션 종료/재시작 후 복구 금지 | 실제 호스트 swap/덤프/백업과 SDK 운영 로그 |
-| T18–20  | 영상/음성/타 제공자 차단, 모델·endpoint 고정, 미확정 프로필 차단                   | 실제 계정 지역/모델/보존 조건              |
-| T21–22  | 자동 고정 안내·SDK echo, 봇 제외, 시도 제한/실패, 연령 단계·차단                   | 실제 플랫폼 허용량과 연령 모순 대응        |
-| T23–24  | 최소 작업 영속성, 앱/외부/영상/사본 분리, 완료 조건, 영상 목록                     | 실제 편집·제공자 요청·결과 통지            |
-| T25–26  | 프로필 변경 무효화, 미설정 설치 기본 차단                                          | 새 운영자의 실제 승인·공개 안내            |
+Automated scope is in [privacy requirements tests](../tests/privacy-requirements.test.ts), consent/persona/scheduler tests and [browser checks](../scripts/privacy-browser-check.ts). Dated results belong in [VERIFICATION_REPORT](../VERIFICATION_REPORT.md).
 
-실제 SOOP 앱 승인·허용 발송량, 최종 공개 방침·안내의 국가/기간, 최소 비동의 처리 근거, 연령 대응, OpenAI 계정 설정 및 영상 권리행사 담당 절차는 이 저장소에 제공되지 않았다. 기본 차단을 해제하기 전에 실제 값과 근거를 확인해야 한다. `store:false`와 지역 설정의 범위는 [OpenAI 공식 데이터 안내](https://developers.openai.com/api/docs/guides/your-data)를 근거로 검토하되, 코드의 boolean을 실제 제공자 설정 검증으로 오인하지 않는다.
+| Acceptance IDs | Implementation/fixture scope                                                                                  | Separate operational review                     |
+| -------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| T01–04         | Default denial, exact commands, failed/staged delivery, post-consent messages                                 | Actual notice delivery/event ordering           |
+| T05–08         | Account/platform/broadcast/session isolation, stale commands, renewed generations                             | SDK reconnect contracts                         |
+| T09–12         | Withdrawal cancellation, late responses, derived output/snapshots, between-request checks                     | Already transmitted provider requests           |
+| T13–15         | Fixed categories without provenance, retained approved summaries, raw removal, no external summarization      | Identification risk in actual broadcast context |
+| T16            | Forced memory Store, end/new-session clearing, no recovery                                                    | Host shutdown/deployment                        |
+| T17            | Logging disabled, browser storage checks, synthetic artifacts, no session recovery                            | Host swap/dumps/backups and SDK logs            |
+| T18–20         | Alternative-input/service restrictions, pinned endpoint/model, incomplete-profile denial                      | Actual account region/model/retention           |
+| T21–22         | Automatic fixed notices and acknowledgements, bot exclusion, attempt limits/failures, age declarations/blocks | Platform quotas and child-handling procedure    |
+| T23–24         | Minimal durable follow-up, independent app/external/video/copy completion, optional content list              | Actual editing/provider requests/notification   |
+| T25–26         | Profile-change invalidation and unconfigured-install denial                                                   | Real approvals/public notices                   |
 
-## ChatGPT 구독 지원 변경
+Actual platform approval/quotas, final notices with countries/periods, the basis for minimal nonparticipant processing, child handling, provider account settings and video-rights responsibilities are deployment prerequisites, not supplied approvals. Review [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data); `store:false` and local booleans do not prove actual account settings or provider retention.
 
-사용자의 추가 요구에 따라 기존 AI-01의 API 전용 범위를 API/ChatGPT 구독의 명시적 선택으로 확장했다. `ai.provider`와 `privacy.processing.provider`를 일치시키고, 구독은 `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1`, 실제 선택한 모델을 기록한다. API 키와 OPENAI_MODEL은 구독 준비 조건이 아니다. 관리자에서 공식 ChatGPT 로그인과 계정 모델 선택을 사용한다. Codex CLI 토큰을 읽거나 CLI를 실행하는 기능은 아니다. 실제 구독의 국가·보존·공유 설정과 안내를 확인해야 하며 API 계약 확인을 자동 승계하지 않는다. 모든 원문/철회/메모리/영상 입력 제한은 유지하고 토큰 갱신 후 전송 직전에도 재검사한다.
+## Sign in with ChatGPT
 
-## 변경 요구 적용 범위
+The previous API-key-only scope was extended to explicit API-key or **Sign in with ChatGPT** authentication for the **Responses API**. Match `ai.provider` and `privacy.processing.provider`. For `chatgpt_subscription`, retain the exact configuration value `contract: ChatGPT subscription`, endpoint `https://api.openai.com/v1` and the selected model slug. `OPENAI_API_KEY` / `OPENAI_MODEL` are not prerequisites for this mode. Use the app's account connection and model selector; no Codex CLI token import or execution is involved.
 
-- 영상 공개 검토는 실제 YouTube·CHZZK·SOOP의 송출/녹화/다시보기/편집본 공개 범위와 기간을 대상으로 한다. 미확정 Google 표 B나 API와 동일한 법적 관계라는 가정을 일괄 차단 조건으로 사용하지 않는다. 필요한 제공·국외 처리 안내와 실제 채널 승인은 계속 확인한다. 화면·음성 AI 입력 차단은 별개로, 비참여 원문 우회 유입을 배제할 수 없다는 현재 입력 경로의 제약이다.
-- 영상 자동 편집, 사용자별 영상 색인, 모든 출력의 완전한 인과관계 추적은 필수 개발 범위가 아니다. 기존 콘텐츠 목록은 운영 보조이며 권리행사 접수와 앱/외부/영상 조치 구분을 유지한다. 원문 재사용을 막는 내부 취소·세대 검사는 유지한다.
-- 공개 문안에 내부 큐·세대·취소 알고리즘을 의무적으로 기재하지 않는다. 이 문서는 내부 구현 명세이며 최종 공개 방침 문안 자체는 제공되지 않았다. 일반 인수는 저장 금지, 삭제 후 재표시/재전송 방지, 세션 종료·재시작 후 복구 금지를 검사한다. 모든 하드웨어 잔존의 포렌식 소거는 공개 보증이나 성공 기준이 아니며 OS 보호조치는 내부 운영 검토로 구분한다.
-- 국가·기간·처리 항목 변경은 안내문 버전을 함께 갱신하고 재동의한다. 실행 중 프로필 수정은 처리 범위가 바뀌었는데 `noticeVersion`이 같으면 거부한다. 외부 링크의 문서 내용이 바뀌었다고 앱 동의 범위를 자동 확대하지 않는다. 코드의 프로필 변경 무효화는 유지한다.
+Review actual ChatGPT plan usage countries, retention, sharing settings and notices independently of API-key billing conditions. Raw-text/withdrawal/memory/media guards apply to both modes. Authorization is rechecked after asynchronous token refresh immediately before transmission. See the [official integration](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
 
-## YouTube 자동 안내
+## Requirements delta scope
 
-YouTube는 서버 OAuth로 방송자 채널을 연결하고 공식 `liveChatMessages.insert`로 같은 고정 참여 안내를 발송한다. 미동의 본문·닉네임·AI 응답을 발송하지 않는다. API가 반환한 발송 메시지 ID·채팅·작성자·문구를 확인한 뒤 전달을 기록하며, 긴 안내는 나눠 보내고 전체 확인 전에는 단계 동의를 열지 않는다. 각 조각/실패 시도를 기존 계정·전체 발송 제한에 포함한다. 이미 전달한 최초 안내는 같은 세션의 일반 채팅으로 다시 예약하지 않는다. 관리자 탭은 열어 둘 필요가 없지만 서버 수신기가 실행 중이어야 한다.
+- Publication review covers actual YouTube/CHZZK/SOOP live, recording, VOD and edited-copy scope/periods. An unconfirmed Google table B or assumed API-equivalent legal relationship is not a blanket video blocker. Required provision/overseas notices and actual channel approvals remain. Screen/audio inference restrictions separately reflect the current inability to exclude nonparticipant input.
+- Automatic video editing, per-viewer indexes and exhaustive causal tracking are not mandatory. Existing content inventory is optional operational support. Rights intake and app/external/video distinctions remain, as do internal cancellation/generation guards against raw-text reuse.
+- Public policy wording need not disclose internal queues, generation numbers, cancellation algorithms or every editing method. This is an internal implementation document; final public policy copy was not supplied. Acceptance checks non-persistence, no redisplay/retransmission after deletion and no session recovery. Forensic removal of every hardware remnant is neither a public guarantee nor a success criterion. Host protections remain internal operational review.
+- Country, retention and processing-item changes require updated notice text/version and renewed consent. Runtime scope changes with an unchanged `noticeVersion` are rejected. Updating an external document link never automatically expands consent.
 
-토큰 갱신 후 전송 직전에 동의 세대·프로필·발송 대상과 연결 계정을 재검사한다. 다른 채널 계정, 철회, 연결 중지, 실패/미확인 응답은 동의를 진행하지 않는다. YouTube 수동 전달 완료 API/UI는 차단한다. 원문이 아닌 운영자 OAuth 자격증명만 암호화 파일에 저장한다. 설정·재시도·실제 인수 경계는 [YouTube 운영 절차](../LIVE_SETUP.md#youtube-oauth-and-automatic-notices)를 따른다.
+## YouTube automatic notices
+
+YouTube uses server OAuth to connect the broadcaster's channel and the official YouTube Live Streaming API `liveChatMessages.insert` for fixed participation guidance. It never sends unconsented bodies, nicknames or AI replies. Validate returned message ID, chat, author and exact text; split long notices and require all parts before opening the consent stage. Each part/failure consumes account/global limits. Confirmed introductions do not repeat for ordinary chat in the same session. The server receiver must run, but the admin tab need not stay open.
+
+After token refresh and before sending, recheck consent generation, profile, target and connected channel. Account mismatch, withdrawal, stop and failed/unconfirmed responses do not advance consent. YouTube manual delivery completion is blocked in API/UI. Only operator OAuth credentials are encrypted on disk; viewer participation remains memory-only. See [YouTube setup and acceptance](../LIVE_SETUP.md#youtube-oauth-and-automatic-notices).

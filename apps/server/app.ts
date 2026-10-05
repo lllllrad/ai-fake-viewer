@@ -376,7 +376,7 @@ export async function createApp(
       .header("X-Content-Type-Options", "nosniff")
       .header(
         "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' https://static.sooplive.com; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://openapi.sooplive.com wss://chat-*.sooplive.com:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+        "default-src 'self'; script-src 'self' https://static.sooplive.com; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://openapi.sooplive.com wss://*.sooplive.com:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
     const requestPath = req.url.split("?", 1)[0];
     const isYoutubeCallback = requestPath === "/oauth/youtube/callback";
@@ -1529,12 +1529,10 @@ export async function createApp(
   });
   app.post("/api/admin/youtube/authorize", async (_req, reply) => {
     if (opts.demo || !config.youtube.enabled || !youtubeAuth.configured)
-      return reply
-        .code(409)
-        .send({
-          error:
-            "config.yaml의 youtube.enabled와 .env의 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET을 설정해 주세요.",
-        });
+      return reply.code(409).send({
+        error:
+          "config.yaml의 youtube.enabled와 .env의 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET을 설정해 주세요.",
+      });
     return { url: youtubeAuth.authorizationUrl(config.youtube.redirectUri) };
   });
   app.post("/api/admin/youtube/disconnect", async () => {

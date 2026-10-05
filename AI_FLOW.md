@@ -1,6 +1,6 @@
 # AI chat pipeline and improvement guide
 
-The live profile is consent-gated, text-only processing using explicitly selected OpenAI API or ChatGPT subscription authentication. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
+The live profile is consent-gated, text-only processing through the Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
 
 ## Runtime scope and startup
 
@@ -13,7 +13,7 @@ Legacy audio, video, Jev, persistent Store and persona authoring libraries remai
 - Every raw-message admission and public projection checks the current platform/broadcaster/session/account consent generation. General text from nonparticipants is discarded before message/event storage. Private IDs, original names and consent records are absent from model DTOs.
 - Withdrawal invalidates the generation synchronously, erases raw messages and orphan mappings, aborts work and clears queued drafts/cache/manifests. Tracked directly or indirectly dependent AI messages are removed conservatively. Late responses cannot publish. External processing already started is not described as undone.
 - Local summary creation considers currently permitted recent human chat only. It emits fixed topic/mood labels supported by at least three distinct accounts, without quotes, personal stories, links or provenance tables. Counts/regular expressions alone do not certify legal anonymity. No external summary request is made.
-- The strict live anonymous area retains categories approved before withdrawal for the rest of the current session; withdrawn text is never used to rebuild them. No account/message/source mapping is stored in that area. Session close/reset clears it. Admin **채팅 요약 초기화** clears the aggregate with a sequence cutoff and invalidates current work.
+- The strict live anonymous area retains categories approved before withdrawal for the rest of the current session; withdrawn text is never used to rebuild them. No account/message/source mapping is stored in that area. Session close/reset clears it. Admin **Reset chat summary** clears the aggregate with a sequence cutoff and invalidates current work.
 - Model request IDs are associated with participants only in memory. Withdrawal creates a separate minimal rights task if text was displayed or requests were associated. App deletion, provider handling and VOD/copy handling remain distinct.
 
 ## Runtime overview
@@ -28,7 +28,7 @@ flowchart TD
   D --> G[Persona selection and context]
   F --> G
   G --> H[Recheck profile and consent revision]
-  H --> I[Pinned OpenAI API token count and response]
+  H --> I[Responses API with selected authentication]
   I --> J[Schema and evidence checks / optional draft review]
   J --> K[Current generation check and local publication]
   W[Withdrawal / profile change] --> L[Invalidate and cancel / remove raw and derived context]
@@ -55,7 +55,7 @@ Legacy utility only. Enabling it blocks live readiness rather than transmitting 
 
 ### 5. Answer generation and inspection
 
-Both adapters check profile/model/revision, absence of live frames/transcripts and current permission for every input message before token counting and again immediately before Responses. In API-key mode token counting and Responses use the configured endpoint; subscription mode uses its supported public Responses endpoint; no silent region/provider fallback. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
+Both adapters check profile/model/revision, absence of live frames/transcripts and current permission for every input message before token counting and again immediately before the Responses API request. In API-key mode token counting and the Responses API use the configured endpoint; subscription mode uses its supported public Responses API endpoint; no silent region/provider fallback. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
 
 ### 6. AI draft review (default enabled)
 
@@ -81,6 +81,6 @@ Use [config.example.yaml](config.example.yaml), [live setup](LIVE_SETUP.md) and 
 
 `store:false` is not proof that all provider logs are erased. Actual account data controls, region/model eligibility and retention must match the notices; see [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). Local cancellation cannot retract network bytes already delivered. Host swap/crash captures and external video copies require operator review. Session end clears all ordinary app context; exceptional rights tasks and credentials have separate storage and purpose.
 
-## ChatGPT subscription without an API key
+## Sign in with ChatGPT without an API key
 
-`chatgpt_subscription` uses the app's official ChatGPT OAuth account and selected model, with no API-key/environment-model requirement. The Responses stream uses `store:false` and no tools/chaining. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.
+`chatgpt_subscription` uses the app's Sign in with ChatGPT account and selected model, with no API-key/environment-model requirement. The Responses API stream uses `store:false` and no tools/chaining. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.

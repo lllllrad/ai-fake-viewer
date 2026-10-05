@@ -39,6 +39,10 @@ const context = await browser.newContext({
 });
 context.on("page", (page) => {
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on("console", (message) => {
+    if (/Content.Security.Policy|invalid source/i.test(message.text()))
+      errors.push(message.text());
+  });
 });
 try {
   const adminPage = await context.newPage();
