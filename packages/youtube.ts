@@ -228,8 +228,10 @@ export async function runYoutube(
   }
   let transport = config.transport;
   let failures = 0;
+  status("connecting");
   while (!signal.aborted) {
-    status(failures ? "reconnecting" : "connecting");
+    // Normal polling/stream continuation does not disconnect the logical receiver.
+    if (failures) status("reconnecting");
     const key = `youtube:${store.sessionId}:${chat}:${transport}`;
     let token = store.checkpoint(key);
     try {
@@ -298,7 +300,6 @@ export async function runYoutube(
         signal.addEventListener("abort", abort, { once: true });
         try {
           for await (const b of stream) {
-            if (signal.aborted) break;
             if (signal.aborted) break;
             store.ingestBatch(
               (b.items ?? [])

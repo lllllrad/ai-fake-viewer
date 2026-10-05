@@ -4,6 +4,29 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## YouTube repeated notices and stalled consent — 2026-10-05
+
+Live notice metadata showed repeated first parts of the same three-part stage.
+The receiver marked every normal poll/stream continuation as connecting, and the
+sender discarded successful insertion acknowledgements when receive connectivity
+changed during the write. This lost delivery progress and kept consent waiting.
+
+Normal continuation now retains subscription state. New writes require a connected
+receiver, but exact successful responses remain valid across receive-state changes
+when session, account, target, consent generation and pending work still match.
+Disconnect during token refresh pauses the job without discarding confirmed parts.
+Withdrawal, explicit cancellation and target changes continue to reject stale work.
+
+Validation: `sh run-command.sh npm run check` passed documentation/schema checks,
+TypeScript/Vite and all 142 tests. Four regressions cover connection changes during
+successful writes, no repeated intro without new chat, retained multipart progress
+through token-refresh disconnect and normal REST polling status. The multipart
+regression confirms advancement only after the final part and a fresh consent
+command. Receivers were temporarily stopped to halt repeated live notices, then
+the server was restarted through `just server-restart`. A fresh viewer consent
+flow is required after restart; no operator command was submitted on a viewer's
+behalf. Live metadata inspection excluded viewer chat bodies.
+
 ## Broadcaster testing and opt-in broadcast transcription — 2026-10-05
 
 Added default-off `youtube.allowBroadcasterTesting` for testing participation with

@@ -108,7 +108,6 @@ export class YoutubeNotices {
       // OAuth refresh is asynchronous: recheck consent/session/target immediately before sending.
       const valid = () =>
         !signal.aborted &&
-        this.connected &&
         this.target === target &&
         this.job === job &&
         this.auth.channelId === target.broadcaster &&
@@ -116,6 +115,12 @@ export class YoutubeNotices {
       if (!valid()) {
         bot.failed(job.id);
         this.job = undefined;
+        return;
+      }
+      // Connectivity gates new writes, not acknowledgements of completed writes.
+      // A receive rollover during refresh must not discard already confirmed parts.
+      if (!this.connected) {
+        this.state = "waiting_connection";
         return;
       }
       const text = job.parts[job.index];
@@ -157,6 +162,8 @@ export class YoutubeNotices {
         this.job = undefined;
         return;
       }
+      // The exact successful resource proves delivery even if receipt is reconnecting.
+      // Session, target, consent, authentication and cancellation still have to match.
       const b = (await r.json()) as any;
       if (!valid()) {
         bot.failed(job.id);

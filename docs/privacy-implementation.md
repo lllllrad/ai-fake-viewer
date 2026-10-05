@@ -144,3 +144,15 @@ ordinary text and consent/withdrawal commands for testing, using the same staged
 participation rules. Numbered automatic-notice parts from that account remain
 excluded in both REST and gRPC paths, including after restart. Explicit configured
 bot exclusions still apply. See the [temporary testing runbook](../LIVE_SETUP.md#temporary-youtube-broadcaster-account-testing).
+
+## YouTube notice acknowledgements during receive continuation
+
+Normal REST polling and gRPC stream continuation preserve the receiver's subscribed
+state. A receive-state change does not invalidate an exact successful YouTube
+insertion response. Connectivity is required before sending, while response
+acceptance checks the unchanged session, target, account, consent generation and
+pending notice. Confirmed multipart progress survives a disconnect during token
+refresh; sending resumes with the next unsent part. Withdrawal, target changes and
+explicit cancellation still reject late responses. All parts must be confirmed
+before a fresh consent command advances a stage; a confirmed introduction is not
+sent again merely because the receiver reconnects or the timer ticks.

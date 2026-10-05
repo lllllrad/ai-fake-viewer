@@ -540,3 +540,107 @@ test("broadcaster test filter handles REST and gRPC messages and reserves all au
     }
   }
 });
+
+test("YouTube retains confirmed parts when receive state changes during an insertion", async (t) => {
+  const f = fixture(t, undefined, async (_url, init) => {
+    const b = JSON.parse(String(init?.body));
+    // A normal receiver rollover can happen while the independent write finishes.
+    f.sender.connected = false;
+    return Response.json({
+      id: `sent-${f.sent.length}`,
+      snippet: { ...b.snippet, authorChannelId: "fixture" },
+    });
+  });
+  f.message("!동의");
+  const person = f.p.get("youtube", "fixture", "viewer")!;
+  const parts: string[] = [];
+  for (let n = 0; n < 20 && person.deliveredAt === null; n++) {
+    f.sender.connected = true;
+    await f.sender.tick(f.signal);
+    parts.push(f.sent.at(-1)?.snippet.textMessageDetails.messageText);
+    f.message("!동의"); // Only the command after final confirmed delivery may advance.
+    if (person.stage === 1) break;
+    assert.equal(person.stage, 0);
+    f.tick();
+  }
+  assert.equal(person.stage, 1);
+  assert.equal(new Set(parts).size, parts.length);
+  assert(parts.length > 1);
+  assert(parts[0].startsWith("[안내 1/"));
+});
+
+test("YouTube confirms an intro across receive rollover and does not send it again without new chat", async (t) => {
+  const f = fixture(t, undefined, async (_url, init) => {
+    const b = JSON.parse(String(init?.body));
+    f.sender.connected = false;
+    return Response.json({
+      id: "sent",
+      snippet: { ...b.snippet, authorChannelId: "fixture" },
+    });
+  });
+  f.message("hello");
+  await f.sender.tick(f.signal);
+  assert.equal(f.p.get("youtube", "fixture", "viewer")!.introDelivered, true);
+  for (let n = 0; n < 5; n++) {
+    f.tick(60001);
+    f.sender.connected = true;
+    await f.sender.tick(f.signal);
+  }
+  assert.equal(f.sent.length, 1);
+});
+
+test("YouTube pauses during credential refresh disconnect without dropping partial progress", async (t) => {
+  let disconnect = false;
+  const f = fixture(t, async () => {
+    if (disconnect) f.sender.connected = false;
+    return "fixture-token";
+  });
+  f.message("!동의");
+  await f.sender.tick(f.signal);
+  f.tick();
+  disconnect = true;
+  await f.sender.tick(f.signal);
+  assert.equal(f.sent.length, 1);
+  f.tick();
+  disconnect = false;
+  f.sender.connected = true;
+  await f.sender.tick(f.signal);
+  assert.equal(f.sent.length, 2);
+  assert(
+    f.sent[1].snippet.textMessageDetails.messageText.startsWith("[안내 2/"),
+  );
+});
+
+test("YouTube normal REST poll continuation does not disconnect notice delivery", async (t) => {
+  const { runYoutube } = await import("../packages/youtube.ts");
+  const f = fixture(t),
+    controller = new AbortController();
+  const states: string[] = [];
+  let reads = 0;
+  t.mock.method(globalThis, "fetch", async (url: any) => {
+    if (String(url).includes("/videos?"))
+      return Response.json({
+        items: [
+          {
+            snippet: { channelId: "fixture" },
+            liveStreamingDetails: { activeLiveChatId: "live-chat" },
+          },
+        ],
+      });
+    if (++reads === 2) controller.abort();
+    return Response.json({
+      items: [],
+      nextPageToken: "next",
+      pollingIntervalMillis: 1000,
+    });
+  });
+  await runYoutube(
+    { video: "abcdefghijk", transport: "rest", restFallback: true },
+    f.store,
+    controller.signal,
+    (s) => states.push(s),
+    { access: async () => "fixture-token" },
+  );
+  assert.equal(reads, 2);
+  assert.deepEqual(states, ["connecting", "subscribed:rest", "stopped"]);
+});

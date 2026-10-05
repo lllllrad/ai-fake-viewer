@@ -131,3 +131,9 @@ aborts in-flight transcription; further captured speech is new input. Session
 end/restart also erases records. Downloaded JSONL files and provider-side records
 remain separate operator-managed copies. Video remains disabled. Set
 `privacy.audioEnabled: false` to disable this path again.
+
+When testing YouTube staged consent, wait for all numbered notice parts before
+sending the next consent command. A complete stage must not restart at part one
+without a new stage/session or a delivery failure. Ordinary receive continuation
+must not erase confirmed delivery. See the
+[YouTube acknowledgement rules](docs/privacy-implementation.md#youtube-notice-acknowledgements-during-receive-continuation).
