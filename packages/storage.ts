@@ -12,6 +12,7 @@ import {
 export class Store extends EventEmitter {
   db: DatabaseSync;
   sessionId: string;
+  readerCollisionNames = new Set<string>();
   constructor(path: string) {
     super();
     if (path !== ":memory:")
@@ -30,13 +31,36 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS transcripts(id TEXT PRIMARY KEY,session TEXT NOT NULL,captured INTEGER NOT NULL,text TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS transcripts_captured ON transcripts(captured);
  CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,session TEXT,at INTEGER,action TEXT);
- CREATE TABLE IF NOT EXISTS persona_templates(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(id,revision));
+ CREATE TABLE IF NOT EXISTS persona_templates(id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,revision));
  CREATE TABLE IF NOT EXISTS persona_versions(id TEXT PRIMARY KEY,persona_id TEXT NOT NULL,version INTEGER NOT NULL,status TEXT NOT NULL,content TEXT NOT NULL,content_hash TEXT NOT NULL,provenance TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(persona_id,version));
- CREATE TABLE IF NOT EXISTS persona_sessions(id TEXT PRIMARY KEY,source_session TEXT NOT NULL,revision INTEGER NOT NULL,brief TEXT NOT NULL,policy TEXT NOT NULL,state TEXT NOT NULL,armed INTEGER NOT NULL DEFAULT 0,control_epoch INTEGER NOT NULL DEFAULT 0,disclosure_confirmed INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,updated INTEGER NOT NULL);
- CREATE TABLE IF NOT EXISTS persona_cast(session_id TEXT NOT NULL,member_id TEXT NOT NULL,persona_id TEXT NOT NULL,version_id TEXT NOT NULL,definition_snapshot TEXT NOT NULL,definition_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL,muted INTEGER NOT NULL DEFAULT 0,epoch INTEGER NOT NULL DEFAULT 0,guessing_eligible INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(session_id,member_id));
+    CREATE TABLE IF NOT EXISTS persona_sessions(id TEXT PRIMARY KEY,source_session TEXT NOT NULL,revision INTEGER NOT NULL,brief TEXT NOT NULL,policy TEXT NOT NULL,state TEXT NOT NULL,armed INTEGER NOT NULL DEFAULT 0,control_epoch INTEGER NOT NULL DEFAULT 0,disclosure_confirmed INTEGER NOT NULL DEFAULT 0,revealed_at INTEGER,created INTEGER NOT NULL,updated INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS persona_name_denylist(session_id TEXT NOT NULL,normalized_name TEXT NOT NULL,reason TEXT,created INTEGER NOT NULL,PRIMARY KEY(session_id,normalized_name));
+ CREATE TABLE IF NOT EXISTS persona_cast(session_id TEXT NOT NULL,member_id TEXT NOT NULL,persona_id TEXT NOT NULL,version_id TEXT NOT NULL,definition_snapshot TEXT NOT NULL,definition_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL,muted INTEGER NOT NULL DEFAULT 0,attention REAL NOT NULL DEFAULT 0.5,focus_tags TEXT NOT NULL DEFAULT '[]',epoch INTEGER NOT NULL DEFAULT 0,guessing_eligible INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(session_id,member_id));
+ CREATE TABLE IF NOT EXISTS persona_presence(session_id TEXT NOT NULL,member_id TEXT NOT NULL,interval_no INTEGER NOT NULL,joined_at INTEGER NOT NULL,joined_after_seq INTEGER NOT NULL,left_at INTEGER,left_after_seq INTEGER,PRIMARY KEY(session_id,member_id,interval_no));
+ CREATE TABLE IF NOT EXISTS persona_reaction_attempts(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,member_id TEXT NOT NULL,event_ids TEXT NOT NULL,context_cutoff INTEGER NOT NULL,session_epoch INTEGER NOT NULL,member_epoch INTEGER NOT NULL,definition_hash TEXT NOT NULL,config_revision INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,model_manifest TEXT,result TEXT,public_message_id TEXT,UNIQUE(session_id,member_id,context_cutoff));
+ CREATE TABLE IF NOT EXISTS persona_publication_outbox(message_id TEXT PRIMARY KEY,attempt_id TEXT NOT NULL UNIQUE,state TEXT NOT NULL,created INTEGER NOT NULL,dispatched INTEGER,FOREIGN KEY(attempt_id) REFERENCES persona_reaction_attempts(id));
+ CREATE TABLE IF NOT EXISTS persona_operator_commands(id TEXT NOT NULL,session_id TEXT NOT NULL,operation TEXT NOT NULL,request_hash TEXT NOT NULL,result TEXT NOT NULL,status_code INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,PRIMARY KEY(session_id,operation,id));
+ CREATE TABLE IF NOT EXISTS persona_jobs(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,progress INTEGER NOT NULL,total INTEGER NOT NULL,result TEXT,error TEXT,created INTEGER NOT NULL,updated INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS persona_model_runs(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,category TEXT NOT NULL,provider TEXT NOT NULL,model TEXT,scenario TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,status TEXT,input_tokens INTEGER,output_tokens INTEGER,manifest TEXT,error_code TEXT);
  CREATE TABLE IF NOT EXISTS persona_evaluations(id TEXT NOT NULL,session_id TEXT NOT NULL,version_id TEXT NOT NULL,fixture_set TEXT NOT NULL,result TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,version_id));
+ CREATE TABLE IF NOT EXISTS persona_reviews(id TEXT PRIMARY KEY,evaluation_id TEXT NOT NULL,version_id TEXT NOT NULL,reviewer TEXT NOT NULL,decision TEXT NOT NULL,created INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS persona_audit(id INTEGER PRIMARY KEY,session_id TEXT,at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,prior_revision INTEGER,new_revision INTEGER,reason TEXT);
- PRAGMA user_version=1;`);
+ PRAGMA user_version=2;`);
+    const castColumns = (this.db.prepare("PRAGMA table_info(persona_cast)").all() as any[]).map(c=>c.name);
+    if (!castColumns.includes('attention')) this.db.exec("ALTER TABLE persona_cast ADD COLUMN attention REAL NOT NULL DEFAULT 0.5");
+    if (!castColumns.includes('focus_tags')) this.db.exec("ALTER TABLE persona_cast ADD COLUMN focus_tags TEXT NOT NULL DEFAULT '[]'");
+    const sessionColumns=(this.db.prepare("PRAGMA table_info(persona_sessions)").all() as any[]).map(c=>c.name);
+    if(!sessionColumns.includes('revealed_at')) this.db.exec("ALTER TABLE persona_sessions ADD COLUMN revealed_at INTEGER");
+    const commandColumns=(this.db.prepare("PRAGMA table_info(persona_operator_commands)").all() as any[]).map(c=>c.name);
+    if(!commandColumns.includes('status_code')) this.db.exec("ALTER TABLE persona_operator_commands ADD COLUMN status_code INTEGER NOT NULL DEFAULT 0");
+    const commandKeys=(this.db.prepare("PRAGMA table_info(persona_operator_commands)").all() as any[]).filter(c=>c.pk>0).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
+    if(commandKeys.join(',')!=='session_id,operation,id') this.db.exec("ALTER TABLE persona_operator_commands RENAME TO persona_operator_commands_old; CREATE TABLE persona_operator_commands(id TEXT NOT NULL,session_id TEXT NOT NULL,operation TEXT NOT NULL,request_hash TEXT NOT NULL,result TEXT NOT NULL,status_code INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,PRIMARY KEY(session_id,operation,id)); INSERT INTO persona_operator_commands SELECT id,session_id,operation,request_hash,result,status_code,created FROM persona_operator_commands_old; DROP TABLE persona_operator_commands_old;");
+    const templateKeys=(this.db.prepare("PRAGMA table_info(persona_templates)").all() as any[]).filter(c=>c.pk>0).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
+    if(templateKeys.join(',')!=='id,revision') this.db.exec("ALTER TABLE persona_templates RENAME TO persona_templates_old; CREATE TABLE persona_templates(id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,revision)); INSERT OR IGNORE INTO persona_templates SELECT id,revision,content,created FROM persona_templates_old; DROP TABLE persona_templates_old;");
+    this.db.prepare("DELETE FROM persona_operator_commands WHERE status_code=0 AND created<?").run(Date.now()-60*60*1000);
+    const evaluationKeys = (this.db.prepare("PRAGMA table_info(persona_evaluations)").all() as any[]).filter(c=>c.pk>0).sort((a,b)=>a.pk-b.pk).map(c=>c.name);
+    if (evaluationKeys.length===1 && evaluationKeys[0]==='id') this.db.exec("ALTER TABLE persona_evaluations RENAME TO persona_evaluations_old; CREATE TABLE persona_evaluations(id TEXT NOT NULL,session_id TEXT NOT NULL,version_id TEXT NOT NULL,fixture_set TEXT NOT NULL,result TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,version_id)); INSERT INTO persona_evaluations SELECT * FROM persona_evaluations_old; DROP TABLE persona_evaluations_old;");
+    this.db.exec("UPDATE persona_sessions SET armed=0,control_epoch=control_epoch+1,updated=unixepoch('subsec')*1000 WHERE state IN ('live','paused') AND armed<>0; UPDATE persona_reaction_attempts SET state='canceled',reason='server_restart',finished_at=unixepoch('subsec')*1000 WHERE state IN ('generating','candidate','dispatching');");
     const active = this.db
       .prepare(
         "SELECT id FROM sessions WHERE closed IS NULL ORDER BY started DESC LIMIT 1",
@@ -47,6 +71,7 @@ export class Store extends EventEmitter {
       this.db
         .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
         .run(this.sessionId, Date.now());
+    if(this.originsRevealed()) this.readerCollisionNames=this.collisionNameSet();
   }
   transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
@@ -131,6 +156,10 @@ export class Store extends EventEmitter {
           .run(checkpoint.key, checkpoint.value);
     });
     for (const seq of seqs) this.emit("event", this.publicEvent(seq));
+    if(seqs.length&&this.originsRevealed()){
+      const colliding=this.collisionNameSet();const fresh=[...colliding].some(name=>!this.readerCollisionNames.has(name));
+      this.readerCollisionNames=colliding;if(fresh)this.emit('reset');
+    }
     return seqs;
   }
   publicMessage(id: string): PublicMessage | null {
@@ -159,7 +188,7 @@ export class Store extends EventEmitter {
     let payload = JSON.parse(e.payload);
     let type = e.type;
     if (type.startsWith("message.")) {
-      payload = this.publicMessage(e.target);
+      payload = type === 'message.added' || type === 'message.updated' ? this.publicMessage(e.target) : { id: e.target };
       if (!payload) {
         type = "message.hidden";
         payload = { id: e.target };
@@ -200,6 +229,7 @@ export class Store extends EventEmitter {
       )
       .get(this.sessionId);
   }
+  private collisionNameSet(){const names=this.db.prepare('SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id WHERE m.session=? AND m.hidden=0').all(this.sessionId) as any[];const counts=new Map<string,number>();for(const row of names){const key=row.name.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{Cf}\p{P}]/gu,'');counts.set(key,(counts.get(key)??0)+1);}return new Set([...counts].filter(([,count])=>count>1).map(([key])=>key));}
   readerMessage(
     message: PublicMessage,
     revealed = this.originsRevealed(),
@@ -211,7 +241,13 @@ export class Store extends EventEmitter {
           ? message.displayName.replace(/\s*·\s*experiment\s*$/i, "").trim() ||
             "시청자"
           : message.displayName;
-    if (revealed) return { ...message, displayName };
+    if (revealed) {
+      const normalized=displayName.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{Cf}\p{P}]/gu,'');
+      const names=this.db.prepare('SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id WHERE m.session=? AND m.hidden=0').all(message.sessionId) as any[];
+      const collisions=names.filter(a=>a.name.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{Cf}\p{P}]/gu,'')===normalized);
+      const rendered=collisions.length>1?`${displayName} · ${message.actorId.slice(0,4)}`:displayName;
+      return { ...message, displayName:rendered };
+    }
     return {
       ...message,
       displayName: `시청자-${message.actorId.slice(0, 8)}`,
@@ -234,6 +270,7 @@ export class Store extends EventEmitter {
         ...event,
         payload: this.readerMessage(event.payload as PublicMessage),
       };
+    if(event.type.startsWith('message.')) return {...event,payload:{id:(event.payload as any)?.id}};
     return event;
   }
   lastSeq() {
@@ -313,11 +350,20 @@ export class Store extends EventEmitter {
           a.source === "experiment" ? "system_generated" : "platform_received",
       })),
     );
+    this.readerCollisionNames=this.collisionNameSet();
     this.emit("event", this.publicEvent(seq));
     this.emit("reset");
   }
+  revealPersonaIdentities(personaSessionId:string) {
+    const rows=this.db.prepare("SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id JOIN persona_cast c ON c.session_id=? AND a.author=('persona-'||c.member_id) WHERE a.session=? AND m.hidden=0 AND m.platform='experiment'").all(personaSessionId,this.sessionId) as any[];
+    const seq=this.event('identity.revealed',null,rows.map(a=>({actorId:a.id,displayName:a.name,kind:'system_generated'})));
+    this.readerCollisionNames=this.collisionNameSet();
+    this.emit('event',this.publicEvent(seq));this.emit('reset');return rows.length;
+  }
   closeSession() {
     if (this.closed()) return;
+    this.db.prepare("UPDATE persona_sessions SET state='ended',armed=0,control_epoch=control_epoch+1,revision=revision+1,updated=? WHERE source_session=? AND state IN ('live','paused')").run(Date.now(),this.sessionId);
+    this.db.prepare("UPDATE persona_reaction_attempts SET state='canceled',reason='source_session_closed',finished_at=? WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND state IN ('generating','candidate','dispatching')").run(Date.now(),this.sessionId);
     this.db
       .prepare("UPDATE sessions SET closed=? WHERE id=?")
       .run(Date.now(), this.sessionId);
@@ -339,10 +385,20 @@ export class Store extends EventEmitter {
         .get(before) &&
       !this.db
         .prepare("SELECT 1 FROM transcripts WHERE captured<? LIMIT 1")
-        .get(before)
+        .get(before) &&
+      !this.db.prepare("SELECT 1 FROM persona_sessions WHERE source_session IN (SELECT id FROM sessions WHERE closed<?) OR (state IN ('ended','archived') AND updated<?) LIMIT 1").get(before,before) &&
+      !this.db.prepare('SELECT 1 FROM persona_audit WHERE at<? LIMIT 1').get(Date.now()-90*86400000) &&
+      !this.db.prepare('SELECT 1 FROM persona_model_runs WHERE started_at<? LIMIT 1').get(Date.now()-90*86400000)
     )
       return;
     this.transaction(() => {
+      this.db.prepare("DELETE FROM persona_publication_outbox WHERE attempt_id IN (SELECT id FROM persona_reaction_attempts WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=? ) AND started_at<?)").run(this.sessionId,before);
+      this.db.prepare("DELETE FROM persona_reaction_attempts WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND started_at<?").run(this.sessionId,before);
+      this.db.prepare("UPDATE persona_reaction_attempts SET result=NULL WHERE finished_at<?").run(Date.now()-24*60*60*1000);
+      const expiredPersonaSessions=this.db.prepare("SELECT id FROM persona_sessions WHERE source_session IN (SELECT id FROM sessions WHERE closed<?) OR (state IN ('ended','archived') AND updated<?)").all(before,before) as any[];
+      for(const personaSession of expiredPersonaSessions){this.db.prepare('DELETE FROM persona_publication_outbox WHERE attempt_id IN (SELECT id FROM persona_reaction_attempts WHERE session_id=?)').run(personaSession.id);this.db.prepare('DELETE FROM persona_reaction_attempts WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_presence WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_cast WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_name_denylist WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_evaluations WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_reviews WHERE evaluation_id IN (SELECT id FROM persona_jobs WHERE session_id=?)').run(personaSession.id);this.db.prepare('DELETE FROM persona_model_runs WHERE job_id IN (SELECT id FROM persona_jobs WHERE session_id=?)').run(personaSession.id);this.db.prepare('DELETE FROM persona_jobs WHERE session_id=?').run(personaSession.id);this.db.prepare('DELETE FROM persona_audit WHERE session_id=?').run(personaSession.id);this.db.prepare("DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id')=?").run(personaSession.id);this.db.prepare('DELETE FROM persona_sessions WHERE id=?').run(personaSession.id);}
+      this.db.prepare('DELETE FROM persona_audit WHERE at<?').run(Date.now()-90*86400000);
+      this.db.prepare('DELETE FROM persona_model_runs WHERE started_at<?').run(Date.now()-90*86400000);
       this.db.prepare("DELETE FROM events WHERE at<?").run(before);
       this.db.prepare("DELETE FROM messages WHERE received<?").run(before);
       this.db.prepare("DELETE FROM transcripts WHERE captured<?").run(before);
@@ -363,7 +419,7 @@ export class Store extends EventEmitter {
   }
   deleteAll() {
     this.db.exec(
-      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM sessions;",
+      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions;",
     );
     this.sessionId = randomUUID();
     this.db
@@ -458,5 +514,65 @@ export class Store extends EventEmitter {
   }
   close() {
     this.db.close();
+  }
+  personaRuntime() {
+    const s = this.db.prepare("SELECT * FROM persona_sessions WHERE source_session=? AND state='live' ORDER BY created DESC LIMIT 1").get(this.sessionId) as any;
+    if (!s) return null;
+    const members = this.db.prepare("SELECT * FROM persona_cast WHERE session_id=? AND status='present' AND muted=0 ORDER BY rowid").all(s.id) as any[];
+    return { id: s.id, revision: s.revision, armed: !!s.armed, controlEpoch: s.control_epoch, configRevision: s.revision, policy: JSON.parse(s.policy), brief: JSON.parse(s.brief), members: members.map(m=>{const last=this.db.prepare("SELECT MAX(m.received) at FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND a.author=? AND m.hidden=0").get(this.sessionId,`persona-${m.member_id}`) as any;const recent=this.db.prepare("SELECT a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform='experiment' AND m.hidden=0 ORDER BY m.seq DESC LIMIT 5").all(this.sessionId) as any[];let consecutive=0;for(const x of recent){if(x.author!==`persona-${m.member_id}`)break;consecutive++;}return { id:m.member_id, personaId:m.persona_id, versionId:m.version_id, snapshot:JSON.parse(m.definition_snapshot), hash:m.definition_hash, displayName:m.display_name, epoch:m.epoch, attention:m.attention, focusTags:JSON.parse(m.focus_tags), guessingEligible:!!m.guessing_eligible, lastPublishedAt:last.at??null, consecutiveMessages:consecutive, presence:this.db.prepare('SELECT * FROM persona_presence WHERE session_id=? AND member_id=? ORDER BY interval_no').all(s.id,m.member_id) as any[] };}) };
+  }
+  personaCanPublish(sessionId:string, memberId:string, sessionEpoch:number, memberEpoch:number, attemptId:string) {
+    try{return this.transaction(()=>{
+      const s=this.db.prepare('SELECT * FROM persona_sessions WHERE id=?').get(sessionId) as any;
+      const m=this.db.prepare('SELECT * FROM persona_cast WHERE session_id=? AND member_id=?').get(sessionId,memberId) as any;
+      const a=this.db.prepare('SELECT * FROM persona_reaction_attempts WHERE id=?').get(attemptId) as any;
+      if(!s||!m||!a||s.source_session!==this.sessionId||s.state!=='live'||!s.armed||s.control_epoch!==sessionEpoch||m.status!=='present'||m.muted||m.epoch!==memberEpoch||a.state!=='candidate') return false;
+      const policy=JSON.parse(s.policy),now=Date.now(),windowMs=policy.rolling_window_ms??60000;
+      const upstream=Number((this.db.prepare("SELECT COUNT(*) n FROM messages WHERE session=? AND platform<>'experiment' AND hidden=0 AND received>=?").get(this.sessionId,now-windowMs) as any).n);
+      const synthetic=Number((this.db.prepare("SELECT COUNT(*) n FROM messages WHERE session=? AND platform='experiment' AND hidden=0 AND received>=?").get(this.sessionId,now-windowMs) as any).n);
+      const band=(policy.upstream_activity_bands??[]).find((b:any)=>upstream>=b.min_messages&&(b.max_messages===null||upstream<=b.max_messages));
+      const cap=Math.min(policy.global_hard_cap_messages_per_window??6,band?.ai_cap_messages_per_window??6);
+      const reservations=Number((this.db.prepare("SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND state IN ('generating','candidate','dispatching') AND started_at>=?").get(sessionId,now-windowMs) as any).n);
+      if(synthetic+reservations>cap) return false;
+      const gap=policy.minimum_global_gap_ms??5000;
+      if(Number((this.db.prepare("SELECT COUNT(*) n FROM messages WHERE session=? AND platform='experiment' AND received>=?").get(this.sessionId,now-gap) as any).n)>0) return false;
+      const memberCooldown=policy.persona_cooldown_ms??30000;
+      if(Number((this.db.prepare("SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND member_id=? AND state='published' AND finished_at>=?").get(sessionId,memberId,now-memberCooldown) as any).n)>0) return false;
+      const inflight=Number((this.db.prepare("SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND state IN ('generating','candidate','dispatching')").get(sessionId) as any).n);
+      if(inflight>(policy.max_inflight_per_session??2)) return false;
+      const consecutiveLimit=policy.max_consecutive_messages_from_one_persona??2;
+      const latest=this.db.prepare("SELECT a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform='experiment' AND m.hidden=0 ORDER BY m.seq DESC LIMIT ?").all(this.sessionId,consecutiveLimit) as any[];
+      if(latest.length>=consecutiveLimit&&latest.every(x=>x.author===`persona-${memberId}`)) return false;
+      for(const sourceId of JSON.parse(a.event_ids) as string[]){
+        const message=this.db.prepare('SELECT 1 FROM messages WHERE id=? AND session=? AND hidden=0').get(sourceId,this.sessionId);
+        const transcript=this.db.prepare('SELECT 1 FROM transcripts WHERE id=? AND session=?').get(sourceId,this.sessionId);
+        if(!message&&!transcript) return false;
+      }
+      const proposed=JSON.parse(a.result??'null')?.text as string|undefined;
+      if(proposed){const normalized=proposed.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{Cf}\p{P}]/gu,'');if([...normalized].length>=12){const prior=this.db.prepare("SELECT m.text FROM messages m JOIN actors_private p ON p.id=m.actor WHERE m.session=? AND p.author LIKE 'persona-%' AND m.hidden=0 AND m.received>=?").all(this.sessionId,now-120000) as any[];if(prior.some(x=>x.text.normalize('NFKC').toLocaleLowerCase().replace(/[\s\p{Cf}\p{P}]/gu,'')===normalized))return false;}}
+      this.db.prepare("UPDATE persona_reaction_attempts SET state='dispatching' WHERE id=? AND state='candidate'").run(attemptId);
+      return true;
+    });}catch{return false;}
+  }
+  beginPersonaAttempt(input:{id:string;sessionId:string;memberId:string;eventIds:string[];cutoff:number;sessionEpoch:number;memberEpoch:number;definitionHash:string;configRevision:number}) {
+    this.db.prepare("INSERT INTO persona_reaction_attempts(id,session_id,member_id,event_ids,context_cutoff,session_epoch,member_epoch,definition_hash,config_revision,state,started_at) VALUES(?,?,?,?,?,?,?,?,?,'generating',?)").run(input.id,input.sessionId,input.memberId,JSON.stringify(input.eventIds),input.cutoff,input.sessionEpoch,input.memberEpoch,input.definitionHash,input.configRevision,Date.now());
+  }
+  finishPersonaAttempt(id:string,state:'skipped'|'suppressed'|'expired'|'canceled'|'failed'|'candidate'|'published',reason:string|null,result:unknown=null,manifest:unknown=null) {
+    this.db.prepare('UPDATE persona_reaction_attempts SET state=?,reason=?,result=?,model_manifest=COALESCE(?,model_manifest),finished_at=? WHERE id=? AND state NOT IN (\'published\',\'skipped\',\'suppressed\',\'expired\',\'canceled\',\'failed\')').run(state,reason,result===null?null:JSON.stringify(result),manifest===null?null:JSON.stringify(manifest),Date.now(),id);
+  }
+  publishPersona(input:{attemptId:string;memberId:string;name:string;text:string;replyToId:string|null}) {
+    try{return this.transaction(()=>{
+      const attempt=this.db.prepare("SELECT * FROM persona_reaction_attempts WHERE id=? AND state='dispatching'").get(input.attemptId) as any;
+      const s=attempt?this.db.prepare('SELECT * FROM persona_sessions WHERE id=?').get(attempt.session_id) as any:null;
+      const member=attempt?this.db.prepare('SELECT * FROM persona_cast WHERE session_id=? AND member_id=?').get(attempt.session_id,input.memberId) as any:null;
+      if(!attempt||!s||!member||s.source_session!==this.sessionId||s.state!=='live'||!s.armed||s.control_epoch!==attempt.session_epoch||member.status!=='present'||member.muted||member.epoch!==attempt.member_epoch||member.definition_hash!==attempt.definition_hash)return null;
+      const author=`persona-${input.memberId}`;let actor=(this.db.prepare('SELECT id FROM actors_private WHERE session=? AND source=? AND author=?').get(this.sessionId,'experiment',author) as any)?.id as string|undefined;
+      if(!actor){actor=randomUUID();this.db.prepare("INSERT INTO actors_private(id,session,source,author,name) VALUES(?,?,?,?,?)").run(actor,this.sessionId,'experiment',author,input.name);}
+      const id=randomUUID(),now=Date.now();const seq=Number(this.db.prepare("INSERT INTO events(session,type,target,at,payload) VALUES(?,'message.added',?,?,?)").run(this.sessionId,id,now,JSON.stringify({})).lastInsertRowid);
+      this.db.prepare('INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,hidden,seq) VALUES(?,?,?,?,?,?,?,?,?,?,0,?)').run(id,this.sessionId,actor,'experiment',this.sessionId,input.attemptId,now,now,input.text,input.replyToId,seq);
+      this.db.prepare("INSERT OR IGNORE INTO persona_publication_outbox(message_id,attempt_id,state,created,dispatched) VALUES(?,?,'dispatched',?,?)").run(id,input.attemptId,now,now);
+      this.db.prepare("UPDATE persona_reaction_attempts SET state='published',finished_at=?,public_message_id=? WHERE id=? AND state='dispatching'").run(now,id,input.attemptId);
+      this.emit('event',this.publicEvent(seq));return id;
+    });}catch{return null;}
   }
 }

@@ -33,6 +33,20 @@ export type Model = (
   input: ModelInput,
   signal: AbortSignal,
 ) => Promise<ModelResult>;
+export function limitModelConcurrency(model:Model, maximum=2):Model {
+  let active=0;const queue:Array<{resolve:(release:()=>void)=>void;reject:(reason:unknown)=>void;signal:AbortSignal;abort:()=>void}> = [];
+  const releaseOne=()=>{
+    while(queue.length){const next=queue.shift()!;next.signal.removeEventListener('abort',next.abort);if(next.signal.aborted)continue;next.resolve(makeRelease());return;}
+    active=Math.max(0,active-1);
+  };
+  const makeRelease=()=>{let released=false;return()=>{if(released)return;released=true;releaseOne();};};
+  const acquire=(signal:AbortSignal)=>{
+    signal.throwIfAborted();
+    if(active<maximum){active++;return Promise.resolve(makeRelease());}
+    return new Promise<()=>void>((resolve,reject)=>{const waiter={resolve,reject,signal,abort:()=>{const i=queue.indexOf(waiter);if(i>=0)queue.splice(i,1);reject(signal.reason);}};queue.push(waiter);signal.addEventListener('abort',waiter.abort,{once:true});});
+  };
+  return async(input,signal)=>{const release=await acquire(signal);try{signal.throwIfAborted();return await model(input,signal);}finally{release();}};
+}
 export function validateDecision(raw: unknown, input: ModelInput) {
   const d = decisionSchema.parse(raw);
   const messages = new Set(input.messages.map((m) => m.id)),

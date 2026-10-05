@@ -24,6 +24,8 @@ export const briefSchema = z.object({
   candidate_count: z.number().int().min(1).max(24).default(12), cast_size: z.number().int().min(1).max(12).default(6), game_mode: z.boolean().default(true),
 }).strict().refine(b => b.cast_size <= b.candidate_count, 'Cast exceeds candidates');
 export type Brief = z.infer<typeof briefSchema>;
+export const templateSchema=z.object({template_id:z.string().trim().min(1).max(80),revision:z.number().int().positive(),behavior_family:text,permitted_variation:strings.min(1),disallowed_combinations:strings,examples:z.array(z.object({situation:text,response:text}).strict()).max(12)}).strict();
+export type PersonaTemplate=z.infer<typeof templateSchema>;
 export function planningBrief(b: Brief) {
   return { topic: b.topic, audience_intent: b.audience_intent, public_context: b.public_context, language: b.language, tone_policy: b.tone_policy };
 }

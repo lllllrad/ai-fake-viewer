@@ -20,6 +20,7 @@ import { Supervisor } from "../../packages/supervisor.ts";
 import { PersonaService } from "../../packages/persona/service.ts";
 import { chatgptPersonaGenerator, demoPersonaGenerator, openaiPersonaGenerator } from "../../packages/persona/generator.ts";
 import { hash as canonicalHash } from "../../packages/persona/contracts.ts";
+import { PersonaError } from "../../packages/persona/contracts.ts";
 export function equal(a: unknown, b: string) {
   return (
     typeof a === "string" &&
@@ -182,6 +183,7 @@ export async function createApp(
   });
   app.setErrorHandler((e, req, reply) => {
     const validation = e instanceof z.ZodError;
+    if(e instanceof PersonaError)return reply.code(e.statusCode).send({error:{code:e.code,message:e.message,retryable:e.retryable}});
     reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
       error: validation
         ? "Invalid request fields"
@@ -238,6 +240,7 @@ export async function createApp(
   app.post("/api/admin/persona/sessions", async (req) => personas.createBrief(req.body));
   app.get("/api/admin/persona/templates", async () => ({ templates: personas.templates() }));
   app.post("/api/admin/persona/templates", async (req) => personas.createTemplate(req.body));
+  app.post("/api/admin/persona/sessions/:id/nickname-denylist", async (req) => {const body=z.object({name:z.string().trim().min(1).max(60),reason:z.string().trim().min(1).max(200)}).strict().parse(req.body);return personas.denyNickname(z.string().uuid().parse((req.params as any).id),body.name,body.reason);});
   app.get("/api/admin/persona/sessions/:id", async (req) => personas.getSession(z.string().uuid().parse((req.params as any).id)));
   app.post("/api/admin/persona/sessions/:id/candidates", async (req) => {
     const body = z.object({ count: z.number().int().min(1).max(24).optional() }).strict().parse(req.body ?? {});
@@ -299,6 +302,13 @@ export async function createApp(
   app.post("/api/admin/persona/sessions/:id/end", async (req) => {
     const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
     scheduler.stop("persona_ended"); return personas.end(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+  });
+  app.patch("/api/admin/persona/sessions/:id/policy", async (req) => {
+    const body=z.object({expected_revision:z.number().int().positive(),policy:z.unknown()}).strict().parse(req.body);
+    scheduler.stop("persona_policy_changed");
+    const state=personas.updatePolicy(z.string().uuid().parse((req.params as any).id),body.expected_revision,body.policy);
+    if(state.state==='live'&&state.armed){try{scheduler.start();}catch(error){scheduler.stop('preflight_failed');personas.stop(state.id,'preflight_failed');throw error;}}
+    return state;
   });
   app.patch("/api/admin/persona/sessions/:id/members/:memberId", async (req) => {
     const body=z.object({expected_member_epoch:z.number().int().nonnegative(),presence:z.enum(['present','departed']).optional(),muted:z.boolean().optional(),attention:z.number().min(0).max(1).optional(),current_focus_tags:z.array(z.string().trim().min(1).max(60)).max(20).optional()}).strict().parse(req.body);
