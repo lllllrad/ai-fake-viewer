@@ -25,6 +25,7 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
+ CREATE TABLE IF NOT EXISTS viewer_consents(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author TEXT NOT NULL,granted INTEGER NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(session,platform,channel,author));
  CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT,type TEXT,target TEXT,at INTEGER,payload TEXT);
  CREATE TABLE IF NOT EXISTS connector_checkpoints(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,session TEXT,at INTEGER,reserved REAL,input INTEGER,output INTEGER,status TEXT);
@@ -127,6 +128,14 @@ export class Store extends EventEmitter {
     if (this.originsRevealed())
       this.readerCollisionNames = this.collisionNameSet();
   }
+  grantConsent(platform: string, channel: string, author: string) {
+    if (platform === "experiment") return;
+    this.db
+      .prepare(
+        "INSERT INTO viewer_consents(session,platform,channel,author,granted,updated) VALUES(?,?,?,?,1,?) ON CONFLICT(session,platform,channel,author) DO UPDATE SET granted=1,updated=excluded.updated",
+      )
+      .run(this.sessionId, platform, channel, author, Date.now());
+  }
   transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
     try {
@@ -157,6 +166,64 @@ export class Store extends EventEmitter {
       if (this.closed()) return;
       for (const raw of items) {
         const m = incomingSchema.parse(raw);
+        const command = m.text.trim().toLocaleLowerCase();
+        if (
+          m.platform !== "experiment" &&
+          (command === "!동의" || command === "!철회")
+        ) {
+          const granted = command === "!동의";
+          this.db
+            .prepare(
+              "INSERT INTO viewer_consents(session,platform,channel,author,granted,updated) VALUES(?,?,?,?,?,?) ON CONFLICT(session,platform,channel,author) DO UPDATE SET granted=excluded.granted,updated=excluded.updated",
+            )
+            .run(
+              this.sessionId,
+              m.platform,
+              m.channel,
+              m.author,
+              granted ? 1 : 0,
+              Date.now(),
+            );
+          if (!granted) {
+            const oldMessages = this.db
+              .prepare(
+                "SELECT id FROM messages WHERE session=? AND platform=? AND channel=? AND actor IN (SELECT id FROM actors_private WHERE session=? AND source=? AND author=?) AND hidden=0",
+              )
+              .all(
+                this.sessionId,
+                m.platform,
+                m.channel,
+                this.sessionId,
+                m.platform,
+                m.author,
+              ) as any[];
+            const withdrawnSeqs = oldMessages.map((old) => {
+              this.db
+                .prepare("UPDATE messages SET hidden=1,text='' WHERE id=?")
+                .run(old.id);
+              const seq = this.event("message.hidden", old.id);
+              seqs.push(seq);
+              return seq;
+            });
+            for (const seq of withdrawnSeqs)
+              this.emit("event", this.publicEvent(seq));
+          }
+          this.audit(
+            granted ? "viewer.consent.granted" : "viewer.consent.withdrawn",
+          );
+          continue;
+        }
+        if (
+          m.platform !== "experiment" &&
+          !(
+            this.db
+              .prepare(
+                "SELECT granted FROM viewer_consents WHERE session=? AND platform=? AND channel=? AND author=?",
+              )
+              .get(this.sessionId, m.platform, m.channel, m.author) as any
+          )?.granted
+        )
+          continue;
         let a = this.db
           .prepare(
             "SELECT * FROM actors_private WHERE session=? AND source=? AND author=?",
@@ -629,7 +696,7 @@ export class Store extends EventEmitter {
   }
   deleteAll() {
     this.db.exec(
-      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running';",
+      "DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running';",
     );
     this.sessionId = randomUUID();
     this.db

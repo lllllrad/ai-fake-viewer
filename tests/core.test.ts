@@ -29,10 +29,14 @@ const msg = (extra: Partial<Incoming> = {}): Incoming => ({
 });
 const fixture = (name: string) =>
   JSON.parse(readFileSync(`fixtures/${name}.json`, "utf8"));
+const consent = (s: Store, m: Incoming = msg()) =>
+  s.grantConsent(m.platform, m.channel, m.author);
 test("A01–A04: account identity, repeated content, ID deduplication and mutation", () => {
   const s = new Store(":memory:");
-  for (const platform of ["youtube", "chzzk", "soop"] as const)
+  for (const platform of ["youtube", "chzzk", "soop"] as const) {
+    consent(s, msg({ platform }));
     s.ingestBatch([msg({ platform })]);
+  }
   assert.equal(new Set(s.snapshot().messages.map((m) => m!.actorId)).size, 3);
   s.ingestBatch([msg({ sourceId: "a" }), msg({ sourceId: "b" })]);
   assert.equal(s.snapshot().messages.length, 5);
@@ -41,6 +45,42 @@ test("A01–A04: account identity, repeated content, ID deduplication and mutati
   s.ingestBatch([msg({ sourceId: "a", text: "updated" })]);
   assert.equal(s.snapshot().messages.length, 5);
   assert.equal(s.snapshot().messages[3]!.text, "updated");
+  s.close();
+});
+test("viewer chat is private until per-stream platform identity consents, and withdrawal retracts it", () => {
+  const s = new Store(":memory:");
+  const privateMessage = msg({
+    sourceId: "before",
+    text: "private before consent",
+  });
+  s.ingestBatch([privateMessage]);
+  assert.equal(s.snapshot().messages.length, 0);
+  assert.equal(s.context(["youtube"]).length, 0);
+  s.ingestBatch([{ ...privateMessage, text: "!동의", sourceId: "consent" }]);
+  assert.equal(s.snapshot().messages.length, 0);
+  s.ingestBatch([msg({ sourceId: "visible", text: "consented message" })]);
+  assert.equal(s.snapshot().messages.length, 1);
+  const withdrawn = s.ingestBatch([
+    msg({ sourceId: "withdraw", text: "!철회" }),
+  ]);
+  assert.equal(withdrawn.length, 1);
+  assert.equal(s.snapshot().messages.length, 0);
+  assert.equal(s.context(["youtube"]).length, 0);
+  s.ingestBatch([msg({ sourceId: "after", text: "private after withdrawal" })]);
+  assert.equal(s.snapshot().messages.length, 0);
+  assert.equal(
+    JSON.stringify(s.replay(0)).includes("private after withdrawal"),
+    false,
+  );
+  s.ingestBatch([
+    msg({
+      platform: "chzzk",
+      channel: "c",
+      sourceId: "other",
+      text: "separate identity",
+    }),
+  ]);
+  assert.equal(s.snapshot().messages.length, 0);
   s.close();
 });
 test("AI desired running state survives a database-backed server restart", () => {
@@ -62,6 +102,7 @@ test("A05–A06: committed cursor, rollback, replay and hidden content never res
     assert.equal(s.checkpoint("cursor"), "next");
     events.push(e);
   });
+  consent(s);
   s.ingestBatch([msg({ sourceId: "a" })], { key: "cursor", value: "next" });
   assert.equal(events.length, 1);
   assert.throws(() =>
@@ -83,6 +124,7 @@ test("A05–A06: committed cursor, rollback, replay and hidden content never res
 });
 test("A12: public DTO excludes private account, source IDs and model metadata", () => {
   const s = new Store(":memory:");
+  consent(s, msg({ author: "PRIVATE_ACCOUNT" }));
   s.ingestBatch([
     msg({ author: "PRIVATE_ACCOUNT", sourceId: "PRIVATE_MESSAGE" }),
   ]);
@@ -158,6 +200,7 @@ test("T06: CHZZK object/string parser never treats chatChannelId as message ID",
   assert.deepEqual(normalizeChzzk(c), normalizeChzzk(JSON.stringify(c)));
   assert(!("sourceId" in normalizeChzzk(c)));
   const s = new Store(":memory:");
+  consent(s, normalizeChzzk(c));
   s.ingestBatch([normalizeChzzk(c), normalizeChzzk(c)]);
   assert.equal(s.snapshot().messages.length, 2);
   s.close();
@@ -238,6 +281,7 @@ test("A07: stop discards late model response and platform ingestion continues", 
         resolve = () => r(say(i));
       }),
   );
+  consent(h.s);
   const pending = h.ai.tick();
   h.ai.stop();
   h.s.ingestBatch([msg()]);
@@ -253,6 +297,7 @@ test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", asy
     calls++;
     return say(i);
   });
+  consent(h.s);
   await h.ai.tick();
   assert.equal(calls, 1);
   h.capture.add(
@@ -280,6 +325,7 @@ test("A13: call and money limits survive restart; provider failures retain reser
   const h = harness(async () => {
     throw Error("provider failed");
   });
+  consent(h.s);
   h.c.ai.maxCalls = 1;
   await h.ai.tick();
   assert.equal(h.ai.state, "model_error");
@@ -308,6 +354,9 @@ test("A17: configured platform context enters the model without raw account IDs"
     input = i;
     return say(i);
   });
+  consent(h.s);
+  consent(h.s, msg({ platform: "experiment" }));
+  consent(h.s, msg({ author: "PRIVATE" }));
   h.s.ingestBatch([
     msg({ author: "PRIVATE", text: "exclude me" }),
     msg({ platform: "experiment", text: "include me" }),

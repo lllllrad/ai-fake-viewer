@@ -69,10 +69,12 @@ export class Supervisor {
       let n = 0;
       const tick = () => {
         const p = ["youtube", "chzzk", "soop"][n % 3];
+        const author = `demo-${n % 4}`;
+        this.store.grantConsent(p, "demo-channel", author);
         this.receive(p, {
           platform: p,
           channel: "demo-channel",
-          author: `demo-${n % 4}`,
+          author,
           name: `Demo viewer ${(n % 4) + 1}`,
           text: [
             "[DEMO] 안녕하세요!",

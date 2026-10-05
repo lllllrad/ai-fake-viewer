@@ -65,6 +65,7 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
       sourceId: "human-1",
       text: "새로운 장면이네요",
     };
+    store.grantConsent(human.platform, human.channel, human.author);
     store.ingestBatch([human]);
     transcriber.transcripts.push({
       id: "speech",
@@ -136,6 +137,7 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
       "experiment",
     );
     store.newSession();
+    store.grantConsent(human.platform, human.channel, human.author);
     store.ingestBatch([human]);
     const nextSession = await connect();
     assert.equal(nextSession[0].messages[0].attribution, "mixed");

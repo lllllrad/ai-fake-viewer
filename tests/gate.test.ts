@@ -189,6 +189,8 @@ test("allowed input reaches model and unauthorized platform text stays out of Je
     { threshold: 0.95 },
   );
   try {
+    h.store.grantConsent("youtube", "channel", "private-youtube");
+    h.store.grantConsent("chzzk", "channel", "private-chzzk");
     h.store.ingestBatch([
       {
         platform: "youtube",

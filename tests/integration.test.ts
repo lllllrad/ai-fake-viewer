@@ -251,6 +251,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       ws.send(JSON.stringify({ type: "auth", token: reader, afterSeq: 0 }));
     }
     await waitFor(() => streams.every((s) => s.length === 1));
+    store.grantConsent("youtube", "fixture", "private-actor");
     store.ingestBatch([
       {
         platform: "youtube",
@@ -611,6 +612,7 @@ test("A15–A16: isolated Socket.IO 2 worker receives CHAT, stays idle and can c
     assert(!outbound.some((m) => m.startsWith("42")));
     child.kill();
     await once(child, "exit");
+    s.grantConsent("youtube", "fixture", "fixture");
     s.ingestBatch([
       {
         platform: "youtube",
