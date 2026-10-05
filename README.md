@@ -4,7 +4,7 @@ A local, read-only broadcast chat aggregator with screen-aware AI characters. Yo
 
 **For the separate Linux OBS PC and live credentials, follow [LIVE_SETUP.md](LIVE_SETUP.md) in order.** **Ready for a local demo. Live broadcasting requires your credentials, policy review, OBS setup and the live checks in [VERIFICATION_REPORT.md](VERIFICATION_REPORT.md).** SOOP's official SDK integration remains blocked pending its verified contract. No live platform or paid model call was used during development.
 
-See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow.
+See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow, and editable prompt files under [prompts/](prompts/).
 
 ## Quick start
 
