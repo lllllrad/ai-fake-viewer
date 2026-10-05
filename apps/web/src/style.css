@@ -169,6 +169,15 @@ header {
 .section-title h2 {
   margin: 0;
 }
+.persona-studio { margin-top: 22px; }
+.persona-fields, .persona-candidates { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 16px 0; }
+.persona-fields label, .persona-candidate label { display: grid; gap: 6px; color: #a9bfba; font-size: 12px; }
+.persona-fields input, .persona-fields textarea, .persona-candidate input { width: 100%; box-sizing: border-box; background: #10191b; color: #e6eeeb; border: 1px solid #3b4a4d; border-radius: 7px; padding: 10px; font: inherit; }
+.persona-fields textarea { min-height: 76px; resize: vertical; }
+.persona-candidate { border: 1px solid #334548; border-radius: 10px; padding: 14px; background: #121c1e; }
+.persona-candidate h3 { margin: 0 0 8px; }
+.persona-candidate h3 small { color: #91b8aa; font-size: 11px; font-weight: 400; }
+.persona-approval { display: flex; gap: 8px; align-items: center; margin: 14px 0; }
 .status {
   font-size: 12px;
   color: #9ebdb3;

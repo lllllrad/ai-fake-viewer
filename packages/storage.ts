@@ -30,6 +30,12 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS transcripts(id TEXT PRIMARY KEY,session TEXT NOT NULL,captured INTEGER NOT NULL,text TEXT NOT NULL);
  CREATE INDEX IF NOT EXISTS transcripts_captured ON transcripts(captured);
  CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,session TEXT,at INTEGER,action TEXT);
+ CREATE TABLE IF NOT EXISTS persona_templates(id TEXT PRIMARY KEY,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(id,revision));
+ CREATE TABLE IF NOT EXISTS persona_versions(id TEXT PRIMARY KEY,persona_id TEXT NOT NULL,version INTEGER NOT NULL,status TEXT NOT NULL,content TEXT NOT NULL,content_hash TEXT NOT NULL,provenance TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(persona_id,version));
+ CREATE TABLE IF NOT EXISTS persona_sessions(id TEXT PRIMARY KEY,source_session TEXT NOT NULL,revision INTEGER NOT NULL,brief TEXT NOT NULL,policy TEXT NOT NULL,state TEXT NOT NULL,armed INTEGER NOT NULL DEFAULT 0,control_epoch INTEGER NOT NULL DEFAULT 0,disclosure_confirmed INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,updated INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS persona_cast(session_id TEXT NOT NULL,member_id TEXT NOT NULL,persona_id TEXT NOT NULL,version_id TEXT NOT NULL,definition_snapshot TEXT NOT NULL,definition_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL,muted INTEGER NOT NULL DEFAULT 0,epoch INTEGER NOT NULL DEFAULT 0,guessing_eligible INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(session_id,member_id));
+ CREATE TABLE IF NOT EXISTS persona_evaluations(id TEXT NOT NULL,session_id TEXT NOT NULL,version_id TEXT NOT NULL,fixture_set TEXT NOT NULL,result TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,version_id));
+ CREATE TABLE IF NOT EXISTS persona_audit(id INTEGER PRIMARY KEY,session_id TEXT,at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,prior_revision INTEGER,new_revision INTEGER,reason TEXT);
  PRAGMA user_version=1;`);
     const active = this.db
       .prepare(

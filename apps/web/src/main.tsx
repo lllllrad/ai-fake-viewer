@@ -415,6 +415,10 @@ function Admin() {
   const [chatgptModels, setChatgptModels] = useState<
     { slug: string; name: string }[]
   >([]);
+  const [personaBrief, setPersonaBrief] = useState({ session_title: "", topic: "", audience_intent: "엔터테인먼트", public_context: "", private_production_context: "", language: "ko-KR", tone_policy: "모욕, 사칭, 개인정보 추측 금지", cast_mode: "fresh", candidate_count: 12, cast_size: 6, game_mode: true });
+  const [personaSession, setPersonaSession] = useState<any>();
+  const [personaCandidates, setPersonaCandidates] = useState<any[]>([]);
+  const [personaAudition, setPersonaAudition] = useState<any>();
   const api = async (path: string, method = "GET") => {
     const r = await fetch(`/api/admin/${path}`, {
       method,
@@ -435,6 +439,17 @@ function Admin() {
     });
     if (!r.ok) throw Error((await r.json()).error);
     return r.json();
+  };
+  const loadPersona = async (id: string) => {
+    const s = await (await api(`persona/sessions/${id}`)).json();
+    setPersonaSession(s);
+    setPersonaCandidates(await (await api(`persona/sessions/${id}/candidates`)).json());
+  };
+  const personaAction = async (fn: () => Promise<void>) => {
+    setBusy(true); setError("");
+    try { await fn(); await refresh(); }
+    catch (e: any) { setError(e.message); }
+    finally { setBusy(false); }
   };
   const loadChatgptModels = async () => {
     try {
@@ -577,6 +592,39 @@ function Admin() {
         <p>Loading…</p>
       ) : (
         <>
+          <section className="card persona-studio">
+            <div className="section-title"><h2>Persona studio · P0</h2><span>세션별 새 출연진 · 로컬 오버레이 전용</span></div>
+            {!personaSession ? <>
+              <div className="persona-fields">
+                <label>방송 제목<input value={personaBrief.session_title} onChange={e=>setPersonaBrief({...personaBrief,session_title:e.target.value})} /></label>
+                <label>주제<input value={personaBrief.topic} onChange={e=>setPersonaBrief({...personaBrief,topic:e.target.value})} /></label>
+                <label>시청 경험 의도<input value={personaBrief.audience_intent} onChange={e=>setPersonaBrief({...personaBrief,audience_intent:e.target.value})} /></label>
+                <label>공개 맥락<textarea value={personaBrief.public_context} onChange={e=>setPersonaBrief({...personaBrief,public_context:e.target.value})} /></label>
+                <label>비공개 제작 참고<textarea value={personaBrief.private_production_context} onChange={e=>setPersonaBrief({...personaBrief,private_production_context:e.target.value})} /></label>
+                <label>후보 수<input type="number" min={1} max={24} value={personaBrief.candidate_count} onChange={e=>setPersonaBrief({...personaBrief,candidate_count:Number(e.target.value)})} /></label>
+                <label>선정 인원<input type="number" min={1} max={12} value={personaBrief.cast_size} onChange={e=>setPersonaBrief({...personaBrief,cast_size:Number(e.target.value)})} /></label>
+              </div>
+              <p className="hint">비공개 제작 참고는 후보 생성·오디션·실시간 모델 입력에서 제외됩니다. audience disclosure를 확인한 뒤 출연진을 동결해야 합니다.</p>
+              <button disabled={busy || !personaBrief.session_title || !personaBrief.topic} onClick={()=>void personaAction(async()=>{ const s=await post("persona/sessions",personaBrief); setPersonaSession(s); const generated=await post(`persona/sessions/${s.id}/candidates`,{}); setPersonaCandidates(generated.candidates); })}>브리프 저장 및 행동 슬롯 초안 생성</button>
+            </> : <>
+              <p><strong>{personaSession.brief.session_title}</strong> · {personaSession.state} · revision {personaSession.revision} · {personaSession.armed ? "AI armed" : "AI disarmed"}</p>
+              {personaSession.state === "draft" && <>
+                <div className="persona-candidates">{personaCandidates.map((v:any)=><article className="persona-candidate" key={v.id}>
+                  <h3>{v.definition.display_name_suggestion} <small>{v.status}</small></h3><p>{v.definition.core.viewing_motive}</p><p><b>관심:</b> {v.definition.core.interests.join(", ")} · <b>관찰:</b> {v.definition.core.observation_focus.join(", ")}</p><p><b>침묵:</b> {v.definition.participation.stay_silent_when.join(", ")}</p>
+                  {personaAudition?.candidates?.find((x:any)=>x.version_id===v.id) && <div className="hint">12개 공통 시나리오: 운영자가 각 장면의 출력과 전송/건너뛰기를 검토합니다. 결정 검사 {personaAudition.candidates.find((x:any)=>x.version_id===v.id).deterministic.passed ? "통과" : "실패"}</div>}
+                  <label>검토 점수 (일관성 / 차별성 / 자연스러움 / 관련성 각각 1–5)<input data-score={v.id} placeholder="4,4,4,4" /></label>
+                </article>)}</div>
+                <button disabled={busy || personaCandidates.length===0} onClick={()=>void personaAction(async()=>setPersonaAudition(await post(`persona/sessions/${personaSession.id}/auditions`,{version_ids:personaCandidates.map((v:any)=>v.id)})))}>공통 오디션 시나리오 실행</button>
+                <button disabled={busy || !personaAudition} onClick={()=>void personaAction(async()=>{ for(const v of personaCandidates){ const input=document.querySelector(`[data-score="${v.id}"]`) as HTMLInputElement; const scores=(input?.value||"").split(",").map(Number); if(scores.length!==4||scores.some(x=>!Number.isInteger(x)||x<1||x>5)) continue; await post(`persona/versions/${v.id}/approve`,{hash:v.hash,evaluation_id:personaAudition.id,reviewer_decision:{approved:true,coherence:scores[0],distinction:scores[1],naturalness:scores[2],relevance:scores[3]}}); } await loadPersona(personaSession.id); })}>기준 충족 후보 승인</button>
+                <label className="persona-approval"><input type="checkbox" id="persona-disclosure" /> 시청자에게 합성 참여자가 포함됨을 알렸습니다.</label>
+                <button disabled={busy || personaCandidates.filter((v:any)=>v.status==="approved").length<personaSession.brief.cast_size} onClick={()=>void personaAction(async()=>{ const selected=personaCandidates.filter((v:any)=>v.status==="approved").slice(0,personaSession.brief.cast_size); const cast=await fetch(`/api/admin/persona/sessions/${personaSession.id}/cast`,{method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({expected_revision:personaSession.revision,members:selected.map((v:any)=>({version_id:v.id}))})});if(!cast.ok)throw Error((await cast.json()).error);const frozen=await post(`persona/sessions/${personaSession.id}/freeze`,{expected_revision:personaSession.revision+1,disclosure_confirmed:(document.querySelector("#persona-disclosure") as HTMLInputElement).checked});setPersonaSession(frozen);})}>선정 인원으로 동결</button>
+              </>}
+              {personaSession.state === "ready" && <button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/start`,{expected_revision:personaSession.revision,arm_ai:false}))) }>AI 비활성으로 라이브 세션 시작</button>}
+              {personaSession.state === "live" && <><p className="hint">Persona cast는 동결됐습니다. 이 저장소의 기존 실시간 생성기는 아직 이 cast를 사용하지 않으므로 발행은 차단되어 있습니다.</p><button className="stop" disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/ai/stop`,{reason:"operator_stop"}))) }>AI 긴급 정지</button><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/pause`,{expected_revision:personaSession.revision}))) }>세션 일시정지</button><button className="danger" disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/end`,{expected_revision:personaSession.revision}))) }>세션 종료</button></>}
+              {personaSession.state === "paused" && <><button disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/resume`,{expected_revision:personaSession.revision}))) }>세션 재개 (AI 비활성)</button><button className="danger" disabled={busy} onClick={()=>void personaAction(async()=>setPersonaSession(await post(`persona/sessions/${personaSession.id}/end`,{expected_revision:personaSession.revision}))) }>세션 종료</button></>}
+              <button className="secondary" disabled={busy} onClick={()=>void personaAction(async()=>{setPersonaSession(undefined);setPersonaCandidates([]);setPersonaAudition(undefined);})}>새 브리프</button>
+            </>}
+          </section>
           {status.demo && (
             <aside className="demo">
               DEMO SESSION · Artificial platform messages, generated test frames

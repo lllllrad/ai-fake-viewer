@@ -17,6 +17,7 @@ import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
+import { PersonaService } from "../../packages/persona/service.ts";
 export function equal(a: unknown, b: string) {
   return (
     typeof a === "string" &&
@@ -46,6 +47,7 @@ export async function createApp(
     throw Error("Generate independent credentials using npm run setup");
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   const store = new Store(config.database);
+  const personas = new PersonaService(store);
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(
     config.audio,
@@ -207,6 +209,56 @@ export async function createApp(
       `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=0`,
     );
     return { ok: true };
+  });
+
+  // P0 persona authoring and session control. These routes are operator-only;
+  // public stream projections continue to use the existing allowlisted schema.
+  app.post("/api/admin/persona/sessions", async (req) => personas.createBrief(req.body));
+  app.get("/api/admin/persona/sessions/:id", async (req) => personas.getSession(z.string().uuid().parse((req.params as any).id)));
+  app.post("/api/admin/persona/sessions/:id/candidates", async (req) => {
+    const body = z.object({ count: z.number().int().min(1).max(24).optional() }).strict().parse(req.body ?? {});
+    return personas.createCandidates(z.string().uuid().parse((req.params as any).id), body.count);
+  });
+  app.get("/api/admin/persona/sessions/:id/candidates", async (req) => personas.listCandidates(z.string().uuid().parse((req.params as any).id)));
+  app.post("/api/admin/persona/sessions/:id/auditions", async (req) => {
+    const body = z.object({ version_ids: z.array(z.string().uuid()).min(1).max(24) }).strict().parse(req.body);
+    return personas.audition(z.string().uuid().parse((req.params as any).id), body.version_ids);
+  });
+  app.post("/api/admin/persona/versions/:id/approve", async (req) => {
+    const body = z.object({ hash: z.string().length(64), evaluation_id: z.string().uuid(), reviewer_decision: z.unknown() }).strict().parse(req.body);
+    return personas.approve(z.string().uuid().parse((req.params as any).id), body);
+  });
+  app.put("/api/admin/persona/sessions/:id/cast", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive(), members: z.array(z.object({ version_id: z.string().uuid(), display_name: z.string().trim().min(1).max(60).optional() }).strict()) }).strict().parse(req.body);
+    return personas.putCast(z.string().uuid().parse((req.params as any).id), body.expected_revision, body.members);
+  });
+  app.post("/api/admin/persona/sessions/:id/freeze", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive(), disclosure_confirmed: z.literal(true), policy: z.unknown().optional() }).strict().parse(req.body);
+    return personas.freeze(z.string().uuid().parse((req.params as any).id), body.expected_revision, body.disclosure_confirmed, body.policy);
+  });
+  app.post("/api/admin/persona/sessions/:id/start", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive(), arm_ai: z.boolean() }).strict().parse(req.body);
+    return personas.start(z.string().uuid().parse((req.params as any).id), body.expected_revision, body.arm_ai);
+  });
+  app.post("/api/admin/persona/sessions/:id/ai/stop", async (req) => {
+    const body = z.object({ reason: z.string().trim().min(1).max(200).optional() }).strict().parse(req.body ?? {});
+    return personas.stop(z.string().uuid().parse((req.params as any).id), body.reason);
+  });
+  app.post("/api/admin/persona/sessions/:id/ai/arm", async (req) => {
+    const body = z.object({ expected_control_epoch: z.number().int().nonnegative() }).strict().parse(req.body);
+    return personas.arm(z.string().uuid().parse((req.params as any).id), body.expected_control_epoch);
+  });
+  app.post("/api/admin/persona/sessions/:id/pause", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
+    return personas.pause(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+  });
+  app.post("/api/admin/persona/sessions/:id/resume", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
+    return personas.resume(z.string().uuid().parse((req.params as any).id), body.expected_revision);
+  });
+  app.post("/api/admin/persona/sessions/:id/end", async (req) => {
+    const body = z.object({ expected_revision: z.number().int().positive() }).strict().parse(req.body);
+    return personas.end(z.string().uuid().parse((req.params as any).id), body.expected_revision);
   });
 
   app.get("/stream", { websocket: true }, (socket, req) => {
