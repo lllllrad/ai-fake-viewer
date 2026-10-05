@@ -123,7 +123,6 @@ export async function createApp(
     if (opts.demo) return [];
     const missing: string[] = [];
     if (
-      !config.capture.programConfirmed ||
       !config.capture.masks.length ||
       !capture.confirmed ||
       !capture.latest() ||
@@ -944,7 +943,6 @@ export async function createApp(
       lastFrameAt: capture.latest()?.capturedAt ?? null,
       dimensions: capture.dimensions,
       lastError: capture.lastError,
-      programConfirmed: config.capture.programConfirmed,
       ffmpeg: config.capture.ffmpeg,
       backend: config.capture.backend,
       device: config.capture.backend === "rtmp" ? "" : config.capture.device,
@@ -1535,7 +1533,6 @@ export async function createApp(
       return false;
     try {
       if (!capture.confirmed) {
-        if (!config.capture.programConfirmed) return false;
         capture.confirm();
       }
     } catch {

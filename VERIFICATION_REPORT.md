@@ -4,6 +4,12 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Capture without a configuration acknowledgement — 2026-10-05
+
+- Removed the `programConfirmed` startup/readiness/recovery gate and its admin warning. The schema accepts legacy boolean values for compatibility and discards them; new configuration examples omit the field. Actual input settings, fresh-frame checks and runtime mask confirmation remain in use.
+- `sh run-command.sh npm run check`: PASS, build/documentation/config checks and **65 tests**. Controlled FFmpeg fixtures verify real capture startup and masked output with the legacy key omitted, false and true. A live-mode control fixture verifies readiness, manual start and saved-intent recovery without the key, and refusal to recover stale video. Provider calls are mocked.
+- `sh run-command.sh npm run test:browser`: PASS with no page errors. Changed-file formatting and whitespace checks pass. No physical OBS or live provider test was performed.
+
 ## Development command launcher — 2026-10-05
 
 - Added `run-command.sh`, root `AGENTS.md` and [development instructions](docs/development.md) so repository tools and browser checks can reuse mise and the existing temporary Linux library/font bundle without manual environment prefixes.

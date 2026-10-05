@@ -53,7 +53,6 @@ capture:
   device: OBS Virtual Camera
   url: "PASTE_PRIVATE_APP_READ_URL_HERE"
   intervalMs: 3000
-  programConfirmed: true
   masks:
     - x: 0.70
       y: 0.0
@@ -61,7 +60,7 @@ capture:
       height: 1.0
 ```
 
-The example blacks out the rightmost 30% of the source frame. In `ai.visualMode: on_request`, capture keeps only a short masked local frame buffer; the AI provider receives an image only after the model explicitly requests `inspect`. Change or add normalized rectangles to cover every on-screen chat area and private region in every scene; do not assume the example fits your layout. `programConfirmed: true` records your physical Program-source check, while **Confirm masked Program** in admin is a separate runtime preview approval. Stop AI and review the mask again after changing scenes or composition. Use the runtime capture controls to stop or start capture; there is no `capture.enabled` setting. The RTMP server being online alone does not produce frames.
+The example blacks out the rightmost 30% of the source frame. In `ai.visualMode: on_request`, capture keeps only a short masked local frame buffer; the AI provider receives an image only after the model explicitly requests `inspect`. Change or add normalized rectangles to cover every on-screen chat area and private region in every scene; do not assume the example fits your layout. Capture starts directly from the configured input; no `programConfirmed` flag is needed. Old values are accepted and ignored. Inspect the preview and use **Confirm masked Program** in admin for runtime approval. Stop AI and review the mask again after changing scenes or composition. Use the runtime capture controls to stop or start capture; there is no `capture.enabled` setting. The RTMP server being online alone does not produce frames.
 
 ## 3. Enable automatic Groq Whisper transcription
 

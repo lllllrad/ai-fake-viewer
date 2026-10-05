@@ -1719,9 +1719,6 @@ function Admin() {
                   {status.capture.confirmed
                     ? "Preview confirmed"
                     : "Review required"}
-                  {status.capture.programConfirmed
-                    ? " · Program source configured"
-                    : " · config.yaml Program confirmation missing"}
                 </p>
                 {status.capture.lastError && (
                   <p className="error" role="status">

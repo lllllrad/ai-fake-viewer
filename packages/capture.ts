@@ -67,12 +67,6 @@ export class Capture {
       this.timer = setInterval(() => void tick(), 3000);
       return;
     }
-    if (!this.config.programConfirmed) {
-      this.state = "config_required";
-      this.lastError =
-        "Set capture.programConfirmed: true after verifying OBS Program output.";
-      return;
-    }
     this.lastError = "";
     this.state = "connecting";
     this.child = fork(new URL("../workers/capture.mjs", import.meta.url), [], {

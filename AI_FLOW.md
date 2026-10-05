@@ -6,7 +6,7 @@ This is the implementation reference for understanding and improving the chat pi
 
 This page describes the shared response pipeline. [Persona studio](docs/ai-viewer-persona-system-spec.md) adds authoring, approved cast snapshots, presence-limited context, weighted selection, session controls and publication checks. Without an active live persona session, YAML `ai.personas` supplies the characters. Candidate generation uses a separate prompt in `packages/persona/generator.ts`; it does not use `prompts/answer.md`. Auditions use the shared answer model with twelve text fixtures. Authoring usage is not a unified part of the live scheduler budget.
 
-The production entry point starts configured receivers, capture and transcription for an open stream session. On restart it may restore persisted AI running intent or an armed persona session after a fresh frame, capture confirmation and readiness checks. `capture.programConfirmed` can allow that runtime confirmation to be restored automatically. Stop AI before shutdown to clear the running intent. In-flight persona reactions are canceled on restart.
+The production entry point starts configured receivers, capture and transcription for an open stream session. On restart it may restore persisted AI running intent or an armed persona session after a fresh frame, capture confirmation and readiness checks. Capture no longer requires a `programConfirmed` configuration flag. During saved-intent recovery, a fresh frame and configured masks allow runtime confirmation to be restored; legacy flag values are ignored. Stop AI before shutdown to clear the running intent. In-flight persona reactions are canceled on restart.
 
 Live AI start currently requires confirmed fresh masked capture, running audio input and a ready model in **both visual modes**; platform receivers are optional. `on_request` omits images from the first inference and permits text-only ticks after start, but is not a text-only startup configuration. See `scheduler.readyCheck`, `readyComponents` and `resumeAiIfRequested` in [app.ts](apps/server/app.ts).
 
@@ -177,7 +177,7 @@ Admin `/api/admin/status` exposes scheduler state/phase, latest context counts, 
 - `budget_exhausted`, `gate_budget_exhausted`, `model_error`: AI stopped on the named failure; inspect gate/provider status and budgets before restarting.
 - `Program input · connecting` with no frame: FFmpeg started but no decodable image has arrived. Check the selected camera/backend, Program output, RTMP URL/network and FFmpeg path.
 - `failed` or `reconnecting`: capture worker failed; use the displayed exit/error detail and check OBS output/capture configuration.
-- A fresh frame is shown only if it is <=10 seconds old. Preview confirmation is separate from `capture.programConfirmed` in local configuration.
+- A fresh frame is shown only if it is <=10 seconds old. Preview confirmation is a runtime action, not a YAML acknowledgement. `capture.programConfirmed` is accepted only for compatibility and discarded during config parsing.
 
 ## Privacy and boundaries
 

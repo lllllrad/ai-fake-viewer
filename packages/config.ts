@@ -100,17 +100,18 @@ export const configSchema = z
         device: z.string().default("OBS Virtual Camera"),
         url: z.string().max(1024).default(""),
         intervalMs: z.number().int().min(1000).max(5000).default(3000),
-        programConfirmed: z.boolean().default(false),
+        // Accept old configs, but do not use this redundant acknowledgement.
+        programConfirmed: z.boolean().optional(),
         masks: z.array(rect).max(30).default([]),
       })
       .strict()
+      .transform(({ programConfirmed: _legacy, ...capture }) => capture)
       .default({
         ffmpeg: "ffmpeg",
         backend: "dshow",
         device: "OBS Virtual Camera",
         url: "",
         intervalMs: 3000,
-        programConfirmed: false,
         masks: [],
       }),
     audio: z

@@ -115,7 +115,6 @@ capture:
   backend: dshow
   device: OBS Virtual Camera
   intervalMs: 3000
-  programConfirmed: true
   masks:
     - x: 0.70
       y: 0.0
@@ -125,7 +124,7 @@ capture:
 
 The example masks the rightmost 30% of the image. Change it for your actual composition. Coordinates are normalized to the entire original image. Include **every** chat overlay (including this application's overlay), credentials and private regions in every scene. Masks are applied before resizing, administrator preview and model upload. Masked images are held only in memory: up to 10 frames / 30 seconds; each request uses at most 3 fresh frames. Images are resized to fit 1280 × 1280.
 
-Open admin, inspect the masked preview and select **Confirm masked Program**. Image upload is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. In `ai.visualMode: continuous`, ten seconds without a fresh frame pauses AI and requires a manual start. In `on_request` mode, text-only decisions can continue while unavailable video requests are skipped. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
+Capture starts from the configured camera or RTMP source without a separate `programConfirmed` setting; legacy values are accepted and ignored. Open admin, inspect the masked preview and select **Confirm masked Program**. Image upload is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. In `ai.visualMode: continuous`, ten seconds without a fresh frame pauses AI and requires a manual start. In `on_request` mode, text-only decisions can continue while unavailable video requests are skipped. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
 
 Capture failures are isolated and retried up to five times with backoff. Confirmation is cleared on failure. For a camera on the same Linux PC, select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
 
@@ -141,7 +140,6 @@ capture:
   backend: rtmp
   url: "APP_READ_URL_FROM_PRIVATE_FILE"
   intervalMs: 3000
-  programConfirmed: true
   masks:
     - x: 0.70
       y: 0.0

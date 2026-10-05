@@ -102,3 +102,76 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("live readiness and saved-intent recovery do not require programConfirmed", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "pipeline-no-confirm-flag-"));
+  const oldGroqKey = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = "fixture-only-not-a-real-key";
+  const { app, store, scheduler, capture, transcriber, resumeAiIfRequested } =
+    await createApp(
+      configSchema.parse({
+        database: ":memory:",
+        capture: { masks: [{ x: 0, y: 0, width: 0.5, height: 1 }] },
+        audio: { url: "rtmp://127.0.0.1/fixture" },
+      }),
+      {
+        startInputs: false,
+        adminToken: "a".repeat(64),
+        readerToken: "r".repeat(64),
+        encryptionKey: "e".repeat(64),
+        chatgptTokenPath: join(directory, "chatgpt.tokens"),
+        chzzkTokenPath: join(directory, "chzzk.tokens"),
+        soopTokenPath: join(directory, "soop.tokens"),
+      },
+    );
+  // Exercise real start checks without capture workers or provider requests.
+  t.mock.method(scheduler, "providerReady", () => true);
+  t.mock.method(scheduler, "tick", async () => {});
+  const headers = {
+    host: "127.0.0.1:3210",
+    authorization: `Bearer ${"a".repeat(64)}`,
+  };
+  try {
+    transcriber.state = "listening";
+    capture.add(
+      {
+        capturedAt: Date.now(),
+        width: 100,
+        height: 100,
+        bytes: Buffer.from("fixture"),
+      },
+      "obs_program",
+    );
+    let response = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/start",
+      headers,
+    });
+    assert.equal(
+      response.statusCode,
+      409,
+      "A runtime preview check is still required",
+    );
+    capture.confirm();
+    response = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/start",
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(scheduler.state, "running");
+    scheduler.stop("server_shutdown", true);
+    capture.confirmed = false;
+    assert.equal(resumeAiIfRequested(), true);
+    assert.equal(capture.confirmed, true);
+    assert.equal(store.aiDesiredRunning(), true);
+    scheduler.stop("server_shutdown", true);
+    capture.frames[0].capturedAt = Date.now() - 11000;
+    assert.equal(resumeAiIfRequested(), false, "Stale video cannot resume AI");
+  } finally {
+    await app.close();
+    if (oldGroqKey === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = oldGroqKey;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -13,7 +13,7 @@ import { configSchema } from "../packages/config.ts";
 import { runYoutube } from "../packages/youtube.ts";
 import { Store } from "../packages/storage.ts";
 import { openaiModel } from "../packages/model.ts";
-import { workerEnv } from "../packages/capture.ts";
+import { Capture, workerEnv } from "../packages/capture.ts";
 const admin = "a".repeat(64),
   reader = "r".repeat(64),
   encryptionKey = "e".repeat(64);
@@ -480,79 +480,91 @@ test("T10/A10/A19: Responses receives real image bytes, structured output and no
     else process.env.OPENAI_MODEL = oldModel;
   }
 });
-test(
-  "A17: RTMP capture worker blacks out configured ROI before emitting JPEG",
-  { skip: process.platform === "win32" },
-  async () => {
-    const dir = mkdtempSync(join(tmpdir(), "mixed-capture-"));
-    const fixture = join(dir, "fixture.jpg");
-    writeFileSync(
-      fixture,
-      await sharp({
-        create: { width: 100, height: 100, channels: 3, background: "#ffffff" },
-      })
-        .jpeg()
-        .toBuffer(),
-    );
-    const fake = join(dir, "fake-ffmpeg");
-    const argsFile = join(dir, "ffmpeg-args.json");
-    writeFileSync(
-      fake,
-      `#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(${JSON.stringify(argsFile)},JSON.stringify(process.argv.slice(2)));setTimeout(()=>process.stdout.write(fs.readFileSync(${JSON.stringify(fixture)})),20);setInterval(()=>{},1000);`,
-      { mode: 0o700 },
-    );
-    const child = fork(new URL("../workers/capture.mjs", import.meta.url), [], {
-      execArgv: [],
-      env: workerEnv(),
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
-    });
-    try {
-      const result = new Promise<any>((resolve, reject) => {
-        const timeout = setTimeout(
-          () => reject(Error("No capture frame")),
-          5000,
-        );
-        child.on("message", (m) => {
-          clearTimeout(timeout);
-          resolve(m);
-        });
-        child.on("exit", () => {
-          clearTimeout(timeout);
-          reject(Error("Capture exited"));
-        });
-      });
-      child.send({
-        type: "start",
-        config: {
+for (const legacyFlag of [undefined, false, true])
+  test(
+    `A17: capture starts and masks frames with programConfirmed=${legacyFlag}`,
+    { skip: process.platform === "win32" },
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), "mixed-capture-"));
+      const fixture = join(dir, "fixture.jpg");
+      writeFileSync(
+        fixture,
+        await sharp({
+          create: {
+            width: 100,
+            height: 100,
+            channels: 3,
+            background: "#ffffff",
+          },
+        })
+          .jpeg()
+          .toBuffer(),
+      );
+      const fake = join(dir, "fake-ffmpeg");
+      const argsFile = join(dir, "ffmpeg-args.json");
+      writeFileSync(
+        fake,
+        `#!${process.execPath}\nconst fs=require('node:fs');fs.writeFileSync(${JSON.stringify(argsFile)},JSON.stringify(process.argv.slice(2)));setTimeout(()=>process.stdout.write(fs.readFileSync(${JSON.stringify(fixture)})),20);setInterval(()=>{},1000);`,
+        { mode: 0o700 },
+      );
+      const config = configSchema.parse({
+        capture: {
           ffmpeg: fake,
           backend: "rtmp",
           url: "rtmp://127.0.0.1:1935/program",
-          intervalMs: 3000,
+          ...(legacyFlag === undefined ? {} : { programConfirmed: legacyFlag }),
           masks: [{ x: 0, y: 0, width: 0.5, height: 1 }],
         },
       });
-      const frame = await result;
-      const { data, info } = await sharp(Buffer.from(frame.bytes, "base64"))
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-      const pixel = (x: number, y: number) =>
-        data[(y * info.width + x) * info.channels];
-      assert(pixel(10, 50) < 10);
-      assert(pixel(90, 50) > 240);
-      assert.equal(frame.sourceWidth, 100);
-      const args = JSON.parse(readFileSync(argsFile, "utf8"));
-      const inputAt = args.indexOf("-i");
-      assert.deepEqual(args.slice(inputAt, inputAt + 2), [
-        "-i",
-        "rtmp://127.0.0.1:1935/program",
-      ]);
-    } finally {
-      child.send({ type: "stop" });
-      await once(child, "exit");
-      rmSync(dir, { recursive: true, force: true });
-    }
-  },
-);
+      assert.equal(Object.hasOwn(config.capture, "programConfirmed"), false);
+      const capture = new Capture(config.capture);
+      capture.start();
+      const child = capture.child;
+      assert.ok(
+        child,
+        "Capture must start without a configuration acknowledgement",
+      );
+      try {
+        const result = new Promise<any>((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(Error("No capture frame")),
+            5000,
+          );
+          child.on("message", (m) => {
+            clearTimeout(timeout);
+            resolve(m);
+          });
+          child.on("exit", () => {
+            clearTimeout(timeout);
+            reject(Error("Capture exited"));
+          });
+        });
+        const frame = await result;
+        assert.equal(capture.confirmed, false);
+        capture.confirm();
+        assert.equal(capture.confirmed, true);
+        const { data, info } = await sharp(Buffer.from(frame.bytes, "base64"))
+          .raw()
+          .toBuffer({ resolveWithObject: true });
+        const pixel = (x: number, y: number) =>
+          data[(y * info.width + x) * info.channels];
+        assert(pixel(10, 50) < 10);
+        assert(pixel(90, 50) > 240);
+        assert.equal(frame.sourceWidth, 100);
+        const args = JSON.parse(readFileSync(argsFile, "utf8"));
+        const inputAt = args.indexOf("-i");
+        assert.deepEqual(args.slice(inputAt, inputAt + 2), [
+          "-i",
+          "rtmp://127.0.0.1:1935/program",
+        ]);
+      } finally {
+        const exited = once(child, "exit");
+        capture.stop();
+        await exited;
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 test("A15–A16: isolated Socket.IO 2 worker receives CHAT, stays idle and can crash independently", async () => {
   const { WebSocketServer } = await import("ws");
   const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
