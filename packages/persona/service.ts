@@ -1,3 +1,4 @@
+import { automaticDefinitions, researchBasis } from "./automatic.ts";
 import { randomUUID } from 'node:crypto';
 import type { Store } from '../storage.ts';
 import {
@@ -32,6 +33,105 @@ export class PersonaService {
   private jobs = new Map<string, AbortController>();
   private auditionModel?: Model;
   constructor(private store: Store, private model?: Model, private config?: Config, private generator?: PersonaGenerator, private demo=false) { this.auditionModel=model?limitModelConcurrency(model,1):undefined;this.seedTemplates(); }
+  ensureAutomaticCast() {
+    const active = this.activeSessionId();
+    if (active) return this.getSession(active);
+    ensure(!this.store.closed(), "SESSION_CLOSED");
+    ensure(this.config, "CONFIG_REQUIRED");
+    return this.store.transaction(() => {
+      const topic = this.config!.ai.description.trim() || "현재 방송";
+      const session = this.createBrief({
+        session_title: "자동 시청자",
+        topic,
+        audience_intent: "서로 다른 시청 동기로 현재 방송에 참여",
+        public_context: topic,
+        private_production_context: "",
+        tone_policy:
+          "신상·과거 이력·친분을 꾸며내지 않고 관찰 근거에 따라 반응",
+        candidate_count: 6,
+        cast_size: 6,
+      });
+      const names = new Set(
+        (
+          this.db
+            .prepare("SELECT name FROM actors_private WHERE session=?")
+            .all(this.store.sessionId) as any[]
+        ).map((x) => normalizeName(x.name)),
+      );
+      const cards = automaticDefinitions(topic).map(
+        ({ definition, sources }) => {
+          while (names.has(normalizeName(definition.display_name_suggestion)))
+            definition.display_name_suggestion = `시청자${randomUUID().slice(0, 12)}`;
+          names.add(normalizeName(definition.display_name_suggestion));
+          const card = this.saveDraft(definition, {
+            session_id: session.id,
+            generator: "automatic-research-composition",
+            research_basis: researchBasis,
+            sources,
+            validation: "schema-and-unique-name",
+            human_review: false,
+          });
+          this.db
+            .prepare("UPDATE persona_versions SET status='approved' WHERE id=?")
+            .run(card.id);
+          return { version_id: card.id };
+        },
+      );
+      this.putCast(session.id, session.revision, cards);
+      // Automatic preparation has no operator approval/disclosure-confirmation step.
+      const now = Date.now(),
+        seq = this.store.lastSeq();
+      this.db
+        .prepare(
+          "UPDATE persona_sessions SET state='live',armed=0,revision=revision+1,updated=? WHERE id=?",
+        )
+        .run(now, session.id);
+      const prepared = this.getSession(session.id);
+      for (const member of prepared.cast as any[]) {
+        this.db
+          .prepare(
+            "UPDATE persona_cast SET status='present',epoch=epoch+1 WHERE session_id=? AND member_id=?",
+          )
+          .run(session.id, member.member_id);
+        this.db
+          .prepare("INSERT INTO persona_presence VALUES(?,?,?,?,?,NULL,NULL)")
+          .run(session.id, member.member_id, 1, now, seq);
+      }
+      this.db
+        .prepare(
+          "INSERT INTO persona_audit(session_id,at,actor,action,reason) VALUES(?,?,?,?,?)",
+        )
+        .run(
+          session.id,
+          now,
+          "system",
+          "cast.automatically_prepared",
+          researchBasis,
+        );
+      return this.getSession(session.id);
+    });
+  }
+  automaticSummary() {
+    const id = this.activeSessionId();
+    if (!id) return [];
+    return (
+      this.db
+        .prepare(
+          "SELECT member_id,display_name,definition_snapshot FROM persona_cast WHERE session_id=?",
+        )
+        .all(id) as any[]
+    ).map((row) => {
+      const definition = definitionSchema.parse(
+        JSON.parse(row.definition_snapshot),
+      );
+      return {
+        id: row.member_id,
+        name: row.display_name,
+        motive: definition.core.viewing_motive,
+        participation: definition.core.social_behavior,
+      };
+    });
+  }
   private get db() { return this.store.db; }
   private audit(session: string | null, action: string, old?: number, next?: number, reason?: string) {
     this.db.prepare('INSERT INTO persona_audit(session_id,at,actor,action,prior_revision,new_revision,reason) VALUES(?,?,?,?,?,?,?)').run(session, Date.now(), 'operator', action, old ?? null, next ?? null, reason ?? null);

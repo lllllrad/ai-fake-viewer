@@ -99,6 +99,10 @@ export async function createApp(
         : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     transcriber,
   );
+  scheduler.preparePersonas = () => {
+    const session = personas.ensureAutomaticCast();
+    if (!session.armed) personas.arm(session.id, session.control_epoch);
+  };
   const auth = new ChzzkAuth(
     opts.encryptionKey,
     opts.chzzkTokenPath ?? "data/chzzk.tokens",
@@ -918,6 +922,7 @@ export async function createApp(
       (connector) => connector.state === "ended",
     ),
     aiDesiredRunning: store.aiDesiredRunning(),
+    personas: personas.automaticSummary(),
     retentionDays: config.retentionDays,
     connectors: supervisor.states,
     audio: {
@@ -1114,16 +1119,6 @@ export async function createApp(
         });
     }
     scheduler.start();
-    // The global toggle also resumes an explicitly stopped live persona cast.
-    const runtime = store.personaRuntime();
-    if (runtime && !runtime.armed) {
-      try {
-        personas.arm(runtime.id, runtime.controlEpoch);
-      } catch (error) {
-        scheduler.stop("persona_arm_failed");
-        throw error;
-      }
-    }
     return { ok: true, started: true, readiness: readyComponents() };
   });
   app.post("/api/admin/pipeline/start", async () => {

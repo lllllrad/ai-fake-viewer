@@ -61,8 +61,4 @@ ai:
   outputUsdPerMillion: null
   priceCheckedAt: ""
   description: A live broadcast. React only to visible events.
-  personas:
-    - name: Orbit
-      style: Brief, curious Korean spectator.
-    - name: Pebble
-      style: Playful visual comparisons in short Korean.
+  # Viewer personas are generated automatically when AI starts; no persona list is needed.

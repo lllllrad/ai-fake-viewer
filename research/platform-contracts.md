@@ -1,6 +1,6 @@
 # Upstream contract review
 
-Historical external-document review dated 2026-10-02. This is not live-account acceptance or legal permission. Implementation decisions below describe that revision: current public messages are blinded until reveal, and viewer consent now gates storage/display/context with all supported platforms eligible after consent. The old per-platform AI-context approval configuration has been removed; see [current behavior](../README.md#persona-studio-and-viewer-consent).
+Historical external-document review dated 2026-10-02. This is not live-account acceptance or legal permission. Implementation decisions below describe that revision: current public messages are blinded until reveal, and viewer consent now gates storage/display/context with all supported platforms eligible after consent. The old per-platform AI-context approval configuration has been removed; see [current behavior](../README.md#automatic-personas-and-viewer-consent).
 
 | Area                 | Primary source                                                                                      | Implementation decision                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |

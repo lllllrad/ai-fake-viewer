@@ -4,6 +4,13 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Automatic research-informed personas — 2026-10-05
+
+- AI start and saved-intent recovery automatically prepare six synthetic viewers from the supplied local viewer research. No operator brief, candidate selection, audition or approval is required. Composition is local; actual responses still use the selected answer model. The admin studio is replaced by a read-only, collapsible cast summary.
+- `sh run-command.sh npm run check`: PASS, document/config validation, build and **69 tests**. New fixtures verify research provenance without human-review records, distinct motives, session reuse, SQLite close/reopen persistence, fresh identities in a new stream session, global-toggle activation and delivery of the generated behavioral card to the response model.
+- `sh run-command.sh npm run test:browser`: PASS, including six automatic persona cards, absence of authoring buttons, AI controls, blind public messages and explicit reveal. Chromium 153.0.8010.12; no page errors. Desktop/mobile checks remain passing.
+- No live provider calls or new audience research were performed. Naturalness of real model output is not established by these deterministic fixtures. The six-motive composition and independently sampled voices are product design choices, not measured population frequencies or copies of research participants. Legacy authoring APIs remain available but are not required by the normal UI.
+
 ## Removal of mask confirmation — 2026-10-05
 
 - Removed mask-confirmation UI text/buttons, `Capture.confirm()` / `confirmed`, the confirmation endpoint and mask-presence gates from live start, inspection and restart recovery. Fresh video is usable with `capture.masks: []`. Existing explicitly configured rectangles remain optional worker processing; viewer consent/withdrawal behavior is unchanged.

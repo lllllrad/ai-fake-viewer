@@ -8,7 +8,7 @@
 | [프로젝트 README](../README.md)                                                                     | 설치·운영 진입점과 기능 개요                                         |
 | [라이브 설치](../LIVE_SETUP.md)                                                                     | 별도 OBS PC, 자격 증명, 운영 리허설                                  |
 | [AI 흐름](../AI_FLOW.md)                                                                            | 공통 수집·모델·필터·검토·게시 파이프라인                             |
-| [페르소나 구현 명세](ai-viewer-persona-system-spec.md)                                              | 작성·승인·출연진·라이브 제어·API·현재 한계                           |
+| [페르소나 구현 명세](ai-viewer-persona-system-spec.md)                                              | 자동 생성·조사 반영·출연진·라이브 제어·기존 API                      |
 | [관리자 대시보드 요구사항](admin-dashboard-functional-spec.md)                                      | 목표 UI 계약과 현재 구현 차이                                        |
 | [작업 현황](../TASKS.md)                                                                            | 구현 범위와 미완료 인수 항목                                         |
 | [검증 기록](../VERIFICATION_REPORT.md)                                                              | 실행 날짜별 증거와 미검증 범위                                       |

@@ -231,6 +231,17 @@ try {
   await aiToggle.focus();
   await adminPage.keyboard.press("Space");
   await expect(aiToggle).toHaveAttribute("aria-checked", "true");
+  await expect(
+    adminPage.getByRole("heading", { name: "자동 시청자 페르소나" }),
+  ).toBeVisible();
+  const castSummary = adminPage.getByText("페르소나 6명 보기", { exact: true });
+  await expect(castSummary).toBeVisible();
+  await castSummary.click();
+  await expect(adminPage.locator(".persona-candidate")).toHaveCount(6);
+  await expect(
+    adminPage.getByRole("button", { name: /후보 생성|오디션|새 브리프/ }),
+  ).toHaveCount(0);
+  await castSummary.click();
 
   await readerPage
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
