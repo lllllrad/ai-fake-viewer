@@ -38,6 +38,7 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
   const publicBaseUrl = `http://192.168.50.10:${port}`;
   const c = configSchema.parse({
     port,
+    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     network: { bindHost: "0.0.0.0", publicBaseUrl },
     database: ":memory:",
     privacy: { rightsDatabase: ":memory:" },
@@ -58,6 +59,7 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     readerToken: reader,
     encryptionKey,
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    youtubeTokenPath: join(chatgptDir, "youtube.tokens"),
     chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
     soopTokenPath: join(chatgptDir, "soop.tokens"),
     startInputs: false,
@@ -105,6 +107,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-api-test-"));
   const c = configSchema.parse({
     port,
+    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     database: ":memory:",
     privacy: approvedProfile(),
     chzzk: {
@@ -124,6 +127,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
     encryptionKey,
     startInputs: false,
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    youtubeTokenPath: join(chatgptDir, "youtube.tokens"),
     chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
     soopTokenPath: join(chatgptDir, "soop.tokens"),
   });

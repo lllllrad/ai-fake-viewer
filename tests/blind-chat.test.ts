@@ -34,6 +34,7 @@ test("origin badges remain hidden until reveal while real nicknames stay visible
     readerToken: reader,
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(directory, "tokens"),
+    youtubeTokenPath: join(directory, "youtube.tokens"),
     chzzkTokenPath: join(directory, "chzzk.tokens"),
     soopTokenPath: join(directory, "soop.tokens"),
   });

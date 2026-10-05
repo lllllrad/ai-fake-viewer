@@ -352,6 +352,7 @@ test("live privacy profile blocks transcript storage and export even for adminis
     readerToken: "b".repeat(32),
     encryptionKey: "c".repeat(64),
     chatgptTokenPath: join(directory, "chatgpt.tokens"),
+    youtubeTokenPath: join(directory, "youtube.tokens"),
     chzzkTokenPath: join(directory, "chzzk.tokens"),
     soopTokenPath: join(directory, "soop.tokens"),
     startInputs: false,

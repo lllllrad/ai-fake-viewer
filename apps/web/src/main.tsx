@@ -822,6 +822,55 @@ function Admin() {
                 refresh={refresh}
               />
             )}
+            {!status.demo && (
+              <section className="card">
+                <h2>YouTube 자동 안내 연결</h2>
+                <p>
+                  {status.setup?.youtube?.connected
+                    ? `계정 연결됨 · ${status.setup.youtube.channelId}`
+                    : "방송 채널 계정으로 연결해 주세요."}
+                </p>
+                <p className="hint">
+                  발송하려는 방송의 채널을 선택하세요. 연결 후 수신기를 시작하면
+                  승인된 고정 동의 안내만 자동 발송합니다.
+                </p>
+                <button
+                  disabled={
+                    busy ||
+                    !status.setup?.youtube?.enabled ||
+                    !status.setup?.youtube?.oauthConfigured
+                  }
+                  onClick={() => {
+                    setBusy(true);
+                    setError("");
+                    void api("youtube/authorize", "POST")
+                      .then((r) => r.json())
+                      .then((b) => {
+                        location.href = b.url;
+                      })
+                      .catch((e) => setError(e.message))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  YouTube 계정 연결
+                </button>
+                {status.setup?.youtube?.connected && (
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => void action("youtube/disconnect")}
+                  >
+                    YouTube 연결 해제
+                  </button>
+                )}
+                {!status.setup?.youtube?.oauthConfigured && (
+                  <p className="hint">
+                    .env에 YOUTUBE_CLIENT_ID와 YOUTUBE_CLIENT_SECRET을 설정하고
+                    서버를 재시작하세요.
+                  </p>
+                )}
+              </section>
+            )}
             <div className="grid connections" id="connection-details">
               {Object.entries(status.connectors).map(
                 ([p, s]: [string, any]) => (

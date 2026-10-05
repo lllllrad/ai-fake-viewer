@@ -13,6 +13,7 @@ const admin = "a".repeat(64),
 const { app, store, capture } = await createApp(
   configSchema.parse({
     port,
+    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     database: ":memory:",
     chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
     soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
@@ -23,6 +24,7 @@ const { app, store, capture } = await createApp(
     readerToken: reader,
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    youtubeTokenPath: join(chatgptDir, "youtube.tokens"),
     chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
     soopTokenPath: join(chatgptDir, "soop.tokens"),
     startInputs: false,

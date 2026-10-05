@@ -141,16 +141,33 @@ export function PrivacyPanel() {
           } as Record<string, string>
         )[data.noticeBot] || "확인 중"}
       </p>
+      <p role="status">
+        YouTube 자동 안내:{" "}
+        {(
+          {
+            waiting_connection: "수신 연결 대기",
+            auth_required: "YouTube 계정 연결 필요",
+            channel_mismatch: "방송 채널과 연결 계정이 다름",
+            approval_required: "발송 승인·허용량 확인 필요",
+            sending: "안내 전달 중",
+            ready: "사용 중",
+            delivery_unconfirmed: "전달 미확인 · 제한 간격 이후 재시도",
+            permission_or_quota_blocked: "발송 권한·할당량 확인 필요",
+            notice_too_long: "안내의 긴 주소·문구를 줄여 주세요",
+            disabled: "사용 안 함",
+          } as Record<string, string>
+        )[data.youtubeNoticeBot] || "확인 중"}
+      </p>
       <details>
         <summary>참여 안내·현재 동의 상태 ({data.participants.length})</summary>
         <p className="hint">
-          SOOP 미동의 채팅에는 고정 안내가 자동 발송됩니다. 동의 단계 안내도
-          자동 발송하고 SOOP 응답으로 전달을 확인합니다. 관리자 탭의 SOOP 연결을
-          유지하세요. 실제 수신 명령 확인은 동의를 대신하는 기능이 아닙니다.
-          현재 운영 대상은 만 14세 이상 자기신고 이용자입니다. 채팅 명령은 실제
-          연령 검증이 아닙니다. 만 14세 미만으로 확인되거나 자기신고와 모순되는
-          정보가 있으면 차단하세요. 법정대리인 동의 확인 기능은 제공하지
-          않습니다.
+          SOOP·YouTube 미동의 채팅에는 고정 안내가 자동 발송됩니다. 동의 단계
+          안내도 자동 발송하고 플랫폼 응답으로 전달을 확인합니다. 관리자 탭의
+          SOOP 연결을 유지하세요. 실제 수신 명령 확인은 동의를 대신하는 기능이
+          아닙니다. 현재 운영 대상은 만 14세 이상 자기신고 이용자입니다. 채팅
+          명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로 확인되거나
+          자기신고와 모순되는 정보가 있으면 차단하세요. 법정대리인 동의 확인
+          기능은 제공하지 않습니다.
         </p>
         {data.participants.map((p: any) => (
           <article key={p.id} className="persona-candidate">
@@ -204,7 +221,7 @@ export function PrivacyPanel() {
                 >
                   고정 안내문 복사
                 </button>
-                {p.platform !== "soop" && (
+                {!["soop", "youtube"].includes(p.platform) && (
                   <button
                     disabled={busy}
                     onClick={() => {
@@ -221,7 +238,7 @@ export function PrivacyPanel() {
                     안내 전달 완료 확인
                   </button>
                 )}
-                {p.platform === "soop" && (
+                {["soop", "youtube"].includes(p.platform) && (
                   <p className="hint">
                     안내는 자동 발송됩니다. 발송 제한 또는 응답 미확인 중에는
                     다음 동의 단계로 진행하지 않습니다.

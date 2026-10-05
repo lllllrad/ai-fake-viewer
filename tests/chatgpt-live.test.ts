@@ -53,6 +53,7 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
       readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(dir, "chatgpt"),
+      youtubeTokenPath: join(dir, "youtube.tokens"),
       soopTokenPath: join(dir, "soop"),
       chzzkTokenPath: join(dir, "chzzk"),
     },

@@ -19,6 +19,7 @@ export class NoticeBot {
   constructor(
     private participation: Participation,
     private broadcaster: string,
+    private platform: "soop" | "youtube" = "soop",
   ) {}
   reset() {
     this.pending = undefined;
@@ -31,8 +32,8 @@ export class NoticeBot {
       return null;
     }
     if (
-      !p.available("soop", this.broadcaster) ||
-      !p.approval("soop", this.broadcaster)?.fixedNotices ||
+      !p.available(this.platform, this.broadcaster) ||
+      !p.approval(this.platform, this.broadcaster)?.fixedNotices ||
       !p.profile.notices.approvedLimitConfirmed
     ) {
       this.pending = undefined;
@@ -50,7 +51,7 @@ export class NoticeBot {
       (a, b) => a.lastNoticeAt - b.lastNoticeAt,
     )) {
       if (
-        person.platform !== "soop" ||
+        person.platform !== this.platform ||
         person.broadcaster !== this.broadcaster ||
         person.author === this.broadcaster ||
         p.profile.notices.botUserIds.includes(person.author) ||
@@ -83,7 +84,7 @@ export class NoticeBot {
         revision: p.revision,
         session: p.sessionId,
         kind,
-        expiresAt: Date.now() + 15000,
+        expiresAt: Date.now() + (this.platform === "youtube" ? 900000 : 15000),
         text: `${text} [안내 ${id.slice(0, 8)}]`,
       };
       this.state = "awaiting_echo";
@@ -91,6 +92,43 @@ export class NoticeBot {
     }
     if (this.state !== "delivery_unconfirmed") this.state = "ready";
     return null;
+  }
+  valid(id: string) {
+    const j = this.pending;
+    if (!j || j.id !== id || j.expiresAt <= Date.now()) return false;
+    const p = this.participation;
+    const person = [...p.participants.values()].find(
+      (x) => x.id === j.participant,
+    );
+    return (
+      !!person &&
+      !p.ended &&
+      p.sessionId === j.session &&
+      p.revision === j.revision &&
+      person.epoch === j.epoch &&
+      person.stage === j.stage &&
+      (j.kind === "intro"
+        ? person.state === "UNCONSENTED"
+        : person.state === "WAITING_CONSENT" && person.deliveredAt === null) &&
+      p.available(this.platform, this.broadcaster) &&
+      !!p.approval(this.platform, this.broadcaster)?.fixedNotices &&
+      p.profile.notices.approvedLimitConfirmed
+    );
+  }
+  reservePart(id: string) {
+    if (!this.valid(id)) return false;
+    this.attempts = this.attempts.filter((at) => at > Date.now() - 60000);
+    if (
+      this.attempts.length >= this.participation.profile.notices.globalPerMinute
+    )
+      return false;
+    try {
+      this.participation.reserveNotice(this.pending!.participant);
+      this.attempts.push(Date.now());
+      return true;
+    } catch {
+      return false;
+    }
   }
   // Only exact MESSAGE echoes from the authenticated broadcaster acknowledge sending.
   echo(author: string, text: string) {
@@ -108,8 +146,8 @@ export class NoticeBot {
       p.sessionId !== job.session ||
       p.revision !== job.revision ||
       person.epoch !== job.epoch ||
-      !p.available("soop", this.broadcaster) ||
-      !p.approval("soop", this.broadcaster)?.fixedNotices ||
+      !p.available(this.platform, this.broadcaster) ||
+      !p.approval(this.platform, this.broadcaster)?.fixedNotices ||
       !p.profile.notices.approvedLimitConfirmed
     ) {
       this.state = "delivery_unconfirmed";

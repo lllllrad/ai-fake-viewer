@@ -1,3 +1,4 @@
+import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
 import { Participation } from "../../packages/participation.ts";
 import {
@@ -55,6 +56,7 @@ export async function createApp(
     chatgptTokenPath?: string;
     chzzkTokenPath?: string;
     soopTokenPath?: string;
+    youtubeTokenPath?: string;
   },
 ) {
   if (
@@ -222,10 +224,24 @@ export async function createApp(
     opts.encryptionKey,
     opts.soopTokenPath ?? "data/soop.tokens",
   );
-  const supervisor = new Supervisor(config, store, auth, !!opts.demo);
+  const youtubeAuth = new YoutubeAuth(
+    opts.encryptionKey,
+    opts.youtubeTokenPath ?? "data/youtube.tokens",
+  );
+  const supervisor = new Supervisor(
+    config,
+    store,
+    auth,
+    !!opts.demo,
+    youtubeAuth,
+  );
   const receiverConfigured = () =>
     (config.youtube.enabled &&
-      !!(process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN) &&
+      !!(
+        youtubeAuth.connected ||
+        process.env.YOUTUBE_API_KEY ||
+        process.env.YOUTUBE_ACCESS_TOKEN
+      ) &&
       !!(config.youtube.video || config.youtube.channelId)) ||
     (config.chzzk.enabled &&
       !!process.env.CHZZK_CLIENT_ID &&
@@ -306,6 +322,7 @@ export async function createApp(
   };
   let soopAuthorizationPendingUntil = 0;
   let readerToken = opts.readerToken;
+  const youtubeCallback = new URL(config.youtube.redirectUri);
   const chzzkCallback = new URL(config.chzzk.redirectUri);
   const soopCallback = new URL(config.soop.redirectUri);
   const origins = [
@@ -314,6 +331,7 @@ export async function createApp(
     ...(config.network.bindHost === "0.0.0.0"
       ? [config.network.publicBaseUrl]
       : []),
+    `${youtubeCallback.origin}`,
     `${chzzkCallback.origin}`,
     `${soopCallback.origin}`,
   ];
@@ -361,11 +379,13 @@ export async function createApp(
         "default-src 'self'; script-src 'self' https://static.sooplive.com; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://openapi.sooplive.com wss://chat-*.sooplive.com:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
     const requestPath = req.url.split("?", 1)[0];
+    const isYoutubeCallback = requestPath === "/oauth/youtube/callback";
     const isChzzkCallback = requestPath === "/oauth/chzzk/callback";
     const isSoopCallback = requestPath === "/oauth/soop/callback";
     if (
       (req.url.startsWith("/api/admin/") ||
         (req.url.startsWith("/oauth/") &&
+          !isYoutubeCallback &&
           !isChzzkCallback &&
           !isSoopCallback) ||
         ["/admin", "/"].includes(req.url)) &&
@@ -378,12 +398,14 @@ export async function createApp(
     const soopCallbackHost = soopCallback.host;
     const hostAllowed =
       hosts.includes(req.headers.host ?? "") ||
+      (isYoutubeCallback && req.headers.host === youtubeCallback.host) ||
       (isChzzkCallback && req.headers.host === callbackHost) ||
       (isSoopCallback && req.headers.host === soopCallbackHost);
     if (!hostAllowed) return reply.code(403).send({ error: "Host rejected" });
     if (
       req.headers.origin &&
       !origins.includes(req.headers.origin) &&
+      !(isYoutubeCallback && req.headers.origin === youtubeCallback.origin) &&
       !(isChzzkCallback && req.headers.origin === chzzkCallback.origin) &&
       !(isSoopCallback && req.headers.origin === soopCallback.origin)
     )
@@ -1031,6 +1053,7 @@ export async function createApp(
     return {
       pendingFollowups: pendingRights.size,
       noticeBot: noticeBot?.state ?? "disabled",
+      youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
       profile: config.privacy,
       issues: profileIssues(config.privacy),
       participants: participation
@@ -1075,9 +1098,13 @@ export async function createApp(
         .parse(req.body);
       void body;
       if (!participation) throw Error("Live 참여 상태가 없습니다.");
-      if (participation.byId((req.params as any).id).platform === "soop")
+      if (
+        ["soop", "youtube"].includes(
+          participation.byId((req.params as any).id).platform,
+        )
+      )
         throw new PrivacyActionError(
-          "SOOP 안내는 자동 발송 응답으로 확인합니다.",
+          "SOOP·YouTube 안내는 자동 발송 응답으로 확인합니다.",
         );
       participation.delivered((req.params as any).id);
       return { ok: true };
@@ -1228,13 +1255,20 @@ export async function createApp(
     chatgpt: chatgpt.status,
     setup: {
       youtube: {
+        oauthConfigured: youtubeAuth.configured,
+        connected: youtubeAuth.connected,
+        channelId: youtubeAuth.channelId,
+        redirectUri: config.youtube.redirectUri,
+        noticeState: supervisor.youtubeNotices?.state ?? "disabled",
         enabled: config.youtube.enabled,
         consentNoticeEnabled: store.consentNoticeEnabled(
           "youtube",
           config.youtube.consentNoticeEnabled,
         ),
         credentialsConfigured: !!(
-          process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
+          youtubeAuth.connected ||
+          process.env.YOUTUBE_API_KEY ||
+          process.env.YOUTUBE_ACCESS_TOKEN
         ),
         videoConfigured: !!config.youtube.video,
         channelConfigured: !!config.youtube.channelId,
@@ -1490,6 +1524,48 @@ export async function createApp(
         .type("text/plain")
         .send(
           "ChatGPT connection failed. Return to the admin page and try again.",
+        );
+    }
+  });
+  app.post("/api/admin/youtube/authorize", async (_req, reply) => {
+    if (opts.demo || !config.youtube.enabled || !youtubeAuth.configured)
+      return reply
+        .code(409)
+        .send({
+          error:
+            "config.yaml의 youtube.enabled와 .env의 YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET을 설정해 주세요.",
+        });
+    return { url: youtubeAuth.authorizationUrl(config.youtube.redirectUri) };
+  });
+  app.post("/api/admin/youtube/disconnect", async () => {
+    await supervisor.stopPlatform("youtube");
+    youtubeAuth.forget();
+    supervisor.youtubeNotices?.reset();
+    return { ok: true };
+  });
+  app.get("/oauth/youtube/callback", async (req, reply) => {
+    try {
+      if (opts.demo || !config.youtube.enabled) throw Error("disabled");
+      const q = z
+        .object({
+          code: z.string().max(4096).optional(),
+          state: z.string().min(1).max(256),
+          error: z.string().optional(),
+        })
+        .parse(req.query);
+      await youtubeAuth.callback(q.code, q.state, !!q.error);
+      await supervisor.stopPlatform("youtube");
+      return reply
+        .type("text/plain")
+        .send(
+          "YouTube 연결 완료. 관리자 화면으로 돌아가 수신기를 시작해 주세요. 자동 안내는 연결한 채널의 승인된 방송에서 발송됩니다.",
+        );
+    } catch {
+      return reply
+        .code(400)
+        .type("text/plain")
+        .send(
+          "YouTube 연결 실패. 클라이언트 정보·등록된 redirect URI·채팅 발송 권한을 확인하고 관리자 화면에서 다시 연결해 주세요.",
         );
     }
   });

@@ -1,3 +1,5 @@
+import { YoutubeAuth } from "./youtube-auth.ts";
+import { YoutubeNotices } from "./youtube-notices.ts";
 import { fork, type ChildProcess } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Store } from "./storage.ts";
@@ -7,6 +9,8 @@ import { runYoutube } from "./youtube.ts";
 import { ChzzkAuth, normalizeChzzk } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {
+  youtubeNotices?: YoutubeNotices;
+  private platformTasks = new Map<string, Promise<void>>();
   onBroadcastEnded?: () => void;
   states: Record<
     string,
@@ -26,7 +30,15 @@ export class Supervisor {
     public store: Store,
     public auth: ChzzkAuth,
     public demo = false,
+    public youtubeAuth?: YoutubeAuth,
   ) {
+    if (!demo && store.participation && youtubeAuth) {
+      this.youtubeNotices = new YoutubeNotices(
+        store.participation,
+        youtubeAuth,
+      );
+      store.on("reset", () => this.youtubeNotices?.reset());
+    }
     for (const p of ["youtube", "chzzk", "soop"])
       this.states[p] = {
         state: "disabled",
@@ -48,6 +60,8 @@ export class Supervisor {
   }
   status(p: string, s: string) {
     const previous = this.states[p]?.state;
+    if (p === "youtube" && this.youtubeNotices)
+      this.youtubeNotices.connected = s.startsWith("subscribed:");
     if (p === "youtube" && s === "reconnecting" && this.states[p].state !== s)
       this.states[p].recoveries++;
     if (
@@ -122,11 +136,37 @@ export class Supervisor {
       (!this.store.participation ||
         this.states.youtube.state !== "privacy_blocked")
     )
-      this.launch("youtube", (signal) =>
-        runYoutube(this.config.youtube, this.store, signal, (s) =>
-          this.status("youtube", s),
-        ),
-      );
+      this.launch("youtube", async (signal) => {
+        let pending: Promise<void> | undefined;
+        const timer = setInterval(() => {
+          if (!pending)
+            pending = (
+              this.youtubeNotices?.tick(signal) ?? Promise.resolve()
+            ).finally(() => {
+              pending = undefined;
+            });
+        }, 1000);
+        try {
+          await runYoutube(
+            this.config.youtube,
+            this.store,
+            signal,
+            (s) => this.status("youtube", s),
+            {
+              access: this.youtubeAuth?.connected
+                ? () => this.youtubeAuth!.access()
+                : undefined,
+              resolve: (chat, broadcaster) =>
+                this.youtubeNotices?.resolve(chat, broadcaster),
+              ownChannel: () => this.youtubeAuth?.channelId,
+            },
+          );
+        } finally {
+          clearInterval(timer);
+          this.youtubeNotices?.reset();
+          await pending;
+        }
+      });
     if (
       this.config.chzzk.enabled &&
       (!this.store.participation ||
@@ -164,8 +204,10 @@ export class Supervisor {
       .finally(() => {
         if (this.controllers.get(p) === c) this.controllers.delete(p);
         this.tasks.delete(task);
+        if (this.platformTasks.get(p) === task) this.platformTasks.delete(p);
       });
     this.tasks.add(task);
+    this.platformTasks.set(p, task);
   }
   worker(name: string) {
     const child = fork(new URL(`../workers/${name}.cjs`, import.meta.url), [], {
@@ -335,6 +377,11 @@ export class Supervisor {
         signal,
       }).catch(() => {});
     }
+  }
+  async stopPlatform(p: string) {
+    this.controllers.get(p)?.abort();
+    await this.platformTasks.get(p);
+    this.status(p, "stopped");
   }
   async stop() {
     clearInterval(this.demoTimer);

@@ -12,6 +12,10 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
   const { app, store } = await createApp(
     configSchema.parse({
       port,
+      youtube: {
+        enabled: true,
+        redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback`,
+      },
       privacy: {
         ...approvedProfile(),
         processing: {
@@ -35,6 +39,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       readerToken: "q".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(dir, "live-chatgpt"),
+      youtubeTokenPath: join(dir, "youtube.tokens"),
       chzzkTokenPath: join(dir, "live-chzzk"),
       soopTokenPath: join(dir, "live-soop"),
     },
@@ -68,6 +73,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await page.route("**/api/admin/status", async (route) => {
       const response = await route.fetch();
       const data = await response.json();
+      data.setup.youtube.oauthConfigured = true;
       data.setup.soop.tokenConfigured = true;
       data.setup.soop.credentialsConfigured = true;
       await route.fulfill({ json: data });
@@ -91,6 +97,12 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         }),
     );
     await page.locator("#advanced-settings > summary").click();
+    await expect(
+      page.getByRole("button", { name: "YouTube 계정 연결", exact: true }),
+    ).toBeEnabled();
+    await expect(
+      panel.getByText("YouTube 자동 안내: 수신 연결 대기", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Continue with ChatGPT" }),
     ).toBeVisible();

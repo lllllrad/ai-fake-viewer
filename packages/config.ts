@@ -38,6 +38,10 @@ export const configSchema = z
     retentionDays: z.number().int().min(1).max(7).default(7),
     youtube: z
       .object({
+        redirectUri: z
+          .string()
+          .url()
+          .default("http://127.0.0.1:3210/oauth/youtube/callback"),
         enabled: z.boolean().default(false),
         consentNoticeEnabled: z.boolean().default(false),
         video: z.string().default(""),
@@ -47,6 +51,7 @@ export const configSchema = z
       })
       .strict()
       .default({
+        redirectUri: "http://127.0.0.1:3210/oauth/youtube/callback",
         enabled: false,
         consentNoticeEnabled: false,
         video: "",
@@ -223,6 +228,36 @@ export const configSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
+    try {
+      const callback = new URL(c.youtube.redirectUri);
+      const validPath = callback.pathname === "/oauth/youtube/callback";
+      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
+      const validProtocol =
+        callback.protocol === "https:" ||
+        (callback.protocol === "http:" && loopback);
+      const validPort =
+        callback.protocol === "https:" ||
+        (callback.protocol === "http:" &&
+          loopback &&
+          callback.port === String(c.port));
+      if (
+        !validPath ||
+        !validProtocol ||
+        !validPort ||
+        callback.username ||
+        callback.password ||
+        callback.search ||
+        callback.hash
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["youtube", "redirectUri"],
+          message:
+            "YouTube redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
+        });
+    } catch {
+      /* handled by URL schema */
+    }
     try {
       const callback = new URL(c.chzzk.redirectUri);
       const validPath = callback.pathname === "/oauth/chzzk/callback";

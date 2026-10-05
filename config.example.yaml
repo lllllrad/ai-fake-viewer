@@ -5,6 +5,7 @@ network:
 database: data/chat.sqlite # legacy compatibility only; the app always uses session memory
 retentionDays: 7 # legacy utility bound, not persistent live chat retention
 youtube:
+  redirectUri: http://127.0.0.1:3210/oauth/youtube/callback
   enabled: false
   consentNoticeEnabled: false
   channelId: "" # optional UC channel ID for active-live discovery

@@ -67,11 +67,13 @@ export async function googleJson(
   path: string,
   params: Record<string, string>,
   signal: AbortSignal,
+  access?: () => Promise<string>,
 ) {
   const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   const headers: Record<string, string> = {};
-  if (process.env.YOUTUBE_ACCESS_TOKEN)
+  if (access) headers.Authorization = `Bearer ${await access()}`;
+  else if (process.env.YOUTUBE_ACCESS_TOKEN)
     headers.Authorization = `Bearer ${process.env.YOUTUBE_ACCESS_TOKEN}`;
   else url.searchParams.set("key", process.env.YOUTUBE_API_KEY ?? "");
   const r = await fetch(url, {
@@ -135,8 +137,17 @@ export async function runYoutube(
   store: Store,
   signal: AbortSignal,
   status: (s: string) => void,
+  options?: {
+    access?: () => Promise<string>;
+    resolve?: (chat: string, broadcaster: string) => void;
+    ownChannel?: () => string | undefined;
+  },
 ) {
-  if (!process.env.YOUTUBE_API_KEY && !process.env.YOUTUBE_ACCESS_TOKEN) {
+  if (
+    !options?.access &&
+    !process.env.YOUTUBE_API_KEY &&
+    !process.env.YOUTUBE_ACCESS_TOKEN
+  ) {
     status("config_required");
     return;
   }
@@ -160,6 +171,7 @@ export async function runYoutube(
           maxResults: "5",
         },
         signal,
+        options?.access,
       );
       selectedVideo =
         live.items?.find((item: any) => typeof item.id?.videoId === "string")
@@ -178,6 +190,7 @@ export async function runYoutube(
         id: videoId(selectedVideo),
       },
       signal,
+      options?.access,
     );
     chat = b.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
     if (store.participation) {
@@ -190,6 +203,7 @@ export async function runYoutube(
         return;
       }
     }
+    if (chat && broadcaster) options?.resolve?.(chat, broadcaster);
     if (!chat) {
       status("waiting_live");
       return;
@@ -215,12 +229,14 @@ export async function runYoutube(
             ...(token ? { pageToken: token } : {}),
           },
           signal,
+          options?.access,
         );
         if (signal.aborted) break;
         store.ingestBatch(
           (b.items ?? [])
             .map((i: any) => {
               const m = normalizeYoutube(i, chat);
+              if (m && m.author === options?.ownChannel?.()) return null;
               return m && broadcaster ? { ...m, channel: broadcaster } : m;
             })
             .filter(Boolean),
@@ -240,7 +256,9 @@ export async function runYoutube(
       } else {
         const client = makeGrpcClient();
         const metadata = new grpc.Metadata();
-        if (process.env.YOUTUBE_ACCESS_TOKEN)
+        if (options?.access)
+          metadata.set("authorization", `Bearer ${await options.access()}`);
+        else if (process.env.YOUTUBE_ACCESS_TOKEN)
           metadata.set(
             "authorization",
             `Bearer ${process.env.YOUTUBE_ACCESS_TOKEN}`,
@@ -264,6 +282,7 @@ export async function runYoutube(
               (b.items ?? [])
                 .map((i: any) => {
                   const m = normalizeYoutube(i, chat);
+                  if (m && m.author === options?.ownChannel?.()) return null;
                   return m && broadcaster ? { ...m, channel: broadcaster } : m;
                 })
                 .filter(Boolean),
