@@ -10,7 +10,6 @@ export function normalizeAdminStatus(raw: any) {
       state: "unknown",
       lastFrameAt: null,
       lastFrameAgeMs: null,
-      masks: [],
       ...raw.capture,
     },
     audio: { state: "unknown", latestAt: null, history: [], ...raw.audio },
@@ -71,13 +70,11 @@ export function OperationsDashboard({
   };
   const captureHealth: Health = stale
     ? unknown
-    : freshFrame && status.capture.confirmed
+    : freshFrame
       ? { label: "정상" }
       : {
           label: "확인 필요",
-          hint: freshFrame
-            ? "화면의 가림 영역을 확인해 주세요."
-            : "송출 화면이 들어오는지 확인해 주세요.",
+          hint: "송출 화면이 들어오는지 확인해 주세요.",
         };
   const audioHealth = stale ? unknown : inputHealth(status.audio.state);
   const platforms = ["youtube", "chzzk", "soop"] as const;
@@ -190,7 +187,7 @@ export function OperationsDashboard({
           </div>
           <div className="preview dashboard-preview">
             {freshFrame && preview ? (
-              <img src={preview} alt="마스크가 적용된 송출 화면 미리보기" />
+              <img src={preview} alt="송출 화면 미리보기" />
             ) : (
               <p>
                 {stale
@@ -201,15 +198,6 @@ export function OperationsDashboard({
           </div>
           {captureHealth.hint && <p>{captureHealth.hint}</p>}
           <div className="toolbar">
-            {!status.capture.confirmed && (
-              <button
-                className="secondary"
-                disabled={busy || stale || !freshFrame}
-                onClick={() => onAction("capture/confirm")}
-              >
-                마스크 확인
-              </button>
-            )}
             <a href="#program-details">영상 설정 및 제어</a>
           </div>
         </article>
@@ -292,8 +280,8 @@ export function OperationsDashboard({
         )}
       </div>
       <p className="hint">
-        입력 시작은 영상·음성·설정된 채팅 수신기를 준비합니다. 화면 마스크를
-        확인한 뒤 AI 생성을 켜세요. AI만 끄면 입력 수집은 계속됩니다.
+        입력 시작은 영상·음성·설정된 채팅 수신기를 준비합니다. 입력이 준비되면
+        AI 생성을 켜세요. AI만 끄면 입력 수집은 계속됩니다.
       </p>
       {!status.demo && (
         <details className="operations-notices">

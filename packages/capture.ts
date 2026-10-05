@@ -37,7 +37,6 @@ export class Capture {
   failures = 0;
   generation = 0;
   dimensions = "";
-  confirmed = false;
   lastError = "";
   constructor(
     public config: Config["capture"],
@@ -48,7 +47,6 @@ export class Capture {
     clearTimeout(this.retryTimer);
     this.frames = [];
     this.dimensions = "";
-    this.confirmed = false;
     const generation = ++this.generation;
     if (this.demo) {
       this.state = "demo";
@@ -88,14 +86,15 @@ export class Capture {
     });
     this.child.on("error", () => {
       this.state = "failed";
+      this.frames = [];
       this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and capture device/RTMP URL.`;
     });
     this.child.on("exit", (code, signal) => {
       if (generation === this.generation) {
         this.child = undefined;
         this.state = "failed";
+        this.frames = [];
         this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, capture device/RTMP URL, and FFmpeg availability.`;
-        this.confirmed = false;
         if (++this.failures <= 5) {
           this.state = "reconnecting";
           this.retryTimer = setTimeout(
@@ -122,11 +121,9 @@ export class Capture {
     this.lastError = "";
     const dims = `${m.sourceWidth ?? m.width}x${m.sourceHeight ?? m.height}`;
     if (this.dimensions && dims !== this.dimensions) {
-      this.confirmed = false;
       this.frames = [];
-      this.state = "mask_review_required";
-    } else if (this.state !== "mask_review_required")
-      this.state = this.demo ? "demo" : "receiving";
+    }
+    this.state = this.demo ? "demo" : "receiving";
     this.dimensions = dims;
     this.frames.push({
       ...m,
@@ -149,14 +146,10 @@ export class Capture {
   latest() {
     return this.frames.at(-1);
   }
-  confirm() {
-    if (!this.latest() || Date.now() - this.latest()!.capturedAt > 10000)
-      throw Error("A fresh frame is required");
-    if (!this.demo && !this.config.masks.length)
-      throw Error("Configure chat/privacy masks before enabling image upload");
-    this.confirmed = true;
-    this.lastError = "";
-    this.state = this.demo ? "demo" : "receiving";
+  has(id: string) {
+    return this.frames.some(
+      (frame) => frame.id === id && frame.capturedAt > Date.now() - 10000,
+    );
   }
   stop() {
     this.generation++;
@@ -167,7 +160,6 @@ export class Capture {
     this.child?.kill();
     this.child = undefined;
     this.frames = [];
-    this.confirmed = false;
     this.state = "stopped";
     this.lastError = "";
   }

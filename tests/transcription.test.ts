@@ -126,7 +126,6 @@ test("text-first AI sends no image until it asks to inspect masked video", async
     },
     "demo",
   );
-  capture.confirmed = true;
   const transcript = {
     id: "speech-1",
     capturedAt: Date.now(),

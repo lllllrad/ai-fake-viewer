@@ -22,8 +22,8 @@ This board separates implemented code from operational acceptance. Current behav
 - This is a single local application with logical shared packages, not separately published packages or a distributed service.
 - Reconnects use a bounded current snapshot. The store has safe historical event projection, but the browser does not request an unbounded backfill.
 - Only ordinary YouTube text, CHZZK CHAT and experimental SOOP CHAT are normalized. Native moderation and non-text events are not claimed.
-- Config edits are made in YAML and applied on restart. Admin previews and confirms masks; it does not provide a graphical mask editor.
-- The software can verify configured rectangles and fresh frames; the operator must verify Program selection and mask coverage on every scene.
+- Config edits are made in YAML and applied on restart. Admin previews received video without a mask-confirmation step. Optional configured rectangles remain supported; no graphical mask editor is provided.
+- Video readiness uses fresh received frames. Optional configured rectangles are applied automatically; mask confirmation is not part of startup.
 - Model/API and live-account acceptance cannot be replaced by fixtures.
 
 ## Current follow-up scope

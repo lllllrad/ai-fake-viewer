@@ -106,7 +106,7 @@ export function modelMessages(input: ModelInput) {
             .replaceAll(
               "{{visual_instruction}}",
               input.frames.length
-                ? "A masked frame is present; do not request inspect again."
+                ? "A video frame is present; do not request inspect again."
                 : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
             ),
     },

@@ -357,7 +357,6 @@ test("Jev runs once before a text decision and its subsequent masked-frame inspe
     },
     "demo",
   );
-  h.capture.confirmed = true;
   h.scheduler.model = async (state) => {
     frameCounts.push(state.frames.length);
     return {

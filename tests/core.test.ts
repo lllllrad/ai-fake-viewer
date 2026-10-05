@@ -311,7 +311,6 @@ function harness(model: any) {
     },
     "demo",
   );
-  capture.confirmed = true;
   const ai = new Scheduler(s, capture, c, model, true);
   ai.state = "running";
   return { s, capture, ai, c };
@@ -501,7 +500,7 @@ test("Retention deletes old content, identity metadata and history without stale
   assert.equal(s.db.prepare("SELECT * FROM actors_private").all().length, 0);
   s.close();
 });
-test("T09: source resolution change invalidates preview approval even after resizing", () => {
+test("T09: source resolution change clears old frames and continues receiving", () => {
   const c = new Capture(configSchema.parse({}).capture, true);
   c.add(
     {
@@ -514,7 +513,6 @@ test("T09: source resolution change invalidates preview approval even after resi
     },
     "demo",
   );
-  c.confirm();
   c.add(
     {
       capturedAt: Date.now(),
@@ -526,8 +524,7 @@ test("T09: source resolution change invalidates preview approval even after resi
     },
     "demo",
   );
-  assert.equal(c.confirmed, false);
-  assert.equal(c.state, "mask_review_required");
+  assert.equal(c.state, "demo");
   assert.equal(c.frames.length, 1);
 });
 
@@ -583,5 +580,31 @@ test("SOOP OAuth encrypts tokens at rest and refreshes through the official toke
     assert.equal(existsSync(path), false);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("publication drops a candidate citing frames removed by source resolution change", async () => {
+  const h = harness(async (input: ModelInput) => say(input));
+  h.c.ai.manualApproval = true;
+  try {
+    await h.ai.tick();
+    assert.ok(h.ai.pending);
+    const oldFrame = h.capture.latest()!.id;
+    h.capture.add(
+      {
+        capturedAt: Date.now(),
+        width: 4,
+        height: 4,
+        bytes: Buffer.from("new frame"),
+      },
+      "demo",
+    );
+    assert.equal(h.capture.has(oldFrame), false);
+    assert.equal(h.capture.state, "demo");
+    h.ai.approve();
+    assert.equal(h.s.snapshot().messages.length, 0);
+  } finally {
+    h.ai.stop();
+    h.s.close();
   }
 });

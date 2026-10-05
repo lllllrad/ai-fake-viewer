@@ -40,7 +40,6 @@ export function inputHealth(state?: string): Health {
     ended: "방송이 종료되었습니다.",
     budget_exhausted: "사용 한도에 도달했습니다. 한도를 확인해 주세요.",
     quota_blocked: "사용 한도에 도달했습니다. 한도를 확인해 주세요.",
-    mask_review_required: "화면의 가림 영역을 확인해 주세요.",
   };
   return {
     label: "확인 필요",

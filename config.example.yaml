@@ -29,8 +29,8 @@ capture:
   device: OBS Virtual Camera
   url: "" # when backend is rtmp: rtmp://127.0.0.1:1935/program
   intervalMs: 3000
-  # Normalized rectangles, applied before preview and upload.
-  # Include every chat overlay and any private area in every scene.
+  # Optional normalized rectangles, applied before preview and upload.
+  # Empty is supported; no mask confirmation is required.
   masks: []
 audio:
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker

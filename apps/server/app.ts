@@ -122,13 +122,8 @@ export async function createApp(
   scheduler.readyCheck = () => {
     if (opts.demo) return [];
     const missing: string[] = [];
-    if (
-      !config.capture.masks.length ||
-      !capture.confirmed ||
-      !capture.latest() ||
-      Date.now() - capture.latest()!.capturedAt > 10000
-    )
-      missing.push("검증된 마스크 Program 캡처");
+    if (!capture.latest() || Date.now() - capture.latest()!.capturedAt > 10000)
+      missing.push("실시간 송출 영상");
     if (
       !config.audio.url ||
       !process.env.GROQ_API_KEY ||
@@ -157,9 +152,8 @@ export async function createApp(
     const checks = [
       {
         id: "capture",
-        label: "마스크 적용 및 확인된 영상",
+        label: "실시간 송출 영상",
         ready:
-          !!capture.confirmed &&
           !!capture.latest() &&
           Date.now() - capture.latest()!.capturedAt <= 10000,
       },
@@ -939,7 +933,6 @@ export async function createApp(
     },
     capture: {
       state: capture.state,
-      confirmed: capture.confirmed,
       lastFrameAt: capture.latest()?.capturedAt ?? null,
       dimensions: capture.dimensions,
       lastError: capture.lastError,
@@ -1052,9 +1045,6 @@ export async function createApp(
       audio: {
         credentialsConfigured: !!process.env.GROQ_API_KEY,
       },
-      capture: {
-        maskConfigured: config.capture.masks.length > 0,
-      },
       ai: {
         provider: config.ai.provider,
         connected:
@@ -1106,10 +1096,6 @@ export async function createApp(
   app.post("/api/admin/capture/stop", async () => {
     scheduler.stop("paused_input_stale");
     capture.stop();
-    return { ok: true };
-  });
-  app.post("/api/admin/capture/confirm", async () => {
-    capture.confirm();
     return { ok: true };
   });
   app.post("/api/admin/ai/start", async (_req, reply) => {
@@ -1531,13 +1517,6 @@ export async function createApp(
       return false;
     if (!capture.latest() || Date.now() - capture.latest()!.capturedAt > 10000)
       return false;
-    try {
-      if (!capture.confirmed) {
-        capture.confirm();
-      }
-    } catch {
-      return false;
-    }
     try {
       scheduler.start();
       return true;

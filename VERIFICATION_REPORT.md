@@ -4,6 +4,13 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Removal of mask confirmation — 2026-10-05
+
+- Removed mask-confirmation UI text/buttons, `Capture.confirm()` / `confirmed`, the confirmation endpoint and mask-presence gates from live start, inspection and restart recovery. Fresh video is usable with `capture.masks: []`. Existing explicitly configured rectangles remain optional worker processing; viewer consent/withdrawal behavior is unchanged.
+- `sh run-command.sh npm run check`: PASS, build/document/config checks and **66 tests**. Coverage includes live-mode start/recovery without masks or approval, controlled capture with empty/explicit masks, automatic continuation after resolution changes, and discarding a publication candidate that cites an old cleared frame.
+- `sh run-command.sh npm run test:browser`: PASS, generation from fresh video without any confirmation button, with desktop/mobile and reveal regressions passing and no page errors. No live provider or physical OBS test was performed.
+- Source changes clear prior frames; capture failure/stop clears buffered video. Publication checks cited frame availability/freshness directly rather than relying on a confirmation flag. This supersedes the earlier milestone below that retained runtime mask confirmation.
+
 ## Capture without a configuration acknowledgement — 2026-10-05
 
 - Removed the `programConfirmed` startup/readiness/recovery gate and its admin warning. The schema accepts legacy boolean values for compatibility and discards them; new configuration examples omit the field. Actual input settings, fresh-frame checks and runtime mask confirmation remain in use.

@@ -1569,12 +1569,6 @@ function Admin() {
                     : "add GROQ_API_KEY"}
                 </p>
                 <p>
-                  Program camera:{" "}
-                  {status.setup?.capture?.maskConfigured
-                    ? "review masked preview"
-                    : "configure privacy masks"}
-                </p>
-                <p>
                   AI:{" "}
                   {status.setup?.ai?.connected && status.setup.ai.modelSelected
                     ? "model connected"
@@ -1687,10 +1681,7 @@ function Admin() {
                 </div>
                 <div className="preview">
                   {preview && status.capture.lastFrameAgeMs <= 10000 ? (
-                    <img
-                      alt="Masked Program input. Verify all private areas and chat are hidden."
-                      src={preview}
-                    />
+                    <img alt="Live Program video input." src={preview} />
                   ) : (
                     <p>
                       {status.capture.state === "config_required"
@@ -1714,12 +1705,6 @@ function Admin() {
                     : `last frame ${Math.floor(status.capture.lastFrameAgeMs / 1000)}s ago`}{" "}
                   · {status.capture.framesInLastMinute} frames / last minute
                 </p>
-                <p>
-                  {status.capture.masks.length} masks ·{" "}
-                  {status.capture.confirmed
-                    ? "Preview confirmed"
-                    : "Review required"}
-                </p>
                 {status.capture.lastError && (
                   <p className="error" role="status">
                     {status.capture.lastError}
@@ -1730,18 +1715,12 @@ function Admin() {
                   Virtual Camera, select Program output in OBS, then use Start
                   capture here. For remote OBS, configure capture.backend: rtmp
                   and its private reader URL. Start streaming/virtual camera
-                  before expecting frames. Verify Program output and masks
-                  before confirming.
+                  before expecting frames. Recent video is available to AI
+                  automatically.
                 </p>
                 <div className="toolbar">
                   <button onClick={() => void action("capture/start")}>
                     Start capture
-                  </button>
-                  <button
-                    className="secondary"
-                    onClick={() => void action("capture/confirm")}
-                  >
-                    Confirm masked Program
                   </button>
                   <button
                     className="secondary"
@@ -2013,7 +1992,7 @@ function Admin() {
                 <p className="hint">
                   AI는 직접 켜야 생성되며 서버 재시작 후 이전 실행 상태가
                   복구됩니다. 방송 종료 시 자동 중지됩니다. 필수 입력을 모두
-                  켜고 영상 마스크를 확인한 뒤 AI를 시작하세요.
+                  켜고 영상이 수신되면 AI를 시작하세요.
                 </p>
                 <p className="hint">
                   {status.ai.manualApproval
@@ -2037,7 +2016,7 @@ function Admin() {
                     Visual mode: {status.ai.input.visualMode};{" "}
                     {status.ai.input.last.frames} frames in the last decision.
                     In on-request mode the first call has no image; an inspect
-                    decision lets the app send a fresh masked frame in a
+                    decision lets the app send a fresh video frame in a
                     follow-up call. Jev sees text only.
                   </p>
                   <p>
@@ -2091,7 +2070,7 @@ function Admin() {
                   </p>
                   <p>
                     음성 전사 시 오디오는 Groq로 전송되며 로컬에는 저장하지
-                    않습니다. AI 화면 입력에는 확인된 마스크 영상만 사용합니다.
+                    않습니다. AI 화면 입력에는 최근 수신한 영상을 사용합니다.
                   </p>
                 </details>
               </section>

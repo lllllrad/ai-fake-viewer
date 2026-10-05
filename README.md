@@ -6,7 +6,7 @@ A local, read-only broadcast chat aggregator with screen-aware AI characters. Yo
 
 See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow, and editable prompt files under [prompts/](prompts/).
 
-The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). The first admin section is the operations dashboard: masked Program preview, per-platform chat reception, latest transcript, model readiness, AI on/off, emergency stop and explicit identity reveal. Healthy inputs show only “정상”; chat health is summarized across platforms. Preparation and failures show a brief next action. Transport states, counters and model stages are hidden under the initially collapsed “연결 및 AI 상세 설정” section; dashboard links open the relevant controls. Persona studio follows the dashboard. Its implementation-gap table records remaining work. See the [documentation index](docs/README.md) for document ownership and status.
+The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). The first admin section is the operations dashboard: Program preview, per-platform chat reception, latest transcript, model readiness, AI on/off, emergency stop and explicit identity reveal. Healthy inputs show only “정상”; chat health is summarized across platforms. Preparation and failures show a brief next action. Transport states, counters and model stages are hidden under the initially collapsed “연결 및 AI 상세 설정” section; dashboard links open the relevant controls. Persona studio follows the dashboard. Its implementation-gap table records remaining work. See the [documentation index](docs/README.md) for document ownership and status.
 
 For development and validation, use `sh run-command.sh npm run check`. The launcher also prepares the existing Linux browser environment; see the [development guide](docs/development.md).
 
@@ -24,7 +24,7 @@ npm run demo
 Open **http://127.0.0.1:3210/admin**. Copy `ADMIN_TOKEN` from the generated local `.env` into the sign-in form. The server never prints your tokens. Keep `.env` private. Admin sign-in now uses an HttpOnly, SameSite=Strict local cookie valid for up to seven days across reloads and server restarts; **Sign out** clears it. Changing `ADMIN_TOKEN` invalidates existing cookies.
 
 1. The demo starts artificial platform chat and artificial moving image frames. It makes no platform or model requests.
-2. Inspect the preview and select **Confirm masked Program**. In demo mode this confirms a clearly labeled artificial input.
+2. Wait for the artificial video preview. No mask or preview confirmation is required.
 3. Select **Start AI**. The mock model publishes a short, explicitly marked demo response automatically.
 4. Watch it appear in the shared conversation without approval. Set `ai.manualApproval: true` only if you want to review each message.
 5. Select **Reader & OBS links**. Open the reader link and copy the overlay link to an OBS Browser Source.
@@ -41,7 +41,7 @@ Platform viewers must send `!동의` before their ordinary messages enter the st
 
 Per-platform consent-notice toggles default off and persist in SQLite when changed in admin. They control notices in this application's reader/overlay, not native platform messages. Enabling notices does not bypass the consent gate or control model-context inclusion. Consented visible messages from all supported platforms are eligible for AI context; there are no per-platform AI-context approval flags in the current schema. The notice includes both commands, is throttled per platform/channel for at least 30 seconds, and is not repeated for a withdrawn viewer during that session.
 
-In current live mode, **starting AI requires confirmed fresh masked video, running Groq audio input, and a ready model even with `on_request`**. Platform chat is optional. `on_request` controls whether images accompany a model request; it does not remove the server's start prerequisites.
+In current live mode, **starting AI requires fresh video, running Groq audio input, and a ready model even with `on_request`**. Platform chat is optional. `on_request` controls whether images accompany a model request; it does not remove the server's start prerequisites.
 
 ## Live configuration
 
@@ -99,7 +99,7 @@ soop:
 
 Both the mode and consent are required. It runs in a child process with no model or other platform secrets. A successful experimental connection is **not** an official integration. Package/repository provenance limitations and live-test blockers are recorded in [research/soop-official-verification.md](research/soop-official-verification.md).
 
-## OBS Program capture and privacy masks
+## OBS Program capture
 
 Install an FFmpeg binary appropriate for your OS, independently of this repository. Its redistribution license depends on that build; no FFmpeg binary is bundled. On Windows, list DirectShow devices:
 
@@ -115,18 +115,14 @@ capture:
   backend: dshow
   device: OBS Virtual Camera
   intervalMs: 3000
-  masks:
-    - x: 0.70
-      y: 0.0
-      width: 0.30
-      height: 1.0
+  masks: [] # optional
 ```
 
-The example masks the rightmost 30% of the image. Change it for your actual composition. Coordinates are normalized to the entire original image. Include **every** chat overlay (including this application's overlay), credentials and private regions in every scene. Masks are applied before resizing, administrator preview and model upload. Masked images are held only in memory: up to 10 frames / 30 seconds; each request uses at most 3 fresh frames. Images are resized to fit 1280 × 1280.
+Capture starts directly from the configured camera or RTMP source. `capture.masks` is optional and defaults to an empty list; there is no mask/preview confirmation button or start gate. Legacy `programConfirmed` values are accepted and ignored. If you explicitly configure rectangles, the worker still applies them before resizing, preview and upload. Existing local mask configuration is not automatically erased.
 
-Capture starts from the configured camera or RTMP source without a separate `programConfirmed` setting; legacy values are accepted and ignored. Open admin, inspect the masked preview and select **Confirm masked Program**. Image upload is blocked without a configured mask and runtime confirmation. This prevents accidental unmasked defaults, but does not automatically locate chat. You must check the rectangles. Layout/scene changes at the same resolution are not automatically detected: stop AI, verify masks and re-confirm before resuming. Source resolution changes invalidate confirmation. In `ai.visualMode: continuous`, ten seconds without a fresh frame pauses AI and requires a manual start. In `on_request` mode, text-only decisions can continue while unavailable video requests are skipped. Repeated identical fresh frames are healthy. A device that continuously outputs a frozen picture cannot reliably be detected.
+Frames are held only in memory, up to 10 frames / 30 seconds, and resized to fit 1280 × 1280. Requests use at most three frames no older than 10 seconds. Resolution changes discard old frames and immediately accept the new source size without confirmation. Capture failures clear the frame buffer and retry up to five times with backoff. In `continuous` mode, missing fresh frames pauses AI; in `on_request`, unavailable visual inspections are skipped while text-only ticks can continue after startup. Cited video must still be available and fresh at publication.
 
-Capture failures are isolated and retried up to five times with backoff. Confirmation is cleared on failure. For a camera on the same Linux PC, select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
+For a camera on the same Linux PC, select `backend: v4l2` and a device such as `/dev/video2`; for macOS select `avfoundation` and the correct camera index. These physical-device paths have not been live-tested here.
 
 ### OBS on a separate Linux PC: optional RTMP input
 
@@ -140,14 +136,10 @@ capture:
   backend: rtmp
   url: "APP_READ_URL_FROM_PRIVATE_FILE"
   intervalMs: 3000
-  masks:
-    - x: 0.70
-      y: 0.0
-      width: 0.30
-      height: 1.0
+  masks: [] # optional
 ```
 
-Use the exact private read URL in your ignored local config; never commit that URL or share it in screenshots. Replace the masks for your actual scene. [FFmpeg can read RTMP](https://mediamtx.org/docs/read/ffmpeg). Confirm a fresh masked preview before allowing AI to inspect video. The setup script prepares credentials but does not start the RTMP service. Physical remote OBS/RTMP operation still needs a live test.
+Use the exact private read URL in your ignored local config; never commit that URL or share it in screenshots. [FFmpeg can read RTMP](https://mediamtx.org/docs/read/ffmpeg). Fresh received video is available for AI inspection without confirmation. The setup script prepares credentials but does not start the RTMP service. Physical remote OBS/RTMP operation still needs a live test.
 
 ## Groq speech and AI model data review
 
@@ -155,7 +147,7 @@ Set `GROQ_API_KEY` in private `.env`, review audio sharing and configure `audio.
 
 Set `audio.language: ko` for a Korean broadcast (`en` for English, `ja` for Japanese). Groq accepts an ISO-639-1 input language hint to improve transcription accuracy. Omit the setting or use `audio.language: ""` to keep automatic detection. Restart after changing the setting; this affects transcription, not AI reply language.
 
-With `ai.visualMode: on_request`, the AI first receives transcript/permitted chat text without images. It can request `inspect`, which causes one additional call with a fresh confirmed masked frame; unavailable frames are skipped. Both calls count against `ai.maxCalls`. `continuous` retains the earlier image-first path.
+With `ai.visualMode: on_request`, the AI first receives transcript/permitted chat text without images. It can request `inspect`, which causes one additional call with a fresh video frame; unavailable frames are skipped. Both calls count against `ai.maxCalls`. `continuous` retains the earlier image-first path.
 
 ### Optional Jev filter before answer generation
 
@@ -172,7 +164,7 @@ ai:
     timeoutMs: 3000
 ```
 
-Restart the app, then start AI. The filter sends bounded recent transcripts, permitted pseudonymous chat, the broadcast description and selected persona to TypeSafe. It never sends images or audio. Jev answers only whether this is **clearly a bad time** to speak. A probability at or above `threshold` suppresses the response; uncertain or neutral results pass to the answer model. The default `0.8` is intentionally conservative. Existing cooldowns, chat activity limits and input deduplication run first. An allowed reaction may still be skipped by the answer model, or request a masked image using the existing inspection flow; inspection is not filtered a second time.
+Restart the app, then start AI. The filter sends bounded recent transcripts, permitted pseudonymous chat, the broadcast description and selected persona to TypeSafe. It never sends images or audio. Jev answers only whether this is **clearly a bad time** to speak. A probability at or above `threshold` suppresses the response; uncertain or neutral results pass to the answer model. The default `0.8` is intentionally conservative. Existing cooldowns, chat activity limits and input deduplication run first. An allowed reaction may still be skipped by the answer model, or request a video frame using the existing inspection flow; inspection is not filtered a second time.
 
 The admin AI card displays filter state, checks, filtered inputs, errors and the latest probability. A timeout, HTTP error or invalid response skips that reaction without an answer-model call; later new input may be evaluated. Reaching `maxRequests` stops AI with `gate_budget_exhausted`. Missing credentials raise an error and stop the scheduler. This filter cap counts attempts per process and resets on app restart; its usage and billing are separate from `ai.maxCalls` and `ai.maxUsd`. Stopping AI cancels an in-flight check. Demo mode bypasses the filter without making requests.
 
@@ -185,9 +177,9 @@ The default `ai.provider: chatgpt_subscription` uses OpenAI's [Sign in with Chat
 This flow requires a ChatGPT plan and feature availability for your account. A live text-only decision reached manual approval on this app PC; each new account still needs its own authorization and verification. It is distinct from ordinary API-key billing. ChatGPT subscription requests use account-specific model slugs, `store: false`, `stream: true`, and accept output only after the completion event. The app enforces a persisted call limit and local request/output bounds; exact pre-call input token counting and USD budgets are unavailable for this provider. `ai.maxInputTokens` and `ai.maxOutputTokens` reject a completed response that reports usage above those values but cannot prevent that call. Review usage and app limits in ChatGPT Settings. The selected model must support images and structured output. Structured text output succeeded in a live call; image comprehension remains unverified.
 
 For an independently billed API key, set `ai.provider: openai_api`, `OPENAI_API_KEY` and `OPENAI_MODEL` in `.env`. Choose a model available to your API account that supports image input, Responses structured output and input token counting. The API-key path uses pre-call token counting and can use `ai.maxUsd` when verified prices are configured. Review the provider handling of uploaded images and chat before use; the current schema has no `policy.providerReviewed` flag. `store: false` does not mean all provider logs are disabled.
-Platform messages are blocked until viewer consent. Once consented and visible, messages from all three supported platforms are eligible for model context. The old `policy.*` settings, including platform AI-context approvals, are no longer accepted by the strict schema. Consent and a working receiver do not establish platform permission; applicable processing review remains an operator responsibility. Image masks remain required before image upload.
+Platform messages are blocked until viewer consent. Once consented and visible, messages from all three supported platforms are eligible for model context. The old `policy.*` settings, including platform AI-context approvals, are no longer accepted by the strict schema. Consent and a working receiver do not establish platform permission; applicable processing review remains an operator responsibility. Image masks and preview confirmation are not required. Viewer consent still gates platform chat ingestion.
 
-The AI checks new transcript chunks and newly received permitted messages against a rolling `ai.contextWindowSeconds` of surrounding transcripts and chat. Each distinct input is evaluated once; skipped or answered chunks are not replayed as new events. After each decision, the next decision waits a newly randomized interval between `ai.pacing.minSeconds` and `ai.pacing.maxSeconds`, independently of audio chunk length. Defaults are a 35–95 second interval and a 120 second context window. The model receives bounded recent transcripts and permitted text, recent spectator replies and one character's style; it receives masked JPEGs only in continuous mode or after an on-request inspection. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. With `ai.reviewDraft: true` (default), the same selected model receives a second call to reject or lightly edit the draft; this is not an independent review or a safety guarantee. Messages publish automatically by default (`ai.manualApproval: false`) after AI review. Set it to `true` to add a human approval queue. Legacy pending approvals expire after 30 seconds; persona candidates use their configured reaction TTL (12 seconds by default) and are invalidated by stopping, hiding evidence or stale input. See [AI_FLOW.md](AI_FLOW.md) for the stage-by-stage inputs.
+The AI checks new transcript chunks and newly received permitted messages against a rolling `ai.contextWindowSeconds` of surrounding transcripts and chat. Each distinct input is evaluated once; skipped or answered chunks are not replayed as new events. After each decision, the next decision waits a newly randomized interval between `ai.pacing.minSeconds` and `ai.pacing.maxSeconds`, independently of audio chunk length. Defaults are a 35–95 second interval and a 120 second context window. The model receives bounded recent transcripts and permitted text, recent spectator replies and one character's style; it receives video JPEGs only in continuous mode or after an on-request inspection. It has no tools, private account IDs or access to the origin table. Output is validated for schema, length, reply/evidence references and several obvious unsafe patterns. With `ai.reviewDraft: true` (default), the same selected model receives a second call to reject or lightly edit the draft; this is not an independent review or a safety guarantee. Messages publish automatically by default (`ai.manualApproval: false`) after AI review. Set it to `true` to add a human approval queue. Legacy pending approvals expire after 30 seconds; persona candidates use their configured reaction TTL (12 seconds by default) and are invalidated by stopping, hiding evidence or stale input. See [AI_FLOW.md](AI_FLOW.md) for the stage-by-stage inputs.
 
 Calls are limited per session, persisted across restarts, with one generation at a time, configurable randomized pacing (35–95 seconds by default), per-character cooldown based on the minimum pacing interval, and at most three messages per minute. Persona sessions add their own limits. Busy human chat suppresses generation. Synthetic message arrival alone does not trigger another response. Unchanged frames can skip inference.
 
@@ -217,8 +209,8 @@ Use **Delete all local data** to stop receivers and AI, clear chat, transcripts,
 - Receiver `config_required` / `auth_required`: check the relevant `.env` variables and app approval, then restart receivers. Do not substitute demo input for a failed live connection.
 - YouTube `waiting_live`: verify the broadcast is live, chat is enabled and your credentials can access it. `quota_blocked` requires quota review; `ended` requires a new live video.
 - CHZZK authorization cannot start in demo mode or before `chzzk.enabled: true` and both Client ID/Secret are set. Register an app with chat-read and user-info scopes and the exact `chzzk.redirectUri` callback; use HTTPS if the login browser is remote, then restart in live mode. `permission_blocked`: verify own-channel login and scopes, then reauthorize. Silence during an active subscription is normal.
-- Capture: verify FFmpeg/device name, OBS camera startup, Program selection and masks. The preview is already masked. Capture stderr is not exposed because it may contain local paths.
-- AI: check the selected visual mode, Groq transcript status, preview confirmation when video is requested, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
+- Capture: verify FFmpeg/device name, OBS camera startup and Program selection. Optional configured masks are reflected in the preview. Capture stderr is not exposed because it may contain local paths.
+- AI: check the selected visual mode, Groq transcript status, fresh video when inspection is requested, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
 
 ```sh
 npm run check

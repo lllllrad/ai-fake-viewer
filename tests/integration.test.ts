@@ -513,7 +513,10 @@ for (const legacyFlag of [undefined, false, true])
           backend: "rtmp",
           url: "rtmp://127.0.0.1:1935/program",
           ...(legacyFlag === undefined ? {} : { programConfirmed: legacyFlag }),
-          masks: [{ x: 0, y: 0, width: 0.5, height: 1 }],
+          masks:
+            legacyFlag === undefined
+              ? []
+              : [{ x: 0, y: 0, width: 0.5, height: 1 }],
         },
       });
       assert.equal(Object.hasOwn(config.capture, "programConfirmed"), false);
@@ -540,15 +543,16 @@ for (const legacyFlag of [undefined, false, true])
           });
         });
         const frame = await result;
-        assert.equal(capture.confirmed, false);
-        capture.confirm();
-        assert.equal(capture.confirmed, true);
+        assert.equal(capture.state, "receiving");
+        assert.ok(capture.recent().length);
         const { data, info } = await sharp(Buffer.from(frame.bytes, "base64"))
           .raw()
           .toBuffer({ resolveWithObject: true });
         const pixel = (x: number, y: number) =>
           data[(y * info.width + x) * info.channels];
-        assert(pixel(10, 50) < 10);
+        assert(
+          legacyFlag === undefined ? pixel(10, 50) > 240 : pixel(10, 50) < 10,
+        );
         assert(pixel(90, 50) > 240);
         assert.equal(frame.sourceWidth, 100);
         const args = JSON.parse(readFileSync(argsFile, "utf8"));

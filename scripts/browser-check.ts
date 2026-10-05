@@ -223,11 +223,11 @@ try {
   capture.start();
   for (let i = 0; i < 50 && !capture.latest(); i++)
     await new Promise((r) => setTimeout(r, 50));
-  await dashboard.getByRole("link", { name: "영상 설정 및 제어" }).click();
-  await adminPage
-    .getByRole("button", { name: "Confirm masked Program", exact: true })
-    .click();
-  await adminPage.getByText("Preview confirmed", { exact: false }).waitFor();
+  await expect(
+    adminPage.getByRole("button", {
+      name: /마스크 확인|Confirm masked Program/,
+    }),
+  ).toHaveCount(0);
   await aiToggle.focus();
   await adminPage.keyboard.press("Space");
   await expect(aiToggle).toHaveAttribute("aria-checked", "true");
@@ -284,7 +284,6 @@ try {
   await readerPage.getByText("AI 생성", { exact: true }).waitFor();
   await overlay.getByText("AI 생성", { exact: true }).waitFor();
   assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
-  await advanced.locator(":scope > summary").click();
   mkdirSync("test-results", { recursive: true });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await adminPage.screenshot({ path: "test-results/admin-dashboard.png" });

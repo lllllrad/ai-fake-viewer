@@ -73,10 +73,10 @@ export class Scheduler {
       );
     if (
       this.config.ai.visualMode === "continuous" &&
-      (!this.capture.confirmed || !this.capture.recent().length)
+      !this.capture.recent().length
     )
       throw new AiStartError(
-        "Confirm a fresh masked Program preview before starting continuous video AI.",
+        "Wait for a fresh video frame before starting continuous video AI.",
       );
     if (!this.demo && !this.providerReady())
       throw new AiStartError(
@@ -116,7 +116,7 @@ export class Scheduler {
     if (this.state !== "running") return;
     if (
       this.config.ai.visualMode === "continuous" &&
-      (!this.capture.confirmed || !this.capture.recent().length)
+      !this.capture.recent().length
     ) {
       this.stop("paused_input_stale");
       return;
@@ -507,11 +507,7 @@ export class Scheduler {
         return;
       let d = validateDecision(r.decision, input);
       if (d.action === "inspect") {
-        if (
-          c.visualMode !== "on_request" ||
-          !this.capture.confirmed ||
-          !this.capture.recent().length
-        ) {
+        if (c.visualMode !== "on_request" || !this.capture.recent().length) {
           this.skips++;
           return;
         }
@@ -560,8 +556,8 @@ export class Scheduler {
       }
       if (
         this.store.closed() ||
-        (input.frames.length > 0 &&
-          (!this.capture.confirmed || !this.capture.recent().length)) ||
+        (input.frames.length > 0 && !this.capture.recent().length) ||
+        d.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
         d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)) ||
         d.evidenceMessageIds.some((id) => !this.store.publicMessage(id)) ||
         (d.replyToMessageId && !this.store.publicMessage(d.replyToMessageId))
@@ -694,8 +690,8 @@ export class Scheduler {
       p.expires < Date.now() ||
       this.state !== "running" ||
       this.store.closed() ||
-      (p.input.frames.length > 0 &&
-        (!this.capture.confirmed || !this.capture.recent().length)) ||
+      (p.input.frames.length > 0 && !this.capture.recent().length) ||
+      p.decision.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
       p.decision.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id))
     ) {
       if (p.attemptId)

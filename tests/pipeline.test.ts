@@ -103,7 +103,7 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
   }
 });
 
-test("live readiness and saved-intent recovery do not require programConfirmed", async (t) => {
+test("live AI starts and recovers with fresh video without masks or confirmation", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "pipeline-no-confirm-flag-"));
   const oldGroqKey = process.env.GROQ_API_KEY;
   process.env.GROQ_API_KEY = "fixture-only-not-a-real-key";
@@ -111,7 +111,6 @@ test("live readiness and saved-intent recovery do not require programConfirmed",
     await createApp(
       configSchema.parse({
         database: ":memory:",
-        capture: { masks: [{ x: 0, y: 0, width: 0.5, height: 1 }] },
         audio: { url: "rtmp://127.0.0.1/fixture" },
       }),
       {
@@ -142,18 +141,7 @@ test("live readiness and saved-intent recovery do not require programConfirmed",
       },
       "obs_program",
     );
-    let response = await app.inject({
-      method: "POST",
-      url: "/api/admin/ai/start",
-      headers,
-    });
-    assert.equal(
-      response.statusCode,
-      409,
-      "A runtime preview check is still required",
-    );
-    capture.confirm();
-    response = await app.inject({
+    const response = await app.inject({
       method: "POST",
       url: "/api/admin/ai/start",
       headers,
@@ -161,9 +149,7 @@ test("live readiness and saved-intent recovery do not require programConfirmed",
     assert.equal(response.statusCode, 200);
     assert.equal(scheduler.state, "running");
     scheduler.stop("server_shutdown", true);
-    capture.confirmed = false;
     assert.equal(resumeAiIfRequested(), true);
-    assert.equal(capture.confirmed, true);
     assert.equal(store.aiDesiredRunning(), true);
     scheduler.stop("server_shutdown", true);
     capture.frames[0].capturedAt = Date.now() - 11000;

@@ -6,9 +6,9 @@ This is the implementation reference for understanding and improving the chat pi
 
 This page describes the shared response pipeline. [Persona studio](docs/ai-viewer-persona-system-spec.md) adds authoring, approved cast snapshots, presence-limited context, weighted selection, session controls and publication checks. Without an active live persona session, YAML `ai.personas` supplies the characters. Candidate generation uses a separate prompt in `packages/persona/generator.ts`; it does not use `prompts/answer.md`. Auditions use the shared answer model with twelve text fixtures. Authoring usage is not a unified part of the live scheduler budget.
 
-The production entry point starts configured receivers, capture and transcription for an open stream session. On restart it may restore persisted AI running intent or an armed persona session after a fresh frame, capture confirmation and readiness checks. Capture no longer requires a `programConfirmed` configuration flag. During saved-intent recovery, a fresh frame and configured masks allow runtime confirmation to be restored; legacy flag values are ignored. Stop AI before shutdown to clear the running intent. In-flight persona reactions are canceled on restart.
+The production entry point starts configured receivers, capture and transcription for an open stream session. On restart it may restore persisted AI running intent or an armed persona session after fresh-frame and readiness checks. Capture no longer requires a `programConfirmed` configuration flag. Mask/preview confirmation has also been removed. Saved-intent recovery requires fresh video and ready audio/model inputs; legacy flag values are ignored. Stop AI before shutdown to clear the running intent. In-flight persona reactions are canceled on restart.
 
-Live AI start currently requires confirmed fresh masked capture, running audio input and a ready model in **both visual modes**; platform receivers are optional. `on_request` omits images from the first inference and permits text-only ticks after start, but is not a text-only startup configuration. See `scheduler.readyCheck`, `readyComponents` and `resumeAiIfRequested` in [app.ts](apps/server/app.ts).
+Live AI start currently requires fresh video capture, running audio input and a ready model in **both visual modes**; platform receivers are optional. `on_request` omits images from the first inference and permits text-only ticks after start, but is not a text-only startup configuration. See `scheduler.readyCheck`, `readyComponents` and `resumeAiIfRequested` in [app.ts](apps/server/app.ts).
 
 ## Runtime overview
 
@@ -19,7 +19,7 @@ flowchart TD
   D[Platform chat] --> E[Viewer consent and visible-message filter]
   C --> F[New events + rolling text context]
   E --> F
-  G[OBS Virtual Camera or RTMP video] --> H[Local masks and short frame buffer]
+  G[OBS Virtual Camera or RTMP video] --> H[Optional masks and short frame buffer]
   F --> I[Scheduler: randomized pacing]
   H --> J{Visual mode}
   J -->|on_request| K[No image on first model call]
@@ -33,7 +33,7 @@ flowchart TD
   N -->|Provider error| O
   N -->|Cap exhausted| Q[Stop entire AI scheduler]
   M -->|No| P
-  P -->|inspect requested| R[App adds fresh, confirmed masked frames]
+  P -->|inspect requested| R[App adds fresh video frames]
   R --> S[Answer model follow-up]
   S --> T[Validate decision and evidence]
   P --> T
@@ -69,12 +69,12 @@ flowchart TD
 
 - **Purpose:** provide visual evidence when the selected AI mode can use images.
 - **Input:** either the configured local camera device (OBS Virtual Camera in Program mode) or configured private RTMP reader URL. The production entry point starts configured capture for an open session. Admin **Start capture** can start it again; Start AI also starts stopped inputs before checking readiness.
-- **Processing:** FFmpeg emits frames at `capture.intervalMs` (1–5 seconds). Privacy rectangles are applied locally before resizing and memory buffering. Up to 10 masked frames / 30 seconds are kept; model requests use at most three recent frames, each no older than 10 seconds. Frames are never persisted by this app.
-- **Confirmation:** operator must inspect the masked preview and confirm it. Confirmation is invalidated by source dimension changes, capture failures, or stopping capture. A mask configuration is required before image upload.
-- **Modes:** `on_request` has no image in the first answer-model call; an `inspect` decision may cause an app-mediated follow-up with fresh, confirmed masked frames. `continuous` requires fresh confirmed frames before AI can start and supplies them in the initial call.
+- **Processing:** FFmpeg emits frames at `capture.intervalMs` (1–5 seconds). Optional configured rectangles are applied locally before resizing and memory buffering. Up to 10 frames / 30 seconds are kept; model requests use at most three recent frames, each no older than 10 seconds. Frames are never persisted by this app.
+- **Availability:** no mask configuration or preview confirmation is required. Source size changes discard old frames and continue receiving automatically. Capture failure/stop clears the buffer. Cited frame IDs must remain available and fresh before publication.
+- **Modes:** `on_request` has no image in the first answer-model call; an `inspect` decision may cause an app-mediated follow-up with fresh video frames. `continuous` requires fresh frames before AI can start and supplies them in the initial call.
 - **Tools:** the model cannot control the camera. `inspect` is a structured model decision interpreted by application code after freshness and confirmation checks.
-- **Runtime checks:** Admin → **Program input** shows source backend/device, dimensions, latest-frame age, frames received in the last minute, capture error, masks and preview confirmation. A stale preview is cleared after 10 seconds. `No frames received` with state `connecting` means the input is not producing a decodable frame yet; `failed`/`reconnecting` includes the FFmpeg exit information.
-- **Source:** `packages/capture.ts` (child lifecycle, memory buffer, confirmation), `workers/capture.mjs` (FFmpeg, masking and resize), `apps/server/app.ts` (status API and preview endpoint).
+- **Runtime checks:** Admin → **Program input** shows source backend/device, dimensions, latest-frame age, frames received in the last minute, capture error and input metadata. A stale preview is cleared after 10 seconds. `No frames received` with state `connecting` means the input is not producing a decodable frame yet; `failed`/`reconnecting` includes the FFmpeg exit information.
+- **Source:** `packages/capture.ts` (child lifecycle, memory buffer, freshness), `workers/capture.mjs` (FFmpeg, masking and resize), `apps/server/app.ts` (status API and preview endpoint).
 
 ### 3. Event selection and scheduler
 
@@ -103,8 +103,8 @@ flowchart TD
 - **Purpose:** draft one short Korean fictional-spectator response, skip, or request visual inspection.
 - **Editable prompt file:** [`prompts/answer.md`](prompts/answer.md). Change the text there; `{{persona_style}}` and `{{visual_instruction}}` are runtime placeholders. Prompt loading and the adjacent model input serialization are in [`packages/model.ts`](packages/model.ts), function `modelMessages(input)`. Update [`packages/contracts.ts`](packages/contracts.ts) if the model’s allowed decisions or evidence format changes.
 
-- **Input fields:** `description`; `reviewDraft` (null for generation); `recentContext` (`messages`); `newMessages`; `newTranscripts` and `recentTranscripts` (IDs, capture times and text); `frames` metadata (IDs/timestamps) plus each frame as a low-detail JPEG data URL. Frames are already masked before serialization. `persona.style` is in the system prompt; the persona name is used for published local identity and by Jev, not serialized as a separate answer payload field.
-- **Actions:** `say` (draft text and evidence), `skip` (no message), or `inspect` (only honored in `on_request` without frames; app validates current confirmed/fresh frames then calls the model again). Inspection is not a callable tool and cannot choose a URL, file or camera source.
+- **Input fields:** `description`; `reviewDraft` (null for generation); `recentContext` (`messages`); `newMessages`; `newTranscripts` and `recentTranscripts` (IDs, capture times and text); `frames` metadata (IDs/timestamps) plus each frame as a low-detail JPEG data URL. Optional configured masks are applied before serialization; no mask is required. `persona.style` is in the system prompt; the persona name is used for published local identity and by Jev, not serialized as a separate answer payload field.
+- **Actions:** `say` (draft text and evidence), `skip` (no message), or `inspect` (only honored in `on_request` without frames; app validates current fresh frames then calls the model again). Inspection is not a callable tool and cannot choose a URL, file or camera source.
 - **Output schema:** strict JSON fields `action`, `text`, `replyToMessageId`, `evidenceFrameIds`, `evidenceMessageIds`, `evidenceTranscriptIds`; action enum is `say | skip | inspect`. `say` requires nonempty text <=120 Unicode characters, at most two lines, and at least one evidence ID. Evidence/reply IDs must exist in current input. Output is checked for several obvious unsafe patterns. These checks do not prove truth or guarantee safety.
 - **Provider calls:** OpenAI API mode sends Responses API with strict JSON schema, `store:false`, configured output token limit, and first performs input token counting. ChatGPT subscription mode sends the same prompt/schema to Responses API with `store:false`, streaming enabled and waits for completion. Neither enables provider tools. Each request is capped locally at 8 MiB.
 - **Budgets/failure:** every generation/follow-up/review call reserves one `ai.maxCalls` call and applicable configured USD budget. Any provider, parse, token-limit or budget error stops AI with a state visible in Admin. Legacy attempt timeout is 30 seconds; persona sessions use `model_timeout_ms` (6 seconds by default); Stop AI aborts the active request.
@@ -113,7 +113,7 @@ flowchart TD
 ### 6. AI draft review (default enabled)
 
 - **Purpose:** reject or make a constrained edit to a generated draft before any human queue or local publication.
-- **Input:** same `ModelInput` and evidence as the answer pass, plus `reviewDraft` containing the proposed text. If visual inspection occurred, masked frames remain available as evidence.
+- **Input:** same `ModelInput` and evidence as the answer pass, plus `reviewDraft` containing the proposed text. If visual inspection occurred, video frames remain available as evidence.
 - **Editable prompt file:** [`prompts/review.md`](prompts/review.md). Change the text there. The draft is supplied as the user JSON field `reviewDraft`; its serialization is in [`packages/model.ts`](packages/model.ts), function `modelMessages(input)`. Keep permitted `say`/`skip` outcomes aligned with validation and scheduler handling.
 
 - **Tools:** none. Same selected model and provider as drafting; it is not independent moderation despite the prompt wording and is not a safety guarantee.
@@ -137,7 +137,7 @@ flowchart TD
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------: | ---------------------------------------------------------------- |
 | Groq Whisper      | Form fields in `packages/transcription.ts`; language from `audio.language`                                                                               |           None | FFmpeg captures audio and creates WAV chunks                     |
 | TypeSafe Jev      | [`prompts/jev_timing.md`](prompts/jev_timing.md), `prompts/jev_criteria_*.md`; loaded by [`packages/gate.ts`](packages/gate.ts)                          |           None | Scheduler suppresses a reaction; stops when its cap is exhausted |
-| Answer generation | [`prompts/answer.md`](prompts/answer.md); loaded by [`packages/model.ts`](packages/model.ts); schema in [`packages/contracts.ts`](packages/contracts.ts) |           None | May request `inspect`; app can attach fresh masked frames        |
+| Answer generation | [`prompts/answer.md`](prompts/answer.md); loaded by [`packages/model.ts`](packages/model.ts); schema in [`packages/contracts.ts`](packages/contracts.ts) |           None | May request `inspect`; app can attach fresh video frames         |
 | Draft review      | [`prompts/review.md`](prompts/review.md); loaded by [`packages/model.ts`](packages/model.ts); same schema                                                |           None | App may accept/edit/reject; no other follow-up                   |
 | Human review      | No AI prompt                                                                                                                                             |            N/A | Authenticated human approves/rejects local pending message       |
 
@@ -177,8 +177,8 @@ Admin `/api/admin/status` exposes scheduler state/phase, latest context counts, 
 - `budget_exhausted`, `gate_budget_exhausted`, `model_error`: AI stopped on the named failure; inspect gate/provider status and budgets before restarting.
 - `Program input · connecting` with no frame: FFmpeg started but no decodable image has arrived. Check the selected camera/backend, Program output, RTMP URL/network and FFmpeg path.
 - `failed` or `reconnecting`: capture worker failed; use the displayed exit/error detail and check OBS output/capture configuration.
-- A fresh frame is shown only if it is <=10 seconds old. Preview confirmation is a runtime action, not a YAML acknowledgement. `capture.programConfirmed` is accepted only for compatibility and discarded during config parsing.
+- A fresh frame is shown only if it is <=10 seconds old. No preview confirmation is required. `capture.programConfirmed` is accepted only for compatibility and discarded during config parsing.
 
 ## Privacy and boundaries
 
-Current configuration has no provider-review flags. Configured audio and a Groq key enable transcription when inputs start. Transcripts and consented visible chat may go to TypeSafe if Jev is enabled and to the selected answer provider. Masked images may go to the answer provider after capture checks; Jev never receives them. The app does not save raw audio or frame images. Persona authoring persists public planning input in model-run manifests, definitions, audition outputs and review records; live persona attempts also retain decisions and metadata. Do not interpret this as a no-model-data-storage system. Retained transcript/chat logs remain local to the configured database and are subject to retention/deletion settings. Keep API keys, encrypted token files, RTMP URLs and exports private.
+Current configuration has no provider-review flags. Configured audio and a Groq key enable transcription when inputs start. Transcripts and consented visible chat may go to TypeSafe if Jev is enabled and to the selected answer provider. Video frames may go to the answer provider after freshness checks; Jev never receives them. The app does not save raw audio or frame images. Persona authoring persists public planning input in model-run manifests, definitions, audition outputs and review records; live persona attempts also retain decisions and metadata. Do not interpret this as a no-model-data-storage system. Retained transcript/chat logs remain local to the configured database and are subject to retention/deletion settings. Keep API keys, encrypted token files, RTMP URLs and exports private.
