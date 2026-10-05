@@ -1101,8 +1101,7 @@ function Admin() {
                       ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
                   </p>
                 )}
-                {status.demo &&
-                  status.ai.provider === "chatgpt_subscription" &&
+                {status.ai.provider === "chatgpt_subscription" &&
                   !status.demo && (
                     <div className="pending">
                       <strong>ChatGPT plan connection</strong>
@@ -1270,8 +1269,8 @@ function Admin() {
                   <summary>Data processing review</summary>
                   <p>
                     현재 운영 프로필은 단계별 동의가 완료된 채팅과 검증된 익명
-                    요약만 OpenAI API에 전달합니다. 영상·음성·다른 제공자는
-                    사용하지 않습니다.
+                    요약만 선택한 OpenAI 서비스에 전달합니다. 영상·음성·다른
+                    제공자는 사용하지 않습니다.
                   </p>
                   <p>
                     응답 저장은 요청하지 않지만 제공자 측 모든 로그가 삭제된다는

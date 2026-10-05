@@ -300,8 +300,7 @@ export class Participation {
         this.onWithdraw?.(structuredClone(p));
       }
   }
-  replaceProfile(profile: PrivacyProfile) {
-    if (profileFingerprint(profile) === this.fingerprint) return;
+  invalidateAll() {
     for (const p of this.participants.values()) {
       p.state = "WITHDRAWN";
       p.epoch++;
@@ -310,6 +309,11 @@ export class Participation {
       p.observed = undefined;
       this.onWithdraw?.(structuredClone(p));
     }
+    this.revision++;
+  }
+  replaceProfile(profile: PrivacyProfile) {
+    if (profileFingerprint(profile) === this.fingerprint) return;
+    this.invalidateAll();
     this.profile = profile;
     this.fingerprint = profileFingerprint(profile);
     this.revision++;

@@ -1,6 +1,6 @@
 # Mixed Chat Studio
 
-A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI API text-only profile**. An incomplete operating profile blocks collection and external AI processing.
+A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI service text-only profile**. An incomplete operating profile blocks collection and external AI processing.
 
 Start with [live setup](LIVE_SETUP.md), [privacy implementation](docs/privacy-implementation.md), [AI flow](AI_FLOW.md) or the [documentation index](docs/README.md). Historical integration experiments are not current deployment approval.
 
@@ -31,7 +31,9 @@ The **개인정보·참여 관리** panel exposes staged guidance, age blocking 
 
 Copy the structure in [config.example.yaml](config.example.yaml) into ignored `config.yaml`. Fill `privacy` with the real operator, contact, public policy/notice versions, actual API processing conditions, publication channels/periods and separately verified platform permissions. Empty defaults intentionally fail closed. YAML changes apply on restart, which clears the session and requires new consent. Do not copy synthetic test approvals into production.
 
-Set `ai.provider: openai_api`, `ai.gate.enabled: false`, `OPENAI_API_KEY` and `OPENAI_MODEL`. The environment model must exactly match `privacy.processing.model`. The pinned endpoint and account retention/region eligibility must match the public notice. ChatGPT subscription login, Groq STT, Jev and unofficial SOOP adapters are unavailable in this live profile.
+Choose `ai.provider: chatgpt_subscription` for **ChatGPT plan usage without an API key**, or `openai_api` for an independently billed API key. Keep `ai.gate.enabled: false`. Subscription mode restores **Continue with ChatGPT**, saved accounts and model selection in admin; use the same ChatGPT account you use for Codex, with this app's own official sign-in. It does not read Codex CLI credential files or run Codex CLI tools.
+
+For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1` and the exact selected model slug. `OPENAI_API_KEY` and `OPENAI_MODEL` are not required. For API mode use `provider: openai_api`, `contract: API`, private `OPENAI_API_KEY` and matching `OPENAI_MODEL`. Both modes require reviewed actual processing conditions and retain consent/withdrawal guards. API region/retention claims must not be copied to a subscription profile without verification. Groq STT, Jev and unofficial SOOP remain unavailable. The [official ChatGPT plan integration](https://developers.openai.com/siwc/token-sharing-open-source) is subject to account eligibility and available models.
 
 ### YouTube: official gRPC and REST
 

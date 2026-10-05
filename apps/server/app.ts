@@ -23,6 +23,8 @@ import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
 import {
   mockModel,
   openaiModel,
+  chatgptModel,
+  type ModelInput,
   limitModelConcurrency,
 } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
@@ -106,9 +108,12 @@ export async function createApp(
   const privacyReady = () =>
     !participation ||
     (!profileIssues(config.privacy).length &&
-      config.ai.provider === "openai_api" &&
+      config.ai.provider === config.privacy.processing.provider &&
       !config.ai.gate.enabled &&
-      config.privacy.processing.model === process.env.OPENAI_MODEL);
+      config.privacy.processing.model ===
+        (config.ai.provider === "chatgpt_subscription"
+          ? chatgpt.active?.model
+          : process.env.OPENAI_MODEL));
 
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
@@ -125,58 +130,63 @@ export async function createApp(
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
   );
   const audiences = new WeakMap<object, any[]>();
+  const modelBoundary = {
+    authorize: (input: ModelInput) => {
+      if (
+        !privacyReady() ||
+        input.privacyRevision !== participation!.revision ||
+        input.frames.length ||
+        (input.transcripts?.length ?? 0) > 0 ||
+        input.messages.some((m) => !store.publicMessage(m.id))
+      )
+        throw Error(
+          "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
+        );
+      if (!audiences.has(input))
+        audiences.set(
+          input,
+          [...participation!.participants.values()]
+            .filter((p) =>
+              input.messages.some((m) => {
+                const row = store.db
+                  .prepare(
+                    "SELECT a.author,m.platform,m.channel FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=?",
+                  )
+                  .get(m.id) as any;
+                return (
+                  row &&
+                  row.author === p.author &&
+                  row.platform === p.platform &&
+                  row.channel === p.broadcaster
+                );
+              }),
+            )
+            .map((p) => ({ participant: p, epoch: p.epoch })),
+        );
+    },
+    requestId: (id: string, input: ModelInput) => {
+      for (const audience of audiences.get(input) ?? []) {
+        const p = audience.participant;
+        p.requestIds.push(id);
+        p.requestIds = p.requestIds.slice(-100);
+        const key = `${p.id}:${audience.epoch + 1}`;
+        const taskId = withdrawalTasks.get(key);
+        if (taskId) rights.attachRequest(taskId, id);
+        const pending = pendingRights.get(key);
+        if (pending) pending.requestIds.push(id);
+      }
+    },
+  };
   const personaModel = limitModelConcurrency(
     opts.demo
       ? mockModel
-      : openaiModel(config.ai, {
-          endpoint: () => config.privacy.processing.endpoint,
-          model: () => config.privacy.processing.model,
-          authorize: (input) => {
-            if (
-              !privacyReady() ||
-              input.privacyRevision !== participation!.revision ||
-              input.frames.length ||
-              (input.transcripts?.length ?? 0) > 0 ||
-              input.messages.some((m) => !store.publicMessage(m.id))
-            )
-              throw Error(
-                "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
-              );
-            if (!audiences.has(input))
-              audiences.set(
-                input,
-                [...participation!.participants.values()]
-                  .filter((p) =>
-                    input.messages.some((m) => {
-                      const row = store.db
-                        .prepare(
-                          "SELECT a.author,m.platform,m.channel FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=?",
-                        )
-                        .get(m.id) as any;
-                      return (
-                        row &&
-                        row.author === p.author &&
-                        row.platform === p.platform &&
-                        row.channel === p.broadcaster
-                      );
-                    }),
-                  )
-                  .map((p) => ({ participant: p, epoch: p.epoch })),
-              );
-          },
-          requestId: (id, input) => {
-            for (const audience of audiences.get(input) ?? []) {
-              const p = audience.participant;
-              p.requestIds.push(id);
-              p.requestIds = p.requestIds.slice(-100);
-              const key = `${p.id}:${audience.epoch + 1}`;
-              const taskId = withdrawalTasks.get(key);
-              if (taskId) rights.attachRequest(taskId, id);
-              const pending = pendingRights.get(key);
-              if (pending) pending.requestIds.push(id);
-            }
-          },
-        }),
+      : config.ai.provider === "chatgpt_subscription"
+        ? chatgptModel(config.ai, chatgpt, fetch, modelBoundary)
+        : openaiModel(config.ai, {
+            endpoint: () => config.privacy.processing.endpoint,
+            model: () => config.privacy.processing.model,
+            ...modelBoundary,
+          }),
     2,
   );
   const personaGenerator = opts.demo ? demoPersonaGenerator() : undefined;
@@ -194,10 +204,9 @@ export async function createApp(
     personaModel,
     !!opts.demo,
     () =>
-      privacyReady() &&
-      (config.ai.provider === "chatgpt_subscription"
+      config.ai.provider === "chatgpt_subscription"
         ? !!chatgpt.active?.refreshToken && !!chatgpt.active?.model
-        : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL),
+        : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     transcriber,
   );
   scheduler.preparePersonas = () => {
@@ -228,7 +237,7 @@ export async function createApp(
     if (opts.demo) return [];
     const missing: string[] = [];
     if (!privacyReady())
-      missing.push("운영 프로필·국외 처리·OpenAI API 설정 확인");
+      missing.push("운영 프로필·국외 처리·선택한 AI 서비스 설정 확인");
     if (!scheduler.providerReady()) missing.push("연결된 AI 모델");
     return missing;
   };
@@ -1417,6 +1426,13 @@ export async function createApp(
     await supervisor.stop();
     return { ok: true };
   });
+  const invalidateChatgptContext = () => {
+    scheduler.stop("chatgpt_account_changed");
+    const prior = participation ? [...participation.participants.values()] : [];
+    participation?.invalidateAll();
+    for (const p of prior)
+      store.revokeParticipant(p.platform, p.broadcaster, p.author);
+  };
   app.post("/api/admin/chatgpt/authorize", async (req) => {
     const body = z
       .object({ clientId: z.string().optional() })
@@ -1430,6 +1446,7 @@ export async function createApp(
     scheduler.stop();
     const body = z.object({ clientId: z.string() }).parse(req.body);
     chatgpt.select(body.clientId);
+    invalidateChatgptContext();
     return { ok: true };
   });
   app.post("/api/admin/chatgpt/select-model", async (req) => {
@@ -1440,10 +1457,12 @@ export async function createApp(
       body.slug,
       models.map((m) => m.slug),
     );
+    invalidateChatgptContext();
     return { ok: true };
   });
   app.post("/api/admin/chatgpt/disconnect", async () => {
     scheduler.stop();
+    invalidateChatgptContext();
     return chatgpt.disconnect();
   });
   app.get("/oauth/chatgpt/callback", async (req, reply) => {
@@ -1457,6 +1476,7 @@ export async function createApp(
         })
         .parse(req.query);
       await chatgpt.callback(q);
+      invalidateChatgptContext();
       return reply
         .type("text/plain")
         .send(
@@ -1732,14 +1752,16 @@ export async function createApp(
   app.addHook("onRequest", async (req, reply) => {
     if (
       !opts.demo &&
-      (/^\/api\/admin\/(?:chatgpt(?:\/|$)|audio(?:\/|$)|capture\/start|transcripts\/export)/.test(
-        req.url,
-      ) ||
+      ((config.ai.provider !== "chatgpt_subscription" &&
+        /^\/api\/admin\/chatgpt(?:\/|$)/.test(req.url)) ||
+        /^\/api\/admin\/(?:audio(?:\/|$)|capture\/start|transcripts\/export)/.test(
+          req.url,
+        ) ||
         (req.method !== "GET" && req.url.startsWith("/api/admin/persona/")))
     )
       return reply.code(409).send({
         error:
-          "현재 프로필은 동의된 텍스트와 OpenAI API만 사용합니다. 영상·음성·다른 제공자·수동 페르소나 경로는 차단됩니다.",
+          "현재 설정에서 허용하지 않는 입력 또는 제공자입니다. 선택한 AI 서비스와 운영 프로필을 확인해 주세요.",
       });
   });
   app.addHook("onClose", async () => {

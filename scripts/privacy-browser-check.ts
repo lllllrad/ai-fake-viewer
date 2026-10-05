@@ -12,7 +12,15 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
   const { app, store } = await createApp(
     configSchema.parse({
       port,
-      privacy: approvedProfile(),
+      privacy: {
+        ...approvedProfile(),
+        processing: {
+          ...approvedProfile().processing,
+          provider: "chatgpt_subscription",
+          contract: "ChatGPT subscription",
+        },
+      },
+      ai: { provider: "chatgpt_subscription" },
       chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
       soop: {
         mode: "official",
@@ -43,8 +51,11 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     const panel = page.getByRole("region", { name: "개인정보 및 참여 관리" });
     await expect(panel).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Continue with ChatGPT" }),
-    ).toHaveCount(0);
+      page.getByRole("button", {
+        name: "Continue with ChatGPT",
+        includeHidden: true,
+      }),
+    ).toHaveCount(1);
     await page.route("**/api/admin/soop/chat-session", (route) =>
       route.fulfill({
         json: {
@@ -80,6 +91,9 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         }),
     );
     await page.locator("#advanced-settings > summary").click();
+    await expect(
+      page.getByRole("button", { name: "Continue with ChatGPT" }),
+    ).toBeVisible();
     await page
       .getByRole("button", { name: "Connect SOOP chat", exact: true })
       .click();

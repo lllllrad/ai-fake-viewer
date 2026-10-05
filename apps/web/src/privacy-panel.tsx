@@ -105,7 +105,11 @@ export function PrivacyPanel() {
           {data.profile.noticeVersion || "미설정"}
         </p>
         <p>
-          처리: OpenAI API · {data.profile.processing.model || "모델 미설정"} ·{" "}
+          처리:{" "}
+          {data.profile.processing.provider === "chatgpt_subscription"
+            ? "ChatGPT 구독"
+            : "OpenAI API"}{" "}
+          · {data.profile.processing.model || "모델 미설정"} ·{" "}
           {data.profile.processing.countries.join(", ") || "국가 미확정"}
         </p>
         <p>
@@ -120,8 +124,8 @@ export function PrivacyPanel() {
         </p>
         <p className="hint">
           운영 프로필은 config.yaml의 privacy에서 설정합니다. 실제 계약·안내
-          내용을 확인한 뒤 적용하세요. 영상·음성, ChatGPT 구독·다른 AI 제공자
-          경로는 이 프로필에서 사용하지 않습니다.
+          내용을 확인한 뒤 적용하세요. 영상·음성·선택하지 않은 AI 제공자 경로는
+          이 프로필에서 사용하지 않습니다.
         </p>
       </details>
       <p role="status">

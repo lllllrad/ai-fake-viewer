@@ -41,7 +41,7 @@ audio:
   chunkSeconds: 10
   maxRequests: 360
 ai:
-  provider: openai_api # the live privacy profile supports only OpenAI API
+  provider: openai_api # or chatgpt_subscription (ChatGPT plan, no API key)
   manualApproval: false # publish locally without human review
   reviewDraft: true # run a second model pass over each proposed reply
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
@@ -82,8 +82,8 @@ privacy:
   thirdPartyNotice: "" # separate step if applicable
   processing:
     provider: openai_api
-    contract: API
-    model: "" # must equal OPENAI_MODEL
+    contract: API # ChatGPT subscription when provider is chatgpt_subscription
+    model: "" # API: OPENAI_MODEL; subscription: selected account model slug
     endpoint: "" # approved OpenAI /v1 endpoint; never silently falls back
     countries: []
     subprocessors: ""

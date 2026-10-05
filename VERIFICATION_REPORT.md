@@ -2,7 +2,15 @@
 
 ## Evidence scope
 
-This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision/ChatGPT paths. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
+This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; ChatGPT subscription support was restored in the latest milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
+
+## Restore ChatGPT subscription support — 2026-10-05
+
+- Extended the previous API-only privacy profile at the user's request: explicit `chatgpt_subscription` now supports the existing official app OAuth account/model with no `OPENAI_API_KEY` or `OPENAI_MODEL`. Restored live sign-in, saved-account and model-selection controls; API mode remains available independently. No Codex CLI credential import or CLI execution was added.
+- Processing profile distinguishes API and ChatGPT subscription contracts and validates provider/model/endpoint consistency. Both adapters enforce the same consent/withdrawal guard. Subscription rechecks after asynchronous token refresh, aborts changed account/model requests and records request IDs for follow-up. Account/model changes invalidate current consent/raw context. Video/audio and third-party gate restrictions remain.
+- `sh run-command.sh npm run check`: **95 tests PASS**, build and document/config validation PASS. Added API-key-free live readiness/start, contract mismatch/unsupported endpoint and pre-send withdrawal during refresh coverage; subscription generation fixture checks stream/store flags and request-ID collection.
+- `sh run-command.sh npm run test:browser`: **PASS**, no page errors. Browser verification uses the strict subscription profile and synthetic SDK fixtures; verifies the restored ChatGPT button alongside existing notice/privacy/rights flows. No paid or subscription generation request was made to a live provider.
+- Local ignored configuration was switched to subscription mode using the existing saved app account/model, with the unsupported Jev gate disabled. Missing operator/notice/processing review fields remain unfilled. Actual model availability/account quota and subscription data handling are not established by fixtures. Official integration reference: [ChatGPT plan usage](https://developers.openai.com/siwc/token-sharing-open-source).
 
 ## Automatic SOOP fixed notices — 2026-10-05
 

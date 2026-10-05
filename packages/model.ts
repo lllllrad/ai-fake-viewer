@@ -239,8 +239,11 @@ export function chatgptModel(
   config: Config["ai"],
   auth: ChatgptAuth,
   request: typeof fetch = fetch,
+  options?: { authorize: (input: ModelInput) => void; requestId?: (id: string, input: ModelInput) => void },
 ): Model {
   return async (input, signal) => {
+    options?.authorize(input);
+    const account = auth.active?.clientId;
     const model = auth.active?.model;
     if (!model) throw Error("Select an available ChatGPT model first");
     const body = {
@@ -261,6 +264,10 @@ export function chatgptModel(
     if (Buffer.byteLength(serialized) > 8 * 1024 * 1024)
       throw Error("Model request exceeds local size limit");
     const token = await auth.access();
+    signal.throwIfAborted();
+    options?.authorize(input);
+    if (auth.active?.clientId !== account || auth.active?.model !== model)
+      throw Error("ChatGPT account or model changed during authentication");
     const r = await request("https://api.openai.com/v1/responses", {
       method: "POST",
       signal,
@@ -270,6 +277,8 @@ export function chatgptModel(
       },
       body: serialized,
     });
+    const requestId = r.headers.get("x-request-id");
+    if (requestId) options?.requestId?.(requestId, input);
     if (!r.ok || !r.body) throw Error("ChatGPT inference unavailable");
     let completed: any;
     let buffer = "";

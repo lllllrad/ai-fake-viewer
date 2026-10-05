@@ -1,12 +1,12 @@
 # AI chat pipeline and improvement guide
 
-The live profile is consent-gated, text-only OpenAI API processing. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
+The live profile is consent-gated, text-only processing using explicitly selected OpenAI API or ChatGPT subscription authentication. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
 
 ## Runtime scope and startup
 
-`createApp` always constructs an in-memory Store. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the model adapter to the privacy profile. Startup requires a complete profile, matching API model/key and disabled third-party gate, not audio/video. AI requires manual start after restart. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
+`createApp` always constructs an in-memory Store. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI requires manual start after restart. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
-Legacy ChatGPT, audio, video, Jev, persistent Store and persona authoring libraries remain testable independently. They are not enabled live paths; changing their legacy config does not bypass the server guards. Demo uses artificial data and a mock model.
+Legacy audio, video, Jev, persistent Store and persona authoring libraries remain testable independently. They are not enabled live paths; changing their legacy config does not bypass the server guards. Demo uses artificial data and a mock model.
 
 ## Withdrawal and anonymous chat summaries
 
@@ -55,7 +55,7 @@ Legacy utility only. Enabling it blocks live readiness rather than transmitting 
 
 ### 5. Answer generation and inspection
 
-The adapter checks profile/model/revision, absence of live frames/transcripts and current permission for every input message before token counting and again immediately before Responses. Both calls use the configured OpenAI endpoint; no silent region/provider fallback. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
+Both adapters check profile/model/revision, absence of live frames/transcripts and current permission for every input message before token counting and again immediately before Responses. In API-key mode token counting and Responses use the configured endpoint; subscription mode uses its supported public Responses endpoint; no silent region/provider fallback. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
 
 ### 6. AI draft review (default enabled)
 
@@ -80,3 +80,7 @@ Use [config.example.yaml](config.example.yaml), [live setup](LIVE_SETUP.md) and 
 ## Privacy and boundaries
 
 `store:false` is not proof that all provider logs are erased. Actual account data controls, region/model eligibility and retention must match the notices; see [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). Local cancellation cannot retract network bytes already delivered. Host swap/crash captures and external video copies require operator review. Session end clears all ordinary app context; exceptional rights tasks and credentials have separate storage and purpose.
+
+## ChatGPT subscription without an API key
+
+`chatgpt_subscription` uses the app's official ChatGPT OAuth account and selected model, with no API-key/environment-model requirement. The Responses stream uses `store:false` and no tools/chaining. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.

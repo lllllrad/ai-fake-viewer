@@ -22,9 +22,11 @@ No blank value means “implicitly approved.” Read the current profile in admi
 
 ## 3. Configure the model and permitted inputs
 
-Use `ai.provider: openai_api`, `ai.gate.enabled: false`, a private `OPENAI_API_KEY` and an `OPENAI_MODEL` exactly matching `privacy.processing.model`. Use only an endpoint/model combination verified for that account, retention contract and announced countries. The software does not verify the truth of operator attestations or switch to a global endpoint on error.
+Choose `ai.provider: chatgpt_subscription` to use a ChatGPT subscription without `OPENAI_API_KEY` or `OPENAI_MODEL`. Open admin → connection/AI details → **Continue with ChatGPT**, authorize this app, load available models and select one. Set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, endpoint `https://api.openai.com/v1` and the same model slug; review that subscription's actual data handling in the public notice. Saved encrypted app accounts remain reusable. Codex CLI credentials are not imported.
 
-Screen and audio ingestion are disabled in this profile. OBS can still show the reader overlay, but incoming camera/RTMP images, spoken chat, Groq transcription, transcript export, ChatGPT subscription and Jev are unavailable. No screen confirmation or `programConfirmed` gate is needed.
+Alternatively select `openai_api`, supply the API key/environment model and use an API contract profile with matching model/endpoint. Keep `ai.gate.enabled: false` for either service. There is no automatic fallback between the two contracts. A provider/model mismatch blocks transmission rather than requiring an API key for subscription users.
+
+Screen and audio ingestion are disabled in this profile. OBS can still show the reader overlay, but incoming camera/RTMP images, spoken chat, Groq transcription, transcript export and Jev are unavailable. No screen confirmation or `programConfirmed` gate is needed.
 
 ## 4. Connect real chat sources
 

@@ -18,8 +18,10 @@ export const privacyProfileSchema = z
     thirdPartyNotice: text,
     processing: z
       .object({
-        provider: z.literal("openai_api").default("openai_api"),
-        contract: z.literal("API").default("API"),
+        provider: z
+          .enum(["openai_api", "chatgpt_subscription"])
+          .default("openai_api"),
+        contract: z.enum(["API", "ChatGPT subscription"]).default("API"),
         model: text,
         endpoint: text,
         countries: z.array(z.string().min(1)).default([]),
@@ -132,10 +134,18 @@ export function profileIssues(p: PrivacyProfile): string[] {
   )
     issues.push("AI 국가·계약·보존·안내 일치 확인 필요");
   if (
-    a.endpoint &&
-    !/^https:\/\/(?:api|[a-z]{2}\.api)\.openai\.com\/v1$/.test(a.endpoint)
+    (a.provider === "openai_api" && a.contract !== "API") ||
+    (a.provider === "chatgpt_subscription" &&
+      a.contract !== "ChatGPT subscription")
   )
-    issues.push("확인된 OpenAI API endpoint 필요");
+    issues.push("AI 제공자와 계약 서비스 불일치");
+  if (
+    a.endpoint &&
+    (a.provider === "chatgpt_subscription"
+      ? a.endpoint !== "https://api.openai.com/v1"
+      : !/^https:\/\/(?:api|[a-z]{2}\.api)\.openai\.com\/v1$/.test(a.endpoint))
+  )
+    issues.push("선택한 OpenAI 서비스의 확인된 endpoint 필요");
   if (
     !p.publications.length ||
     p.publications.some((x) => !x.reviewed || !x.noticeMatches)
