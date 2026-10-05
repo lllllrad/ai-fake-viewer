@@ -19,7 +19,7 @@ This is the entry point for the current live behavior contract. Detailed specifi
 
 ## Platform execution and notice delivery
 
-These are current implementation choices, not claims that a platform requires this architecture in every integration.
+These are current implementation choices, not claims that a platform requires this architecture in every integration. The [SOOP public-documentation recheck](../research/soop-official-verification.md#server-side-support-recheck--2026-10-05) found browser SDK support but no documented official server chat transport; the browser path remains in use.
 
 | Platform | Receiver location                                                                          | Participation notice delivery                                                                                                                                                                               | Admin tab dependency                                                                                                               |
 | -------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

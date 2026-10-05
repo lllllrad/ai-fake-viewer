@@ -6,6 +6,16 @@ Checked 2026-10-02. Official and experimental paths have independent statuses.
 
 Code review on 2026-10-05 found an implemented official OAuth and browser SDK path in [packages/soop.ts](../packages/soop.ts), [server routes](../apps/server/app.ts) and [administrator UI](../apps/web/src/main.tsx). The signed-in admin page hosts the SDK and receives messages for the authenticated broadcaster. See the [current setup guide](../README.md#soop-official-chat). This is code evidence, not new verification of the external SDK contract, account approval or live reception.
 
+## Server-side support recheck — 2026-10-05
+
+The public [Chat SDK overview](https://developers.sooplive.com/docs/chatsdk/overview) explicitly describes JavaScript web browsers as its supported environment. Its setup example loads a script into HTML and constructs `window.SOOP.ChatSDK`. The [connection contract](https://developers.sooplive.com/docs/chatsdk/connection) documents SDK connection to the authenticated broadcaster's own chat; it does not document a standalone server WebSocket protocol or Node.js runtime support.
+
+The public [OpenAPI getting-started guide](https://developers.sooplive.com/docs/api/getting-started) and the API sections linked by the documentation navigation were also reviewed. The scope catalog includes `broad_access_chatinfo`, but no server-side chat receive/send endpoint, chat webhook or server SDK contract was found. A scope name alone does not establish a supported server transport. This finding is limited to the public documentation inspected; it does not rule out a separately provided partner integration.
+
+Retrieval evidence: the documentation pages are client-rendered. Their deployed official assets `index.SmFspiL2.js`, `chatsdk.BKRmx3Wy.js` and `openapi.BIIoHXE7.js`, under `https://static.sooplive.com/build/developers/assets/`, were read to inspect navigation, supported environments, method examples and documented endpoints. No authenticated account, live chat connection or message send was used for this review.
+
+Decision: retain the official browser SDK path and its connected-admin-tab requirement. No runtime migration was made because an officially supported server chat contract was not established. Running the browser SDK in a headless browser or adapting its internals to Node.js would not by itself establish official server support. Revisit this decision when SOOP publishes or supplies a server runtime/transport contract covering authentication, receipt, sending and delivery confirmation.
+
 ## Historical official investigation — 2026-10-02
 
 The [official overview](https://developers.sooplive.com/docs/chatsdk/overview) returned no readable detailed contract through the available documentation retrieval. The [getting-started entry](https://developers.sooplive.co.kr/docs/chatsdk/getting-started) is a follow-up location provided by the handoff, not a verified API contract.
