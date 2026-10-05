@@ -35,3 +35,70 @@ test("broadcast end turns off AI and clears its restart intent", async () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("global AI toggle arms the live persona and reveal disarms it with persisted status", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "pipeline-controls-"));
+  const { app, store, scheduler, personas } = await createApp(
+    configSchema.parse({
+      database: ":memory:",
+      ai: { visualMode: "on_request" },
+    }),
+    {
+      demo: true,
+      startInputs: false,
+      adminToken: "a".repeat(64),
+      readerToken: "r".repeat(64),
+      encryptionKey: "e".repeat(64),
+      chatgptTokenPath: join(directory, "chatgpt.tokens"),
+      chzzkTokenPath: join(directory, "chzzk.tokens"),
+      soopTokenPath: join(directory, "soop.tokens"),
+    },
+  );
+  const headers = {
+    host: "127.0.0.1:3210",
+    authorization: `Bearer ${"a".repeat(64)}`,
+  };
+  try {
+    const persona = personas.createBrief({
+      session_title: "Fixture",
+      topic: "Fixture",
+      audience_intent: "Observe",
+      public_context: "",
+      private_production_context: "",
+      tone_policy: "Brief",
+      candidate_count: 1,
+      cast_size: 1,
+    });
+    // Isolate the control path from authoring/model calls.
+    store.db
+      .prepare("UPDATE persona_sessions SET state='live' WHERE id=?")
+      .run(persona.id);
+    let response = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/start",
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(store.personaRuntime()?.armed, true);
+    assert.equal(store.aiDesiredRunning(), true);
+    response = await app.inject({
+      method: "POST",
+      url: "/api/admin/reveal",
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(scheduler.state, "stopped");
+    assert.equal(store.personaRuntime()?.armed, false);
+    assert.equal(store.aiDesiredRunning(), false);
+    response = await app.inject({
+      method: "GET",
+      url: "/api/admin/status",
+      headers,
+    });
+    assert.equal(response.json().originsRevealed, true);
+    assert.ok(Math.abs(response.json().generatedAt - Date.now()) < 1000);
+  } finally {
+    await app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

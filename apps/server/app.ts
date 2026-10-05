@@ -917,6 +917,8 @@ export async function createApp(
   });
   app.get("/api/admin/status", async () => ({
     demo: !!opts.demo,
+    generatedAt: Date.now(),
+    originsRevealed: store.originsRevealed(),
     sessionId: store.sessionId,
     closed: store.closed(),
     broadcastEnded: Object.values(supervisor.states).some(
@@ -1128,6 +1130,16 @@ export async function createApp(
         });
     }
     scheduler.start();
+    // The global toggle also resumes an explicitly stopped live persona cast.
+    const runtime = store.personaRuntime();
+    if (runtime && !runtime.armed) {
+      try {
+        personas.arm(runtime.id, runtime.controlEpoch);
+      } catch (error) {
+        scheduler.stop("persona_arm_failed");
+        throw error;
+      }
+    }
     return { ok: true, started: true, readiness: readyComponents() };
   });
   app.post("/api/admin/pipeline/start", async () => {
@@ -1172,6 +1184,7 @@ export async function createApp(
   });
   app.post("/api/admin/reveal", async () => {
     scheduler.stop();
+    personas.stopActive("identity_revealed");
     store.reveal();
     return { ok: true };
   });

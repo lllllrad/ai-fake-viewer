@@ -4,6 +4,13 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Operations dashboard — 2026-10-05
+
+- `mise exec -- npm run check`: PASS, documentation/config validation, TypeScript/Vite build and **59 tests**. New control test verifies global AI start arms a live persona, reveal disarms it and clears restart intent, and status reports the reveal flag and generation timestamp.
+- `npm run test:browser`: PASS in Chromium 153.0.8010.12 using the existing temporary Linux library/font environment. Verified dashboard precedes Persona studio, three input summaries, reload, missing nested status fields, stale response disabling start, available emergency stop, keyboard AI switch, cancel/confirm reveal, actual reader/overlay `AI 생성` badges, 390px mobile first-screen controls and no uncaught page errors.
+- The browser fixture grants explicit viewer consent before chat ingestion. External services and paid models were not used. Browser screenshots and the run report remain ignored under `test-results/`.
+- Changed files pass Prettier and `git diff --check`. Automatic restart policy is unchanged and remains a documented gap against the target manual-restart requirement. Live platform, physical OBS and complete accessibility acceptance remain separate.
+
 ## Documentation reconciliation — 2026-10-05
 
 - Compared tracked guidance against server startup/readiness, persona contracts/service/generator, scheduler, storage, UI, consent and gate behavior. Added the missing persona reference and an implementation-gap table for the target dashboard.

@@ -516,3 +516,114 @@ footer {
   top: 0;
   z-index: 2;
 }
+
+.operations-dashboard {
+  border-color: #587c71;
+}
+.operations-dashboard h3 {
+  margin: 0 0 12px;
+  font-size: 16px;
+}
+.operations-controls {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #182326;
+  padding: 12px 0;
+}
+.operations-summary,
+.operations-model {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  padding: 12px 0;
+}
+.operations-summary span {
+  color: #a9bfbb;
+}
+.operations-missing {
+  margin-top: 0;
+  font-size: 13px;
+}
+.operations-inputs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 12px 0;
+}
+.operations-inputs article {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #334548;
+  border-radius: 10px;
+  background: #121c1e;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.operations-inputs .section-title {
+  align-items: flex-start;
+}
+.dashboard-preview {
+  max-height: 170px;
+}
+.platform-status {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.platform-status li {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 8px;
+  margin-bottom: 12px;
+}
+.platform-status small {
+  grid-column: 1 / -1;
+  color: #a9bfbb;
+}
+.transcript-excerpt {
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.operations-notices {
+  border-top: 1px solid #334548;
+  padding-top: 14px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid #b5f4de;
+  outline-offset: 3px;
+}
+[id$="-details"] {
+  scroll-margin-top: 100px;
+}
+@media (max-width: 850px) {
+  .operations-inputs,
+  .persona-fields,
+  .persona-candidates {
+    grid-template-columns: 1fr;
+  }
+  .operations-dashboard {
+    padding: 16px;
+  }
+  .operations-controls {
+    gap: 8px;
+  }
+  .operations-controls button {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .section-title {
+    flex-wrap: wrap;
+  }
+  header {
+    flex-wrap: wrap;
+  }
+}

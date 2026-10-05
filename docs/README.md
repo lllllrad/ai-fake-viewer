@@ -19,7 +19,7 @@
 
 | 기능                       | 기준 코드                                                                                            | 같이 갱신할 문서                                |
 | -------------------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| 시작·복구·준비도·일괄 제어 | `apps/server/main.ts`, `apps/server/app.ts`                                                          | README, LIVE_SETUP, AI_FLOW, 대시보드 구현 차이 |
+| 시작·복구·준비도·일괄 제어 | `apps/server/main.ts`, `apps/server/app.ts`, `apps/web/src/operations-dashboard.tsx`                 | README, LIVE_SETUP, AI_FLOW, 대시보드 구현 차이 |
 | 시청자 동의·철회·익명 표시 | `packages/storage.ts`, `apps/web/src/main.tsx`                                                       | README, 대시보드 요구사항                       |
 | 페르소나 작성·세션         | `packages/persona/`, `packages/scheduler.ts`, `packages/storage.ts`                                  | 페르소나 명세, AI_FLOW, TASKS                   |
 | 모델 입력·프롬프트·예산    | `packages/model.ts`, `packages/gate.ts`, `prompts/`                                                  | AI_FLOW, README                                 |

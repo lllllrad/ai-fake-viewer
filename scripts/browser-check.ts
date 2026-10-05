@@ -1,4 +1,4 @@
-import { chromium } from "@playwright/test";
+import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -52,12 +52,56 @@ try {
       )
     ).length > 0,
   );
-  await adminPage.getByRole("button", { name: "Authorize CHZZK" }).click();
-  await adminPage
-    .getByRole("alert")
-    .getByText("Demo mode uses artificial inputs", { exact: false })
-    .waitFor();
-  await adminPage.getByRole("button", { name: "Dismiss" }).click();
+  const dashboard = adminPage.getByRole("region", {
+    name: "방송 상태 및 AI 제어",
+  });
+  await expect(dashboard).toBeVisible();
+  assert(
+    await adminPage.evaluate(() =>
+      document
+        .querySelector("main.admin section")
+        ?.classList.contains("operations-dashboard"),
+    ),
+  );
+  for (const heading of ["송출 화면", "실제 채팅 정보", "음성 인식 transcript"])
+    await expect(
+      dashboard.getByRole("heading", { name: heading }),
+    ).toBeVisible();
+  const aiToggle = dashboard.getByRole("switch", { name: "AI 채팅 생성 사용" });
+  await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  // Missing optional and nested status fields must not crash the admin page.
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    delete body.setup;
+    delete body.audio;
+    delete body.ai.input;
+    delete body.ai.gate;
+    await route.fulfill({ json: body });
+  });
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(
+    dashboard.getByText("아직 인식된 음성이 없습니다"),
+  ).toBeVisible();
+  await adminPage.unroute("**/api/admin/status");
+  // An old response disables start but keeps emergency stop available.
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      json: { ...(await response.json()), generatedAt: Date.now() - 60000 },
+    });
+  });
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(
+    dashboard.getByText("상태 응답이 오래되었거나 확인되지 않았습니다"),
+  ).toBeVisible();
+  await expect(aiToggle).toBeDisabled();
+  await expect(
+    dashboard.getByRole("button", { name: "AI 긴급 중지" }),
+  ).toBeEnabled();
+  await adminPage.unroute("**/api/admin/status");
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(aiToggle).toBeEnabled();
   const readerPage = await context.newPage(),
     overlay = await context.newPage();
   await readerPage.goto(`${origin}/reader#${reader}`);
@@ -66,6 +110,11 @@ try {
   const timing: number[] = [];
   for (let i = 0; i < 12; i++) {
     const start = performance.now();
+    store.grantConsent(
+      (["youtube", "chzzk", "soop"] as const)[i % 3],
+      "fixture",
+      `fixture-${i % 3}`,
+    );
     store.ingestBatch([
       {
         platform: (["youtube", "chzzk", "soop"] as const)[i % 3],
@@ -130,9 +179,9 @@ try {
     .getByRole("button", { name: "Confirm masked Program", exact: true })
     .click();
   await adminPage.getByText("Preview confirmed", { exact: false }).waitFor();
-  await adminPage
-    .getByRole("button", { name: "Start AI", exact: true })
-    .click();
+  await aiToggle.focus();
+  await adminPage.keyboard.press("Space");
+  await expect(aiToggle).toHaveAttribute("aria-checked", "true");
 
   await readerPage
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
@@ -153,7 +202,9 @@ try {
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
     .waitFor();
   assert.equal(await overlay.locator(".message .badge").count(), 0);
-  await adminPage.getByRole("button", { name: "■ Stop AI now" }).click();
+  await aiToggle.click();
+  await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  store.grantConsent("youtube", "fixture", "viewer");
   store.ingestBatch([
     {
       platform: "youtube",
@@ -166,13 +217,20 @@ try {
   await readerPage
     .getByText("[DEMO] Receiver continues after AI stop")
     .waitFor();
-  await adminPage
-    .getByRole("button", { name: "Stop AI & reveal origins", exact: true })
-    .click();
-  await readerPage.getByText("System generated", { exact: true }).waitFor();
-  await overlay.getByText("System generated", { exact: true }).waitFor();
+  adminPage.once("dialog", (dialog) => void dialog.dismiss());
+  await dashboard.getByRole("button", { name: "누가 AI인지 밝히기" }).click();
+  assert.equal(store.originsRevealed(), false);
+  adminPage.once("dialog", (dialog) => void dialog.accept());
+  await dashboard.getByRole("button", { name: "누가 AI인지 밝히기" }).click();
+  await expect(
+    dashboard.getByRole("button", { name: "AI 정체 공개됨" }),
+  ).toBeDisabled();
+  await readerPage.getByText("AI 생성", { exact: true }).waitFor();
+  await overlay.getByText("AI 생성", { exact: true }).waitFor();
   assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
   mkdirSync("test-results", { recursive: true });
+  await adminPage.evaluate(() => scrollTo(0, 0));
+  await adminPage.screenshot({ path: "test-results/admin-dashboard.png" });
   await adminPage.screenshot({
     path: "test-results/admin.png",
     fullPage: true,
@@ -186,6 +244,11 @@ try {
     omitBackground: true,
   });
   await adminPage.setViewportSize({ width: 390, height: 844 });
+  await adminPage.evaluate(() => scrollTo(0, 0));
+  await expect(aiToggle).toBeInViewport();
+  await expect(
+    dashboard.getByRole("button", { name: "AI 정체 공개됨" }),
+  ).toBeInViewport();
   assert(
     await adminPage.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -205,7 +268,13 @@ try {
       sorted[Math.ceil(sorted.length * 0.95) - 1],
     ),
     errors,
-    screenshots: ["admin", "reader", "overlay", "admin-mobile"],
+    screenshots: [
+      "admin",
+      "admin-dashboard",
+      "reader",
+      "overlay",
+      "admin-mobile",
+    ],
   };
   writeFileSync(
     "test-results/browser-report.json",

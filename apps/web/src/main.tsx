@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PublicMessage } from "../../../packages/contracts";
 import "./style.css";
+import {
+  OperationsDashboard,
+  normalizeAdminStatus,
+} from "./operations-dashboard";
 const disclosure = "실시간 채팅과 합성 참여자 반응이 함께 표시됩니다.";
 function TokenForm({
   title,
@@ -166,6 +170,13 @@ function PublicChat() {
             <div className="message-main">
               <div className="message-meta">
                 <strong>{m.displayName}</strong>
+                {m.attribution !== "mixed" && (
+                  <span className={`badge ${m.attribution}`}>
+                    {m.attribution === "experiment"
+                      ? "AI 생성"
+                      : m.attribution.toUpperCase()}
+                  </span>
+                )}
                 <time>
                   {new Date(m.displayTime).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -423,6 +434,12 @@ function Admin() {
     "checking" | "signed_in" | "signed_out"
   >("checking");
   const [status, setStatus] = useState<any>();
+  const [statusFailed, setStatusFailed] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
   const [links, setLinks] = useState<any>();
@@ -461,7 +478,11 @@ function Admin() {
     });
     if (!r.ok) {
       const b = await r.json();
-      throw Error(b.error);
+      throw Error(
+        typeof b.error === "string"
+          ? b.error
+          : (b.error?.message ?? b.error?.code ?? "요청 실패"),
+      );
     }
     return r;
   };
@@ -531,8 +552,10 @@ function Admin() {
   const refresh = async () => {
     try {
       const r = await api("status");
-      setStatus(await r.json());
+      setStatus(normalizeAdminStatus(await r.json()));
+      setStatusFailed(false);
     } catch (e: any) {
+      setStatusFailed(true);
       if (e.message === "Administrator token required") {
         setStatus(undefined);
         setSession("signed_out");
@@ -542,7 +565,8 @@ function Admin() {
   useEffect(() => {
     void api("status")
       .then(async (r) => {
-        setStatus(await r.json());
+        setStatus(normalizeAdminStatus(await r.json()));
+        setStatusFailed(false);
         setSession("signed_in");
       })
       .catch(() => setSession("signed_out"));
@@ -596,41 +620,20 @@ function Admin() {
       setBusy(false);
     }
   };
-  const startPipeline = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      await api("pipeline/start", "POST");
-      for (let attempt = 0; attempt < 60; attempt++) {
-        const next = await (await api("status")).json();
-        setStatus(next);
-        const frameFresh =
-          next.capture.lastFrameAgeMs !== null &&
-          next.capture.lastFrameAgeMs <= 10000;
-        if (frameFresh && !next.capture.confirmed) {
-          if (
-            !window.confirm(
-              "마스킹된 Program 미리보기를 확인했고, 가려야 할 영역이 모두 가려졌나요? 확인 후 AI 입력으로 승인합니다.",
-            )
-          )
-            throw Error("영상 미리보기 확인이 필요합니다.");
-          await api("capture/confirm", "POST");
-        }
-        if (next.ai.readiness.ready) {
-          await api("ai/start", "POST");
-          await refresh();
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      throw Error("필수 입력 준비 시간 초과. 대시보드 상태를 확인하세요.");
-    } catch (e: any) {
-      setError(e.message);
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
+  const startPipeline = () => action("ai/start");
+  const revealOrigins = () => {
+    if (
+      window.confirm(
+        "AI 생성을 중지하고 누가 AI인지 리더와 오버레이에 공개할까요? 이 세션에서는 되돌릴 수 없습니다.",
+      )
+    )
+      void action("reveal");
   };
+  const stale =
+    statusFailed ||
+    status?.incomplete ||
+    !status?.generatedAt ||
+    now - status.generatedAt > 10000;
   if (session === "checking")
     return (
       <main className="login">
@@ -666,12 +669,8 @@ function Admin() {
           <h1>Broadcast studio</h1>
           <p>Platform chat and screen-aware characters, together.</p>
         </div>
-        {status?.ai.state === "running" && (
-          <button
-            className="stop"
-            disabled={busy}
-            onClick={() => void action("ai/stop")}
-          >
+        {status?.ai?.state === "running" && (
+          <button className="stop" onClick={() => void action("ai/stop")}>
             ■ Stop AI now
           </button>
         )}
@@ -686,6 +685,26 @@ function Admin() {
         <p>Loading…</p>
       ) : (
         <>
+          <OperationsDashboard
+            status={status}
+            stale={stale}
+            now={now}
+            preview={preview}
+            busy={busy}
+            onAction={(path) => void action(path)}
+            onRefresh={() => void refresh()}
+            onToggle={() =>
+              void action(
+                status.ai.state === "running" ? "ai/stop" : "ai/start",
+              )
+            }
+            onReveal={revealOrigins}
+            onNotice={(platform, enabled) =>
+              void personaAction(async () => {
+                await post(`consent-notices/${platform}`, { enabled });
+              })
+            }
+          />
           <section className="card persona-studio">
             <div className="section-title">
               <h2>Persona studio · P0</h2>
@@ -1503,33 +1522,6 @@ function Admin() {
               <div className="section-title">
                 <h2>Live setup</h2>
               </div>
-              <h3>Consent notices</h3>
-              <p className="hint">
-                Enable only after the platform has approved outbound notice
-                text. When enabled, the read-only overlay explains that viewers
-                must type !동의 before their chat is shown. Notices repeat at
-                most once every 30 seconds while non-consenting chat continues;
-                viewers who type !철회 are excluded.
-              </p>
-              {(["youtube", "chzzk", "soop"] as const).map((platform) => (
-                <label key={platform}>
-                  <input
-                    type="checkbox"
-                    checked={
-                      status.setup?.[platform]?.consentNoticeEnabled ?? false
-                    }
-                    disabled={busy}
-                    onChange={(e) =>
-                      void post(`consent-notices/${platform}`, {
-                        enabled: e.target.checked,
-                      })
-                        .then(refresh)
-                        .catch((error) => setError(error.message))
-                    }
-                  />
-                  {platform.toUpperCase()} consent notice (approval required)
-                </label>
-              ))}
               <p>
                 YouTube:{" "}
                 {status.setup?.youtube?.enabled
@@ -1585,7 +1577,7 @@ function Admin() {
               refresh={refresh}
             />
           )}
-          <div className="grid connections">
+          <div className="grid connections" id="connection-details">
             {Object.entries(status.connectors).map(([p, s]: [string, any]) => (
               <section className="card" key={p}>
                 <div className="eyebrow">{p.toUpperCase()}</div>
@@ -1668,7 +1660,7 @@ function Admin() {
             </section>
           )}
           <div className="grid workspace">
-            <section className="card">
+            <section className="card" id="program-details">
               <div className="section-title">
                 <h2>Program input</h2>
                 <span className="status">{status.capture.state}</span>
@@ -1741,7 +1733,7 @@ function Admin() {
                 </button>
               </div>
             </section>
-            <section className="card">
+            <section className="card" id="audio-details">
               <div className="section-title">
                 <h2>Groq speech transcription</h2>
                 <span className="status">{status.audio.state}</span>
@@ -1795,7 +1787,7 @@ function Admin() {
                 </button>
               </div>
             </section>
-            <section className="card">
+            <section className="card" id="ai-details">
               <div className="section-title">
                 <h2>AI pipeline · 전체 상태 및 제어</h2>
                 <span className="status">
@@ -1819,9 +1811,9 @@ function Admin() {
                   disabled={
                     busy || status.closed || status.ai.state === "running"
                   }
-                  onClick={() => void startPipeline()}
+                  onClick={() => void action("pipeline/start")}
                 >
-                  전체 시작 (입력 + AI)
+                  입력 시작
                 </button>
                 <button
                   className="secondary"
@@ -1977,20 +1969,10 @@ function Admin() {
                     busy ||
                     status.closed ||
                     status.ai.state === "running" ||
-                    !status.ai.readiness.ready
+                    !status.ai.readiness.ready ||
+                    stale
                   }
-                  onClick={() => {
-                    if (
-                      status.ai.visualMode === "continuous" ||
-                      status.capture.confirmed
-                    ) {
-                      void startPipeline();
-                    } else if (status.capture.state === "stopped") {
-                      void startPipeline();
-                    } else {
-                      void startPipeline();
-                    }
-                  }}
+                  onClick={() => void startPipeline()}
                 >
                   Start AI
                 </button>
@@ -2035,16 +2017,9 @@ function Admin() {
                   call. Jev sees text only.
                 </p>
                 <p>
-                  Platform text context approved: YouTube{" "}
-                  {String(
-                    status.ai.input.platformTextApproved?.youtube ?? false,
-                  )}
-                  , CHZZK{" "}
-                  {String(status.ai.input.platformTextApproved?.chzzk ?? false)}
-                  , SOOP{" "}
-                  {String(status.ai.input.platformTextApproved?.soop ?? false)}.
-                  Other input includes the broadcast description, persona style,
-                  pseudonymous speaker labels and recent spectator messages.
+                  동의한 시청자의 표시 가능한 채팅과 최근 자막, 공개 방송 설명,
+                  페르소나 정의를 AI 맥락에 사용합니다. 철회·숨김 처리된
+                  메시지는 이후 맥락에서 제외됩니다.
                 </p>
                 <p>
                   Available model tools: none. The model cannot call tools,
@@ -2086,8 +2061,14 @@ function Admin() {
                   Input source: all configured platform receivers and live
                   speech transcription.
                 </p>
-                <p>Personal data is processed only while AI is enabled.</p>
-                <p>Raw audio and unmasked frames are not sent or retained.</p>
+                <p>
+                  AI를 꺼도 채팅 수집과 음성 전사는 계속될 수 있습니다. 모든
+                  수집을 중지하려면 입력과 AI 모두 중지를 사용하세요.
+                </p>
+                <p>
+                  음성 전사 시 오디오는 Groq로 전송되며 로컬에는 저장하지
+                  않습니다. AI 화면 입력에는 확인된 마스크 영상만 사용합니다.
+                </p>
               </details>
             </section>
           </div>
@@ -2123,12 +2104,6 @@ function Admin() {
           <section className="card">
             <h2>Session controls</h2>
             <div className="toolbar">
-              <button
-                className="secondary"
-                onClick={() => void action("reveal")}
-              >
-                Stop AI & show who was AI in the overlay
-              </button>
               <button
                 className="secondary"
                 onClick={() => void action("session/close")}
