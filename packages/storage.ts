@@ -266,7 +266,7 @@ export class Store extends EventEmitter {
       .slice(-80)
       .map((m) => ({
         id: m.id,
-        speaker: `viewer-${m.actorId}`,
+        speaker: `${m.attribution === "experiment" ? "spectator" : "viewer"}-${m.actorId}`,
         text: m.text.slice(0, 500),
       }));
   }

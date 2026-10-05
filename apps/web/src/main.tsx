@@ -629,6 +629,11 @@ function Admin() {
                   : "continuous video"}{" "}
                 · {status.ai.skips} skipped · {status.ai.rejects} rejected
               </p>
+              <p className="hint">
+                Replies wait a random {status.ai.pacing.minSeconds}–
+                {status.ai.pacing.maxSeconds}s after each decision; context
+                covers the previous {status.ai.contextWindowSeconds}s.
+              </p>
               {status.ai.gate.enabled && (
                 <p>
                   Jev filter: {status.ai.gate.state} · {status.ai.gate.requests}{" "}

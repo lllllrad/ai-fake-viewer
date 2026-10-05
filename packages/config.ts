@@ -152,6 +152,18 @@ export const configSchema = z
           .enum(["chatgpt_subscription", "openai_api"])
           .default("chatgpt_subscription"),
         gate: gateSchema.default(() => gateSchema.parse({})),
+        pacing: z
+          .object({
+            minSeconds: z.number().int().min(20).max(600).default(35),
+            maxSeconds: z.number().int().min(20).max(600).default(95),
+          })
+          .strict()
+          .refine(
+            (v) => v.maxSeconds >= v.minSeconds,
+            "maxSeconds must be at least minSeconds",
+          )
+          .default({ minSeconds: 35, maxSeconds: 95 }),
+        contextWindowSeconds: z.number().int().min(30).max(300).default(120),
         manualApproval: z.boolean().default(false),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
@@ -191,6 +203,8 @@ export const configSchema = z
       .default({
         provider: "chatgpt_subscription",
         gate: gateSchema.parse({}),
+        pacing: { minSeconds: 35, maxSeconds: 95 },
+        contextWindowSeconds: 120,
         manualApproval: false,
         visualMode: "continuous",
         maxCalls: 100,

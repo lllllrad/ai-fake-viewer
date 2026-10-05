@@ -276,6 +276,8 @@ export async function createApp(
     ai: {
       state: scheduler.state,
       manualApproval: config.ai.manualApproval,
+      pacing: config.ai.pacing,
+      contextWindowSeconds: config.ai.contextWindowSeconds,
       busy: scheduler.busy,
       pending: scheduler.pending
         ? {

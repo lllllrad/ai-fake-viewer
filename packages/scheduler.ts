@@ -18,6 +18,8 @@ export class Scheduler {
   lastSpoke = 0;
   lastHash = "";
   lastExternal = 0;
+  processedTranscriptIds = new Set<string>();
+  processedMessageVersions = new Map<string, string>();
   personaTimes: number[] = [];
   speechTimes: number[] = [];
   skips = 0;
@@ -81,6 +83,7 @@ export class Scheduler {
     clearInterval(this.timer);
     this.timer = undefined;
     this.pending = undefined;
+    this.lastAttempt = 0;
     this.state = state;
     this.store.audit(`ai.${state}`);
   }
@@ -105,16 +108,41 @@ export class Scheduler {
       if (this.pending.expires < now) this.pending = undefined;
       else return;
     }
-    if (
-      this.busy ||
-      now - this.lastAttempt < 20000 ||
-      now - this.lastSpoke < 20000
-    )
-      return;
-    const messages = this.store.context(this.allowed());
-    const external = this.store
+    if (this.busy || now < this.lastAttempt) return;
+    const contextFloor = now - this.config.ai.contextWindowSeconds * 1000;
+    const recent = this.store
       .snapshot()
-      .messages.filter((m) => m && m.attribution !== "experiment") as any[];
+      .messages.filter(
+        (m) => m && m.displayTime >= contextFloor,
+      ) as NonNullable<ReturnType<Store["snapshot"]>["messages"][number]>[];
+    const recentIds = new Set(recent.map((m) => m.id));
+    const messages = this.store
+      .context(this.allowed())
+      .filter((m) => recentIds.has(m.id));
+    const transcripts = (this.transcriber?.recent() ?? []).filter(
+      (t) => t.capturedAt >= contextFloor,
+    );
+    const currentTranscriptIds = new Set(transcripts.map((t) => t.id));
+    const currentMessageIds = new Set(messages.map((m) => m.id));
+    this.processedTranscriptIds = new Set(
+      [...this.processedTranscriptIds].filter((id) =>
+        currentTranscriptIds.has(id),
+      ),
+    );
+    this.processedMessageVersions = new Map(
+      [...this.processedMessageVersions].filter(([id]) =>
+        currentMessageIds.has(id),
+      ),
+    );
+    const newTranscripts = transcripts.filter(
+      (t) => !this.processedTranscriptIds.has(t.id),
+    );
+    const messageVersion = (m: (typeof messages)[number]) =>
+      `${m.speaker}\n${m.text}`;
+    const newMessages = messages.filter(
+      (m) => this.processedMessageVersions.get(m.id) !== messageVersion(m),
+    );
+    const external = recent.filter((m) => m.attribution !== "experiment");
     const externalSeq = external.at(-1)?.seq ?? 0;
     const freshExternal = external.filter(
       (m) => m.displayTime > now - 60000,
@@ -124,12 +152,13 @@ export class Scheduler {
       this.speechTimes.filter((t) => t > now - 60000).length >= 3
     )
       return;
-    const transcripts = this.transcriber?.recent() ?? [];
-    const allowedExternal = external.filter(
-      (m) =>
-        m.displayTime > now - 60000 && this.allowed().includes(m.attribution),
+    const allowedExternal = external.filter((m) =>
+      this.allowed().includes(m.attribution),
     );
-    const triggerMessage = allowedExternal.at(-1)?.id ?? "";
+    const triggerMessage =
+      allowedExternal.findLast((m) =>
+        newMessages.some((item) => item.id === m.id),
+      )?.id ?? "";
     const frames =
       this.config.ai.visualMode === "continuous" ? this.capture.recent() : [];
     const hash =
@@ -138,7 +167,7 @@ export class Scheduler {
         : `${transcripts.at(-1)?.id ?? ""}:${triggerMessage}`;
     if (
       this.config.ai.visualMode === "on_request" &&
-      !transcripts.length &&
+      !newTranscripts.length &&
       !triggerMessage
     )
       return;
@@ -149,14 +178,18 @@ export class Scheduler {
     )
       return;
     const persona = this.config.ai.personas.findIndex(
-      (_, i) => now - (this.personaTimes[i] ?? 0) >= 45000,
+      (_, i) =>
+        now - (this.personaTimes[i] ?? 0) >=
+        this.config.ai.pacing.minSeconds * 1000,
     );
     if (persona < 0) return;
     const c = this.config.ai;
     let input: ModelInput = {
       frames,
       transcripts,
+      newTranscripts,
       messages,
+      newMessages,
       persona: c.personas[persona],
       description: c.description,
     };
@@ -167,13 +200,22 @@ export class Scheduler {
       AbortSignal.timeout(30000),
     ]);
     this.busy = true;
-    this.lastAttempt = now;
     this.lastHash = hash;
     this.lastExternal = externalSeq;
     try {
       if (this.store.usage().calls >= c.maxCalls)
         throw Error("budget_exhausted");
+      const consumeNewInput = () => {
+        for (const transcript of newTranscripts)
+          this.processedTranscriptIds.add(transcript.id);
+        for (const message of newMessages)
+          this.processedMessageVersions.set(
+            message.id,
+            messageVersion(message),
+          );
+      };
       if (!this.demo && c.gate.enabled) {
+        consumeNewInput();
         const allowed = await this.gate.allow(input, signal);
         if (
           generation !== this.generation ||
@@ -193,6 +235,8 @@ export class Scheduler {
           input.messages.some((m) => !this.store.publicMessage(m.id))
         )
           return;
+      } else {
+        consumeNewInput();
       }
       let r = await this.callModel(input, signal);
       if (
@@ -262,6 +306,13 @@ export class Scheduler {
       }
     } finally {
       this.busy = false;
+      if (generation === this.generation && this.state === "running") {
+        const { minSeconds, maxSeconds } = c.pacing;
+        const intervalSeconds =
+          minSeconds +
+          Math.floor(Math.random() * (maxSeconds - minSeconds + 1));
+        this.lastAttempt = Date.now() + intervalSeconds * 1000;
+      }
     }
   }
   async callModel(input: ModelInput, signal: AbortSignal) {
