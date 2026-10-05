@@ -2,6 +2,10 @@ port := "3210"
 pid_file := ".local/server.pid"
 log_file := ".local/server.log"
 
+# List available recipes instead of starting a server implicitly.
+default:
+    @just --list
+
 # Start the live server detached from the terminal.
 server-start:
     #!/usr/bin/env bash

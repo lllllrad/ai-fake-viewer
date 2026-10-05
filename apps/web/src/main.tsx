@@ -1515,7 +1515,9 @@ function Admin() {
                 <label key={platform}>
                   <input
                     type="checkbox"
-                    checked={status.setup[platform].consentNoticeEnabled}
+                    checked={
+                      status.setup?.[platform]?.consentNoticeEnabled ?? false
+                    }
                     disabled={busy}
                     onChange={(e) =>
                       void post(`consent-notices/${platform}`, {
@@ -1530,7 +1532,7 @@ function Admin() {
               ))}
               <p>
                 YouTube:{" "}
-                {status.setup.youtube.enabled
+                {status.setup?.youtube?.enabled
                   ? status.setup.youtube.credentialsConfigured &&
                     (status.setup.youtube.videoConfigured ||
                       status.setup.youtube.channelConfigured)
@@ -1540,32 +1542,33 @@ function Admin() {
               </p>
               <p>
                 CHZZK:{" "}
-                {status.setup.chzzk.enabled
+                {status.setup?.chzzk?.enabled
                   ? status.setup.chzzk.credentialsConfigured
                     ? "ready to authorize"
                     : "add developer app Client ID and Secret to .env"
                   : "disabled in config.yaml"}
               </p>
               <p className="hint">
-                Registered callback: {status.setup.chzzk.redirectUri}
+                Registered callback:{" "}
+                {status.setup?.chzzk?.redirectUri ?? "not available"}
               </p>
               <p>
                 Groq speech:{" "}
-                {status.setup.audio.credentialsConfigured
+                {status.setup?.audio?.credentialsConfigured
                   ? "configured"
                   : "add GROQ_API_KEY"}
               </p>
               <p>
                 Program camera:{" "}
-                {status.setup.capture.maskConfigured
+                {status.setup?.capture?.maskConfigured
                   ? "review masked preview"
                   : "configure privacy masks"}
               </p>
               <p>
                 AI:{" "}
-                {status.setup.ai.connected && status.setup.ai.modelSelected
+                {status.setup?.ai?.connected && status.setup.ai.modelSelected
                   ? "model connected"
-                  : status.setup.ai.provider === "chatgpt_subscription"
+                  : status.setup?.ai?.provider === "chatgpt_subscription"
                     ? "connect ChatGPT and select a model below"
                     : "set OPENAI_API_KEY and OPENAI_MODEL"}
               </p>
@@ -1575,11 +1578,13 @@ function Admin() {
               </p>
             </section>
           )}
-          <SoopConnector
-            setup={status.setup.soop}
-            state={status.connectors.soop.state}
-            refresh={refresh}
-          />
+          {status.setup?.soop && status.connectors?.soop && (
+            <SoopConnector
+              setup={status.setup.soop}
+              state={status.connectors.soop.state}
+              refresh={refresh}
+            />
+          )}
           <div className="grid connections">
             {Object.entries(status.connectors).map(([p, s]: [string, any]) => (
               <section className="card" key={p}>
@@ -1611,8 +1616,8 @@ function Admin() {
               className="secondary"
               disabled={
                 busy ||
-                !status.setup.chzzk.enabled ||
-                !status.setup.chzzk.credentialsConfigured
+                !status.setup?.chzzk?.enabled ||
+                !status.setup?.chzzk?.credentialsConfigured
               }
               onClick={() => {
                 setError("");
