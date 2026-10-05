@@ -792,13 +792,41 @@ function Admin() {
                   CHZZK:{" "}
                   {status.setup?.chzzk?.enabled
                     ? status.setup.chzzk.credentialsConfigured
-                      ? "ready to authorize"
-                      : "add developer app Client ID and Secret to .env"
-                    : "disabled in config.yaml"}
+                      ? status.setup.chzzk.tokenConfigured
+                        ? "인증 저장됨 · 키 변경 시 다시 인증"
+                        : "키 설정 완료 · 아래 버튼으로 계정 연결"
+                      : ".env에 Client ID와 Client Secret 설정 필요"
+                    : "config.yaml에서 치지직 사용 설정 필요"}
                 </p>
                 <p className="hint">
                   Registered callback:{" "}
                   {status.setup?.chzzk?.redirectUri ?? "not available"}
+                </p>
+                <button
+                  className="secondary"
+                  disabled={
+                    busy ||
+                    !status.setup?.chzzk?.enabled ||
+                    !status.setup?.chzzk?.credentialsConfigured
+                  }
+                  onClick={() => {
+                    setError("");
+                    setBusy(true);
+                    void api("chzzk/authorize", "POST")
+                      .then((r) => r.json())
+                      .then((b) => {
+                        location.href = b.url;
+                      })
+                      .catch((e) => setError(e.message))
+                      .finally(() => setBusy(false));
+                  }}
+                >
+                  치지직 계정 연결 / 다시 인증
+                </button>
+                <p className="hint">
+                  Client ID·Secret 또는 권한을 바꿨다면 서버 재시작 후 위
+                  버튼으로 방송 계정을 다시 인증하세요. 기존 연결이 있어도
+                  재인증할 수 있습니다.
                 </p>
                 <p>음성·영상 입력은 현재 운영 프로필에서 사용하지 않습니다.</p>
                 <p>
@@ -900,27 +928,7 @@ function Admin() {
               >
                 Stop receivers
               </button>
-              <button
-                className="secondary"
-                disabled={
-                  busy ||
-                  !status.setup?.chzzk?.enabled ||
-                  !status.setup?.chzzk?.credentialsConfigured
-                }
-                onClick={() => {
-                  setError("");
-                  setBusy(true);
-                  void api("chzzk/authorize", "POST")
-                    .then((r) => r.json())
-                    .then((b) => {
-                      location.href = b.url;
-                    })
-                    .catch((e) => setError(e.message))
-                    .finally(() => setBusy(false));
-                }}
-              >
-                Authorize CHZZK
-              </button>
+
               <button
                 className="secondary"
                 onClick={() =>

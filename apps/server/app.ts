@@ -1276,6 +1276,7 @@ export async function createApp(
       },
       chzzk: {
         enabled: config.chzzk.enabled,
+        tokenConfigured: !!auth.token,
         consentNoticeEnabled: store.consentNoticeEnabled(
           "chzzk",
           config.chzzk.consentNoticeEnabled,

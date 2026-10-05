@@ -4,6 +4,12 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## CHZZK reauthorization action placement — 2026-10-05
+
+Moved the CHZZK authorization action from the lower receiver toolbar to the Live setup card immediately below its status/callback. The localized label explicitly describes connecting or reauthorizing. Saved-authorization presence is exposed separately from configured credentials; existing authorization does not hide or disable reauthorization. Instructions explain restarting after environment changes.
+
+Validation: `sh run-command.sh npm run build`, `sh run-command.sh npx tsc --noEmit` and documentation checks passed. `sh run-command.sh npm run test:browser` passed on Chromium 153.0.8010.12 with no browser/CSP errors, including action visibility within the setup card and disabled-state behavior for an unconfigured fixture. The initial new assertion ran after the fixture had collapsed the details panel; it was moved before that collapse and the browser checks rerun successfully. No real OAuth flow was initiated and no server was restarted.
+
 ## YouTube OAuth callback encoding — 2026-10-05
 
 The localized callback used `text/plain` without a charset, allowing browsers to misdecode its UTF-8 completion text. Both success and failure responses now explicitly use `text/plain; charset=utf-8`. The route fixture covers a complete synthetic OAuth exchange, connected status and exact localized messages/headers for both outcomes; callback credentials are not reflected in the response.

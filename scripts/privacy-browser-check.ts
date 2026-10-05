@@ -113,6 +113,16 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await page
       .getByRole("button", { name: "Connect SOOP chat", exact: true })
       .click();
+    const setupCard = page.locator("section.card").filter({
+      has: page.getByRole("heading", { name: "Live setup", exact: true }),
+    });
+    const chzzkConnect = setupCard.getByRole("button", {
+      name: "치지직 계정 연결 / 다시 인증",
+      exact: true,
+    });
+    await expect(chzzkConnect).toBeVisible();
+    // This fixture has CHZZK disabled; configuration status and its action stay together.
+    await expect(chzzkConnect).toBeDisabled();
     await page.locator("#advanced-settings > summary").click();
     store.ingestBatch([
       privacyMessage(
