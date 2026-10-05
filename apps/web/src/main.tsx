@@ -1036,9 +1036,9 @@ function Admin() {
                   {status.audio.latestText || "No recent speech transcript"}
                 </p>
                 <p className="hint">
-                  현재 운영 프로필에서는 미동의 채팅이 섞일 수 있는 음성·전사
-                  경로를 사용하지 않습니다. 전사문 파일 내보내기도 제공하지
-                  않습니다.
+                  {status.privacy?.audioEnabled || status.demo
+                    ? "설정된 방송 음성을 Groq로 전사하고 최근 전사문을 AI 입력에 사용합니다. 기록은 현재 세션의 메모리에 보관하며 종료·재시작·동의 철회 시 삭제합니다."
+                    : "음성 입력을 사용하지 않습니다. config.yaml의 privacy.audioEnabled에서 켤 수 있습니다."}
                 </p>
                 {status.audio.history.length > 0 && (
                   <ol>
@@ -1056,7 +1056,7 @@ function Admin() {
                 )}
                 <div className="toolbar">
                   <button
-                    disabled={!status.demo}
+                    disabled={!status.demo && !status.privacy?.audioEnabled}
                     onClick={() => void action("audio/start")}
                   >
                     Start audio
@@ -1067,6 +1067,14 @@ function Admin() {
                   >
                     Stop audio
                   </button>
+                  {(status.demo || status.privacy?.audioEnabled) && (
+                    <a
+                      href="/api/admin/transcripts/export"
+                      download="transcripts.jsonl"
+                    >
+                      전사문 내보내기
+                    </a>
+                  )}
                 </div>
               </section>
               <section className="card" id="ai-details">

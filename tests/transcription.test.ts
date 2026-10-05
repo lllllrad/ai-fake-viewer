@@ -395,3 +395,172 @@ test("live privacy profile blocks transcript storage and export even for adminis
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("opt-in live audio stores and exports session transcripts, then erases speech on withdrawal and rejects late results", async (t) => {
+  const { approvedProfile, privacyMessage } =
+    await import("./privacy-fixtures.ts");
+  const profile = approvedProfile();
+  profile.audioEnabled = true;
+  for (const [key, value] of Object.entries({
+    OPENAI_API_KEY: "fixture",
+    OPENAI_MODEL: "fixture-model",
+  })) {
+    const previous = process.env[key];
+    process.env[key] = value;
+    t.after(() => {
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    });
+  }
+  let modelRequests = 0;
+  t.mock.method(globalThis, "fetch", async (url: any, init: any) => {
+    modelRequests++;
+    const body = JSON.parse(init.body);
+    assert(JSON.stringify(body.input).includes("Fixture speech context"));
+    if (String(url).endsWith("/input_tokens"))
+      return Response.json({ input_tokens: 10 });
+    return Response.json({
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: JSON.stringify({
+                action: "skip",
+                text: null,
+                replyToMessageId: null,
+                evidenceFrameIds: [],
+                evidenceMessageIds: [],
+                evidenceTranscriptIds: [],
+              }),
+            },
+          ],
+        },
+      ],
+    });
+  });
+
+  const oldKey = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = "fixture";
+  t.after(() => {
+    if (oldKey === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = oldKey;
+  });
+  const directory = mkdtempSync(join(tmpdir(), "live-audio-optin-"));
+  const config = configSchema.parse({ privacy: profile });
+  const instance = await createApp(config, {
+    adminToken: "a".repeat(32),
+    readerToken: "b".repeat(32),
+    encryptionKey: "c".repeat(64),
+    startInputs: false,
+    chatgptTokenPath: join(directory, "chatgpt"),
+    youtubeTokenPath: join(directory, "youtube"),
+    chzzkTokenPath: join(directory, "chzzk"),
+    soopTokenPath: join(directory, "soop"),
+  });
+  const { app, store, transcriber } = instance;
+  const headers = {
+    host: `127.0.0.1:${config.port}`,
+    authorization: `Bearer ${"a".repeat(32)}`,
+  };
+  try {
+    transcriber.request = async () =>
+      Response.json({ text: "Fixture speech context" });
+    transcriber.state = "receiving";
+    await transcriber.transcribe(Buffer.alloc(320000));
+    assert.equal(store.transcriptCount(), 1);
+    assert.equal(transcriber.recent().length, 1);
+    const input: ModelInput = {
+      frames: [],
+      messages: [],
+      transcripts: transcriber.recent(),
+      newTranscripts: transcriber.recent(),
+      privacyRevision: instance.participation!.revision,
+      persona: { name: "fixture", style: "brief" },
+      description: "speech only",
+    };
+    await instance.scheduler.model(input, new AbortController().signal);
+    assert.equal(modelRequests, 2);
+
+    const status = (
+      await app.inject({ url: "/api/admin/status", headers })
+    ).json();
+    assert.equal(status.privacy.audioEnabled, true);
+    assert.equal(status.privacy.videoEnabled, false);
+    assert.equal(status.privacy.textOnly, false);
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/admin/transcripts/export",
+          headers: { host: `127.0.0.1:${config.port}` },
+        })
+      ).statusCode,
+      401,
+    );
+    const exported = await app.inject({
+      url: "/api/admin/transcripts/export",
+      headers,
+    });
+    assert.equal(exported.statusCode, 200);
+    assert.equal(
+      JSON.parse(exported.body.trim()).text,
+      "Fixture speech context",
+    );
+    assert.equal(store.snapshot().messages.length, 0);
+    let release!: (r: Response) => void;
+    transcriber.request = () =>
+      new Promise((r) => {
+        release = r;
+      });
+    const pending = transcriber.transcribe(Buffer.alloc(320000));
+    store.ingestBatch([privacyMessage("u", "!철회", Date.now() + 1)]);
+    assert.equal(store.transcriptCount(), 0);
+    assert.equal(transcriber.recent().length, 0);
+    await assert.rejects(
+      instance.scheduler.model(
+        { ...input, privacyRevision: instance.participation!.revision },
+        new AbortController().signal,
+      ),
+    );
+    assert.equal(modelRequests, 2);
+    release(Response.json({ text: "Late withdrawn context" }));
+    await pending;
+    assert.equal(store.transcriptCount(), 0);
+    assert.equal(transcriber.recent().length, 0);
+    const disabled = { ...profile, audioEnabled: false };
+    assert.equal(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/admin/privacy/profile",
+          headers,
+          payload: disabled,
+        })
+      ).statusCode,
+      400,
+    );
+    disabled.noticeVersion = "audio-disabled-2";
+    assert.equal(
+      (
+        await app.inject({
+          method: "PUT",
+          url: "/api/admin/privacy/profile",
+          headers,
+          payload: disabled,
+        })
+      ).statusCode,
+      200,
+    );
+    assert.equal(
+      (await app.inject({ url: "/api/admin/transcripts/export", headers }))
+        .statusCode,
+      409,
+    );
+    assert.equal(transcriber.allowProcessing(), false);
+  } finally {
+    await app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

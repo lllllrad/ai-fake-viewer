@@ -36,7 +36,7 @@ Choose `ai.provider: chatgpt_subscription` to use the Responses API through Sign
 
 Alternatively select `openai_api`, supply the API key/environment model and use an API contract profile with matching model/endpoint. Keep `ai.gate.enabled: false` for either service. There is no automatic fallback between the two contracts. A provider/model mismatch blocks transmission rather than requiring an API key for subscription users.
 
-Screen and audio ingestion are disabled in this profile. OBS can still show the reader overlay, but incoming camera/RTMP images, spoken chat, Groq transcription, transcript export and Jev are unavailable. No screen confirmation or `programConfirmed` gate is needed.
+Screen ingestion and Jev remain disabled. OBS can still show the reader overlay. Broadcast audio, Groq transcription and authenticated transcript export are opt-in through `privacy.audioEnabled`; see the audio setup below. No screen confirmation or `programConfirmed` gate is needed.
 
 ## 4. Connect real chat sources
 
@@ -113,3 +113,21 @@ the connected channel, including history replay and reconnects. A manually copie
 notice with that prefix is also excluded; ordinary viewer accounts are unaffected.
 Set the option back to `false` and restart after testing. The example/default
 configuration keeps it disabled.
+
+## Broadcast audio and transcription
+
+Set `privacy.audioEnabled: true`, configure `audio.url` and provide `GROQ_API_KEY`.
+Restart with `sh run-command.sh just server-restart`; the configured input starts
+automatically, and admin audio controls can stop/start it. Speech chunks use the
+existing Groq transcription adapter; recent transcripts can supply AI evidence
+without a camera or new viewer chat. AI generation still requires explicit start.
+The dashboard shows the current transcript and an authenticated export link.
+
+This scope includes broadcast speech, not only consented platform chat. Update the
+actual audio/provider notice and give profile changes a new `noticeVersion`.
+There is no automatic speaker identification or filtering of chat read aloud.
+Withdrawal/context invalidation conservatively erases all session transcripts and
+aborts in-flight transcription; further captured speech is new input. Session
+end/restart also erases records. Downloaded JSONL files and provider-side records
+remain separate operator-managed copies. Video remains disabled. Set
+`privacy.audioEnabled: false` to disable this path again.

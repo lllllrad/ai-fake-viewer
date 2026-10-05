@@ -13,6 +13,7 @@ export const privacyProfileSchema = z
       })
       .strict()
       .optional(),
+    audioEnabled: z.boolean().default(false),
     operator: text,
     officer: text,
     contact: text,
@@ -175,6 +176,7 @@ export function assertProfileUpdate(
   const scope = (p: PrivacyProfile) =>
     JSON.stringify({
       testReview: p.testReview,
+      audioEnabled: p.audioEnabled,
       operator: p.operator,
       collection: p.collectionNotice,
       publication: p.publicationNotice,

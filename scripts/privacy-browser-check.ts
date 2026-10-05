@@ -18,6 +18,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       },
       privacy: {
         ...approvedProfile(),
+        audioEnabled: true,
         processing: {
           ...approvedProfile().processing,
           provider: "chatgpt_subscription",
@@ -59,6 +60,16 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await page.getByRole("button", { name: "Connect", exact: true }).click();
     const panel = page.getByRole("region", { name: "개인정보 및 참여 관리" });
     await expect(panel).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: "Start audio",
+        exact: true,
+        includeHidden: true,
+      }),
+    ).toBeEnabled();
+    await expect(
+      page.getByRole("link", { name: "전사문 내보내기", includeHidden: true }),
+    ).toHaveAttribute("href", "/api/admin/transcripts/export");
     await expect(
       page.getByRole("button", {
         name: "Continue with ChatGPT",

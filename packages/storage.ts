@@ -1023,7 +1023,11 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
-    if (this.participation || this.closed()) return false;
+    if (
+      (this.participation && !this.participation.profile.audioEnabled) ||
+      this.closed()
+    )
+      return false;
     if (
       !Number.isSafeInteger(entry.capturedAt) ||
       !entry.text.trim() ||
@@ -1036,6 +1040,9 @@ export class Store extends EventEmitter {
       )
       .run(entry.id, this.sessionId, entry.capturedAt, entry.text);
     return true;
+  }
+  clearTranscripts() {
+    this.db.exec("DELETE FROM transcripts");
   }
   transcriptCount() {
     return (

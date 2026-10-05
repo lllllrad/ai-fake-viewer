@@ -35,6 +35,7 @@ export class Transcriber {
   retryTimer?: NodeJS.Timeout;
   controller?: AbortController;
   generation = 0;
+  contextRevision = 0;
   failures = 0;
   requests = 0;
   busy = false;
@@ -114,6 +115,7 @@ export class Transcriber {
     this.busy = true;
     this.requests++;
     const generation = this.generation;
+    const contextRevision = this.contextRevision;
     this.controller = new AbortController();
     const signal = AbortSignal.any([
       this.controller.signal,
@@ -142,7 +144,12 @@ export class Transcriber {
       const raw = await result.text();
       if (raw.length > 8192) throw Error("Groq transcription too large");
       const text = response.parse(JSON.parse(raw)).text.trim().slice(0, 1000);
-      if (generation === this.generation && text) {
+      if (
+        generation === this.generation &&
+        contextRevision === this.contextRevision &&
+        this.allowProcessing() &&
+        text
+      ) {
         const entry = { id: randomUUID(), capturedAt, text };
         try {
           if (this.onTranscript && !this.onTranscript(entry)) return;
@@ -167,6 +174,11 @@ export class Transcriber {
         this.child?.kill();
       }
     }
+  }
+  clearContext() {
+    this.contextRevision++;
+    this.controller?.abort();
+    this.transcripts = [];
   }
   recent() {
     return this.transcripts

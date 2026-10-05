@@ -70,10 +70,10 @@ export function OperationsDashboard({
   };
   const captureHealth: Health = stale
     ? unknown
-    : status.privacy?.textOnly
+    : status.privacy?.videoEnabled === false
       ? {
           label: "사용 안 함",
-          hint: "현재 운영 프로필은 동의된 채팅만 사용합니다.",
+          hint: "현재 운영 프로필은 영상 입력을 사용하지 않습니다.",
         }
       : freshFrame
         ? { label: "정상" }
@@ -198,7 +198,7 @@ export function OperationsDashboard({
               <p>
                 {stale
                   ? "최신 상태를 확인할 수 없습니다"
-                  : status.privacy?.textOnly
+                  : status.privacy?.videoEnabled === false
                     ? "영상 입력을 사용하지 않습니다"
                     : "송출 화면을 기다리고 있습니다"}
               </p>
@@ -240,7 +240,7 @@ export function OperationsDashboard({
           <p className="transcript-excerpt">
             {stale
               ? "최신 자막 상태를 확인할 수 없습니다"
-              : status.privacy?.textOnly
+              : status.privacy?.audioEnabled === false
                 ? "음성 입력을 사용하지 않습니다"
                 : status.audio.latestText || "아직 인식된 음성이 없습니다"}
           </p>

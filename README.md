@@ -1,6 +1,6 @@
 # Mixed Chat Studio
 
-A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI service text-only profile**. An incomplete operating profile blocks collection and external AI processing.
+A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI service profile with optional broadcast transcription**. An incomplete operating profile blocks collection and external AI processing.
 
 Start with [live setup](LIVE_SETUP.md), [privacy implementation](docs/privacy-implementation.md), [AI flow](AI_FLOW.md) or the [documentation index](docs/README.md). Historical integration experiments are not current deployment approval.
 
@@ -35,7 +35,7 @@ Copy the structure in [config.example.yaml](config.example.yaml) into ignored `c
 
 The inference interface is the **Responses API**. Choose `ai.provider: chatgpt_subscription` for **Sign in with ChatGPT** and eligible ChatGPT plan usage without an API key, or `openai_api` for an independently billed API key. Keep `ai.gate.enabled: false`. Admin provides the **Sign in with ChatGPT** flow, saved accounts and model selection; use the same ChatGPT account you use for Codex, with this app's own official sign-in. It does not read Codex CLI credential files or run Codex CLI tools.
 
-For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1` and the exact selected model slug. `OPENAI_API_KEY` and `OPENAI_MODEL` are not required. For API mode use `provider: openai_api`, `contract: API`, private `OPENAI_API_KEY` and matching `OPENAI_MODEL`. Both modes require reviewed actual processing conditions and retain consent/withdrawal guards. API region/retention claims must not be copied to a subscription profile without verification. Groq STT, Jev and unofficial SOOP remain unavailable. The [official Sign in with ChatGPT integration](https://developers.openai.com/siwc/token-sharing-open-source) is subject to account eligibility and available models.
+For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1` and the exact selected model slug. `OPENAI_API_KEY` and `OPENAI_MODEL` are not required. For API mode use `provider: openai_api`, `contract: API`, private `OPENAI_API_KEY` and matching `OPENAI_MODEL`. Both modes require reviewed actual processing conditions and retain consent/withdrawal guards. API region/retention claims must not be copied to a subscription profile without verification. Groq STT is opt-in; Jev and unofficial SOOP remain unavailable. The [official Sign in with ChatGPT integration](https://developers.openai.com/siwc/token-sharing-open-source) is subject to account eligibility and available models.
 
 ### YouTube: official OAuth, gRPC/REST and fixed notices
 
@@ -59,11 +59,11 @@ The current live profile disables capture at the processing boundary: other on-s
 
 ### OBS on a separate Linux PC: legacy RTMP input (disabled live)
 
-Use the app's OBS Browser Source overlay for publication. RTMP capture/audio utilities remain in the repository, but the live privacy profile does not start or upload their inputs. See [live setup](LIVE_SETUP.md) for LAN reader/overlay access.
+Use the app's OBS Browser Source overlay for publication. Video capture remains blocked; broadcast audio can be enabled separately with `privacy.audioEnabled`. See [live setup](LIVE_SETUP.md) for LAN reader/overlay access.
 
 ## Groq speech and AI model data review
 
-Audio capture, transcription storage and transcript export are blocked in live mode, including authenticated export requests. This avoids reintroducing unconsented chat spoken by a broadcaster. Setting an audio URL/key cannot bypass the block.
+Set `privacy.audioEnabled: true` to enable the configured broadcast audio source, Groq transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](LIVE_SETUP.md#broadcast-audio-and-transcription).
 
 ### Legacy Jev filter (disabled live)
 
@@ -87,7 +87,7 @@ Reader tokens are URL fragments, not admin credentials. Admin uses a local HttpO
 
 ## Storage and deletion
 
-Every app instance uses SQLite **in memory** for chat, identities, consent, persona state, summaries, budgets and pending work. Session close and restart discard these; `database` and `retentionDays` no longer select a live chat file or promise a seven-day log. Standalone legacy Store fixtures still test old storage behavior, not the app's live persistence policy. No chat/transcript export is available in live mode.
+Every app instance uses SQLite **in memory** for chat, identities, consent, persona state, summaries, budgets and pending work. Session close and restart discard these; `database` and `retentionDays` no longer select a live chat file or promise a seven-day log. Standalone legacy Store fixtures still test old storage behavior, not the app's live persistence policy. Chat export remains unavailable; reviewed audio permits authenticated session transcript export.
 
 `privacy.rightsDatabase` is a separate owner-only file for exceptional rights requests and video inventory. It contains minimum account/session/video/request identifiers and handling status, not ordinary chat, consent lists or AI context. App data reset does not erase unresolved requests. After each external/video/copy action and result notice, remove unnecessary resolved request records from admin. Credentials remain separate.
 
@@ -95,7 +95,7 @@ Every app instance uses SQLite **in memory** for chat, identities, consent, pers
 
 ## Troubleshooting and verification
 
-Check the admin operating-profile issues first, then actual platform authorization, model/environment match and API budgets. Disabled image/audio inputs are expected. After profile changes, start a new consent flow. Temporary disconnection is not proof of broadcast end; manual-live consent is invalidated on reconnect because event freshness is uncertain.
+Check the admin operating-profile issues first, then actual platform authorization, model/environment match and API budgets. Video stays disabled; audio is disabled unless explicitly enabled in the privacy profile. After profile changes, start a new consent flow. Temporary disconnection is not proof of broadcast end; manual-live consent is invalidated on reconnect because event freshness is uncertain.
 
 ```sh
 sh run-command.sh npm run check

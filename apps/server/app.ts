@@ -118,16 +118,28 @@ export async function createApp(
           ? chatgpt.active?.model
           : process.env.OPENAI_MODEL));
 
+  const audioAllowed = () =>
+    !!opts.demo ||
+    (config.privacy.audioEnabled &&
+      !profileIssues(config.privacy).length &&
+      !store.closed() &&
+      !participation?.ended);
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.recordTranscript(entry),
   );
   if (!opts.demo) {
     capture.allowProcessing = () => false;
-    transcriber.allowProcessing = () => false;
+    transcriber.allowProcessing = audioAllowed;
     capture.state = "privacy_blocked";
-    transcriber.state = "privacy_blocked";
+    transcriber.state = audioAllowed() ? "stopped" : "privacy_blocked";
   }
+  const clearSpeechContext = () => {
+    transcriber.clearContext();
+    store.clearTranscripts();
+  };
+  store.on("context_invalidated", clearSpeechContext);
+  store.on("reset", clearSpeechContext);
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
@@ -139,7 +151,18 @@ export async function createApp(
         !privacyReady() ||
         input.privacyRevision !== participation!.revision ||
         input.frames.length ||
-        (input.transcripts?.length ?? 0) > 0 ||
+        (input.transcripts ?? []).some(
+          (t) =>
+            !audioAllowed() ||
+            !transcriber
+              .recent()
+              .some(
+                (current) =>
+                  current.id === t.id &&
+                  current.text === t.text &&
+                  current.capturedAt === t.capturedAt,
+              ),
+        ) ||
         input.messages.some((m) => !store.publicMessage(m.id))
       )
         throw Error(
@@ -288,7 +311,9 @@ export async function createApp(
       },
       {
         id: "audio",
-        label: "음성 입력 사용 안 함",
+        label: audioAllowed()
+          ? "음성 인식 입력 (선택)"
+          : "음성 입력 사용 안 함",
         ready: true,
         optional: true,
       },
@@ -1082,6 +1107,8 @@ export async function createApp(
       throw Error("권리행사 저장소 변경은 재시작이 필요합니다.");
     assertProfileUpdate(config.privacy, profile);
     scheduler.stop("privacy_profile_changed");
+    transcriber.stop();
+    store.clearTranscripts();
     await supervisor.stop();
     const prior = participation ? [...participation.participants.values()] : [];
     participation?.replaceProfile(profile);
@@ -1160,7 +1187,9 @@ export async function createApp(
     chatSummary: store.chatSummary(),
     privacy: {
       memoryOnly: true,
-      textOnly: !opts.demo,
+      textOnly: !opts.demo && !config.privacy.audioEnabled,
+      videoEnabled: !!opts.demo,
+      audioEnabled: audioAllowed(),
       ready: privacyReady(),
       issues: profileIssues(config.privacy),
       pendingRights: rights
@@ -1832,9 +1861,11 @@ export async function createApp(
       !opts.demo &&
       ((config.ai.provider !== "chatgpt_subscription" &&
         /^\/api\/admin\/chatgpt(?:\/|$)/.test(req.url)) ||
-        /^\/api\/admin\/(?:audio(?:\/|$)|capture\/start|transcripts\/export)/.test(
-          req.url,
-        ) ||
+        /^\/api\/admin\/capture\/start/.test(req.url) ||
+        (!audioAllowed() &&
+          /^\/api\/admin\/(?:audio\/start|transcripts\/export)/.test(
+            req.url,
+          )) ||
         (req.method !== "GET" && req.url.startsWith("/api/admin/persona/")))
     )
       return reply.code(409).send({

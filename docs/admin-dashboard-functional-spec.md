@@ -4,17 +4,17 @@ Version 1.5. Operating controls remain the first priority. [Privacy implementati
 
 ## Implementation and requirement gaps
 
-| Requirement    | Current behavior                                                                                            | Remaining acceptance                            |
-| -------------- | ----------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                              | Full accessibility audit                        |
-| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings             | Actual contracts and account configuration      |
-| Inputs         | Approved official receivers; screen/audio unused because nonparticipant content cannot be excluded reliably | Review before enabling alternative input        |
-| Emergency stop | Available even with stale status; independent of receiver stop                                              | Extended network failure                        |
-| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                            | Match the actual viewer notice                  |
-| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                                   | Host/service rehearsal                          |
-| Guidance       | Automatic fixed notices, observed-command assistance, separate consent stages and child restrictions        | Real delivery permissions and event ordering    |
-| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session           | Provider/VOD actions                            |
-| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks                     | Target identification, editing and notification |
+| Requirement    | Current behavior                                                                                     | Remaining acceptance                            |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                       | Full accessibility audit                        |
+| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings      | Actual contracts and account configuration      |
+| Inputs         | Approved official receivers; optional broadcast transcription; screen remains unused                 | Review before enabling alternative input        |
+| Emergency stop | Available even with stale status; independent of receiver stop                                       | Extended network failure                        |
+| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                     | Match the actual viewer notice                  |
+| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                            | Host/service rehearsal                          |
+| Guidance       | Automatic fixed notices, observed-command assistance, separate consent stages and child restrictions | Real delivery permissions and event ordering    |
+| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session    | Provider/VOD actions                            |
+| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks              | Target identification, editing and notification |
 
 Sources: [operations-dashboard.tsx](../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx), [main.tsx](../apps/web/src/main.tsx) and [server](../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
 
@@ -24,7 +24,7 @@ The operator must immediately understand whether AI is running and which inputs 
 
 ## 2. First-screen layout
 
-The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Live screen/audio inputs are explicitly unused, not mandatory prerequisites awaiting confirmation. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
+The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Video is unused; broadcast audio is optional via `privacy.audioEnabled`. Neither requires a preview-confirmation prerequisite. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
 
 There is no mask-confirmation control or `capture.confirmed` / `programConfirmed` start gate. Input restrictions prevent unconsented information from bypassing text filtering; a manual mask acknowledgement does not lift them.
 
@@ -37,7 +37,7 @@ Use short healthy, unused, preparing, failed and stale states. Hide platform/tra
 | Area         | Display and behavior                                                                              |
 | ------------ | ------------------------------------------------------------------------------------------------- |
 | Session      | Open/closed, new session and explicit close; uncertain connectivity is not proof of broadcast end |
-| Screen/audio | Unused with the input restriction explained; demo shows synthetic state                           |
+| Screen/audio | Video unused; enabled audio shows current transcription state and admin export                    |
 | Real chat    | Healthy/not ready/problem summary; unapproved channels cannot start                               |
 | AI           | Enable switch, failed prerequisites, emergency stop; model/budget details collapsed               |
 | Privacy      | Incomplete-profile warning, actual notice/consent stage and unsaved rights-task warning           |
@@ -56,7 +56,7 @@ Authentication uses **Sign in with ChatGPT** when `chatgpt_subscription` is sele
 
 ### 4.2 Input controls
 
-Starting inputs does not start AI. Separate all-input stop from individual receiver state, and recheck settings/approvals on the server. Live screen/audio start requests are rejected. If end detection is uncertain, the operator explicitly closes the session.
+Starting inputs does not start AI. Separate all-input stop from individual receiver state, and recheck settings/approvals on the server. Live screen start is rejected; audio start/export are permitted only when audio is enabled in the reviewed profile. If end detection is uncertain, the operator explicitly closes the session.
 
 ### 4.3 Guidance and connection controls
 

@@ -4,6 +4,33 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Broadcaster testing and opt-in broadcast transcription — 2026-10-05
+
+Added default-off `youtube.allowBroadcasterTesting` for testing participation with
+the connected broadcaster account. Both the receiver and fixed-notice scheduler
+honor the option. Numbered automatic-notice parts remain excluded for that account
+in REST/gRPC, including replay after restart. Viewer consent is still required.
+
+Added default-off `privacy.audioEnabled` for broadcast audio transcription, recent
+speech as model context and authenticated session transcript export. Audio scope
+changes require a new notice version. Withdrawal/context invalidation clears speech
+history and discards late in-flight transcription. Current transcript content is
+rechecked at the model boundary. Video remains disabled and downloads are separate
+operator-managed copies. UI controls and owning requirements/setup documents now
+reflect the optional audio scope.
+
+Validation: full `npm run check` passed all 138 tests, documentation/schema checks
+and TypeScript/Vite. The augmented transcription test additionally passed nine
+transcription tests, including mocked Responses API acceptance of current speech
+and rejection after withdrawal; TypeScript also passed afterward. Browser checks
+passed on Chromium 153.0.8010.12 with no browser/CSP errors and enabled audio/export
+controls. Local configuration enables both requested options; a managed `just
+server-restart` succeeded. Authenticated status reported audio enabled, privacy/AI
+readiness true and YouTube subscribed. Audio progressed from connecting to receiving, with three successful
+transcript records confirmed by counts only. Broadcaster notice delivery remains
+unverified. CHZZK separately reported authorization required. No real transcript
+body was printed or stored as a test artifact.
+
 ## Operator-reviewed live-test configuration — 2026-10-05
 
 Added optional evidence-backed `privacy.testReview` for an operator who explicitly
