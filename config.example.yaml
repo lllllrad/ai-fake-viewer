@@ -31,6 +31,7 @@ audio:
   enabled: false
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
   url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
+  language: ko # input language (ISO-639-1); "" for automatic detection
   chunkSeconds: 10
   maxRequests: 360
 policy:
@@ -40,10 +41,17 @@ policy:
   reviewReference: ""
   providerReviewed: false
   groqAudioReviewed: false
+  typesafeReviewed: false
 ai:
   provider: chatgpt_subscription # or openai_api
   manualApproval: true
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
+  gate:
+    enabled: false # requires on_request, TYPESAFE_API_KEY and typesafeReviewed
+    model: jev-latest
+    threshold: 0.5
+    maxRequests: 360 # per process; separate from answer-model calls
+    timeoutMs: 3000
   maxCalls: 100
   maxInputTokens: 24000
   maxOutputTokens: 500

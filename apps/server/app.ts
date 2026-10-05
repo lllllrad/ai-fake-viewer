@@ -257,6 +257,7 @@ export async function createApp(
       state: transcriber.state,
       requests: transcriber.requests,
       maxRequests: config.audio.maxRequests,
+      language: config.audio.language || "auto",
       latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
       transcriptCount: transcriber.recent().length,
       latestText: transcriber.recent().at(-1)?.text ?? null,
@@ -279,6 +280,20 @@ export async function createApp(
             expires: scheduler.pending.expires,
           }
         : null,
+      gate: {
+        enabled: config.ai.gate.enabled,
+        state: opts.demo
+          ? "demo_bypass"
+          : config.ai.gate.enabled
+            ? scheduler.gate.state
+            : "disabled",
+        requests: scheduler.gate.requests,
+        maxRequests: config.ai.gate.maxRequests,
+        filtered: scheduler.gate.filtered,
+        errors: scheduler.gate.errors,
+        probability: scheduler.gate.probability,
+        threshold: config.ai.gate.threshold,
+      },
       skips: scheduler.skips,
       rejects: scheduler.rejects,
       usage: store.usage(),

@@ -136,7 +136,32 @@ Use the exact private read URL in your ignored local config; never commit that U
 
 Set `GROQ_API_KEY` in private `.env`, then configure `audio.enabled: true`, `audio.url` to the private RTMP read URL, and `policy.groqAudioReviewed: true` after reviewing audio sharing. The first RTMP audio track is converted to 10-second, 16 kHz mono WAV chunks and sent to [Groq Whisper transcription](https://console.groq.com/docs/speech-to-text). Near-silent chunks are skipped locally. Recent transcripts enter AI context automatically; each successful transcript is also saved in the private SQLite log for later review, without being posted as public chat. `audio.maxRequests` caps calls per app process; a restart resets that cap. A live transcription response was observed on the app PC, but the physical audio source and speech accuracy were not independently verified. See [LIVE_SETUP.md](LIVE_SETUP.md) for the exact two-PC setup.
 
+Set `audio.language: ko` for a Korean broadcast (`en` for English, `ja` for Japanese). Groq accepts an ISO-639-1 input language hint to improve transcription accuracy. Omit the setting or use `audio.language: ""` to keep automatic detection. Restart after changing the setting; this affects transcription, not AI reply language.
+
 With `ai.visualMode: on_request`, the AI first receives transcript/permitted chat text without images. It can request `inspect`, which causes one additional call with a fresh confirmed masked frame; unavailable frames are skipped. Both calls count against `ai.maxCalls`. `continuous` retains the earlier image-first path.
+
+### Optional Jev filter before answer generation
+
+[Jev's System One API](https://docs.typesafe.ai/api) can decide whether recent text warrants a reaction before spending an answer-model call. It is disabled by default. Set `TYPESAFE_API_KEY` in `.env`, review sharing transcripts and permitted chat with TypeSafe, and merge this into `config.yaml`:
+
+```yaml
+policy:
+  typesafeReviewed: true
+ai:
+  visualMode: on_request
+  gate:
+    enabled: true
+    model: jev-latest
+    threshold: 0.5
+    maxRequests: 360
+    timeoutMs: 3000
+```
+
+Restart the app, then start AI. The filter sends bounded recent transcripts, permitted pseudonymous chat, the broadcast description and selected persona to TypeSafe. It never sends images or audio. It uses a Noul question and calls the answer model only when the returned probability is at least `threshold`. Higher thresholds suppress more reactions; tune with your own broadcast content. Existing cooldowns, chat activity limits and input deduplication run first. An allowed reaction may still be skipped by the answer model, or request a masked image using the existing inspection flow; inspection is not filtered a second time.
+
+The admin AI card displays filter state, checks, filtered inputs, errors and the latest probability. A timeout, HTTP error or invalid response skips that input without calling the answer model; the next new input can be evaluated normally. Reaching `maxRequests` pauses generation on the next eligible input. This filter cap counts attempts per process and resets on app restart; its usage and billing are separate from `ai.maxCalls` and `ai.maxUsd`. Stopping AI cancels an in-flight check. Demo mode bypasses the filter without making requests.
+
+The filter requires `on_request` mode because [Jev accepts text only](https://docs.typesafe.ai/models). Use continuous mode with the filter disabled for image-driven reactions. Korean decision quality and the best threshold need evaluation with real broadcast samples; fixture tests verify integration behavior, not model judgment.
 
 ## Image model and data review
 

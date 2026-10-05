@@ -53,6 +53,7 @@ capture:
   backend: rtmp
   device: OBS Virtual Camera
   url: "PASTE_PRIVATE_APP_READ_URL_HERE"
+  language: ko # Korean input; use "" for automatic detection
   intervalMs: 3000
   programConfirmed: true
   masks:
@@ -73,6 +74,7 @@ audio:
   enabled: true
   ffmpeg: scripts/ffmpeg-docker.sh
   url: "PASTE_PRIVATE_APP_READ_URL_HERE"
+  language: ko # Korean input; use "" for automatic detection
   chunkSeconds: 10
   maxRequests: 360
 policy:
@@ -80,6 +82,10 @@ policy:
 ```
 
 Merge these fields into the existing sections of `config.yaml`; do not replace the rest of the file. After restarting `npm start`, audio begins automatically. The admin **Groq speech transcription** card shows `listening` after audio arrives, the latest transcript, and request usage. Near-silent chunks are skipped locally. Spoken chunks are sent as 16 kHz mono WAV to Groq's [`whisper-large-v3-turbo` transcription endpoint](https://console.groq.com/docs/speech-to-text); recent transcripts remain in memory for AI context for up to two minutes, while successful transcripts are also saved in the app PC's private SQLite log for up to `retentionDays` (default seven days). They do not appear as viewer chat. The administrator can inspect recent entries and download the retained log as JSONL from the **Groq speech transcription** card; the export contains transcript ID, session ID, capture time and text. Raw audio is not saved. Keep downloaded copies private and delete them separately. A request in progress causes newer chunks to be dropped rather than queued. `maxRequests` is a per-process cap, so a restart resets it; inspect Groq usage for billing and account limits. Use **Stop audio** to halt uploads without stopping chat receivers or AI. Previously logged text remains until retention expires or **Delete all local data** is used. If `config_required`, check the key; if `review_required`, complete the audio review; if `provider_error`, inspect the Groq account/key and service status. Check the live transcript and request count after adding your key; the included fixture tests alone do not verify speech accuracy.
+
+Set `audio.language` to the broadcast's input language using a lowercase two-letter ISO-639-1 code, such as `ko`, `en`, or `ja`, to reduce incorrect language detection. Omit it or set it to `""` for automatic detection. Restart the app after changing it. This guides transcription; it does not translate the audio or guarantee accuracy.
+
+To reduce answer-model calls, optionally enable the [Jev filter](README.md#optional-jev-filter-before-answer-generation) after configuring a TypeSafe key and reviewing text sharing. Its per-process request cap is separate from transcription and answer-model limits.
 
 ## 4. Connect real chat sources
 

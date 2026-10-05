@@ -34,6 +34,7 @@ test("Groq Whisper receives bounded WAV chunks and keeps transcript private", as
     const body = init.body as FormData;
     assert.equal(body.get("model"), "whisper-large-v3-turbo");
     assert.equal(body.get("response_format"), "json");
+    assert.equal(body.get("language"), "ko");
     const file = body.get("file") as File;
     const bytes = Buffer.from(await file.arrayBuffer());
     assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
@@ -44,7 +45,7 @@ test("Groq Whisper receives bounded WAV chunks and keeps transcript private", as
   }) as typeof fetch;
   try {
     const config = configSchema.parse({
-      audio: { enabled: true, url: audioUrl, maxRequests: 1 },
+      audio: { enabled: true, url: audioUrl, maxRequests: 1, language: "ko" },
     });
     const store = new Store(":memory:");
     const transcription = new Transcriber(
@@ -65,6 +66,49 @@ test("Groq Whisper receives bounded WAV chunks and keeps transcript private", as
     await transcription.transcribe(pcm);
     assert.equal(seen, 1);
     store.close();
+  } finally {
+    if (oldKey === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = oldKey;
+  }
+});
+
+test("transcription language defaults to auto and validates code format", () => {
+  assert.equal(configSchema.parse({}).audio.language, "");
+  assert.equal(configSchema.parse({ audio: {} }).audio.language, "");
+  for (const language of ["", "ko", "en", "ja"])
+    assert.equal(
+      configSchema.parse({ audio: { language } }).audio.language,
+      language,
+    );
+  for (const language of ["Korean", "ko-KR", "KO", "k", " ko", null])
+    assert.equal(
+      configSchema.safeParse({ audio: { language } }).success,
+      false,
+    );
+});
+
+test("automatic language detection omits the provider language parameter", async () => {
+  const oldKey = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = "fixture-groq-key";
+  try {
+    for (const audio of [{}, { language: "" }, { language: "ja" }]) {
+      let seen = false;
+      const transcription = new Transcriber(
+        configSchema.parse({ audio }).audio,
+        true,
+        (async (_url, init) => {
+          seen = true;
+          const body = init!.body as FormData;
+          assert.equal(body.get("language"), audio.language || null);
+          return Response.json({ text: "fixture transcript" });
+        }) as typeof fetch,
+      );
+      transcription.state = "receiving";
+      await transcription.transcribe(Buffer.alloc(320000));
+      assert.equal(seen, true);
+      assert.equal(transcription.recent().length, 1);
+      transcription.stop();
+    }
   } finally {
     if (oldKey === undefined) delete process.env.GROQ_API_KEY;
     else process.env.GROQ_API_KEY = oldKey;

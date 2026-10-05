@@ -570,7 +570,10 @@ function Admin() {
                 Configure the RTMP audio URL, Groq API key and audio review
                 locally.
               </p>
-              <p>{status.audio.loggedCount} retained transcripts</p>
+              <p>
+                {status.audio.loggedCount} retained transcripts · input
+                language: {status.audio.language}
+              </p>
               <div className="toolbar">
                 <a
                   href="/api/admin/transcripts/export"
@@ -624,6 +627,16 @@ function Admin() {
                   : "continuous video"}{" "}
                 · {status.ai.skips} skipped · {status.ai.rejects} rejected
               </p>
+              {status.ai.gate.enabled && (
+                <p>
+                  Jev filter: {status.ai.gate.state} · {status.ai.gate.requests}{" "}
+                  / {status.ai.gate.maxRequests} checks ·{" "}
+                  {status.ai.gate.filtered} filtered · {status.ai.gate.errors}{" "}
+                  errors
+                  {status.ai.gate.probability !== null &&
+                    ` · response probability ${Math.round(status.ai.gate.probability * 100)}% (threshold ${Math.round(status.ai.gate.threshold * 100)}%)`}
+                </p>
+              )}
               {status.ai.provider === "chatgpt_subscription" &&
                 !status.demo && (
                   <div className="pending">

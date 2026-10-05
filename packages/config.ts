@@ -13,6 +13,15 @@ const rect = z
     (r) => r.x + r.width <= 1 && r.y + r.height <= 1,
     "Mask must fit inside the image",
   );
+const gateSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    model: z.string().trim().min(1).max(100).default("jev-latest"),
+    threshold: z.number().min(0).max(1).default(0.5),
+    maxRequests: z.number().int().min(1).max(10000).default(360),
+    timeoutMs: z.number().int().min(100).max(10000).default(3000),
+  })
+  .strict();
 export const configSchema = z
   .object({
     port: z.number().int().min(1024).max(65535).default(3210),
@@ -98,6 +107,13 @@ export const configSchema = z
         enabled: z.boolean().default(false),
         ffmpeg: z.string().default("ffmpeg"),
         url: z.string().max(1024).default(""),
+        language: z
+          .string()
+          .regex(
+            /^(?:[a-z]{2})?$/,
+            "Use a two-letter language code or empty for automatic detection",
+          )
+          .default(""),
         chunkSeconds: z.number().int().min(10).max(30).default(10),
         maxRequests: z.number().int().min(1).max(10000).default(360),
       })
@@ -108,6 +124,7 @@ export const configSchema = z
         url: "",
         chunkSeconds: 10,
         maxRequests: 360,
+        language: "",
       }),
     policy: z
       .object({
@@ -117,6 +134,7 @@ export const configSchema = z
         reviewReference: z.string().max(1000).default(""),
         providerReviewed: z.boolean().default(false),
         groqAudioReviewed: z.boolean().default(false),
+        typesafeReviewed: z.boolean().default(false),
       })
       .strict()
       .default({
@@ -126,12 +144,14 @@ export const configSchema = z
         reviewReference: "",
         providerReviewed: false,
         groqAudioReviewed: false,
+        typesafeReviewed: false,
       }),
     ai: z
       .object({
         provider: z
           .enum(["chatgpt_subscription", "openai_api"])
           .default("chatgpt_subscription"),
+        gate: gateSchema.default(() => gateSchema.parse({})),
         manualApproval: z.boolean().default(true),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
@@ -170,6 +190,7 @@ export const configSchema = z
       .strict()
       .default({
         provider: "chatgpt_subscription",
+        gate: gateSchema.parse({}),
         manualApproval: true,
         visualMode: "continuous",
         maxCalls: 100,
@@ -218,6 +239,12 @@ export const configSchema = z
             "LAN mode requires an HTTP base URL with this port and a non-loopback host",
         });
     }
+    if (c.ai.gate.enabled && c.ai.visualMode !== "on_request")
+      ctx.addIssue({
+        code: "custom",
+        path: ["ai", "gate", "enabled"],
+        message: "The text-only Jev gate requires ai.visualMode: on_request",
+      });
     if (c.audio.enabled) {
       let valid = false;
       try {

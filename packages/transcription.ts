@@ -121,6 +121,7 @@ export class Transcriber {
     const body = new FormData();
     body.set("model", "whisper-large-v3-turbo");
     body.set("response_format", "json");
+    if (this.config.language) body.set("language", this.config.language);
     body.set(
       "file",
       new Blob([new Uint8Array(wavFromPcm(pcm))], { type: "audio/wav" }),

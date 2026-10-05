@@ -3,6 +3,7 @@ import type { Capture } from "./capture.ts";
 import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import { validateDecision, type Model, type ModelInput } from "./model.ts";
+import { DecisionGate } from "./gate.ts";
 import type { Decision } from "./contracts.ts";
 export class AiStartError extends Error {
   statusCode = 409;
@@ -37,6 +38,7 @@ export class Scheduler {
     public providerReady: () => boolean = () =>
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     public transcriber?: Transcriber,
+    public gate = new DecisionGate(config.ai.gate),
   ) {}
   start() {
     if (this.store.closed())
@@ -58,6 +60,16 @@ export class Scheduler {
           ? "Connect ChatGPT and select a model in admin before starting AI."
           : "Set OPENAI_API_KEY and OPENAI_MODEL in .env, then restart before starting AI.",
       );
+    if (!this.demo && this.config.ai.gate.enabled) {
+      if (!this.config.policy.typesafeReviewed)
+        throw new AiStartError(
+          "Review transcript and permitted chat sharing with TypeSafe, set policy.typesafeReviewed: true, and restart.",
+        );
+      if (!process.env.TYPESAFE_API_KEY)
+        throw new AiStartError(
+          "Set TYPESAFE_API_KEY in .env and restart before enabling the Jev gate.",
+        );
+    }
     this.stop();
     this.state = "running";
     this.timer = setInterval(() => void this.tick(), 1000);
@@ -159,6 +171,29 @@ export class Scheduler {
     this.lastHash = hash;
     this.lastExternal = externalSeq;
     try {
+      if (this.store.usage().calls >= c.maxCalls)
+        throw Error("budget_exhausted");
+      if (!this.demo && c.gate.enabled) {
+        const allowed = await this.gate.allow(input, signal);
+        if (
+          generation !== this.generation ||
+          signal.aborted ||
+          this.state !== "running"
+        )
+          return;
+        if (!allowed) {
+          this.skips++;
+          if (this.gate.state === "budget_exhausted")
+            this.stop("gate_budget_exhausted");
+          return;
+        }
+        // Evidence may expire or be hidden while the gate is evaluating.
+        if (
+          input.transcripts?.some((t) => !this.transcriber?.has(t.id)) ||
+          input.messages.some((m) => !this.store.publicMessage(m.id))
+        )
+          return;
+      }
       let r = await this.callModel(input, signal);
       if (
         generation !== this.generation ||
