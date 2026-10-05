@@ -184,6 +184,28 @@ test("ChatGPT inference requires completed stream and sends masked image with su
       interrupted(input, new AbortController().signal),
       /before completion/,
     );
+    for (const type of ["response.failed", "response.incomplete", "error"]) {
+      let calls = 0;
+      const failed = chatgptModel(configSchema.parse({}).ai, auth, async () => {
+        calls++;
+        return new Response(
+          [
+            {
+              type: "response.output_text.delta",
+              delta: JSON.stringify(decision),
+            },
+            { type, response: { status: "failed" } },
+          ]
+            .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+            .join(""),
+        );
+      });
+      await assert.rejects(
+        failed(input, new AbortController().signal),
+        /failed or incomplete/,
+      );
+      assert.equal(calls, 1); // No alternate provider/account retry.
+    }
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -8,6 +8,7 @@ import {
   rmSync,
 } from "node:fs";
 import { z } from "zod";
+import { dirname } from "node:path";
 const root = "https://openapi.chzzk.naver.com";
 const tokenSchema = z.object({
   accessToken: z.string().min(1),
@@ -37,6 +38,7 @@ export function normalizeChzzk(raw: unknown) {
   };
 }
 export class ChzzkAuth {
+  private generation = 0;
   pending?: Promise<string>;
   states = new Map<string, number>();
   token?: { accessToken: string; refreshToken: string; expiresAt: number };
@@ -69,6 +71,7 @@ export class ChzzkAuth {
   authorizationUrl(redirect: string) {
     if (!process.env.CHZZK_CLIENT_ID || !process.env.CHZZK_CLIENT_SECRET)
       throw Error("CHZZK credentials missing");
+    this.generation++;
     this.states.clear();
     const state = randomBytes(32).toString("hex");
     this.states.set(state, Date.now() + 300000);
@@ -78,9 +81,11 @@ export class ChzzkAuth {
     const expiry = this.states.get(state);
     this.states.delete(state);
     if (!expiry || expiry < Date.now()) throw new Error("CHZZK_STATE_INVALID");
+    this.generation++;
     await this.issue({ grantType: "authorization_code", code, state });
   }
   async issue(fields: Record<string, string>) {
+    const generation = this.generation;
     const r = await this.request(`${root}/auth/v1/token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -115,6 +120,8 @@ export class ChzzkAuth {
     if (!parsed.success) throw new Error("CHZZK_TOKEN_INVALID_RESPONSE");
     if (envelope && typeof envelope.code === "number" && envelope.code !== 200)
       throw new Error(`CHZZK_TOKEN_API_CODE_${envelope.code}`);
+    if (generation !== this.generation)
+      throw Error("CHZZK authorization changed");
     const t = parsed.data;
     const next = {
       accessToken: t.accessToken,
@@ -127,7 +134,7 @@ export class ChzzkAuth {
       c.update(JSON.stringify(next)),
       c.final(),
     ]);
-    mkdirSync("data", { recursive: true, mode: 0o700 });
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
     writeFileSync(
       `${this.path}.tmp`,
       Buffer.concat([iv, c.getAuthTag(), encrypted]),
@@ -138,8 +145,8 @@ export class ChzzkAuth {
     return next.accessToken;
   }
   async access() {
-    if (this.pending) return this.pending;
     if (!this.token) throw Error("auth_required");
+    if (this.pending) return this.pending;
     if (this.token.expiresAt > Date.now() + 60000)
       return this.token.accessToken;
     this.pending = this.issue({
@@ -171,6 +178,7 @@ export class ChzzkAuth {
     return b.content ?? {};
   }
   forget() {
+    this.generation++;
     this.token = undefined;
     this.states.clear();
     rmSync(this.path, { force: true });

@@ -562,3 +562,73 @@ test("delta: changed processing conditions require a new notice version before i
     store.close();
   }
 });
+
+test("PC01: API-key requests disable response storage and include explicit input history", async (t) => {
+  const previousKey = process.env.OPENAI_API_KEY,
+    previousModel = process.env.OPENAI_MODEL;
+  process.env.OPENAI_API_KEY = "fixture-key";
+  process.env.OPENAI_MODEL = "fixture-model";
+  t.after(() => {
+    if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = previousKey;
+    if (previousModel === undefined) delete process.env.OPENAI_MODEL;
+    else process.env.OPENAI_MODEL = previousModel;
+  });
+  const input: ModelInput = {
+    frames: [],
+    messages: [
+      {
+        id: "message",
+        speaker: "opaque-session-key",
+        text: "Synthetic permitted input",
+      },
+    ],
+    persona: { name: "synthetic", style: "brief" },
+    description: "fixture",
+  };
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async (url: any, init: any) => {
+    calls++;
+    assert.equal(init.headers.Authorization, "Bearer fixture-key");
+    const body = JSON.parse(init.body);
+    assert.equal(body.model, "fixture-model");
+    assert(JSON.stringify(body.input).includes("Synthetic permitted input"));
+    assert.equal(body.previous_response_id, undefined);
+    assert.equal(body.conversation, undefined);
+    if (String(url).endsWith("/input_tokens"))
+      return Response.json({ input_tokens: 10 });
+    assert.equal(String(url), "https://api.openai.com/v1/responses");
+    assert.equal(body.store, false);
+    return Response.json({
+      status: "completed",
+      output: [
+        {
+          type: "message",
+          content: [
+            {
+              type: "output_text",
+              text: JSON.stringify({
+                action: "skip",
+                text: null,
+                replyToMessageId: null,
+                evidenceFrameIds: [],
+                evidenceMessageIds: [],
+                evidenceTranscriptIds: [],
+              }),
+            },
+          ],
+        },
+      ],
+    });
+  });
+  const run = openaiModel(configSchema.parse({}).ai, {
+    endpoint: () => "https://api.openai.com/v1",
+    model: () => "fixture-model",
+    authorize: () => {},
+  });
+  assert.equal(
+    (await run(input, new AbortController().signal)).decision.action,
+    "skip",
+  );
+  assert.equal(calls, 2);
+});

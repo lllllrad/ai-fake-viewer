@@ -208,6 +208,96 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       })),
       { local: [], session: [] },
     );
+    // PC04/PC06: exercise real browser conversation surfaces with synthetic live consent.
+    const readers = await Promise.all(
+      ["reader", "overlay"].map(async (view) => {
+        const reader = await context.newPage();
+        reader.on("pageerror", (error) => errors.push(error.message));
+        await reader.goto(`http://127.0.0.1:${port}/${view}#${"q".repeat(64)}`);
+        return reader;
+      }),
+    );
+    const surfaces = [page, ...readers];
+    let stamp = Date.now();
+    const message = (author: string, text: string) =>
+      store.ingestBatch([privacyMessage(author, text, ++stamp)]);
+    const participate = (author: string) => {
+      message(author, "!동의");
+      const person = store.participation!.get("youtube", "fixture", author)!;
+      // Delivery is a fixture here; platform sender acknowledgements have separate tests.
+      for (const _ of store.participation!.stages()) {
+        person.lastNoticeAt = 0;
+        store.participation!.delivered(person.id);
+        stamp = Math.max(stamp, Date.now());
+        message(author, "!동의");
+      }
+      assert.equal(person.state, "ACTIVE");
+    };
+    message("unconsented-browser", "PC_UNCONSENTED_BODY");
+    participate("withdraw-browser");
+    message("withdraw-browser", "PC_WITHDRAW_VISIBLE_BODY");
+    for (const surface of surfaces) {
+      await expect(
+        surface.getByText("PC_WITHDRAW_VISIBLE_BODY", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        surface.getByText("PC_UNCONSENTED_BODY", { exact: true }),
+      ).toHaveCount(0);
+    }
+    message("withdraw-browser", "!철회");
+    for (const surface of surfaces)
+      await expect(
+        surface.getByText("PC_WITHDRAW_VISIBLE_BODY", { exact: true }),
+      ).toHaveCount(0);
+    for (const reader of readers) {
+      const snapshot = reader.waitForEvent("websocket").then((socket) =>
+        socket.waitForEvent("framereceived", {
+          predicate: (frame) => {
+            try {
+              return JSON.parse(String(frame.payload)).type === "snapshot";
+            } catch {
+              return false;
+            }
+          },
+        }),
+      );
+      await reader.reload();
+      await snapshot;
+      await expect(
+        reader.getByText("PC_WITHDRAW_VISIBLE_BODY", { exact: true }),
+      ).toHaveCount(0);
+    }
+    assert(
+      !JSON.stringify(store.context(["youtube"])).includes(
+        "PC_WITHDRAW_VISIBLE_BODY",
+      ),
+    );
+    participate("close-browser");
+    message("close-browser", "PC_CLOSE_VISIBLE_BODY");
+    for (const surface of surfaces)
+      await expect(
+        surface.getByText("PC_CLOSE_VISIBLE_BODY", { exact: true }),
+      ).toBeVisible();
+    const closed = await app.inject({
+      method: "POST",
+      url: "/api/admin/session/close",
+      headers: { host: `127.0.0.1:${port}`, authorization: `Bearer ${token}` },
+    });
+    assert.equal(closed.statusCode, 200);
+    for (const surface of surfaces) {
+      await expect(
+        surface.getByText("PC_CLOSE_VISIBLE_BODY", { exact: true }),
+      ).toHaveCount(0);
+      const persisted = await surface.evaluate(async () => ({
+        local: Object.keys(localStorage),
+        session: Object.keys(sessionStorage),
+        databases: (await indexedDB.databases()).map((db) => db.name),
+      }));
+      assert.deepEqual(persisted, { local: [], session: [], databases: [] });
+    }
+    assert.equal(store.participation!.participants.size, 0);
+    assert.equal(store.context(["youtube"]).length, 0);
+    for (const reader of readers) await reader.close();
     await page.screenshot({
       path: "test-results/privacy-admin.png",
       fullPage: true,

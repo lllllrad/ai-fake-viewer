@@ -8,6 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { z } from "zod";
+import { dirname } from "node:path";
 
 const root = "https://openapi.sooplive.com";
 const tokenSchema = z.object({
@@ -19,6 +20,7 @@ const tokenSchema = z.object({
 });
 
 export class SoopAuth {
+  private generation = 0;
   token?: { accessToken: string; refreshToken: string; expiresAt: number };
   pending?: Promise<string>;
 
@@ -62,6 +64,7 @@ export class SoopAuth {
     clientSecret: string,
     redirectUri: string,
   ) {
+    this.generation++;
     return this.issue(
       { grant_type: "authorization_code", code, redirect_uri: redirectUri },
       clientId,
@@ -74,6 +77,7 @@ export class SoopAuth {
     clientId: string,
     clientSecret: string,
   ) {
+    const generation = this.generation;
     const response = await this.request(`${root}/auth/token`, {
       method: "POST",
       headers: {
@@ -96,6 +100,8 @@ export class SoopAuth {
     }
     const parsed = tokenSchema.safeParse(payload);
     if (!parsed.success) throw Error("SOOP_TOKEN_INVALID_RESPONSE");
+    if (generation !== this.generation)
+      throw Error("SOOP authorization changed");
     const next = {
       accessToken: parsed.data.access_token,
       refreshToken: parsed.data.refresh_token,
@@ -111,7 +117,7 @@ export class SoopAuth {
       cipher.update(JSON.stringify(next)),
       cipher.final(),
     ]);
-    mkdirSync("data", { recursive: true, mode: 0o700 });
+    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
     writeFileSync(
       `${this.path}.tmp`,
       Buffer.concat([iv, cipher.getAuthTag(), encrypted]),
@@ -123,8 +129,8 @@ export class SoopAuth {
   }
 
   async access(clientId: string, clientSecret: string) {
-    if (this.pending) return this.pending;
     if (!this.token) throw Error("auth_required");
+    if (this.pending) return this.pending;
     if (this.token.expiresAt > Date.now() + 60000)
       return this.token.accessToken;
     this.pending = this.issue(
@@ -140,6 +146,7 @@ export class SoopAuth {
   }
 
   forget() {
+    this.generation++;
     this.token = undefined;
     rmSync(this.path, { force: true });
   }

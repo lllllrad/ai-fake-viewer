@@ -65,6 +65,7 @@ type Pending = {
   expiresAt: number;
 };
 export class ChatgptAuth {
+  private generation = 0;
   private data: State;
   private pending: Pending | null = null;
   private refreshing: Promise<string> | null = null;
@@ -162,6 +163,7 @@ export class ChatgptAuth {
     const state = randomBytes(32).toString("base64url");
     const nonce = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
+    this.generation++;
     this.pending = {
       state,
       nonce,
@@ -195,6 +197,7 @@ export class ChatgptAuth {
     error?: string;
   }) {
     const p = this.pending;
+    const generation = this.generation;
     this.pending = null;
     if (!p || p.expiresAt < Date.now() || q.state !== p.state)
       throw Error("ChatGPT authorization state invalid or expired");
@@ -234,6 +237,8 @@ export class ChatgptAuth {
       !scopes.includes("offline_access")
     )
       throw Error("ChatGPT plan permission was not granted");
+    if (generation !== this.generation)
+      throw Error("ChatGPT authorization changed");
     const old = this.data.accounts.find((a) => a.clientId === clientId);
     if (old && old.subject !== identity.sub)
       throw Error("ChatGPT account identity mismatch");
@@ -259,6 +264,7 @@ export class ChatgptAuth {
   select(clientId: string) {
     if (!this.data.accounts.some((a) => a.clientId === clientId))
       throw Error("Unknown ChatGPT account");
+    this.generation++;
     this.data.active = clientId;
     this.save();
   }
@@ -275,6 +281,7 @@ export class ChatgptAuth {
       throw Error("Connect ChatGPT first");
     if (a.expiresAt > Date.now() + 60000) return a.accessToken;
     if (this.refreshing) return this.refreshing;
+    const generation = this.generation;
     this.refreshing = (async () => {
       if (a.earliestRefreshAt > Date.now())
         throw Error("ChatGPT refresh is not available yet");
@@ -293,6 +300,12 @@ export class ChatgptAuth {
       const t = tokenSchema.parse(await r.json());
       if (!t.scope.split(/\s+/).includes("chatgpt.tokens.use.direct"))
         throw Error("ChatGPT plan permission expired");
+      if (
+        generation !== this.generation ||
+        this.active !== a ||
+        !a.refreshToken
+      )
+        throw Error("ChatGPT authorization changed");
       a.accessToken = t.access_token;
       a.refreshToken = t.refresh_token;
       a.expiresAt = Date.now() + t.expires_in * 1000;
@@ -331,9 +344,19 @@ export class ChatgptAuth {
   }
   async disconnect() {
     const a = this.active;
+    this.generation++;
+    this.pending = null;
     if (!a) return { revoked: true };
+    const refreshToken = a.refreshToken;
+    // Local deletion is immediate, independent of the remote revocation result.
+    a.accessToken = "";
+    a.refreshToken = "";
+    a.idToken = null;
+    a.expiresAt = 0;
+    a.model = null;
+    this.save();
     let revoked = false;
-    if (a.refreshToken) {
+    if (refreshToken) {
       try {
         const discovery = await this.request(
           `${issuer}/.well-known/openid-configuration`,
@@ -348,7 +371,7 @@ export class ChatgptAuth {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body: new URLSearchParams({
-            token: a.refreshToken,
+            token: refreshToken,
             token_type_hint: "refresh_token",
             client_id: a.clientId,
           }),
@@ -359,12 +382,6 @@ export class ChatgptAuth {
         /* local sign-out still clears secrets */
       }
     }
-    a.accessToken = "";
-    a.refreshToken = "";
-    a.idToken = null;
-    a.expiresAt = 0;
-    a.model = null;
-    this.save();
     return { revoked };
   }
 }

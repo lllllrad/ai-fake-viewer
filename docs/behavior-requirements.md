@@ -2,6 +2,8 @@
 
 This is the entry point for the current live behavior contract. Detailed specifications own the rules linked below; this overview makes platform differences and implementation gaps explicit. Demo fixtures and standalone legacy libraries are not alternate live modes.
 
+The [privacy review evidence map](privacy-review-evidence.md) reconciles PC01–PC12 without treating overview omissions as missing implementation.
+
 ## Requirements and implementation
 
 | ID  | Required behavior                                                            | Current implementation and limits                                                                                                                                                                                                                                                               | Owning specification                                                                                       |

@@ -17,6 +17,8 @@ Start with the [current behavior requirements and implementation status](behavio
 | [Platform contracts](../research/platform-contracts.md)                                                  | Dated external research, not a guarantee of current service contracts                     |
 | [SOOP research](../research/soop-official-verification.md) / [dependencies](../research/dependencies.md) | Investigation evidence and follow-up needs                                                |
 
+The [privacy contract review evidence map](privacy-review-evidence.md) links PC01–PC12 to owning clauses, synthetic checks and outstanding operational acceptance.
+
 ## Ownership
 
 | Feature                                  | Source                                                                                                                           | Documents to update                                     |

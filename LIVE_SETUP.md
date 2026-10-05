@@ -76,3 +76,13 @@ The sender verifies `/open/v1/users/me` against the subscribed channel before po
 Admin participation status shows connection, approval, sending and delivery problems. HTTP 401/403 pauses sending for five minutes; ambiguous failures wait at least one minute. Resolve missing permissions by updating the app permissions and reconnecting. Receipt can work even when sending permissions are absent. No real-account delivery is established by synthetic tests.
 
 Official references: [Chat API](https://chzzk.gitbook.io/chzzk/chzzk-api/chat), [User API](https://chzzk.gitbook.io/chzzk/chzzk-api/user), [Session API](https://chzzk.gitbook.io/chzzk/chzzk-api/session).
+
+## Provider settings and live acceptance record
+
+Before claiming readiness for real processing, keep a private, dated operational record for the actual deployment. A manual review is sufficient; the app does not continuously inspect provider policy or account settings. Do not put tokens, real chat, viewer details or screenshots of private conversations into tracked verification reports.
+
+Record the reviewer/date, selected API-key authentication or Sign in with ChatGPT account/workspace reference, model and endpoint, current public policy/consent versions, and the applicable training/data-sharing and retention settings with their actual evidence location. `store:false` disables response storage for these requests; it does not establish training opt-out, zero provider logs, or the selected workspace's policy. Successful login and profile checkboxes are not evidence of the external settings. Recheck when account/workspace, provider terms or processing scope changes; update notices and invalidate incompatible consent before use.
+
+For each enabled platform, record the actual broadcaster identity, application permissions, notice-send permissions and limits, verified delivery/retry behavior and event ordering. Exercise a synthetic participation/withdrawal sequence in a permitted operational rehearsal and separately verify the published post-session contact reaches the responsible operator. Record app deletion, provider follow-up, public video and controlled copies as distinct outcomes or limitations. Leave an unchecked item explicitly pending; automated fixture results cannot complete it.
+
+Match the final published policy to the enabled profiles, transmitted fields, displayed real nicknames and declared countries/periods. The review addendum is not the revised public policy itself; no equality with unavailable public-policy text is claimed. Use the [evidence map](docs/privacy-review-evidence.md) for code/test ownership and the [exception inventory](docs/privacy-implementation.md#durable-exception-inventory-and-deletion) for retention/deletion procedures.

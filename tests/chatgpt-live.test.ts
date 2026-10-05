@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
-import { chatgptModel } from "../packages/model.ts";
+import { chatgptModel, modelMessages } from "../packages/model.ts";
 import { configSchema } from "../packages/config.ts";
 import { profileIssues } from "../packages/privacy-profile.ts";
 import { createApp } from "../apps/server/app.ts";
@@ -123,12 +123,23 @@ test("subscription rechecks consent after asynchronous token refresh and records
     evidenceFrameIds: [],
     evidenceMessageIds: [],
   };
-  const request = (async (_url: any, init: any) => {
+  const request = (async (url: any, init: any) => {
+    assert.equal(String(url), "https://api.openai.com/v1/responses");
     calls++;
     const body = JSON.parse(init.body);
     assert.equal(body.store, false);
     assert.equal(body.stream, true);
     assert.equal(body.previous_response_id, undefined);
+    assert.equal(body.model, "fixture-model");
+    assert.deepEqual(body.input, modelMessages(input));
+    for (const key of [
+      "tools",
+      "conversation",
+      "background",
+      "max_output_tokens",
+      "metadata",
+    ])
+      assert.equal(body[key], undefined);
     return new Response(
       `data: ${JSON.stringify({ type: "response.completed", response: { status: "completed", output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(decision) }] }], usage: { input_tokens: 2, output_tokens: 2 } } })}\n\n`,
       { headers: { "x-request-id": "synthetic-request" } },
