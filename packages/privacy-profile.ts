@@ -153,3 +153,45 @@ export function profileIssues(p: PrivacyProfile): string[] {
     issues.push("영상 공개 플랫폼·채널·보관·국외 처리 확인 필요");
   return issues;
 }
+
+// Processing changes need a new viewer-facing notice version, not merely a changed link.
+export function assertProfileUpdate(
+  previous: PrivacyProfile,
+  next: PrivacyProfile,
+) {
+  const scope = (p: PrivacyProfile) =>
+    JSON.stringify({
+      operator: p.operator,
+      collection: p.collectionNotice,
+      publication: p.publicationNotice,
+      overseas: p.overseasNotice,
+      thirdParty: p.thirdPartyNotice,
+      overseasBasis: p.overseasBasis,
+      processing: {
+        provider: p.processing.provider,
+        contract: p.processing.contract,
+        model: p.processing.model,
+        endpoint: p.processing.endpoint,
+        countries: p.processing.countries,
+        subprocessors: p.processing.subprocessors,
+        retention: p.processing.retention,
+      },
+      publications: p.publications.map(
+        ({ platform, channel, url, retention, countries }) => ({
+          platform,
+          channel,
+          url,
+          retention,
+          countries,
+        }),
+      ),
+    });
+  if (
+    previous.noticeVersion &&
+    scope(previous) !== scope(next) &&
+    (!next.noticeVersion || next.noticeVersion === previous.noticeVersion)
+  )
+    throw new PrivacyActionError(
+      "처리 조건 변경 시 안내 내용을 수정하고 새로운 noticeVersion을 지정해 주세요.",
+    );
+}

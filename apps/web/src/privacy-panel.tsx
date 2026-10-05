@@ -147,7 +147,10 @@ export function PrivacyPanel() {
           SOOP 미동의 채팅에는 고정 안내가 자동 발송됩니다. 동의 단계 안내도
           자동 발송하고 SOOP 응답으로 전달을 확인합니다. 관리자 탭의 SOOP 연결을
           유지하세요. 실제 수신 명령 확인은 동의를 대신하는 기능이 아닙니다.
-          연령 미달·확인 불가는 차단하세요.
+          현재 운영 대상은 만 14세 이상 자기신고 이용자입니다. 채팅 명령은 실제
+          연령 검증이 아닙니다. 만 14세 미만으로 확인되거나 자기신고와 모순되는
+          정보가 있으면 차단하세요. 법정대리인 동의 확인 기능은 제공하지
+          않습니다.
         </p>
         {data.participants.map((p: any) => (
           <article key={p.id} className="persona-candidate">
@@ -156,8 +159,8 @@ export function PrivacyPanel() {
             </h3>
             <p>
               {states[p.state]} · 단계 {p.stage + 1} · 연령{" "}
-              {p.age === "confirmed"
-                ? "14세 이상 확인"
+              {p.age === "self_declared_14_plus"
+                ? "14세 이상 자기신고 (검증 아님)"
                 : p.age === "blocked"
                   ? "참여 차단"
                   : "미확인"}
@@ -231,7 +234,7 @@ export function PrivacyPanel() {
               disabled={busy}
               onClick={() => void action(`participants/${p.id}/block-age`)}
             >
-              연령 미달·확인 불가로 참여 차단
+              14세 미만·신고 모순으로 참여 차단
             </button>
           </article>
         ))}

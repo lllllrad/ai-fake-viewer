@@ -154,7 +154,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       "WAITING_CONSENT",
     );
     await panel
-      .getByRole("button", { name: "연령 미달·확인 불가로 참여 차단" })
+      .getByRole("button", { name: "14세 미만·신고 모순으로 참여 차단" })
       .click();
     await expect(panel.getByText(/철회됨 · 단계/)).toBeVisible();
     await panel.getByText(/권리행사·영상 후속 조치 \(/).click();

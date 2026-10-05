@@ -2,6 +2,7 @@ import { PrivacyActionError } from "./privacy-profile.ts";
 import { randomUUID } from "node:crypto";
 import type { Incoming } from "./contracts.ts";
 import {
+  assertProfileUpdate,
   profileFingerprint,
   profileIssues,
   type PrivacyProfile,
@@ -18,7 +19,7 @@ export type Participant = {
   state: ParticipationState;
   epoch: number;
   stage: number;
-  age: "unknown" | "confirmed" | "blocked";
+  age: "unknown" | "self_declared_14_plus" | "blocked";
   version: string;
   accepted: string[];
   activeAfter: number;
@@ -119,7 +120,7 @@ export class Participation {
       p?.state === "ACTIVE" &&
       p.epoch === epoch &&
       p.version === this.fingerprint &&
-      p.age === "confirmed"
+      p.age === "self_declared_14_plus"
     );
   }
   handle(m: Incoming): { allow: boolean; withdraw: boolean; epoch: number } {
@@ -133,7 +134,7 @@ export class Participation {
         this.revision++;
         p.state = "WITHDRAWN";
         p.accepted = [];
-        p.age = "unknown";
+        if (p.age !== "blocked") p.age = "unknown";
         p.deliveredAt = null;
         p.observed = undefined;
         p.lastEventAt = Math.max(p.lastEventAt, m.publishedAt ?? Date.now());
@@ -205,7 +206,7 @@ export class Participation {
     if (p.deliveredAt === null || at <= p.deliveredAt) return;
     const stage = this.stages()[p.stage];
     p.accepted.push(stage);
-    if (stage === "age") p.age = "confirmed";
+    if (stage === "age") p.age = "self_declared_14_plus";
     p.stage++;
     p.deliveredAt = null;
     p.observed = undefined;
@@ -244,7 +245,7 @@ export class Participation {
     const profile = this.profile;
     const text =
       stage === "age"
-        ? "이 방송 참여는 만 14세 이상만 가능합니다. 본인이 만 14세 이상이면 안내를 확인한 뒤 새로운 !동의를 입력해 주세요. 확인할 수 없거나 미달이면 참여할 수 없습니다."
+        ? "이 앱은 만 14세 이상이라고 자기신고한 이용자를 대상으로 운영합니다. 본인이 만 14세 이상이면 새로운 !동의를 입력해 주세요. 이 명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로 확인되면 참여를 중단하며, 법정대리인 동의 확인 절차가 마련되기 전에는 참여할 수 없습니다."
         : stage === "collection"
           ? profile.collectionNotice
           : stage === "publication"
@@ -316,6 +317,7 @@ export class Participation {
   }
   replaceProfile(profile: PrivacyProfile) {
     if (profileFingerprint(profile) === this.fingerprint) return;
+    assertProfileUpdate(this.profile, profile);
     this.invalidateAll();
     this.profile = profile;
     this.fingerprint = profileFingerprint(profile);

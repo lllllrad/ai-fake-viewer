@@ -499,42 +499,19 @@ export class Store extends EventEmitter {
     message: PublicMessage,
     revealed = this.originsRevealed(),
   ): PublicMessage {
+    // Disclosure controls origin badges only; viewers always keep their platform nickname.
     const displayName =
-      message.attribution === "youtube"
-        ? message.displayName.replace(/^@/, "")
-        : message.attribution === "experiment"
-          ? message.displayName.replace(/\s*·\s*experiment\s*$/i, "").trim() ||
-            "시청자"
-          : message.displayName;
-    if (revealed) {
-      const normalized = displayName
-        .normalize("NFKC")
-        .toLocaleLowerCase()
-        .replace(/[\s\p{Cf}\p{P}]/gu, "");
-      const names = this.db
-        .prepare(
-          "SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id WHERE m.session=? AND m.hidden=0",
-        )
-        .all(message.sessionId) as any[];
-      const collisions = names.filter(
-        (a) =>
-          a.name
-            .normalize("NFKC")
-            .toLocaleLowerCase()
-            .replace(/[\s\p{Cf}\p{P}]/gu, "") === normalized,
-      );
-      const rendered =
-        collisions.length > 1
-          ? `${displayName} · ${message.actorId.slice(0, 4)}`
-          : displayName;
-      return { ...message, displayName: rendered };
-    }
+      message.attribution === "experiment"
+        ? message.displayName.replace(/\s*·\s*experiment\s*$/i, "").trim() ||
+          "시청자"
+        : message.displayName;
     return {
       ...message,
-      displayName: `시청자-${message.actorId.slice(0, 8)}`,
-      attribution: "mixed",
+      displayName,
+      attribution: revealed ? message.attribution : "mixed",
     };
   }
+
   readerSnapshot() {
     const snapshot = this.snapshot();
     const revealed = this.originsRevealed();

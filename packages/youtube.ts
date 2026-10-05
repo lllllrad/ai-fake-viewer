@@ -50,10 +50,7 @@ export function normalizeYoutube(item: any, chat: string): Incoming | null {
       s.authorChannelId ??
       s.author_channel_id ??
       `unknown-${item.id}`,
-    name: (a.displayName ?? a.display_name ?? "YouTube viewer").replace(
-      /^@/,
-      "",
-    ),
+    name: a.displayName ?? a.display_name ?? "YouTube viewer",
     text,
     publishedAt: Number.isFinite(stamp) ? stamp : null,
   };

@@ -14,7 +14,7 @@ export const approvedProfile = () =>
     overseasBasis: "A",
     collectionNotice: "Fixture collection purpose and period",
     publicationNotice:
-      "Fixture live recording VOD and edited video; original names after reveal; long-term video publication",
+      "Fixture live recording VOD and edited video; actual nicknames throughout participation; long-term video publication",
     overseasNotice:
       "Fixture OpenAI API transfer notice including countries, retention and refusal consequences",
     processing: {

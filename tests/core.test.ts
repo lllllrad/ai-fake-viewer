@@ -228,7 +228,7 @@ test("T04: video selection rejects arbitrary hosts, paths and protocols", () => 
   ])
     assert.throws(() => videoId(v));
 });
-test("YouTube handles and AI persona display names omit platform markers", async () => {
+test("YouTube nicknames remain exact and AI persona display names omit internal markers", async () => {
   const youtube = normalizeYoutube(
     {
       id: "youtube-message",
@@ -237,7 +237,7 @@ test("YouTube handles and AI persona display names omit platform markers", async
     },
     "live-chat",
   );
-  assert.equal(youtube?.name, "viewer");
+  assert.equal(youtube?.name, "@viewer");
 
   const h = harness(async (input: ModelInput) => say(input));
   h.c.ai.personas = [{ name: "Orbit · experiment", style: "Brief." }];

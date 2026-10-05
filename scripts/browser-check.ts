@@ -279,7 +279,7 @@ try {
     for (const name of await page
       .locator(".message-meta strong")
       .allTextContents())
-      assert.match(name, /^시청자-[0-9a-f]{8}$/);
+      assert(name.length > 0 && !/^시청자-[0-9a-f]{8}$/.test(name));
   }
   await overlay.reload();
   await overlay

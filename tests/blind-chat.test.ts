@@ -17,7 +17,7 @@ async function waitFor(check: () => boolean) {
   throw Error("Timed out");
 }
 
-test("automatic AI posts and platform messages remain indistinguishable in live streams, reconnects and admin until reveal", async () => {
+test("origin badges remain hidden until reveal while real nicknames stay visible in streams and reconnects", async () => {
   const directory = mkdtempSync(join(tmpdir(), "mixed-blind-"));
   const config = configSchema.parse({
     database: ":memory:",
@@ -90,8 +90,10 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
     const visible = stream.slice(1).map((event) => event.event.payload);
     for (const m of visible) {
       assert.equal(m.attribution, "mixed");
-      assert.match(m.displayName, /^시청자-[0-9a-f]{8}$/);
+      assert.ok(m.displayName);
+      assert(!m.displayName.startsWith("시청자-"));
     }
+    assert.equal(visible[0].displayName, "Human original");
     assert.notEqual(visible[0].displayName, visible[1].displayName);
     const adminStatus = (
       await app.inject({ url: "/api/admin/status", headers })
@@ -109,13 +111,7 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
     assert.equal(stream[3].event.type, "message.updated");
     assert.equal(stream[3].event.payload.displayName, visible[0].displayName);
     assert.equal(stream[3].event.payload.attribution, "mixed");
-    for (const secret of [
-      "Human original",
-      "Orbit",
-      "experiment",
-      "youtube",
-      "private-account",
-    ])
+    for (const secret of ["experiment", "youtube", "private-account"])
       assert(!JSON.stringify(stream).includes(secret), secret);
     const reveal = await app.inject({
       method: "POST",
@@ -141,7 +137,7 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
     store.ingestBatch([human]);
     const nextSession = await connect();
     assert.equal(nextSession[0].messages[0].attribution, "mixed");
-    assert.notEqual(
+    assert.equal(
       nextSession[0].messages[0].displayName,
       visible[0].displayName,
     );
@@ -152,7 +148,7 @@ test("automatic AI posts and platform messages remain indistinguishable in live 
   }
 });
 
-test("blind aliases and explicit reveal state survive database restart", () => {
+test("standalone legacy Store preserves nicknames and disclosure state on restart", () => {
   const directory = mkdtempSync(join(tmpdir(), "mixed-blind-persist-"));
   const path = join(directory, "chat.sqlite");
   let store = new Store(path);

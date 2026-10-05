@@ -13,7 +13,7 @@ Review host crash/core dumps, swap, service diagnostics and backup paths. The la
 Populate `privacy` in `config.yaml` from the actual operator's decisions:
 
 - Operator, responsible officer, contact, public HTTPS privacy/consent pages and versions.
-- Separate age, collection/use, screen/recording/VOD/edited-video publication and overseas notices; separate third-party notice if needed. Publication notice must explain disclosure of original names and the actual video retention period.
+- Separate 14+ self-declaration (not verified age), collection/use, screen/recording/VOD/edited-video publication and overseas notices; separate third-party notice if needed. Publication notice must explain that actual nicknames are shown from the start and state the actual video retention period. The current operating scope is self-declared age 14+: block known under-14 or contradictory declarations. The app has no guardian-consent verification workflow and does not enable those users through chat commands.
 - Reviewed overseas basis A or B; real OpenAI API model, endpoint, countries, subprocessors, retention, evidence and check date; account data sharing disabled and actual settings verified.
 - Actual publication platforms/channels, video retention and overseas review, separately from AI transfers.
 - Per-platform/broadcaster permissions for receipt, fixed notices, screen publication and external AI, with contract evidence and dates. Confirm allowed notice rates and own/other bot IDs.

@@ -3,6 +3,7 @@ import { Participation } from "../../packages/participation.ts";
 import {
   PrivacyActionError,
   privacyProfileSchema,
+  assertProfileUpdate,
   profileIssues,
 } from "../../packages/privacy-profile.ts";
 import { RightsQueue, rightsIntakeSchema } from "../../packages/rights.ts";
@@ -1055,6 +1056,7 @@ export async function createApp(
     const profile = privacyProfileSchema.parse(req.body);
     if (profile.rightsDatabase !== config.privacy.rightsDatabase)
       throw Error("권리행사 저장소 변경은 재시작이 필요합니다.");
+    assertProfileUpdate(config.privacy, profile);
     scheduler.stop("privacy_profile_changed");
     await supervisor.stop();
     const prior = participation ? [...participation.participants.values()] : [];

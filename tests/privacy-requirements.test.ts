@@ -17,7 +17,11 @@ import {
 } from "./privacy-fixtures.ts";
 import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
-import { openaiModel, type ModelInput } from "../packages/model.ts";
+import {
+  modelMessages,
+  openaiModel,
+  type ModelInput,
+} from "../packages/model.ts";
 
 function fixture(t: any) {
   let now = Date.now();
@@ -52,7 +56,7 @@ test("T01–T04, T22: first command starts guidance; separate delivered stages a
       store.ingestBatch([privacyMessage("u", "!동의", advance())]);
     }
     assert.equal(person.state, "ACTIVE");
-    assert.equal(person.age, "confirmed");
+    assert.equal(person.age, "self_declared_14_plus");
     store.ingestBatch([privacyMessage("u", "새로 보낸 채팅", advance())]);
     assert.equal(store.snapshot().messages.length, 1);
     assert.throws(() => store.grantConsent("youtube", "fixture", "other"));
@@ -431,6 +435,129 @@ test("receiver approval is checked against the resolved YouTube broadcaster befo
   } finally {
     if (oldKey === undefined) delete process.env.YOUTUBE_API_KEY;
     else process.env.YOUTUBE_API_KEY = oldKey;
+    store.close();
+  }
+});
+
+test("delta: actual nicknames remain visible without disclosure and never become model author metadata", (t) => {
+  const { store, advance } = fixture(t);
+  try {
+    for (const id of ["private-id-a", "private-id-b"]) {
+      activateFixture(store, id, advance);
+      store.ingestBatch([
+        privacyMessage(
+          id,
+          `message ${id.endsWith("a") ? "A" : "B"}`,
+          advance(),
+          { name: "@실제닉네임" },
+        ),
+      ]);
+    }
+    store.ingestBatch([
+      privacyMessage("unconsented-id", "hidden text", advance(), {
+        name: "@실제닉네임",
+      }),
+    ]);
+    const before = store.readerSnapshot().messages;
+    assert.equal(before.length, 2);
+    assert(
+      before.every(
+        (m) => m.displayName === "@실제닉네임" && m.attribution === "mixed",
+      ),
+    );
+    assert.notEqual(before[0].actorId, before[1].actorId);
+    const payload = JSON.stringify(
+      modelMessages({
+        frames: [],
+        messages: store.context(["youtube"]),
+        persona: { name: "synthetic", style: "brief" },
+        description: "fixture",
+      }),
+    );
+    assert(!payload.includes("실제닉네임"));
+    assert(!payload.includes("private-id"));
+    store.reveal();
+    assert.deepEqual(
+      store.readerSnapshot().messages.map((m) => m.displayName),
+      before.map((m) => m.displayName),
+    );
+    store.ingestBatch([privacyMessage("private-id-a", "!철회", advance())]);
+    assert.deepEqual(
+      store.readerSnapshot().messages.map((m) => m.text),
+      ["message B"],
+    );
+    assert(!JSON.stringify(store.replay(0)).includes("message A"));
+  } finally {
+    store.close();
+  }
+});
+
+test("delta: child restriction survives profile invalidation and withdrawal; commands cannot verify age or override it", (t) => {
+  const { p, store, advance } = fixture(t);
+  try {
+    const person = activateFixture(store, "u", advance);
+    assert.equal(person.age, "self_declared_14_plus");
+    p.blockAge(person.id);
+    p.replaceProfile({ ...approvedProfile(), noticeVersion: "next" });
+    store.ingestBatch([privacyMessage("u", "!철회", advance())]);
+    for (let i = 0; i < 8; i++)
+      store.ingestBatch([privacyMessage("u", "!동의", advance(31000))]);
+    assert.equal(person.age, "blocked");
+    assert.equal(person.state, "WITHDRAWN");
+    assert.throws(() => p.confirmLiveCommand(person.id, "invented"));
+    store.ingestBatch([privacyMessage("u", "excluded", advance())]);
+    assert.equal(store.readerSnapshot().messages.length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test("delta: unsupported personal details and single-author topics never enter the retained anonymous summary", (t) => {
+  const { store, advance } = fixture(t);
+  try {
+    for (const author of ["a", "b", "c"]) {
+      activateFixture(store, author, advance);
+      store.ingestBatch([
+        privacyMessage(
+          author,
+          "PRIVATE_NAME PRIVATE_EVENT 010-1234-5678 https://example.test/private",
+          advance(),
+        ),
+      ]);
+    }
+    store.ingestBatch([privacyMessage("a", "코드 오류", advance())]);
+    const summary = store.chatSummary();
+    assert.deepEqual(summary.topics, []);
+    assert.deepEqual(summary.atmosphere, []);
+    for (const author of ["a", "b", "c"])
+      store.ingestBatch([privacyMessage(author, "!철회", advance())]);
+    const retained = JSON.stringify(store.chatSummary());
+    for (const value of ["PRIVATE", "010-", "example.test", "개발·기술"])
+      assert(!retained.includes(value));
+    assert.equal(store.context(["youtube"]).length, 0);
+  } finally {
+    store.close();
+  }
+});
+
+test("delta: changed processing conditions require a new notice version before invalidating consent", (t) => {
+  const { p, store, advance } = fixture(t);
+  try {
+    const person = activateFixture(store, "u", advance);
+    const next = {
+      ...approvedProfile(),
+      processing: {
+        ...approvedProfile().processing,
+        countries: ["new-country"],
+        retention: "new period",
+      },
+    };
+    assert.throws(() => p.replaceProfile(next), /noticeVersion/);
+    assert.equal(person.state, "ACTIVE");
+    p.replaceProfile({ ...next, noticeVersion: "fixture-2" });
+    assert.equal(person.state, "WITHDRAWN");
+    assert.equal(p.allowed("youtube", "fixture", "u", person.epoch), false);
+  } finally {
     store.close();
   }
 });
