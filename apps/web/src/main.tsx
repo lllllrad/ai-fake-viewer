@@ -662,7 +662,23 @@ function Admin() {
       />
     );
   return (
-    <main className="admin">
+    <main
+      className="admin"
+      onClick={(event) => {
+        const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(
+          'a[href^="#"]',
+        );
+        if (!link) return;
+        const target = document.getElementById(link.hash.slice(1));
+        for (
+          let parent = target?.parentElement;
+          parent;
+          parent = parent.parentElement
+        ) {
+          if (parent instanceof HTMLDetailsElement) parent.open = true;
+        }
+      }}
+    >
       <header>
         <div>
           <div className="eyebrow">MIXED CHAT / CONTROL ROOM</div>
@@ -1511,567 +1527,579 @@ function Admin() {
               </>
             )}
           </section>
-          {status.demo && (
-            <aside className="demo">
-              DEMO SESSION · Artificial platform messages, generated test frames
-              and a mock model. No live services are connected.
-            </aside>
-          )}
-          {!status.demo && (
-            <section className="card">
-              <div className="section-title">
-                <h2>Live setup</h2>
-              </div>
-              <p>
-                YouTube:{" "}
-                {status.setup?.youtube?.enabled
-                  ? status.setup.youtube.credentialsConfigured &&
-                    (status.setup.youtube.videoConfigured ||
-                      status.setup.youtube.channelConfigured)
-                    ? "ready to test"
-                    : "add API key or access token and video or channel ID"
-                  : "disabled in config.yaml"}
-              </p>
-              <p>
-                CHZZK:{" "}
-                {status.setup?.chzzk?.enabled
-                  ? status.setup.chzzk.credentialsConfigured
-                    ? "ready to authorize"
-                    : "add developer app Client ID and Secret to .env"
-                  : "disabled in config.yaml"}
-              </p>
-              <p className="hint">
-                Registered callback:{" "}
-                {status.setup?.chzzk?.redirectUri ?? "not available"}
-              </p>
-              <p>
-                Groq speech:{" "}
-                {status.setup?.audio?.credentialsConfigured
-                  ? "configured"
-                  : "add GROQ_API_KEY"}
-              </p>
-              <p>
-                Program camera:{" "}
-                {status.setup?.capture?.maskConfigured
-                  ? "review masked preview"
-                  : "configure privacy masks"}
-              </p>
-              <p>
-                AI:{" "}
-                {status.setup?.ai?.connected && status.setup.ai.modelSelected
-                  ? "model connected"
-                  : status.setup?.ai?.provider === "chatgpt_subscription"
-                    ? "connect ChatGPT and select a model below"
-                    : "set OPENAI_API_KEY and OPENAI_MODEL"}
-              </p>
-              <p className="hint">
-                Save config.yaml and .env locally, then restart the server.
-                Never paste Client Secrets or tokens into chat.
-              </p>
-            </section>
-          )}
-          {status.setup?.soop && status.connectors?.soop && (
-            <SoopConnector
-              setup={status.setup.soop}
-              state={status.connectors.soop.state}
-              refresh={refresh}
-            />
-          )}
-          <div className="grid connections" id="connection-details">
-            {Object.entries(status.connectors).map(([p, s]: [string, any]) => (
-              <section className="card" key={p}>
-                <div className="eyebrow">{p.toUpperCase()}</div>
-                <h2>
-                  <span className="dot" />
-                  {s.state}
-                </h2>
+          <details className="advanced-settings" id="advanced-settings">
+            <summary>연결 및 AI 상세 설정</summary>
+            {status.demo && (
+              <aside className="demo">
+                DEMO SESSION · Artificial platform messages, generated test
+                frames and a mock model. No live services are connected.
+              </aside>
+            )}
+            {!status.demo && (
+              <section className="card">
+                <div className="section-title">
+                  <h2>Live setup</h2>
+                </div>
                 <p>
-                  {s.received} received · {s.recoveries} recoveries
+                  YouTube:{" "}
+                  {status.setup?.youtube?.enabled
+                    ? status.setup.youtube.credentialsConfigured &&
+                      (status.setup.youtube.videoConfigured ||
+                        status.setup.youtube.channelConfigured)
+                      ? "ready to test"
+                      : "add API key or access token and video or channel ID"
+                    : "disabled in config.yaml"}
+                </p>
+                <p>
+                  CHZZK:{" "}
+                  {status.setup?.chzzk?.enabled
+                    ? status.setup.chzzk.credentialsConfigured
+                      ? "ready to authorize"
+                      : "add developer app Client ID and Secret to .env"
+                    : "disabled in config.yaml"}
+                </p>
+                <p className="hint">
+                  Registered callback:{" "}
+                  {status.setup?.chzzk?.redirectUri ?? "not available"}
+                </p>
+                <p>
+                  Groq speech:{" "}
+                  {status.setup?.audio?.credentialsConfigured
+                    ? "configured"
+                    : "add GROQ_API_KEY"}
+                </p>
+                <p>
+                  Program camera:{" "}
+                  {status.setup?.capture?.maskConfigured
+                    ? "review masked preview"
+                    : "configure privacy masks"}
+                </p>
+                <p>
+                  AI:{" "}
+                  {status.setup?.ai?.connected && status.setup.ai.modelSelected
+                    ? "model connected"
+                    : status.setup?.ai?.provider === "chatgpt_subscription"
+                      ? "connect ChatGPT and select a model below"
+                      : "set OPENAI_API_KEY and OPENAI_MODEL"}
+                </p>
+                <p className="hint">
+                  Save config.yaml and .env locally, then restart the server.
+                  Never paste Client Secrets or tokens into chat.
                 </p>
               </section>
-            ))}
-          </div>
-          <div className="toolbar">
-            <button
-              disabled={busy}
-              onClick={() => void action("connectors/start")}
-            >
-              Start receivers
-            </button>
-            <button
-              className="secondary"
-              onClick={() => void action("connectors/stop")}
-            >
-              Stop receivers
-            </button>
-            <button
-              className="secondary"
-              disabled={
-                busy ||
-                !status.setup?.chzzk?.enabled ||
-                !status.setup?.chzzk?.credentialsConfigured
-              }
-              onClick={() => {
-                setError("");
-                setBusy(true);
-                void api("chzzk/authorize", "POST")
-                  .then((r) => r.json())
-                  .then((b) => {
-                    location.href = b.url;
-                  })
-                  .catch((e) => setError(e.message))
-                  .finally(() => setBusy(false));
-              }}
-            >
-              Authorize CHZZK
-            </button>
-            <button
-              className="secondary"
-              onClick={() =>
-                void api("links")
-                  .then((r) => r.json())
-                  .then(setLinks)
-                  .catch((e) => setError(e.message))
-              }
-            >
-              Reader & OBS links
-            </button>
-          </div>
-          {links && (
-            <section className="card">
-              <h2>Private read-only links</h2>
-              <p>
-                Anyone with these links can read the chat. OBS Browser Source:
-                600 × 900, transparent background.
-              </p>
-              {["reader", "overlay"].map((k) => (
-                <label key={k}>
-                  {k}
-                  <input
-                    readOnly
-                    value={links[k]}
-                    onFocus={(e) => e.target.select()}
-                  />
-                  <a href={links[k]} target="_blank" rel="noreferrer">
-                    Open {k} ↗
-                  </a>
-                </label>
-              ))}
-            </section>
-          )}
-          <div className="grid workspace">
-            <section className="card" id="program-details">
-              <div className="section-title">
-                <h2>Program input</h2>
-                <span className="status">{status.capture.state}</span>
-              </div>
-              <div className="preview">
-                {preview && status.capture.lastFrameAgeMs <= 10000 ? (
-                  <img
-                    alt="Masked Program input. Verify all private areas and chat are hidden."
-                    src={preview}
-                  />
-                ) : (
-                  <p>
-                    {status.capture.state === "config_required"
-                      ? status.capture.lastError || "Capture is not configured."
-                      : status.capture.state === "connecting" ||
-                          status.capture.state === "reconnecting"
-                        ? "Connecting to video input…"
-                        : status.capture.lastError ||
-                          "No fresh frame received. Check the video input below."}
+            )}
+            {status.setup?.soop && status.connectors?.soop && (
+              <SoopConnector
+                setup={status.setup.soop}
+                state={status.connectors.soop.state}
+                refresh={refresh}
+              />
+            )}
+            <div className="grid connections" id="connection-details">
+              {Object.entries(status.connectors).map(
+                ([p, s]: [string, any]) => (
+                  <section className="card" key={p}>
+                    <div className="eyebrow">{p.toUpperCase()}</div>
+                    <h2>
+                      <span className="dot" />
+                      {s.state}
+                    </h2>
+                    <p>
+                      {s.received} received · {s.recoveries} recoveries
+                    </p>
+                  </section>
+                ),
+              )}
+            </div>
+            <div className="toolbar">
+              <button
+                disabled={busy}
+                onClick={() => void action("connectors/start")}
+              >
+                Start receivers
+              </button>
+              <button
+                className="secondary"
+                onClick={() => void action("connectors/stop")}
+              >
+                Stop receivers
+              </button>
+              <button
+                className="secondary"
+                disabled={
+                  busy ||
+                  !status.setup?.chzzk?.enabled ||
+                  !status.setup?.chzzk?.credentialsConfigured
+                }
+                onClick={() => {
+                  setError("");
+                  setBusy(true);
+                  void api("chzzk/authorize", "POST")
+                    .then((r) => r.json())
+                    .then((b) => {
+                      location.href = b.url;
+                    })
+                    .catch((e) => setError(e.message))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Authorize CHZZK
+              </button>
+              <button
+                className="secondary"
+                onClick={() =>
+                  void api("links")
+                    .then((r) => r.json())
+                    .then(setLinks)
+                    .catch((e) => setError(e.message))
+                }
+              >
+                Reader & OBS links
+              </button>
+            </div>
+            {links && (
+              <section className="card">
+                <h2>Private read-only links</h2>
+                <p>
+                  Anyone with these links can read the chat. OBS Browser Source:
+                  600 × 900, transparent background.
+                </p>
+                {["reader", "overlay"].map((k) => (
+                  <label key={k}>
+                    {k}
+                    <input
+                      readOnly
+                      value={links[k]}
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <a href={links[k]} target="_blank" rel="noreferrer">
+                      Open {k} ↗
+                    </a>
+                  </label>
+                ))}
+              </section>
+            )}
+            <div className="grid workspace">
+              <section className="card" id="program-details">
+                <div className="section-title">
+                  <h2>Program input</h2>
+                  <span className="status">{status.capture.state}</span>
+                </div>
+                <div className="preview">
+                  {preview && status.capture.lastFrameAgeMs <= 10000 ? (
+                    <img
+                      alt="Masked Program input. Verify all private areas and chat are hidden."
+                      src={preview}
+                    />
+                  ) : (
+                    <p>
+                      {status.capture.state === "config_required"
+                        ? status.capture.lastError ||
+                          "Capture is not configured."
+                        : status.capture.state === "connecting" ||
+                            status.capture.state === "reconnecting"
+                          ? "Connecting to video input…"
+                          : status.capture.lastError ||
+                            "No fresh frame received. Check the video input below."}
+                    </p>
+                  )}
+                </div>
+                <p>
+                  Source: {status.capture.backend}
+                  {status.capture.device
+                    ? ` · ${status.capture.device}`
+                    : ""} · {status.capture.dimensions || "no dimensions yet"} ·{" "}
+                  {status.capture.lastFrameAgeMs === null
+                    ? "no frames received"
+                    : `last frame ${Math.floor(status.capture.lastFrameAgeMs / 1000)}s ago`}{" "}
+                  · {status.capture.framesInLastMinute} frames / last minute
+                </p>
+                <p>
+                  {status.capture.masks.length} masks ·{" "}
+                  {status.capture.confirmed
+                    ? "Preview confirmed"
+                    : "Review required"}
+                  {status.capture.programConfirmed
+                    ? " · Program source configured"
+                    : " · config.yaml Program confirmation missing"}
+                </p>
+                {status.capture.lastError && (
+                  <p className="error" role="status">
+                    {status.capture.lastError}
                   </p>
                 )}
-              </div>
-              <p>
-                Source: {status.capture.backend}
-                {status.capture.device
-                  ? ` · ${status.capture.device}`
-                  : ""} · {status.capture.dimensions || "no dimensions yet"} ·{" "}
-                {status.capture.lastFrameAgeMs === null
-                  ? "no frames received"
-                  : `last frame ${Math.floor(status.capture.lastFrameAgeMs / 1000)}s ago`}{" "}
-                · {status.capture.framesInLastMinute} frames / last minute
-              </p>
-              <p>
-                {status.capture.masks.length} masks ·{" "}
-                {status.capture.confirmed
-                  ? "Preview confirmed"
-                  : "Review required"}
-                {status.capture.programConfirmed
-                  ? " · Program source configured"
-                  : " · config.yaml Program confirmation missing"}
-              </p>
-              {status.capture.lastError && (
-                <p className="error" role="status">
-                  {status.capture.lastError}
+                <p className="hint">
+                  Config: capture · FFmpeg {status.capture.ffmpeg}. For OBS
+                  Virtual Camera, select Program output in OBS, then use Start
+                  capture here. For remote OBS, configure capture.backend: rtmp
+                  and its private reader URL. Start streaming/virtual camera
+                  before expecting frames. Verify Program output and masks
+                  before confirming.
                 </p>
-              )}
-              <p className="hint">
-                Config: capture · FFmpeg {status.capture.ffmpeg}. For OBS
-                Virtual Camera, select Program output in OBS, then use Start
-                capture here. For remote OBS, configure capture.backend: rtmp
-                and its private reader URL. Start streaming/virtual camera
-                before expecting frames. Verify Program output and masks before
-                confirming.
-              </p>
-              <div className="toolbar">
-                <button onClick={() => void action("capture/start")}>
-                  Start capture
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => void action("capture/confirm")}
-                >
-                  Confirm masked Program
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => void action("capture/stop")}
-                >
-                  Stop capture
-                </button>
-              </div>
-            </section>
-            <section className="card" id="audio-details">
-              <div className="section-title">
-                <h2>Groq speech transcription</h2>
-                <span className="status">{status.audio.state}</span>
-              </div>
-              <p>
-                {status.audio.requests} / {status.audio.maxRequests} requests
-                this process
-              </p>
-              <p>{status.audio.latestText || "No recent speech transcript"}</p>
-              <p className="hint">
-                Recent transcripts enter AI context automatically. Successful
-                transcripts are logged privately for up to{" "}
-                {status.retentionDays}
-                days; raw audio is not saved. Near-silent chunks are skipped.
-                Configure the RTMP audio URL, Groq API key and audio review
-                locally.
-              </p>
-              <p>
-                {status.audio.loggedCount} retained transcripts · input
-                language: {status.audio.language}
-              </p>
-              <div className="toolbar">
-                <a
-                  href="/api/admin/transcripts/export"
-                  download="transcripts.jsonl"
-                >
-                  Download transcript log (JSONL)
-                </a>
-              </div>
-              {status.audio.history.length > 0 && (
-                <ol>
-                  {status.audio.history.map((entry: any) => (
-                    <li key={entry.id}>
-                      <time dateTime={new Date(entry.capturedAt).toISOString()}>
-                        {new Date(entry.capturedAt).toLocaleString()}
-                      </time>{" "}
-                      {entry.text}
-                    </li>
-                  ))}
-                </ol>
-              )}
-              <div className="toolbar">
-                <button onClick={() => void action("audio/start")}>
-                  Start audio
-                </button>
-                <button
-                  className="secondary"
-                  onClick={() => void action("audio/stop")}
-                >
-                  Stop audio
-                </button>
-              </div>
-            </section>
-            <section className="card" id="ai-details">
-              <div className="section-title">
-                <h2>AI pipeline · 전체 상태 및 제어</h2>
-                <span className="status">
-                  {status.ai.state === "running" ? "AI running" : "AI stopped"}{" "}
-                  · {status.ai.phase}
-                </span>
-              </div>
-              <ul className="readiness-list">
-                {status.ai.readiness.checks.map((check: any) => (
-                  <li
-                    key={check.id}
-                    className={check.ready ? "ready" : "not-ready"}
-                  >
-                    {check.ready ? "●" : "○"} {check.label}
-                    {check.optional ? " (선택)" : ""}
-                  </li>
-                ))}
-              </ul>
-              <div className="toolbar">
-                <button
-                  disabled={
-                    busy || status.closed || status.ai.state === "running"
-                  }
-                  onClick={() => void action("pipeline/start")}
-                >
-                  입력 시작
-                </button>
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => void action("pipeline/stop")}
-                >
-                  전체 중지 (AI·영상·오디오·수신기)
-                </button>
-              </div>
-              <p>
-                {status.ai.state === "running"
-                  ? status.ai.phase === "waiting_for_input"
-                    ? "Waiting for a new transcript or permitted chat message."
-                    : status.ai.phase === "random_wait"
-                      ? "Waiting for the next randomized reply interval."
-                      : status.ai.phase === "jev_timing_filter"
-                        ? "Jev is checking whether this is clearly a bad time to speak."
-                        : status.ai.phase === "generating_draft" ||
-                            status.ai.phase === "generating_draft_with_frame"
-                          ? "The answer model is preparing a reply."
-                          : status.ai.phase === "ai_review"
-                            ? "The answer model is reviewing its draft."
-                            : status.ai.phase === "awaiting_human_review"
-                              ? "A draft is waiting for your approval."
-                              : status.ai.phase === "published_local"
-                                ? "Reply published to this app's local chat."
-                                : `AI is running: ${status.ai.phase}.`
-                  : `AI is stopped (${status.ai.phase}). Start AI to begin processing.`}
-              </p>
-              <div className="metric">
-                {status.ai.usage.calls}
-                <small> / {status.ai.maxCalls} calls</small>
-              </div>
-              <p>
-                {status.ai.costEstimate === "unavailable"
-                  ? "Cost estimate unavailable · call limit enforced"
-                  : `Estimated / reserved: $${status.ai.usage.reservedUsd.toFixed(4)}`}
-              </p>
-              <p>
-                {status.ai.model} ·{" "}
-                {status.ai.visualMode === "on_request"
-                  ? "text first; AI requests video when needed"
-                  : "continuous video"}{" "}
-                · {status.ai.skips} skipped · {status.ai.rejects} rejected
-              </p>
-              <p className="hint">
-                Replies wait a random {status.ai.pacing.minSeconds}–
-                {status.ai.pacing.maxSeconds}s after each decision; context
-                covers the previous {status.ai.contextWindowSeconds}s.
-              </p>
-              {status.ai.gate.enabled && (
-                <p>
-                  Jev filter: {status.ai.gate.state} · {status.ai.gate.requests}{" "}
-                  / {status.ai.gate.maxRequests} checks ·{" "}
-                  {status.ai.gate.filtered} bad-timing vetoes ·{" "}
-                  {status.ai.gate.errors} errors
-                  {status.ai.gate.probability !== null &&
-                    ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
-                </p>
-              )}
-              {status.ai.provider === "chatgpt_subscription" &&
-                !status.demo && (
-                  <div className="pending">
-                    <strong>ChatGPT plan connection</strong>
-                    <p>
-                      {status.chatgpt.accounts.find(
-                        (a: any) => a.clientId === status.chatgpt.active,
-                      )?.email || "No active account"}
-                    </p>
-                    <div className="toolbar">
-                      <button onClick={() => void authorizeChatgpt()}>
-                        Continue with ChatGPT
-                      </button>
-                      <button
-                        className="secondary"
-                        onClick={() => void loadChatgptModels()}
-                      >
-                        Load available models
-                      </button>
-                    </div>
-                    {status.chatgpt.accounts.map((a: any) => (
-                      <div key={a.clientId} className="toolbar">
-                        <span>
-                          {a.email || a.clientId}{" "}
-                          {a.connected ? "· connected" : "· signed out"}
-                        </span>
-                        <button
-                          className="secondary"
-                          onClick={() =>
-                            void post("chatgpt/select-account", {
-                              clientId: a.clientId,
-                            })
-                              .then(refresh)
-                              .catch((e: any) => setError(e.message))
-                          }
-                        >
-                          Use
-                        </button>
-                        <button
-                          className="secondary"
-                          onClick={() => void authorizeChatgpt(a.clientId)}
-                        >
-                          Sign in
-                        </button>
-                      </div>
-                    ))}
-                    {chatgptModels.length > 0 && (
-                      <label>
-                        Model
-                        <select
-                          value={
-                            status.ai.model === "not selected"
-                              ? ""
-                              : status.ai.model
-                          }
-                          onChange={(e) =>
-                            void post("chatgpt/select-model", {
-                              slug: e.target.value,
-                            })
-                              .then(refresh)
-                              .catch((err: any) => setError(err.message))
-                          }
-                        >
-                          <option value="">Select a model</option>
-                          {chatgptModels.map((m) => (
-                            <option key={m.slug} value={m.slug}>
-                              {m.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <p>
-                      <a
-                        href="https://chatgpt.com/settings/usage"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Review ChatGPT plan usage and app access
-                      </a>
-                    </p>
-                    <button
-                      className="secondary"
-                      onClick={() => void action("chatgpt/disconnect")}
-                    >
-                      Disconnect active account
-                    </button>
-                  </div>
-                )}
-              <div className="toolbar">
-                <button
-                  disabled={
-                    busy ||
-                    status.closed ||
-                    status.ai.state === "running" ||
-                    !status.ai.readiness.ready ||
-                    stale
-                  }
-                  onClick={() => void startPipeline()}
-                >
-                  Start AI
-                </button>
-                {status.ai.state === "running" && (
-                  <button
-                    className="stop"
-                    disabled={busy}
-                    onClick={() => void action("ai/stop")}
-                  >
-                    Stop AI now
-                  </button>
-                )}
-              </div>
-              <p className="hint">
-                AI는 직접 켜야 생성되며 서버 재시작 후 이전 실행 상태가
-                복구됩니다. 방송 종료 시 자동 중지됩니다. 필수 입력을 모두 켜고
-                영상 마스크를 확인한 뒤 AI를 시작하세요.
-              </p>
-              <p className="hint">
-                {status.ai.manualApproval
-                  ? "Messages wait for your approval before publication."
-                  : "Messages publish automatically. Open Reader to watch without generation details; origins stay hidden until you reveal them."}
-              </p>
-              <details>
-                <summary>AI inputs, tools and review</summary>
-                <p>
-                  Audio arrives as {status.ai.input.audioChunkSeconds}s chunks (
-                  {status.ai.input.audioLanguage}); transcription text enters
-                  AI, raw audio does not. Each decision gets{" "}
-                  {status.ai.input.last.newTranscripts} new /{" "}
-                  {status.ai.input.last.contextTranscripts} recent transcript
-                  chunks and {status.ai.input.last.newMessages} new /{" "}
-                  {status.ai.input.last.contextMessages} recent permitted chat
-                  messages from a {status.ai.input.contextWindowSeconds}s
-                  window.
-                </p>
-                <p>
-                  Visual mode: {status.ai.input.visualMode};{" "}
-                  {status.ai.input.last.frames} frames in the last decision. In
-                  on-request mode the first call has no image; an inspect
-                  decision lets the app send a fresh masked frame in a follow-up
-                  call. Jev sees text only.
-                </p>
-                <p>
-                  동의한 시청자의 표시 가능한 채팅과 최근 자막, 공개 방송 설명,
-                  페르소나 정의를 AI 맥락에 사용합니다. 철회·숨김 처리된
-                  메시지는 이후 맥락에서 제외됩니다.
-                </p>
-                <p>
-                  Available model tools: none. The model cannot call tools,
-                  access files, control capture, or post to a platform. The
-                  application validates each decision and publishes approved
-                  messages only to this app's local conversation.
-                </p>
-                <p>
-                  Draft review:{" "}
-                  {status.ai.reviewDraft
-                    ? `enabled · ${status.ai.reviewCount} review calls`
-                    : "disabled"}
-                  . The selected answer model gets a second call to reject or
-                  refine each proposed message. Each pass counts toward
-                  ai.maxCalls.{" "}
-                  {status.ai.manualApproval
-                    ? "A person must then approve publication."
-                    : "Human approval is off."}
-                </p>
-              </details>
-              {status.ai.pending && (
-                <div className="pending">
-                  <span className="eyebrow">AWAITING REVIEW</span>
-                  <p>{status.ai.pending.text}</p>
-                  <button onClick={() => void action("ai/approve")}>
-                    Publish locally
+                <div className="toolbar">
+                  <button onClick={() => void action("capture/start")}>
+                    Start capture
                   </button>
                   <button
                     className="secondary"
-                    onClick={() => void action("ai/reject")}
+                    onClick={() => void action("capture/confirm")}
                   >
-                    Discard
+                    Confirm masked Program
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => void action("capture/stop")}
+                  >
+                    Stop capture
                   </button>
                 </div>
-              )}
-              <details>
-                <summary>Data processing review</summary>
+              </section>
+              <section className="card" id="audio-details">
+                <div className="section-title">
+                  <h2>Groq speech transcription</h2>
+                  <span className="status">{status.audio.state}</span>
+                </div>
                 <p>
-                  Input source: all configured platform receivers and live
-                  speech transcription.
+                  {status.audio.requests} / {status.audio.maxRequests} requests
+                  this process
                 </p>
                 <p>
-                  AI를 꺼도 채팅 수집과 음성 전사는 계속될 수 있습니다. 모든
-                  수집을 중지하려면 입력과 AI 모두 중지를 사용하세요.
+                  {status.audio.latestText || "No recent speech transcript"}
+                </p>
+                <p className="hint">
+                  Recent transcripts enter AI context automatically. Successful
+                  transcripts are logged privately for up to{" "}
+                  {status.retentionDays}
+                  days; raw audio is not saved. Near-silent chunks are skipped.
+                  Configure the RTMP audio URL, Groq API key and audio review
+                  locally.
                 </p>
                 <p>
-                  음성 전사 시 오디오는 Groq로 전송되며 로컬에는 저장하지
-                  않습니다. AI 화면 입력에는 확인된 마스크 영상만 사용합니다.
+                  {status.audio.loggedCount} retained transcripts · input
+                  language: {status.audio.language}
                 </p>
-              </details>
-            </section>
-          </div>
+                <div className="toolbar">
+                  <a
+                    href="/api/admin/transcripts/export"
+                    download="transcripts.jsonl"
+                  >
+                    Download transcript log (JSONL)
+                  </a>
+                </div>
+                {status.audio.history.length > 0 && (
+                  <ol>
+                    {status.audio.history.map((entry: any) => (
+                      <li key={entry.id}>
+                        <time
+                          dateTime={new Date(entry.capturedAt).toISOString()}
+                        >
+                          {new Date(entry.capturedAt).toLocaleString()}
+                        </time>{" "}
+                        {entry.text}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+                <div className="toolbar">
+                  <button onClick={() => void action("audio/start")}>
+                    Start audio
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => void action("audio/stop")}
+                  >
+                    Stop audio
+                  </button>
+                </div>
+              </section>
+              <section className="card" id="ai-details">
+                <div className="section-title">
+                  <h2>AI pipeline · 전체 상태 및 제어</h2>
+                  <span className="status">
+                    {status.ai.state === "running"
+                      ? "AI running"
+                      : "AI stopped"}{" "}
+                    · {status.ai.phase}
+                  </span>
+                </div>
+                <ul className="readiness-list">
+                  {status.ai.readiness.checks.map((check: any) => (
+                    <li
+                      key={check.id}
+                      className={check.ready ? "ready" : "not-ready"}
+                    >
+                      {check.ready ? "●" : "○"} {check.label}
+                      {check.optional ? " (선택)" : ""}
+                    </li>
+                  ))}
+                </ul>
+                <div className="toolbar">
+                  <button
+                    disabled={
+                      busy || status.closed || status.ai.state === "running"
+                    }
+                    onClick={() => void action("pipeline/start")}
+                  >
+                    입력 시작
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => void action("pipeline/stop")}
+                  >
+                    전체 중지 (AI·영상·오디오·수신기)
+                  </button>
+                </div>
+                <p>
+                  {status.ai.state === "running"
+                    ? status.ai.phase === "waiting_for_input"
+                      ? "Waiting for a new transcript or permitted chat message."
+                      : status.ai.phase === "random_wait"
+                        ? "Waiting for the next randomized reply interval."
+                        : status.ai.phase === "jev_timing_filter"
+                          ? "Jev is checking whether this is clearly a bad time to speak."
+                          : status.ai.phase === "generating_draft" ||
+                              status.ai.phase === "generating_draft_with_frame"
+                            ? "The answer model is preparing a reply."
+                            : status.ai.phase === "ai_review"
+                              ? "The answer model is reviewing its draft."
+                              : status.ai.phase === "awaiting_human_review"
+                                ? "A draft is waiting for your approval."
+                                : status.ai.phase === "published_local"
+                                  ? "Reply published to this app's local chat."
+                                  : `AI is running: ${status.ai.phase}.`
+                    : `AI is stopped (${status.ai.phase}). Start AI to begin processing.`}
+                </p>
+                <div className="metric">
+                  {status.ai.usage.calls}
+                  <small> / {status.ai.maxCalls} calls</small>
+                </div>
+                <p>
+                  {status.ai.costEstimate === "unavailable"
+                    ? "Cost estimate unavailable · call limit enforced"
+                    : `Estimated / reserved: $${status.ai.usage.reservedUsd.toFixed(4)}`}
+                </p>
+                <p>
+                  {status.ai.model} ·{" "}
+                  {status.ai.visualMode === "on_request"
+                    ? "text first; AI requests video when needed"
+                    : "continuous video"}{" "}
+                  · {status.ai.skips} skipped · {status.ai.rejects} rejected
+                </p>
+                <p className="hint">
+                  Replies wait a random {status.ai.pacing.minSeconds}–
+                  {status.ai.pacing.maxSeconds}s after each decision; context
+                  covers the previous {status.ai.contextWindowSeconds}s.
+                </p>
+                {status.ai.gate.enabled && (
+                  <p>
+                    Jev filter: {status.ai.gate.state} ·{" "}
+                    {status.ai.gate.requests} / {status.ai.gate.maxRequests}{" "}
+                    checks · {status.ai.gate.filtered} bad-timing vetoes ·{" "}
+                    {status.ai.gate.errors} errors
+                    {status.ai.gate.probability !== null &&
+                      ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
+                  </p>
+                )}
+                {status.ai.provider === "chatgpt_subscription" &&
+                  !status.demo && (
+                    <div className="pending">
+                      <strong>ChatGPT plan connection</strong>
+                      <p>
+                        {status.chatgpt.accounts.find(
+                          (a: any) => a.clientId === status.chatgpt.active,
+                        )?.email || "No active account"}
+                      </p>
+                      <div className="toolbar">
+                        <button onClick={() => void authorizeChatgpt()}>
+                          Continue with ChatGPT
+                        </button>
+                        <button
+                          className="secondary"
+                          onClick={() => void loadChatgptModels()}
+                        >
+                          Load available models
+                        </button>
+                      </div>
+                      {status.chatgpt.accounts.map((a: any) => (
+                        <div key={a.clientId} className="toolbar">
+                          <span>
+                            {a.email || a.clientId}{" "}
+                            {a.connected ? "· connected" : "· signed out"}
+                          </span>
+                          <button
+                            className="secondary"
+                            onClick={() =>
+                              void post("chatgpt/select-account", {
+                                clientId: a.clientId,
+                              })
+                                .then(refresh)
+                                .catch((e: any) => setError(e.message))
+                            }
+                          >
+                            Use
+                          </button>
+                          <button
+                            className="secondary"
+                            onClick={() => void authorizeChatgpt(a.clientId)}
+                          >
+                            Sign in
+                          </button>
+                        </div>
+                      ))}
+                      {chatgptModels.length > 0 && (
+                        <label>
+                          Model
+                          <select
+                            value={
+                              status.ai.model === "not selected"
+                                ? ""
+                                : status.ai.model
+                            }
+                            onChange={(e) =>
+                              void post("chatgpt/select-model", {
+                                slug: e.target.value,
+                              })
+                                .then(refresh)
+                                .catch((err: any) => setError(err.message))
+                            }
+                          >
+                            <option value="">Select a model</option>
+                            {chatgptModels.map((m) => (
+                              <option key={m.slug} value={m.slug}>
+                                {m.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      )}
+                      <p>
+                        <a
+                          href="https://chatgpt.com/settings/usage"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Review ChatGPT plan usage and app access
+                        </a>
+                      </p>
+                      <button
+                        className="secondary"
+                        onClick={() => void action("chatgpt/disconnect")}
+                      >
+                        Disconnect active account
+                      </button>
+                    </div>
+                  )}
+                <div className="toolbar">
+                  <button
+                    disabled={
+                      busy ||
+                      status.closed ||
+                      status.ai.state === "running" ||
+                      !status.ai.readiness.ready ||
+                      stale
+                    }
+                    onClick={() => void startPipeline()}
+                  >
+                    Start AI
+                  </button>
+                  {status.ai.state === "running" && (
+                    <button
+                      className="stop"
+                      disabled={busy}
+                      onClick={() => void action("ai/stop")}
+                    >
+                      Stop AI now
+                    </button>
+                  )}
+                </div>
+                <p className="hint">
+                  AI는 직접 켜야 생성되며 서버 재시작 후 이전 실행 상태가
+                  복구됩니다. 방송 종료 시 자동 중지됩니다. 필수 입력을 모두
+                  켜고 영상 마스크를 확인한 뒤 AI를 시작하세요.
+                </p>
+                <p className="hint">
+                  {status.ai.manualApproval
+                    ? "Messages wait for your approval before publication."
+                    : "Messages publish automatically. Open Reader to watch without generation details; origins stay hidden until you reveal them."}
+                </p>
+                <details>
+                  <summary>AI inputs, tools and review</summary>
+                  <p>
+                    Audio arrives as {status.ai.input.audioChunkSeconds}s chunks
+                    ({status.ai.input.audioLanguage}); transcription text enters
+                    AI, raw audio does not. Each decision gets{" "}
+                    {status.ai.input.last.newTranscripts} new /{" "}
+                    {status.ai.input.last.contextTranscripts} recent transcript
+                    chunks and {status.ai.input.last.newMessages} new /{" "}
+                    {status.ai.input.last.contextMessages} recent permitted chat
+                    messages from a {status.ai.input.contextWindowSeconds}s
+                    window.
+                  </p>
+                  <p>
+                    Visual mode: {status.ai.input.visualMode};{" "}
+                    {status.ai.input.last.frames} frames in the last decision.
+                    In on-request mode the first call has no image; an inspect
+                    decision lets the app send a fresh masked frame in a
+                    follow-up call. Jev sees text only.
+                  </p>
+                  <p>
+                    동의한 시청자의 표시 가능한 채팅과 최근 자막, 공개 방송
+                    설명, 페르소나 정의를 AI 맥락에 사용합니다. 철회·숨김 처리된
+                    메시지는 이후 맥락에서 제외됩니다.
+                  </p>
+                  <p>
+                    Available model tools: none. The model cannot call tools,
+                    access files, control capture, or post to a platform. The
+                    application validates each decision and publishes approved
+                    messages only to this app's local conversation.
+                  </p>
+                  <p>
+                    Draft review:{" "}
+                    {status.ai.reviewDraft
+                      ? `enabled · ${status.ai.reviewCount} review calls`
+                      : "disabled"}
+                    . The selected answer model gets a second call to reject or
+                    refine each proposed message. Each pass counts toward
+                    ai.maxCalls.{" "}
+                    {status.ai.manualApproval
+                      ? "A person must then approve publication."
+                      : "Human approval is off."}
+                  </p>
+                </details>
+                {status.ai.pending && (
+                  <div className="pending">
+                    <span className="eyebrow">AWAITING REVIEW</span>
+                    <p>{status.ai.pending.text}</p>
+                    <button onClick={() => void action("ai/approve")}>
+                      Publish locally
+                    </button>
+                    <button
+                      className="secondary"
+                      onClick={() => void action("ai/reject")}
+                    >
+                      Discard
+                    </button>
+                  </div>
+                )}
+                <details>
+                  <summary>Data processing review</summary>
+                  <p>
+                    Input source: all configured platform receivers and live
+                    speech transcription.
+                  </p>
+                  <p>
+                    AI를 꺼도 채팅 수집과 음성 전사는 계속될 수 있습니다. 모든
+                    수집을 중지하려면 입력과 AI 모두 중지를 사용하세요.
+                  </p>
+                  <p>
+                    음성 전사 시 오디오는 Groq로 전송되며 로컬에는 저장하지
+                    않습니다. AI 화면 입력에는 확인된 마스크 영상만 사용합니다.
+                  </p>
+                </details>
+              </section>
+            </div>
+          </details>
           <section className="card">
             <div className="section-title">
               <h2>Local conversation</h2>

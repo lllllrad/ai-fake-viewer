@@ -4,6 +4,12 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Simplified operational status — 2026-10-05
+
+- `npm run check`: PASS, build/documentation checks and **62 tests**. Health aggregation covers healthy transport variants, preparing/stopped/disabled/unknown inputs, partial failures and safe fallback text.
+- Browser checks: PASS. Healthy chat shows one `정상` status without platform/transport/count details; a failed platform shows a useful action without its raw error code. Diagnostics start collapsed, and dashboard links open the corresponding controls. Existing AI toggle, reveal, stale-status and mobile checks still pass with no page errors.
+- Normal frame ages, request counts, model stages and usage details moved out of the default operational view. Detailed information remains available on demand; input and model behavior is unchanged.
+
 ## Operations dashboard — 2026-10-05
 
 - `mise exec -- npm run check`: PASS, documentation/config validation, TypeScript/Vite build and **59 tests**. New control test verifies global AI start arms a live persona, reveal disarms it and clears restart intent, and status reports the reveal flag and generation timestamp.

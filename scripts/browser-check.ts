@@ -69,6 +69,54 @@ try {
     ).toBeVisible();
   const aiToggle = dashboard.getByRole("switch", { name: "AI 채팅 생성 사용" });
   await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  const chatSummary = dashboard.locator("article").filter({
+    has: adminPage.getByRole("heading", { name: "실제 채팅 정보" }),
+  });
+  const advanced = adminPage.locator("#advanced-settings");
+  await expect(advanced).not.toHaveAttribute("open", "");
+  await expect(adminPage.locator("#connection-details")).not.toBeVisible();
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.connectors = {
+      youtube: { state: "subscribed:grpc", received: 123 },
+      chzzk: { state: "subscribed" },
+      soop: { state: "disabled" },
+    };
+    await route.fulfill({ json: body });
+  });
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(chatSummary.getByText("정상", { exact: true })).toBeVisible();
+  assert(!/YOUTUBE|subscribed|grpc|123/.test(await chatSummary.innerText()));
+  assert(
+    !/requests|last frame|reserved|mock/.test(await dashboard.innerText()),
+  );
+  await adminPage.unroute("**/api/admin/status");
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.connectors = {
+      youtube: { state: "permission_blocked" },
+      chzzk: { state: "subscribed" },
+      soop: { state: "disabled" },
+    };
+    await route.fulfill({ json: body });
+  });
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(
+    chatSummary.getByText("확인 필요", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    chatSummary.getByText("유튜브: 계정의 접근 권한을 확인해 주세요."),
+  ).toBeVisible();
+  assert(!(await chatSummary.innerText()).includes("permission_blocked"));
+  await chatSummary
+    .getByRole("link", { name: "채팅 연결 및 수신 제어" })
+    .click();
+  await expect(advanced).toHaveAttribute("open", "");
+  await expect(adminPage.locator("#connection-details")).toBeVisible();
+  await advanced.locator(":scope > summary").click();
+  await adminPage.unroute("**/api/admin/status");
   // Missing optional and nested status fields must not crash the admin page.
   await adminPage.route("**/api/admin/status", async (route) => {
     const response = await route.fetch();
@@ -81,7 +129,7 @@ try {
   });
   await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
   await expect(
-    dashboard.getByText("아직 인식된 음성이 없습니다"),
+    dashboard.getByText("최신 자막 상태를 확인할 수 없습니다"),
   ).toBeVisible();
   await adminPage.unroute("**/api/admin/status");
   // An old response disables start but keeps emergency stop available.
@@ -175,6 +223,7 @@ try {
   capture.start();
   for (let i = 0; i < 50 && !capture.latest(); i++)
     await new Promise((r) => setTimeout(r, 50));
+  await dashboard.getByRole("link", { name: "영상 설정 및 제어" }).click();
   await adminPage
     .getByRole("button", { name: "Confirm masked Program", exact: true })
     .click();
@@ -228,6 +277,7 @@ try {
   await readerPage.getByText("AI 생성", { exact: true }).waitFor();
   await overlay.getByText("AI 생성", { exact: true }).waitFor();
   assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
+  await advanced.locator(":scope > summary").click();
   mkdirSync("test-results", { recursive: true });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await adminPage.screenshot({ path: "test-results/admin-dashboard.png" });

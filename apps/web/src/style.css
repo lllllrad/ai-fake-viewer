@@ -627,3 +627,24 @@ input:focus-visible {
     flex-wrap: wrap;
   }
 }
+
+.advanced-settings {
+  margin: 20px 0;
+  font-size: 14px;
+}
+.advanced-settings > summary {
+  padding: 18px 24px;
+  border: 1px solid #334548;
+  border-radius: 10px;
+  color: #c8d6d4;
+}
+.advanced-settings[open] > summary {
+  margin-bottom: 20px;
+}
+.input-problems {
+  padding-left: 18px;
+  color: #e6b56e;
+}
+.input-problems li {
+  margin-bottom: 8px;
+}

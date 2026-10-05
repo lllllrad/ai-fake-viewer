@@ -6,7 +6,7 @@ A local, read-only broadcast chat aggregator with screen-aware AI characters. Yo
 
 See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication flow, and editable prompt files under [prompts/](prompts/).
 
-The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). The first admin section is the operations dashboard: masked Program preview, per-platform chat reception, latest transcript, model readiness, AI on/off, emergency stop and explicit identity reveal. Persona studio and detailed settings follow. Its implementation-gap table records remaining work. See the [documentation index](docs/README.md) for document ownership and status.
+The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). The first admin section is the operations dashboard: masked Program preview, per-platform chat reception, latest transcript, model readiness, AI on/off, emergency stop and explicit identity reveal. Healthy inputs show only “정상”; chat health is summarized across platforms. Preparation and failures show a brief next action. Transport states, counters and model stages are hidden under the initially collapsed “연결 및 AI 상세 설정” section; dashboard links open the relevant controls. Persona studio follows the dashboard. Its implementation-gap table records remaining work. See the [documentation index](docs/README.md) for document ownership and status.
 
 ## Quick start
 

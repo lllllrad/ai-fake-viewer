@@ -1,4 +1,5 @@
 import React from "react";
+import { inputHealth, chatHealth, type Health } from "./input-health";
 
 export function normalizeAdminStatus(raw: any) {
   return {
@@ -28,41 +29,6 @@ export function normalizeAdminStatus(raw: any) {
     },
   };
 }
-
-const states: Record<string, string> = {
-  stopped: "중지",
-  disabled: "비활성",
-  unknown: "확인 불가",
-  connecting: "연결 중",
-  reconnecting: "재연결 중",
-  connected: "연결됨",
-  streaming: "수신 중",
-  polling: "수신 중",
-  receiving: "수신 중",
-  listening: "음성 입력 대기",
-  subscribed: "채팅 구독 중",
-  config_required: "설정 필요",
-  auth_required: "인증 필요",
-  awaiting_browser: "관리자에서 SOOP 연결 필요",
-  waiting_live: "방송 대기",
-  ended: "방송 종료",
-  failed: "실패",
-  provider_error: "제공자 오류",
-  budget_exhausted: "호출 한도 도달",
-  demo_fixture: "데모 입력",
-  running: "실행 중",
-  waiting_for_input: "새 입력 대기",
-  random_wait: "다음 발언 대기",
-  generating_draft: "응답 생성 중",
-  generating_draft_with_frame: "화면 확인 후 생성 중",
-  ai_review: "초안 검토 중",
-  awaiting_human_review: "운영자 승인 대기",
-  jev_timing_filter: "발언 시점 검사 중",
-  published_local: "로컬 채팅 게시 완료",
-};
-const label = (value?: string) => states[value ?? "unknown"] ?? value;
-const age = (at: number | null | undefined, now: number) =>
-  at ? `${Math.max(0, Math.floor((now - at) / 1000))}초 전` : "수신 기록 없음";
 
 export function OperationsDashboard({
   status,
@@ -99,6 +65,32 @@ export function OperationsDashboard({
     !stale &&
     status.capture.lastFrameAt &&
     now - status.capture.lastFrameAt <= 10000;
+  const unknown: Health = {
+    label: "확인 불가",
+    hint: "상태를 다시 확인하세요.",
+  };
+  const captureHealth: Health = stale
+    ? unknown
+    : freshFrame && status.capture.confirmed
+      ? { label: "정상" }
+      : {
+          label: "확인 필요",
+          hint: freshFrame
+            ? "화면의 가림 영역을 확인해 주세요."
+            : "송출 화면이 들어오는지 확인해 주세요.",
+        };
+  const audioHealth = stale ? unknown : inputHealth(status.audio.state);
+  const platforms = ["youtube", "chzzk", "soop"] as const;
+  const platformNames = { youtube: "유튜브", chzzk: "치지직", soop: "SOOP" };
+  const chat = stale
+    ? unknown
+    : chatHealth(platforms.map((p) => status.connectors[p]?.state));
+  const chatProblems = platforms
+    .map((p) => ({ platform: p, ...inputHealth(status.connectors[p]?.state) }))
+    .filter(
+      (health) => health.label === "확인 필요" || health.label === "확인 불가",
+    );
+  const modelReady = checks.find((check) => check.id === "model")?.ready;
   const targets: Record<string, string> = {
     capture: "program-details",
     audio: "audio-details",
@@ -162,12 +154,11 @@ export function OperationsDashboard({
             : status.closed
               ? "종료된 세션입니다"
               : running
-                ? `AI 실행 중 · ${label(status.ai.phase)}`
+                ? "AI 채팅 생성이 켜져 있습니다"
                 : status.ai.readiness.ready
                   ? "AI 시작 준비 완료"
                   : "AI 시작 전 입력 확인이 필요합니다"}
         </strong>
-        <span>2초마다 갱신 · 마지막 응답 {age(status.generatedAt, now)}</span>
       </div>
       {stale ? (
         <p className="hint">
@@ -190,9 +181,7 @@ export function OperationsDashboard({
         <article>
           <div className="section-title">
             <h3>송출 화면</h3>
-            <span className="status">
-              {stale ? "확인 불가" : label(status.capture.state)}
-            </span>
+            <span className="status">{captureHealth.label}</span>
           </div>
           <div className="preview dashboard-preview">
             {freshFrame && preview ? (
@@ -201,94 +190,75 @@ export function OperationsDashboard({
               <p>
                 {stale
                   ? "최신 상태를 확인할 수 없습니다"
-                  : "최근 10초 이내 송출 화면 없음"}
+                  : "송출 화면을 기다리고 있습니다"}
               </p>
             )}
           </div>
-          <p>
-            {freshFrame
-              ? `최근 프레임 ${age(status.capture.lastFrameAt, now)}`
-              : "영상 최신성 확인 필요"}{" "}
-            · {status.capture.confirmed ? "마스크 확인됨" : "마스크 확인 필요"}
-          </p>
-          {status.capture.lastError && (
-            <p className="hint">{status.capture.lastError}</p>
-          )}
+          {captureHealth.hint && <p>{captureHealth.hint}</p>}
           <div className="toolbar">
-            <button
-              className="secondary"
-              disabled={
-                busy || stale || !freshFrame || status.capture.confirmed
-              }
-              onClick={() => onAction("capture/confirm")}
-            >
-              마스크 확인
-            </button>
+            {!status.capture.confirmed && (
+              <button
+                className="secondary"
+                disabled={busy || stale || !freshFrame}
+                onClick={() => onAction("capture/confirm")}
+              >
+                마스크 확인
+              </button>
+            )}
             <a href="#program-details">영상 설정 및 제어</a>
           </div>
         </article>
         <article>
-          <h3>실제 채팅 정보</h3>
-          <ul className="platform-status">
-            {["youtube", "chzzk", "soop"].map((platform) => {
-              const connector = status.connectors[platform];
-              return (
-                <li key={platform}>
-                  <strong>{platform.toUpperCase()}</strong>
-                  <span>{stale ? "확인 불가" : label(connector?.state)}</span>
-                  <small>
-                    동의 후 수집 {connector?.received ?? "—"}개 ·{" "}
-                    {age(connector?.lastReceived, now)}
-                  </small>
+          <div className="section-title">
+            <h3>실제 채팅 정보</h3>
+            <span className="status">{chat.label}</span>
+          </div>
+          {!stale && chatProblems.length > 0 && (
+            <ul className="input-problems">
+              {chatProblems.map((problem) => (
+                <li key={problem.platform}>
+                  {platformNames[problem.platform]}: {problem.hint}
                 </li>
-              );
-            })}
-          </ul>
-          <p className="hint">
-            채팅은 선택 입력입니다. 동의한 시청자의 메시지만 표시·AI 맥락에
-            포함됩니다. 수신 기록이 없는 상태가 반드시 연결 오류를 뜻하지는
-            않습니다.
-          </p>
+              ))}
+            </ul>
+          )}
+          {!stale && chatProblems.length === 0 && chat.hint && (
+            <p>{chat.hint}</p>
+          )}
+          {stale && <p>채팅 상태를 다시 확인하세요.</p>}
+          {chat.label === "사용 안 함" && (
+            <p className="hint">채팅 연결 없이도 AI를 사용할 수 있습니다.</p>
+          )}
           <a href="#connection-details">채팅 연결 및 수신 제어</a>
         </article>
         <article>
           <div className="section-title">
             <h3>음성 인식 transcript</h3>
-            <span className="status">
-              {stale ? "확인 불가" : label(status.audio.state)}
-            </span>
+            <span className="status">{audioHealth.label}</span>
           </div>
           <p className="transcript-excerpt">
             {stale
               ? "최신 자막 상태를 확인할 수 없습니다"
               : status.audio.latestText || "아직 인식된 음성이 없습니다"}
           </p>
-          <p>
-            최근 자막 {age(status.audio.latestAt, now)}
-            {status.audio.latestAt && now - status.audio.latestAt > 120000
-              ? " · 오래된 자막"
-              : ""}
-          </p>
-          <p className="hint">
-            전사 요청 {status.audio.requests ?? "—"} /{" "}
-            {status.audio.maxRequests ?? "—"} · 무음 구간은 건너뜁니다.
-          </p>
+          {audioHealth.hint && <p>{audioHealth.hint}</p>}
           <a href="#audio-details">음성 입력 및 자막 기록</a>
         </article>
       </div>
       <div className="operations-model">
         <span>
-          AI 모델: {status.ai.model ?? "확인 불가"} ·{" "}
-          {stale ? "상태 확인 필요" : label(status.ai.state)} /{" "}
-          {label(status.ai.phase)}
+          AI 모델 · {stale ? "확인 불가" : modelReady ? "정상" : "확인 필요"}
         </span>
-        <span>
-          호출 {status.ai.usage.calls} / {status.ai.maxCalls ?? "—"} ·{" "}
-          {status.ai.costEstimate === "configured_prices"
-            ? `예약 비용 $${status.ai.usage.reservedUsd.toFixed(4)}`
-            : "비용 확인 불가"}
-        </span>
-        <a href="#ai-details">모델 연결 및 상세 설정</a>
+        {!stale && !modelReady && <span>모델 연결을 확인해 주세요.</span>}
+        {!stale && status.ai.pending && (
+          <a href="#ai-details">생성된 메시지 승인하기</a>
+        )}
+        {!stale &&
+          status.ai.maxCalls &&
+          status.ai.usage.calls >= status.ai.maxCalls * 0.8 && (
+            <a href="#ai-details">AI 사용 한도 확인이 필요합니다.</a>
+          )}
+        <a href="#ai-details">AI 상세 설정</a>
       </div>
       <div className="toolbar">
         <button className="secondary" onClick={onRefresh}>
@@ -321,8 +291,8 @@ export function OperationsDashboard({
         확인한 뒤 AI 생성을 켜세요. AI만 끄면 입력 수집은 계속됩니다.
       </p>
       {!status.demo && (
-        <div className="operations-notices">
-          <strong>시청자 동의 안내</strong>
+        <details className="operations-notices">
+          <summary>시청자 동의 안내 설정</summary>
           <p className="hint">
             플랫폼 심사 확인 후 활성화하세요. 앱 리더·오버레이의 안내만
             제어하며, 동의 전 채팅 차단은 항상 유지됩니다.
@@ -342,7 +312,7 @@ export function OperationsDashboard({
               </label>
             ))}
           </div>
-        </div>
+        </details>
       )}
     </section>
   );
