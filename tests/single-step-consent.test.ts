@@ -4,6 +4,7 @@ import { Participation } from "../packages/participation.ts";
 import { Store } from "../packages/storage.ts";
 import { YoutubeNotices } from "../packages/youtube-notices.ts";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";
+import { normalizeChzzk } from "../packages/chzzk.ts";
 import {
   assertProfileUpdate,
   profileIssues,
@@ -62,11 +63,24 @@ for (const platform of ["youtube", "chzzk"] as const) {
           );
     sender.resolve("chat", "fixture");
     sender.connected = true;
-    const send = (text: string) =>
-      store.ingestBatch([privacyMessage("fixture", text, ++now, { platform })]);
+    const send = (text: string) => {
+      const at = ++now;
+      const message =
+        platform === "chzzk"
+          ? normalizeChzzk({
+              channelId: "fixture",
+              senderChannelId: "fixture",
+              profile: { nickname: "Synthetic broadcaster" },
+              content: text,
+              messageTime: at,
+            })
+          : privacyMessage("fixture", text, at, { platform });
+      store.ingestBatch([message]);
+      return message;
+    };
     send("hello");
     const person = p.get(platform, "fixture", "fixture")!;
-    send("!동의");
+    const earlyConsent = send("!동의");
     assert.equal(person.state, "WAITING_CONSENT");
     await sender.tick(new AbortController().signal);
     assert.equal(sent.length, 1);
@@ -74,6 +88,8 @@ for (const platform of ["youtube", "chzzk"] as const) {
     assert(sent[0].length <= (platform === "chzzk" ? 100 : 200));
     assert(sent[0].includes(profile.noticeUrl));
     assert(sent[0].includes("14세"));
+    store.ingestBatch([earlyConsent]);
+    assert.equal(person.state, "WAITING_CONSENT");
     now += 60000;
     send("ordinary again");
     await sender.tick(new AbortController().signal);

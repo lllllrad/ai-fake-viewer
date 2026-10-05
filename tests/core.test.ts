@@ -250,11 +250,11 @@ test("YouTube nicknames remain exact and AI persona display names omit internal 
 test("T06: CHZZK object/string parser never treats chatChannelId as message ID", () => {
   const c = fixture("chzzk-chat");
   assert.deepEqual(normalizeChzzk(c), normalizeChzzk(JSON.stringify(c)));
-  assert(!("sourceId" in normalizeChzzk(c)));
+  assert(normalizeChzzk(c).sourceId.startsWith("chzzk-event:"));
   const s = new Store(":memory:");
   consent(s, normalizeChzzk(c));
   s.ingestBatch([normalizeChzzk(c), normalizeChzzk(c)]);
-  assert.equal(s.snapshot().messages.length, 2);
+  assert.equal(s.snapshot().messages.length, 1);
   s.close();
 });
 test("A14: refresh single-flight and atomic encrypted token rotation", async () => {

@@ -95,6 +95,16 @@ After token refresh and before sending, recheck consent generation, profile, tar
 
 ## CHZZK automatic fixed notices
 
+Incoming CHAT events receive a local SHA-256 replay identity from the channel,
+sender, provider message timestamp and content. This is not a provider-issued
+message ID; the channel ID alone is never a message ID. Consent ordering still
+uses the provider timestamp and requires a fresh command after confirmed notice
+delivery. Replayed events keep the same identity and cannot advance consent.
+Identical events from one sender in the same millisecond are conservatively
+treated as duplicates. Missing or invalid timestamps are not replaced with local
+receive time. Tests pass raw CHAT payloads through normalization, consent and the
+public store snapshot used by the overlay.
+
 The server sends fixed participation introductions and stage notices through the official Chat API while its own-channel receiver is subscribed. It checks the authenticated channel through the User API, applies the same participation/profile/attempt limits, and splits notices into messages of at most 100 characters without truncating URLs. Every part must return a successful response with a nonempty message ID before delivery is recorded. Viewer commands before completion cannot advance consent. Own-channel messages are excluded from viewer input. Confirmed introductions remain suppressed for later ordinary chat in the same session, including receiver reconnects.
 
 Token refresh, identity lookup and response parsing are asynchronous boundaries: cancellation, credentials, target and consent validity are checked before sending and acknowledging. Missing acknowledgement can cause a delayed retry; remote exactly-once sending is not promised. Authentication/permission failures pause retries, and stopping receipt stops sending. No arbitrary-message API or native-platform AI publication is added.

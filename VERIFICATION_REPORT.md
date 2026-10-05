@@ -4,6 +4,22 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## CHZZK consent normalization repair — 2026-10-05
+
+Live participant metadata showed a received consent command held for ordering
+assistance, with participation still waiting. The CHZZK normalizer preserved the
+provider timestamp but omitted a source identity, so automatic consent could not
+advance. It now supplies a deterministic local replay hash of channel, sender,
+timestamp and content. Provider timestamps and post-delivery ordering checks remain
+required. Exact event replays are deduplicated rather than treated as new commands.
+
+`sh run-command.sh npm run check` passed documentation/configuration validation,
+TypeScript/Vite and all 152 tests. The CHZZK single-step sender test now uses raw
+CHAT payload normalization instead of a fixture with an invented unique source ID;
+it verifies pre-delivery command replay remains waiting, fresh consent activates
+participation, subsequent text enters the public snapshot, and withdrawal removes
+it. These are synthetic checks, not confirmation of a new live viewer consent.
+
 ## Single-step test flow and AI enablement diagnostics — 2026-10-05
 
 Added explicit default-off `privacy.singleStepTest`: one short combined test notice

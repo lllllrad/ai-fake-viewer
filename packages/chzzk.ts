@@ -1,4 +1,9 @@
-import { randomBytes, createCipheriv, createDecipheriv } from "node:crypto";
+import {
+  randomBytes,
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+} from "node:crypto";
 import {
   existsSync,
   readFileSync,
@@ -35,6 +40,17 @@ export function normalizeChzzk(raw: unknown) {
     name: e.profile.nickname,
     text: e.content,
     publishedAt: e.messageTime,
+    // Local replay identity, not a provider-issued message ID or receive timestamp.
+    sourceId: `chzzk-event:${createHash("sha256")
+      .update(
+        JSON.stringify([
+          e.channelId,
+          e.senderChannelId,
+          e.messageTime,
+          e.content,
+        ]),
+      )
+      .digest("hex")}`,
   };
 }
 export class ChzzkAuth {
