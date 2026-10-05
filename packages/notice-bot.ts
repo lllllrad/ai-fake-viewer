@@ -115,8 +115,10 @@ export class NoticeBot {
       this.state = "delivery_unconfirmed";
       return true;
     }
-    if (job.kind === "intro" && person.state === "UNCONSENTED")
+    if (job.kind === "intro" && person.state === "UNCONSENTED") {
       person.introPending = false;
+      person.introDelivered = true;
+    }
     if (
       job.kind === "stage" &&
       person.state === "WAITING_CONSENT" &&

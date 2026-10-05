@@ -4,6 +4,11 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; ChatGPT subscription support was restored in the latest milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Suppress repeated participation introductions — 2026-10-05
+
+- Confirmed initial notice delivery is remembered per participant in memory for the current broadcast session. Later ordinary chat and sender reconnection do not schedule the introduction again. Explicit consent still starts stage notices; unconfirmed delivery retains bounded retries. New sessions/server restarts clear this history.
+- `sh run-command.sh npm run check`: **96 tests PASS**, build and document/config validation PASS. Added regression coverage beyond the notice cooldown, sender reset, explicit consent, waiting-stage chat and a new session. No real platform notice was sent. The running server was not restarted for this change.
+
 ## Restore ChatGPT subscription support — 2026-10-05
 
 - Extended the previous API-only privacy profile at the user's request: explicit `chatgpt_subscription` now supports the existing official app OAuth account/model with no `OPENAI_API_KEY` or `OPENAI_MODEL`. Restored live sign-in, saved-account and model-selection controls; API mode remains available independently. No Codex CLI credential import or CLI execution was added.

@@ -28,6 +28,7 @@ export type Participant = {
   observed?: { id: string; receivedAt: number; command: string };
   eventIds: Set<string>;
   introPending: boolean;
+  introDelivered: boolean;
   published: boolean;
   requestIds: string[];
 };
@@ -98,6 +99,7 @@ export class Participation {
         deliveredAt: null,
         eventIds: new Set(),
         introPending: false,
+        introDelivered: false,
         published: false,
         requestIds: [],
       };
@@ -184,7 +186,8 @@ export class Participation {
       (fresh || liveWithoutTimestamp) &&
       this.allowed(m.platform, m.channel, m.author, p.epoch);
     if (allow) p.published = true;
-    else if (p.state === "UNCONSENTED") p.introPending = true;
+    else if (p.state === "UNCONSENTED" && !p.introDelivered)
+      p.introPending = true;
     return { allow, withdraw: false, epoch: p.epoch };
   }
   private acceptCommand(p: Participant, at: number) {

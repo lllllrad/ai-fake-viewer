@@ -154,3 +154,30 @@ test("global attempt limit survives a new broadcast session in the same process"
   tick(60001);
   assert(bot.next(true));
 });
+
+test("confirmed intro is not repeated for later chat, but explicit consent and new sessions still work", (t) => {
+  const { p, store, bot, message, tick } = fixture(t);
+  message("u", "first");
+  const intro = bot.next(true)!;
+  assert(bot.echo("fixture", intro.text));
+  tick(600001);
+  message("u", "later");
+  assert.equal(bot.next(true), null);
+  bot.reset();
+  tick(600001);
+  message("u", "after reconnect");
+  assert.equal(bot.next(true), null);
+  message("u", "!동의");
+  const stage = bot.next(true)!;
+  assert(stage);
+  assert(bot.echo("fixture", stage.text));
+  tick(600001);
+  message("u", "waiting for consent");
+  assert.equal(bot.next(true), null);
+  assert.equal(p.get("soop", "fixture", "u")!.stage, 0);
+  store.newSession();
+  bot.reset();
+  tick(600001);
+  message("u", "new broadcast");
+  assert(bot.next(true));
+});
