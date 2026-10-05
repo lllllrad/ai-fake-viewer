@@ -14,7 +14,11 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       port,
       privacy: approvedProfile(),
       chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
-      soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
+      soop: {
+        mode: "official",
+        streamerId: "fixture",
+        redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback`,
+      },
     }),
     {
       demo: false,
@@ -41,6 +45,45 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await expect(
       page.getByRole("button", { name: "Continue with ChatGPT" }),
     ).toHaveCount(0);
+    await page.route("**/api/admin/soop/chat-session", (route) =>
+      route.fulfill({
+        json: {
+          clientId: "synthetic",
+          accessToken: "synthetic",
+          streamerId: "fixture",
+        },
+      }),
+    );
+    await page.route("**/api/admin/status", async (route) => {
+      const response = await route.fetch();
+      const data = await response.json();
+      data.setup.soop.tokenConfigured = true;
+      data.setup.soop.credentialsConfigured = true;
+      await route.fulfill({ json: data });
+    });
+    await page.getByRole("button", { name: "상태 다시 확인" }).click();
+    await page.route(
+      "https://static.sooplive.com/asset/app/chat-sdk/sooplive-chat-sdk.js",
+      (route) =>
+        route.fulfill({
+          contentType: "application/javascript",
+          body: `
+      window.__fixedNotices = [];
+      window.SOOP = {ChatSDK: class {
+        setAuth() {} handleReady(fn) {this.ready=fn;}
+        handleMessageReceived(fn) {this.message=fn;}
+        handleChatClosed() {} handleError() {} disconnect() {}
+        async connect(){this.ready?.();} async getRoomInfo(){return {bjId:"fixture"};}
+        sendMessage(text){window.__fixedNotices.push(text);this.message?.("MESSAGE",{userId:"fixture",userNickname:"Synthetic broadcaster",message:text});}
+      }};
+    `,
+        }),
+    );
+    await page.locator("#advanced-settings > summary").click();
+    await page
+      .getByRole("button", { name: "Connect SOOP chat", exact: true })
+      .click();
+    await page.locator("#advanced-settings > summary").click();
     store.ingestBatch([
       privacyMessage(
         "browser-viewer",
@@ -50,6 +93,15 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       ),
     ]);
     assert.equal(store.snapshot().messages.length, 0);
+    await expect
+      .poll(() => page.evaluate(() => (window as any).__fixedNotices.length))
+      .toBe(1);
+    assert(
+      (await page.evaluate(() => (window as any).__fixedNotices[0])).includes(
+        "방송 화면에 표시되거나 AI 입력으로 사용되지 않습니다",
+      ),
+    );
+
     store.ingestBatch([
       {
         ...privacyMessage("browser-viewer", "!동의", Date.now(), {
@@ -67,8 +119,22 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     page.once("dialog", (d) => void d.accept());
     await confirm.click();
     await expect(panel.getByText(/단계별 동의 대기/)).toBeVisible();
-    page.once("dialog", (d) => void d.accept());
-    await panel.getByRole("button", { name: "안내 전달 완료 확인" }).click();
+    await expect(
+      panel.getByRole("button", { name: "안내 전달 완료 확인" }),
+    ).toHaveCount(0);
+    // Advance only the fixture account's send allowance, without sleeping through a real 30s limit.
+    store.participation!.get(
+      "soop",
+      "fixture",
+      "browser-viewer",
+    )!.lastNoticeAt = 0;
+    await expect
+      .poll(
+        () =>
+          store.participation!.get("soop", "fixture", "browser-viewer")!
+            .deliveredAt,
+      )
+      .not.toBeNull();
     assert.equal(
       store.participation!.get("soop", "fixture", "browser-viewer")!.state,
       "WAITING_CONSENT",
@@ -122,6 +188,21 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
+    await page.locator("#advanced-settings > summary").click();
+    await page
+      .getByRole("button", { name: "Disconnect SOOP", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        app
+          .inject({
+            method: "POST",
+            url: "/api/admin/soop/notices/next",
+            headers: { host: `127.0.0.1:${port}` },
+          })
+          .then((r) => r.statusCode),
+      )
+      .toBe(401);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();

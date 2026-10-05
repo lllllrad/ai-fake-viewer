@@ -30,7 +30,7 @@ Screen and audio ingestion are disabled in this profile. OBS can still show the 
 
 Configure the official receiver credentials and exact registered OAuth callbacks. Set an approval entry for the actual broadcaster identity used by the adapter, not a display nickname. See [README](README.md#live-configuration). The SOOP browser SDK requires the signed-in admin page to remain open and the authenticated broadcaster's own live stream. Its runtime endpoint contract and real-account approval need a live rehearsal; do not substitute the unofficial adapter.
 
-The app provides no native SOOP sender. Deliver only the fixed stage notice through an approved route. In **개인정보·참여 관리**, confirm actual successful delivery before the viewer sends a new `!동의`. A failed or undelivered notice must not be marked delivered. For SDK events without trustworthy ordering, verify the exact newly received command within its 60-second window; do not approve old retransmissions. No operator-only activation API exists.
+The official SOOP SDK automatically sends fixed participation notices for unconsented ordinary chat and subsequent consent stages. Configure the actual fixed-notice approval and allowed rates, and keep the connected administrator tab open. **개인정보·참여 관리** shows automatic delivery status; SOOP has no manual delivery-confirmation button. A matching MESSAGE echo from the authenticated broadcaster confirms sending, followed by a new viewer `!동의`; merely calling sendMessage or a timeout does not confirm delivery. For SDK events without trustworthy ordering, verify the exact newly received command within its 60-second window; do not approve old retransmissions. No operator-only activation API exists.
 
 ## 5. Connect OBS and the reader
 

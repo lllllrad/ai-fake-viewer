@@ -1,3 +1,4 @@
+import { dispatchFixedNotice } from "./soop-notice-sender";
 import { PrivacyPanel } from "./privacy-panel";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
@@ -253,6 +254,32 @@ function SoopConnector({
     },
     [],
   );
+  useEffect(() => {
+    let active = true,
+      polling = false;
+    const timer = setInterval(() => {
+      if (polling || !active || !verified.current) return;
+      polling = true;
+      void dispatchFixedNotice(
+        () => post("soop/notices/next"),
+        () => active && verified.current && !!sdk.current,
+        (text) => sdk.current.sendMessage(text),
+        (id) => post("soop/notices/failed", { id }),
+      )
+        .catch(() =>
+          setMessage(
+            "자동 안내 상태를 확인할 수 없습니다. 연결 상태를 확인해 주세요.",
+          ),
+        )
+        .finally(() => {
+          polling = false;
+        });
+    }, 1000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, []);
   const authorize = async () => {
     setBusy(true);
     setMessage("");
@@ -344,6 +371,10 @@ function SoopConnector({
       }
       roomVerified.current = true;
       verified.current = ready.current;
+      if (verified.current) {
+        await post("soop/status", { state: "subscribed" });
+        setBusy(false);
+      }
       setMessage(
         ready.current
           ? "Connected to your SOOP broadcast. Keep this admin tab open."
@@ -1324,8 +1355,8 @@ function Admin() {
             </div>
             <p className="hint">
               메모리 전용: 세션 종료·재시작 시 채팅과 전사문을 삭제합니다.
-              Frames, raw audio and prompts are not written to disk. No platform
-              chat sending is provided.
+              Frames, raw audio and prompts are not written to disk. SOOP에는
+              고정 참여 안내만 자동 발송하며 AI 채팅은 발송하지 않습니다.
             </p>
           </section>
         </>

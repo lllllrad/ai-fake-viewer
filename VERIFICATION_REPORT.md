@@ -4,6 +4,14 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision/ChatGPT paths. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Automatic SOOP fixed notices — 2026-10-05
+
+- Corrected the previous milestone's substitution of manual notice delivery for the requested notice bot. Unconsented ordinary SOOP chat now schedules a fixed non-display/participation notice; consent stages schedule their fixed notices automatically. Neither viewer text/nickname nor AI replies can enter this sending interface.
+- Confirmed `sendMessage(message)` and MESSAGE response handling in the official SOOP documentation bundle and public SDK; see [contract evidence](research/soop-official-verification.md#2026-10-05-공식-고정-안내-발송-계약-재확인). Real application approval and rate limits remain operator prerequisites. No real chat was sent during this work.
+- Server-side account/global attempt limits include failed attempts. One expiring dispatch lease prevents duplicate sends from multiple admin tabs. Only the authenticated broadcaster's exact echoed fixed text, including a random nonidentifying notice code, confirms delivery. Stale stage/session/revision, copied text from another account and timeout cannot grant consent. Withdrawn users and configured bots do not trigger unsolicited guidance. The SOOP manual delivery-confirmation API/UI is blocked/removed; actual ambiguous-command confirmation remains separate.
+- `sh run-command.sh npm run check`: build/document/config checks and **92 tests PASS**. Added automatic trigger, no raw text, attempt limits, failures, bots/withdrawal/approval, stage echoes and disconnected sender tests.
+- `sh run-command.sh npm run test:browser`: **PASS**, no page errors, with the official SDK interface replaced by a synthetic browser fixture. Verified native sendMessage invocation, echoed acknowledgement through the real server route, automatic stage notice, absence of SOOP manual-delivery control, existing privacy/rights and desktop/mobile flows. Actual account delivery/echo behavior remains a live rehearsal item.
+
 ## Memory-only staged participation requirements — 2026-10-05
 
 - Implemented a default-deny operator/processing/publication/permission profile, separate delivered consent stages and 14+ declaration, scoped consent generations, stale command rejection, age blocking and actual observed-command assistance. All app chat, mappings, consent, personas and summaries are memory-only; restart does not recover them or resume AI.

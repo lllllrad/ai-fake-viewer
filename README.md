@@ -25,7 +25,7 @@ A first exact `!동의` starts guidance; it does not grant participation. Each d
 
 `!철회` invalidates the consent generation immediately, removes original and identifiable derived context, cancels queued/in-flight AI work and retracts tracked dependent replies. Late results cannot be published. Previously approved fixed-category anonymous topic/mood context may remain only until the session ends. `!참여상태` lets an operator confirm the account's current participation state. Commands are not chat or AI input.
 
-The **개인정보·참여 관리** panel exposes staged guidance, age blocking and separate external/VOD follow-up work. Fixed notices must be delivered through an actually approved platform route; the app has no native outbound sender. Manual delivery confirmation is not a claim that the app sent a message. Legacy overlay-notice switches are informational, not viewer consent.
+The **개인정보·참여 관리** panel exposes staged guidance, age blocking and separate external/VOD follow-up work. The official SOOP SDK automatically sends a fixed non-display/participation notice after unconsented ordinary chat, and sends the next consent-stage notice when ready. Account/global limits apply before each attempt; the authenticated broadcaster’s matching MESSAGE echo confirms delivery. Keep the connected admin tab open. Failed or unconfirmed delivery never grants consent. Legacy overlay-notice switches are informational, not viewer consent.
 
 ## Live configuration
 

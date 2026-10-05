@@ -124,12 +124,26 @@ export function PrivacyPanel() {
           경로는 이 프로필에서 사용하지 않습니다.
         </p>
       </details>
+      <p role="status">
+        SOOP 자동 안내:{" "}
+        {(
+          {
+            waiting_connection: "연결 대기",
+            approval_required: "발송 승인·허용량 확인 필요",
+            awaiting_echo: "전달 확인 중",
+            delivery_unconfirmed: "전달 미확인 · 제한 간격 이후 재시도",
+            ready: "사용 중",
+            disabled: "사용 안 함",
+          } as Record<string, string>
+        )[data.noticeBot] || "확인 중"}
+      </p>
       <details>
         <summary>참여 안내·현재 동의 상태 ({data.participants.length})</summary>
         <p className="hint">
-          고정 안내는 승인된 플랫폼 경로에서 직접 전달합니다. 아래 확인은 실제
-          전달·실제 명령의 확인이며 참여자를 대신한 동의가 아닙니다. 만 14세
-          미만 또는 확인할 수 없는 경우 차단하세요.
+          SOOP 미동의 채팅에는 고정 안내가 자동 발송됩니다. 동의 단계 안내도
+          자동 발송하고 SOOP 응답으로 전달을 확인합니다. 관리자 탭의 SOOP 연결을
+          유지하세요. 실제 수신 명령 확인은 동의를 대신하는 기능이 아닙니다.
+          연령 미달·확인 불가는 차단하세요.
         </p>
         {data.participants.map((p: any) => (
           <article key={p.id} className="persona-candidate">
@@ -183,21 +197,29 @@ export function PrivacyPanel() {
                 >
                   고정 안내문 복사
                 </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    if (
-                      window.confirm(
-                        "현재 단계의 안내문을 승인된 경로에서 실제 전달했고 실패하지 않았습니까?",
+                {p.platform !== "soop" && (
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          "현재 단계의 안내문을 승인된 경로에서 실제 전달했고 실패하지 않았습니까?",
+                        )
                       )
-                    )
-                      void action(`participants/${p.id}/notice-delivered`, {
-                        delivered: true,
-                      });
-                  }}
-                >
-                  안내 전달 완료 확인
-                </button>
+                        void action(`participants/${p.id}/notice-delivered`, {
+                          delivered: true,
+                        });
+                    }}
+                  >
+                    안내 전달 완료 확인
+                  </button>
+                )}
+                {p.platform === "soop" && (
+                  <p className="hint">
+                    안내는 자동 발송됩니다. 발송 제한 또는 응답 미확인 중에는
+                    다음 동의 단계로 진행하지 않습니다.
+                  </p>
+                )}
               </>
             )}
             <button

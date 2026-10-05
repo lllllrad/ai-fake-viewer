@@ -1,3 +1,4 @@
+import { NoticeBot } from "../../packages/notice-bot.ts";
 import { Participation } from "../../packages/participation.ts";
 import {
   PrivacyActionError,
@@ -65,6 +66,10 @@ export async function createApp(
     ? undefined
     : new Participation(config.privacy, "");
   const store = new Store(":memory:", participation);
+  const noticeBot = participation
+    ? new NoticeBot(participation, config.soop.streamerId)
+    : undefined;
+  store.on("reset", () => noticeBot?.reset());
   const rights = new RightsQueue(
     opts.demo ? ":memory:" : config.privacy.rightsDatabase,
   );
@@ -1015,6 +1020,7 @@ export async function createApp(
     flushRights();
     return {
       pendingFollowups: pendingRights.size,
+      noticeBot: noticeBot?.state ?? "disabled",
       profile: config.privacy,
       issues: profileIssues(config.privacy),
       participants: participation
@@ -1058,6 +1064,10 @@ export async function createApp(
         .parse(req.body);
       void body;
       if (!participation) throw Error("Live 참여 상태가 없습니다.");
+      if (participation.byId((req.params as any).id).platform === "soop")
+        throw new PrivacyActionError(
+          "SOOP 안내는 자동 발송 응답으로 확인합니다.",
+        );
       participation.delivered((req.params as any).id);
       return { ok: true };
     },
@@ -1539,6 +1549,7 @@ export async function createApp(
         ]),
       })
       .parse(req.body);
+    if (body.state !== "subscribed") noticeBot?.reset();
     if (body.state !== "subscribed" && participation) {
       const prior = [...participation.participants.values()];
       participation.connectionLost("soop");
@@ -1547,6 +1558,21 @@ export async function createApp(
           store.revokeParticipant(p.platform, p.broadcaster, p.author);
     }
     supervisor.status("soop", body.state);
+    return { ok: true };
+  });
+  app.post("/api/admin/soop/notices/next", async () => ({
+    notice:
+      noticeBot?.next(
+        !opts.demo &&
+          config.soop.mode === "official" &&
+          !store.closed() &&
+          supervisor.states.soop.state === "subscribed",
+      ) ?? null,
+    state: noticeBot?.state ?? "disabled",
+  }));
+  app.post("/api/admin/soop/notices/failed", async (req) => {
+    const { id } = z.object({ id: z.string().uuid() }).strict().parse(req.body);
+    noticeBot?.failed(id);
     return { ok: true };
   });
   app.post("/api/admin/soop/message", async (req, reply) => {
@@ -1564,6 +1590,10 @@ export async function createApp(
       })
       .strict()
       .parse(req.body);
+    if (body.userId === config.soop.streamerId) {
+      noticeBot?.echo(body.userId, body.message);
+      return { ok: true };
+    }
     supervisor.receive("soop", {
       platform: "soop",
       channel: config.soop.streamerId,

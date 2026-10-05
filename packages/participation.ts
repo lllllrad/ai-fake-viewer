@@ -27,6 +27,7 @@ export type Participant = {
   deliveredAt: number | null;
   observed?: { id: string; receivedAt: number; command: string };
   eventIds: Set<string>;
+  introPending: boolean;
   published: boolean;
   requestIds: string[];
 };
@@ -96,6 +97,7 @@ export class Participation {
         lastNoticeAt: 0,
         deliveredAt: null,
         eventIds: new Set(),
+        introPending: false,
         published: false,
         requestIds: [],
       };
@@ -182,6 +184,7 @@ export class Participation {
       (fresh || liveWithoutTimestamp) &&
       this.allowed(m.platform, m.channel, m.author, p.epoch);
     if (allow) p.published = true;
+    else if (p.state === "UNCONSENTED") p.introPending = true;
     return { allow, withdraw: false, epoch: p.epoch };
   }
   private acceptCommand(p: Participant, at: number) {
@@ -251,13 +254,13 @@ export class Participation {
       text: `[참여 안내 ${stage}] ${text} 이 단계에 동의하면 새로운 !동의를 입력해 주세요. 동의하지 않으면 이 앱에 참여하지 않습니다. 철회: !철회 / 상태 확인: !참여상태. 방침: ${profile.policyUrl} 안내(${profile.noticeVersion}): ${profile.noticeUrl}`,
     };
   }
-  delivered(id: string) {
+  reserveNotice(id: string) {
     const p = this.byId(id),
       a = this.approval(p.platform, p.broadcaster),
       now = Date.now();
     this.sent = this.sent.filter((t) => t > now - 60000);
     if (
-      p.state !== "WAITING_CONSENT" ||
+      !["UNCONSENTED", "WAITING_CONSENT"].includes(p.state) ||
       !this.available(p.platform, p.broadcaster) ||
       !a?.fixedNotices ||
       !this.profile.notices.approvedLimitConfirmed ||
@@ -265,9 +268,16 @@ export class Participation {
       this.sent.length >= this.profile.notices.globalPerMinute
     )
       throw new PrivacyActionError("안내 권한·단계·발송 제한을 확인해 주세요.");
-    p.deliveredAt = now;
     p.lastNoticeAt = now;
     this.sent.push(now);
+    return p;
+  }
+  delivered(id: string) {
+    const p = this.byId(id);
+    if (p.state !== "WAITING_CONSENT")
+      throw new PrivacyActionError("안내 단계를 확인해 주세요.");
+    this.reserveNotice(id);
+    p.deliveredAt = Date.now();
     return p;
   }
   blockAge(id: string) {
