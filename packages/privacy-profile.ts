@@ -1,0 +1,145 @@
+import { z } from "zod";
+import { createHash } from "node:crypto";
+export class PrivacyActionError extends Error {}
+const text = z.string().trim().max(2000).default("");
+export const privacyProfileSchema = z
+  .object({
+    operator: text,
+    officer: text,
+    contact: text,
+    policyUrl: text,
+    noticeUrl: text,
+    policyVersion: text,
+    noticeVersion: text,
+    overseasBasis: z.enum(["unconfirmed", "A", "B"]).default("unconfirmed"),
+    collectionNotice: text,
+    publicationNotice: text,
+    overseasNotice: text,
+    thirdPartyNotice: text,
+    processing: z
+      .object({
+        provider: z.literal("openai_api").default("openai_api"),
+        contract: z.literal("API").default("API"),
+        model: text,
+        endpoint: text,
+        countries: z.array(z.string().min(1)).default([]),
+        subprocessors: text,
+        retention: text,
+        evidenceUrl: text,
+        checkedAt: text,
+        accountSettingsVerified: z.boolean().default(false),
+        dataSharingDisabled: z.boolean().default(false),
+        noticeMatchesConfiguration: z.boolean().default(false),
+      })
+      .strict()
+      .default(() => ({
+        provider: "openai_api" as const,
+        contract: "API" as const,
+        model: "",
+        endpoint: "",
+        countries: [],
+        subprocessors: "",
+        retention: "",
+        evidenceUrl: "",
+        checkedAt: "",
+        accountSettingsVerified: false,
+        dataSharingDisabled: false,
+        noticeMatchesConfiguration: false,
+      })),
+    publications: z
+      .array(
+        z
+          .object({
+            platform: z.enum(["youtube", "chzzk", "soop"]),
+            channel: z.string().min(1),
+            url: z.string().url(),
+            retention: z.string().min(1),
+            countries: z.string().min(1),
+            reviewed: z.boolean(),
+            noticeMatches: z.boolean(),
+          })
+          .strict(),
+      )
+      .default([]),
+    approvals: z
+      .array(
+        z
+          .object({
+            platform: z.enum(["youtube", "chzzk", "soop"]),
+            broadcaster: z.string().min(1),
+            receive: z.boolean(),
+            fixedNotices: z.boolean(),
+            screenPublication: z.boolean(),
+            externalAi: z.boolean(),
+            contractReference: text,
+            checkedAt: text,
+          })
+          .strict(),
+      )
+      .default([]),
+    notices: z
+      .object({
+        perAccountIntervalMs: z.number().int().min(30000).default(30000),
+        globalPerMinute: z.number().int().min(1).max(20).default(2),
+        approvedLimitConfirmed: z.boolean().default(false),
+        botUserIds: z.array(z.string()).default([]),
+      })
+      .strict()
+      .default(() => ({
+        perAccountIntervalMs: 30000,
+        globalPerMinute: 2,
+        approvedLimitConfirmed: false,
+        botUserIds: [],
+      })),
+    rightsDatabase: z.string().default("data/rights.sqlite"),
+  })
+  .strict();
+export type PrivacyProfile = z.infer<typeof privacyProfileSchema>;
+export function profileFingerprint(p: PrivacyProfile) {
+  return createHash("sha256").update(JSON.stringify(p)).digest("hex");
+}
+export function profileIssues(p: PrivacyProfile): string[] {
+  const issues: string[] = [];
+  for (const key of [
+    "operator",
+    "officer",
+    "contact",
+    "policyVersion",
+    "noticeVersion",
+    "collectionNotice",
+    "publicationNotice",
+    "overseasNotice",
+  ] as const)
+    if (!p[key]) issues.push(`${key} 미설정`);
+  for (const key of ["policyUrl", "noticeUrl"] as const)
+    if (!/^https:\/\//.test(p[key])) issues.push(`${key} 공개 HTTPS 주소 필요`);
+  if (p.overseasBasis === "unconfirmed") issues.push("국외 처리 A/B 미확정");
+  const a = p.processing;
+  for (const key of [
+    "model",
+    "endpoint",
+    "subprocessors",
+    "retention",
+    "evidenceUrl",
+    "checkedAt",
+  ] as const)
+    if (!a[key]) issues.push(`AI ${key} 미설정`);
+  if (
+    !a.countries.length ||
+    !a.accountSettingsVerified ||
+    !a.dataSharingDisabled ||
+    !a.noticeMatchesConfiguration
+  )
+    issues.push("AI 국가·계약·보존·안내 일치 확인 필요");
+  if (
+    a.endpoint &&
+    !/^https:\/\/(?:api|[a-z]{2}\.api)\.openai\.com\/v1$/.test(a.endpoint)
+  )
+    issues.push("확인된 OpenAI API endpoint 필요");
+  if (
+    !p.publications.length ||
+    p.publications.some((x) => !x.reviewed || !x.noticeMatches)
+  )
+    issues.push("영상 공개 플랫폼·채널·보관·국외 처리 확인 필요");
+  return issues;
+}

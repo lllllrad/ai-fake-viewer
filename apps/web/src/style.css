@@ -656,3 +656,22 @@ input:focus-visible {
   font-size: 13px;
   padding: 10px 4px;
 }
+
+.privacy-panel .privacy-check {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.6rem;
+}
+.privacy-panel .privacy-check input {
+  width: auto;
+  margin: 0;
+}
+.privacy-panel select {
+  width: 100%;
+  padding: 0.6rem;
+  background: var(--panel, #152426);
+  color: inherit;
+  border: 1px solid #415558;
+  border-radius: 6px;
+}

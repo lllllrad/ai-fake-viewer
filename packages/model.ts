@@ -21,6 +21,7 @@ export interface ModelInput {
   newTranscripts?: Transcript[];
   messages: { id: string; speaker: string; text: string }[];
   newMessages?: { id: string; speaker: string; text: string }[];
+  privacyRevision?: number;
   chatSummary?: ChatSummary;
   reviewDraft?: string;
   persona: { name: string; style: string };
@@ -148,17 +149,28 @@ export function modelMessages(input: ModelInput) {
     },
   ];
 }
-export function openaiModel(config: Config["ai"]): Model {
+export function openaiModel(
+  config: Config["ai"],
+  options?: {
+    endpoint: () => string;
+    model: () => string;
+    authorize: (input: ModelInput) => void;
+    requestId?: (id: string, input: ModelInput) => void;
+  },
+): Model {
   return async (input, signal) => {
     if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
       throw Error("Model credentials missing");
+    options?.authorize(input);
+    const endpoint = options?.endpoint() ?? "https://api.openai.com/v1";
+    const model = options?.model() ?? process.env.OPENAI_MODEL;
     const messages = modelMessages(input);
     const headers = {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
     };
     const body = {
-      model: process.env.OPENAI_MODEL,
+      model,
       store: false,
       input: messages,
       text: {
@@ -173,8 +185,10 @@ export function openaiModel(config: Config["ai"]): Model {
     };
     if (Buffer.byteLength(JSON.stringify(body)) > 8 * 1024 * 1024)
       throw Error("Model request too large");
+    signal.throwIfAborted();
+    options?.authorize(input);
     const count = await fetch(
-      "https://api.openai.com/v1/responses/input_tokens",
+      `${endpoint}/responses/input_tokens`,
       {
         method: "POST",
         headers,
@@ -186,6 +200,8 @@ export function openaiModel(config: Config["ai"]): Model {
         }),
       },
     );
+    const countRequestId = count.headers.get("x-request-id");
+    if (countRequestId) options?.requestId?.(countRequestId, input);
     if (!count.ok) throw Error("Input token count unavailable");
     const counted: any = await count.json();
     if (
@@ -193,12 +209,16 @@ export function openaiModel(config: Config["ai"]): Model {
       counted.input_tokens > config.maxInputTokens
     )
       throw Error("Input token budget exceeded");
-    const r = await fetch("https://api.openai.com/v1/responses", {
+    signal.throwIfAborted();
+    options?.authorize(input);
+    const r = await fetch(`${endpoint}/responses`, {
       method: "POST",
       headers,
       signal,
       body: JSON.stringify(body),
     });
+    const responseRequestId = r.headers.get("x-request-id");
+    if (responseRequestId) options?.requestId?.(responseRequestId, input);
     if (!r.ok) throw Error("Model provider request failed");
     const b: any = await r.json();
     if (b.status !== "completed") throw Error("Model response incomplete");

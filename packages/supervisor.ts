@@ -50,6 +50,23 @@ export class Supervisor {
     const previous = this.states[p]?.state;
     if (p === "youtube" && s === "reconnecting" && this.states[p].state !== s)
       this.states[p].recoveries++;
+    if (
+      this.store.participation &&
+      ["reconnecting", "disconnected", "failed"].includes(s)
+    ) {
+      const people = [...this.store.participation.participants.values()].filter(
+        (person) =>
+          person.platform === p &&
+          person.accepted.includes("manual_live_order"),
+      );
+      this.store.participation.connectionLost(p);
+      for (const person of people)
+        this.store.revokeParticipant(
+          person.platform,
+          person.broadcaster,
+          person.author,
+        );
+    }
     this.states[p].state = s;
     if (s === "ended" && previous !== "ended") this.onBroadcastEnded?.();
   }
@@ -88,20 +105,47 @@ export class Supervisor {
       this.demoTimer = setInterval(tick, 4000);
       return;
     }
-    if (this.config.youtube.enabled)
+    if (this.store.participation) {
+      for (const platform of ["youtube", "chzzk", "soop"]) {
+        if (
+          !this.config.privacy.approvals.some(
+            (a) =>
+              a.platform === platform &&
+              this.store.participation!.available(platform, a.broadcaster),
+          )
+        )
+          this.status(platform, "privacy_blocked");
+      }
+    }
+    if (
+      this.config.youtube.enabled &&
+      (!this.store.participation ||
+        this.states.youtube.state !== "privacy_blocked")
+    )
       this.launch("youtube", (signal) =>
         runYoutube(this.config.youtube, this.store, signal, (s) =>
           this.status("youtube", s),
         ),
       );
-    if (this.config.chzzk.enabled)
+    if (
+      this.config.chzzk.enabled &&
+      (!this.store.participation ||
+        this.states.chzzk.state !== "privacy_blocked")
+    )
       this.launch("chzzk", (signal) => this.chzzk(signal));
-    if (this.config.soop.mode === "official")
+    if (
+      this.config.soop.mode === "official" &&
+      (!this.store.participation ||
+        this.states.soop.state !== "privacy_blocked")
+    )
       this.status(
         "soop",
         this.config.soop.streamerId ? "awaiting_browser" : "config_required",
       );
-    else if (this.config.soop.mode === "experimental_library") {
+    else if (
+      this.config.soop.mode === "experimental_library" &&
+      !this.store.participation
+    ) {
       if (!this.config.soop.experimentalConsent)
         this.status("soop", "needs_approval");
       else if (!this.config.soop.streamerId)
@@ -187,6 +231,14 @@ export class Supervisor {
                 ) {
                   if (typeof e.data.channelId !== "string" || !e.data.channelId)
                     throw Error("invalid_subscription");
+                  if (
+                    this.store.participation &&
+                    !this.store.participation.available(
+                      "chzzk",
+                      e.data.channelId,
+                    )
+                  )
+                    throw Error("permission_blocked");
                   subscribedChannel = e.data.channelId;
                   subscribed = true;
                   clearTimeout(timeout);

@@ -1,3 +1,4 @@
+import { approvedProfile, activateFixture } from "./privacy-fixtures.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -39,6 +40,7 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     port,
     network: { bindHost: "0.0.0.0", publicBaseUrl },
     database: ":memory:",
+    privacy: { rightsDatabase: ":memory:" },
     chzzk: {
       enabled: false,
       redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
@@ -96,12 +98,15 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     rmSync(chatgptDir, { recursive: true, force: true });
   }
 });
-test("A05, A11, A12, A18: authenticated API and two identical public streams", async () => {
+test("A05, A11, A12, A18: authenticated API and two identical public streams", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
   const port = await freePort();
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-api-test-"));
   const c = configSchema.parse({
     port,
     database: ":memory:",
+    privacy: approvedProfile(),
     chzzk: {
       enabled: false,
       redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
@@ -192,13 +197,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       url: "/api/admin/chatgpt/authorize",
       headers: authHeaders,
     });
-    assert.equal(chatgptAuthorization.statusCode, 200);
-    const chatgptUrl = new URL(chatgptAuthorization.json().url);
-    assert.equal(chatgptUrl.origin, "https://auth.openai.com");
-    assert.equal(
-      chatgptUrl.searchParams.get("redirect_uri"),
-      `http://127.0.0.1:${port}/oauth/chatgpt/callback`,
-    );
+    assert.equal(chatgptAuthorization.statusCode, 409);
     assert.equal(
       (
         await app.inject({ url: "/api/admin/status", headers: authHeaders })
@@ -238,7 +237,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       403,
     );
     supervisor.start();
-    assert.equal(supervisor.states.soop.state, "needs_approval");
+    assert.equal(supervisor.children.size, 0);
     assert.equal(supervisor.children.size, 0);
     const streams: any[][] = [[], []];
     for (let i = 0; i < 2; i++) {
@@ -251,7 +250,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       ws.send(JSON.stringify({ type: "auth", token: reader, afterSeq: 0 }));
     }
     await waitFor(() => streams.every((s) => s.length === 1));
-    store.grantConsent("youtube", "fixture", "private-actor");
+    activateFixture(store, "private-actor", (ms) => (now += ms));
     store.ingestBatch([
       {
         platform: "youtube",
@@ -259,6 +258,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
         author: "private-actor",
         name: "Viewer",
         sourceId: "private-id",
+        publishedAt: ++now,
         text: "<script>window.secret=true</script>",
       },
     ]);

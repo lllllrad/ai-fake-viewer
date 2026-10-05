@@ -436,6 +436,7 @@ export class Scheduler {
       ? `${personaRuntime.brief.topic}. ${personaRuntime.brief.audience_intent}. ${personaRuntime.brief.public_context}`
       : c.description;
     let input: ModelInput = {
+      privacyRevision: this.store.participation?.revision,
       frames,
       transcripts,
       newTranscripts,

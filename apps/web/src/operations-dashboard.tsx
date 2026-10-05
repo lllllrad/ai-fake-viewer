@@ -70,12 +70,17 @@ export function OperationsDashboard({
   };
   const captureHealth: Health = stale
     ? unknown
-    : freshFrame
-      ? { label: "정상" }
-      : {
-          label: "확인 필요",
-          hint: "송출 화면이 들어오는지 확인해 주세요.",
-        };
+    : status.privacy?.textOnly
+      ? {
+          label: "사용 안 함",
+          hint: "현재 운영 프로필은 동의된 채팅만 사용합니다.",
+        }
+      : freshFrame
+        ? { label: "정상" }
+        : {
+            label: "확인 필요",
+            hint: "송출 화면이 들어오는지 확인해 주세요.",
+          };
   const audioHealth = stale ? unknown : inputHealth(status.audio.state);
   const platforms = ["youtube", "chzzk", "soop"] as const;
   const platformNames = { youtube: "유튜브", chzzk: "치지직", soop: "SOOP" };
@@ -91,6 +96,7 @@ export function OperationsDashboard({
   const targets: Record<string, string> = {
     capture: "program-details",
     audio: "audio-details",
+    privacy: "privacy-panel",
     model: "ai-details",
     receiver: "connection-details",
   };
@@ -192,7 +198,9 @@ export function OperationsDashboard({
               <p>
                 {stale
                   ? "최신 상태를 확인할 수 없습니다"
-                  : "송출 화면을 기다리고 있습니다"}
+                  : status.privacy?.textOnly
+                    ? "영상 입력을 사용하지 않습니다"
+                    : "송출 화면을 기다리고 있습니다"}
               </p>
             )}
           </div>
@@ -232,7 +240,9 @@ export function OperationsDashboard({
           <p className="transcript-excerpt">
             {stale
               ? "최신 자막 상태를 확인할 수 없습니다"
-              : status.audio.latestText || "아직 인식된 음성이 없습니다"}
+              : status.privacy?.textOnly
+                ? "음성 입력을 사용하지 않습니다"
+                : status.audio.latestText || "아직 인식된 음성이 없습니다"}
           </p>
           {audioHealth.hint && <p>{audioHealth.hint}</p>}
           <a href="#audio-details">음성 입력 및 자막 기록</a>
@@ -280,8 +290,11 @@ export function OperationsDashboard({
         )}
       </div>
       <p className="hint">
-        입력 시작은 영상·음성·설정된 채팅 수신기를 준비합니다. 입력이 준비되면
-        AI 생성을 켜세요. AI만 끄면 입력 수집은 계속됩니다.
+        {status.demo
+          ? "입력 시작은 인공 영상·채팅을 준비합니다."
+          : "입력 시작은 승인된 채팅 수신기를 준비합니다. 현재 프로필에서는 영상·음성을 사용하지 않습니다."}{" "}
+        준비 상태를 확인한 뒤 AI 생성을 켜세요. AI만 끄면 채팅 수신은
+        계속됩니다.
       </p>
       {!status.demo && (
         <details className="operations-notices">

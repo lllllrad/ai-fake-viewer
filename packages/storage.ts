@@ -1,3 +1,4 @@
+import type { Participation } from "./participation.ts";
 import { summarizeChat, summaryWindowMs } from "./chat-summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID, createHash } from "node:crypto";
@@ -14,15 +15,19 @@ export class Store extends EventEmitter {
   db: DatabaseSync;
   sessionId: string;
   readerCollisionNames = new Set<string>();
-  constructor(path: string) {
+  constructor(
+    path: string,
+    public participation?: Participation,
+  ) {
     super();
+    if (this.participation) path = ":memory:";
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
     if (path !== ":memory:" && process.platform !== "win32")
       chmodSync(path, 0o600);
     this.db
-      .exec(`PRAGMA journal_mode=WAL; PRAGMA secure_delete=ON; PRAGMA busy_timeout=5000;
+      .exec(`PRAGMA temp_store=MEMORY; PRAGMA journal_mode=WAL; PRAGMA secure_delete=ON; PRAGMA busy_timeout=5000;
  CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
@@ -54,6 +59,14 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS persona_reviews(id TEXT PRIMARY KEY,evaluation_id TEXT NOT NULL,version_id TEXT NOT NULL,reviewer TEXT NOT NULL,decision TEXT NOT NULL,created INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS persona_audit(id INTEGER PRIMARY KEY,session_id TEXT,at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,prior_revision INTEGER,new_revision INTEGER,reason TEXT);
  PRAGMA user_version=2;`);
+    if (
+      !(this.db.prepare("PRAGMA table_info(messages)").all() as any[]).some(
+        (c) => c.name === "consent_epoch",
+      )
+    )
+      this.db.exec(
+        "ALTER TABLE messages ADD COLUMN consent_epoch INTEGER NOT NULL DEFAULT 0",
+      );
     const castColumns = (
       this.db.prepare("PRAGMA table_info(persona_cast)").all() as any[]
     ).map((c) => c.name);
@@ -135,10 +148,13 @@ export class Store extends EventEmitter {
       this.db
         .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
         .run(this.sessionId, Date.now());
+    if (this.participation) this.participation.sessionId = this.sessionId;
     if (this.originsRevealed())
       this.readerCollisionNames = this.collisionNameSet();
   }
   grantConsent(platform: string, channel: string, author: string) {
+    if (this.participation)
+      throw Error("참여자의 단계별 의사표시가 필요합니다.");
     if (platform === "experiment") return;
     this.db
       .prepare(
@@ -177,6 +193,24 @@ export class Store extends EventEmitter {
       if (this.closed()) return;
       for (const raw of items) {
         const m = incomingSchema.parse(raw);
+        let consentEpoch = 0;
+        if (this.participation && m.platform !== "experiment") {
+          const result = this.participation.handle(m);
+          consentEpoch = result.epoch;
+          if (result.withdraw) {
+            const rows = this.db
+              .prepare(
+                "SELECT m.id FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform=? AND m.channel=? AND a.author=?",
+              )
+              .all(this.sessionId, m.platform, m.channel, m.author) as any[];
+            this.eraseChatContext(
+              rows.map((r) => r.id),
+              seqs,
+            );
+            invalidated = true;
+          }
+          if (!result.allow) continue;
+        }
         const command = m.text.trim().toLocaleLowerCase();
         if (
           m.platform !== "experiment" &&
@@ -231,6 +265,7 @@ export class Store extends EventEmitter {
           continue;
         }
         if (
+          !this.participation &&
           m.platform !== "experiment" &&
           !(
             this.db
@@ -272,7 +307,7 @@ export class Store extends EventEmitter {
           const seq = this.event("message.added", id);
           this.db
             .prepare(
-              "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,seq) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+              "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,seq,consent_epoch) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             )
             .run(
               id,
@@ -286,6 +321,7 @@ export class Store extends EventEmitter {
               m.text,
               m.replyToId,
               seq,
+              consentEpoch,
             );
           seqs.push(seq);
         }
@@ -363,10 +399,21 @@ export class Store extends EventEmitter {
   publicMessage(id: string): PublicMessage | null {
     const m = this.db
       .prepare(
-        "SELECT m.*,a.name FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=? AND m.hidden=0",
+        "SELECT m.*,a.name,a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=? AND m.hidden=0",
       )
       .get(id) as any;
-    if (!m) return null;
+    if (
+      !m ||
+      (this.participation &&
+        m.platform !== "experiment" &&
+        !this.participation.allowed(
+          m.platform,
+          m.channel,
+          m.author,
+          m.consent_epoch,
+        ))
+    )
+      return null;
     return {
       id: m.id,
       sessionId: m.session,
@@ -543,7 +590,34 @@ export class Store extends EventEmitter {
       actor: string;
       text: string;
     }>;
-    const summary = summarizeChat(rows);
+    let summary = summarizeChat(rows);
+    if (this.participation) {
+      const current = (
+        this.snapshot().messages.filter(Boolean) as PublicMessage[]
+      ).filter(
+        (m) =>
+          m.attribution !== "experiment" &&
+          m.displayTime > now - summaryWindowMs &&
+          m.seq > (prior?.cutoff ?? 0),
+      );
+      summary = summarizeChat(
+        current.map((m) => ({ actor: m.actorId, text: m.text })),
+      );
+      const old = this.db
+        .prepare("SELECT payload FROM chat_context_summaries WHERE session=?")
+        .get(this.sessionId) as any;
+      if (old) {
+        const approved = JSON.parse(old.payload);
+        if (approved.state === "available")
+          summary = {
+            ...approved,
+            topics: [...new Set([...approved.topics, ...summary.topics])],
+            atmosphere: [
+              ...new Set([...approved.atmosphere, ...summary.atmosphere]),
+            ],
+          };
+      }
+    }
     this.db
       .prepare(
         "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires",
@@ -609,6 +683,29 @@ export class Store extends EventEmitter {
         )
         .run(id, id);
     }
+    if (this.participation) {
+      this.db.exec(
+        "DELETE FROM actors_private WHERE id NOT IN (SELECT actor FROM messages WHERE hidden=0)",
+      );
+      const remaining = new Set(
+        (this.db.prepare("SELECT id FROM actors_private").all() as any[]).map(
+          (a) => a.id,
+        ),
+      );
+      for (const event of this.db
+        .prepare(
+          "SELECT seq,payload FROM events WHERE type='identity.revealed'",
+        )
+        .all() as any[]) {
+        const identities = JSON.parse(event.payload).filter((identity: any) =>
+          remaining.has(identity.actorId),
+        );
+        this.db
+          .prepare("UPDATE events SET payload=? WHERE seq=?")
+          .run(JSON.stringify(identities), event.seq);
+      }
+      this.readerCollisionNames = this.collisionNameSet();
+    }
     // In-flight models may have used any earlier context, not just cited IDs.
     this.db
       .prepare(
@@ -632,6 +729,22 @@ export class Store extends EventEmitter {
       this.audit("message.hidden");
     });
     if (seqs.length) this.emit("context_invalidated");
+    for (const seq of seqs) this.emit("event", this.publicEvent(seq));
+  }
+  revokeParticipant(platform: string, channel: string, author: string) {
+    const seqs: number[] = [];
+    this.transaction(() => {
+      const rows = this.db
+        .prepare(
+          "SELECT m.id FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform=? AND m.channel=? AND a.author=?",
+        )
+        .all(this.sessionId, platform, channel, author) as any[];
+      this.eraseChatContext(
+        rows.map((r) => r.id),
+        seqs,
+      );
+    });
+    this.emit("context_invalidated");
     for (const seq of seqs) this.emit("event", this.publicEvent(seq));
   }
   context(allowed: string[]) {
@@ -734,6 +847,15 @@ export class Store extends EventEmitter {
     return rows.length;
   }
   closeSession() {
+    if (this.participation) {
+      this.participation.end();
+      this.deleteAll();
+      this.db
+        .prepare("UPDATE sessions SET closed=? WHERE id=?")
+        .run(Date.now(), this.sessionId);
+      this.emit("reset");
+      return;
+    }
     if (this.closed()) return;
     this.setAiDesiredRunning(false);
     this.db
@@ -758,14 +880,20 @@ export class Store extends EventEmitter {
     this.db
       .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
       .run(this.sessionId, Date.now());
+    if (this.participation) {
+      this.participation.sessionId = this.sessionId;
+      this.participation.ended = false;
+      this.participation.startedAt = Date.now();
+    }
     this.emit("reset");
   }
   purge(before: number) {
-    this.db
-      .prepare(
-        "DELETE FROM chat_context_summaries WHERE expires<? OR session IN (SELECT id FROM sessions WHERE closed<?)",
-      )
-      .run(Date.now(), before);
+    if (!this.participation)
+      this.db
+        .prepare(
+          "DELETE FROM chat_context_summaries WHERE expires<? OR session IN (SELECT id FROM sessions WHERE closed<?)",
+        )
+        .run(Date.now(), before);
     this.db.exec(
       "DELETE FROM ai_message_context WHERE message_id NOT IN (SELECT id FROM messages) OR source_message_id NOT IN (SELECT id FROM messages)",
     );
@@ -900,10 +1028,17 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   deleteAll() {
+    this.readerCollisionNames.clear();
+    this.participation?.participants.clear();
+    if (this.participation) this.participation.revision++;
     this.db.exec(
       "DELETE FROM chat_context_summaries; DELETE FROM ai_message_context; DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
     );
     this.sessionId = randomUUID();
+    if (this.participation) {
+      this.participation.sessionId = this.sessionId;
+      this.participation.startedAt = Date.now();
+    }
     this.db
       .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
       .run(this.sessionId, Date.now());
@@ -911,7 +1046,7 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
-    if (this.closed()) return false;
+    if (this.participation || this.closed()) return false;
     if (
       !Number.isSafeInteger(entry.capturedAt) ||
       !entry.text.trim() ||
@@ -995,6 +1130,7 @@ export class Store extends EventEmitter {
     };
   }
   close() {
+    this.participation?.end();
     this.db.close();
   }
   personaRuntime() {

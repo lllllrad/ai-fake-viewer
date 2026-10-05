@@ -339,9 +339,10 @@ test("transcript log persists across restart and follows retention and deletion"
   }
 });
 
-test("transcript export is available only to the local administrator", async () => {
+test("live privacy profile blocks transcript storage and export even for administrators", async () => {
   const config = configSchema.parse({
     database: ":memory:",
+    privacy: { rightsDatabase: ":memory:" },
     ai: { visualMode: "on_request" },
   });
   const adminToken = "a".repeat(32);
@@ -375,12 +376,8 @@ test("transcript export is available only to the local administrator", async () 
         authorization: `Bearer ${adminToken}`,
       },
     });
-    assert.equal(allowed.statusCode, 200);
-    assert.match(
-      allowed.headers["content-type"] as string,
-      /application\/x-ndjson/,
-    );
-    assert.equal(JSON.parse(allowed.body.trim()).text, "private speech");
+    assert.equal(allowed.statusCode, 409);
+    assert.equal(store.transcriptCount(), 0);
     assert.equal(store.snapshot().messages.length, 0);
     const blocked = await app.inject({
       method: "POST",

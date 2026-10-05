@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
+import { checkPrivacyUI } from "./privacy-browser-check.ts";
 const port = 33219;
 const chatgptDir = mkdtempSync(join(tmpdir(), "mixed-chat-browser-"));
 const admin = "a".repeat(64),
@@ -272,7 +273,7 @@ try {
   await overlay
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
     .waitFor();
-  assert.equal(await adminPage.getByText("AWAITING REVIEW").count(), 0);
+  await expect(adminPage.getByText("AWAITING REVIEW")).toHaveCount(0);
   for (const page of [readerPage, overlay]) {
     assert.equal(await page.locator(".message .badge").count(), 0);
     for (const name of await page
@@ -348,6 +349,7 @@ try {
     path: "test-results/admin-mobile.png",
     fullPage: true,
   });
+  await checkPrivacyUI(browser, chatgptDir);
   assert.deepEqual(errors, []);
   const sorted = timing.sort((a, b) => a - b);
   const report = {
@@ -364,6 +366,7 @@ try {
       "reader",
       "overlay",
       "admin-mobile",
+      "privacy-admin",
     ],
   };
   writeFileSync(

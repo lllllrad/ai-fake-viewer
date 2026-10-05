@@ -25,6 +25,11 @@ export function inputHealth(state?: string): Health {
       label: "준비 중",
       hint: "연결을 준비하고 있습니다. 잠시 기다려 주세요.",
     };
+  if (kind === "privacy_blocked")
+    return {
+      label: "사용 안 함",
+      hint: "현재 운영 프로필에서 이 입력 경로를 사용하지 않습니다.",
+    };
   if (kind === "disabled") return { label: "사용 안 함" };
   if (kind === "stopped")
     return { label: "중지됨", hint: "사용하려면 입력을 시작하세요." };

@@ -144,6 +144,7 @@ export async function runYoutube(
     return;
   }
   let chat: string;
+  let broadcaster: string | undefined;
   let selectedVideo = config.video.trim();
   try {
     if (!selectedVideo && config.channelId?.trim()) {
@@ -173,10 +174,25 @@ export async function runYoutube(
     }
     const b = await googleJson(
       "videos",
-      { part: "liveStreamingDetails", id: videoId(selectedVideo) },
+      {
+        part: store.participation
+          ? "liveStreamingDetails,snippet"
+          : "liveStreamingDetails",
+        id: videoId(selectedVideo),
+      },
       signal,
     );
     chat = b.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
+    if (store.participation) {
+      broadcaster = b.items?.[0]?.snippet?.channelId;
+      if (
+        !broadcaster ||
+        !store.participation.available("youtube", broadcaster)
+      ) {
+        status("privacy_blocked");
+        return;
+      }
+    }
     if (!chat) {
       status("waiting_live");
       return;
@@ -206,7 +222,10 @@ export async function runYoutube(
         if (signal.aborted) break;
         store.ingestBatch(
           (b.items ?? [])
-            .map((i: any) => normalizeYoutube(i, chat))
+            .map((i: any) => {
+              const m = normalizeYoutube(i, chat);
+              return m && broadcaster ? { ...m, channel: broadcaster } : m;
+            })
             .filter(Boolean),
           { key, value: b.nextPageToken ?? "" },
         );
@@ -246,7 +265,10 @@ export async function runYoutube(
             if (signal.aborted) break;
             store.ingestBatch(
               (b.items ?? [])
-                .map((i: any) => normalizeYoutube(i, chat))
+                .map((i: any) => {
+                  const m = normalizeYoutube(i, chat);
+                  return m && broadcaster ? { ...m, channel: broadcaster } : m;
+                })
                 .filter(Boolean),
               { key, value: b.next_page_token ?? "" },
             );

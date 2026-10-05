@@ -10,8 +10,9 @@ try {
     config.database = "data/demo.sqlite";
     config.ai.visualMode = "continuous";
   }
-  const { app, store, supervisor, capture, transcriber, resumeAiIfRequested } =
-    await createApp(config, {
+  const { app, store, supervisor, capture, transcriber } = await createApp(
+    config,
+    {
       startInputs: false,
       demo,
       adminToken: process.env.ADMIN_TOKEN ?? "",
@@ -30,7 +31,8 @@ try {
         renameSync(".env.tmp", ".env");
         process.env.READER_TOKEN = token;
       },
-    });
+    },
+  );
   await app
     .listen({ host: config.network.bindHost, port: config.port })
     .catch(async (error) => {
@@ -41,17 +43,9 @@ try {
     supervisor.start();
     capture.start();
     transcriber.start();
-    const restore = setInterval(() => {
-      if (!store.aiDesiredRunning() && !store.personaRuntime()?.armed) {
-        clearInterval(restore);
-        return;
-      }
-      if (resumeAiIfRequested()) clearInterval(restore);
-    }, 1000);
-    restore.unref();
   }
   console.log(
-    `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — credentials and Program input required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
+    `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — reviewed privacy profile and staged viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
   );
   let stopping = false;
   const stop = async () => {

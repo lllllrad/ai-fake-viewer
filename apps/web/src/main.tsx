@@ -1,3 +1,4 @@
+import { PrivacyPanel } from "./privacy-panel";
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PublicMessage } from "../../../packages/contracts";
@@ -157,8 +158,9 @@ function PublicChat() {
         {consentNoticeAt !== null && (
           <aside className="disclosure consent-notice" role="status">
             개인정보 처리에 동의한 시청자의 채팅만 화면에 표시됩니다. 참여하려면
-            채팅에 <strong>!동의</strong>를 입력해 주세요. 동의는 현재 방송
-            세션에서 유효하며, 철회하려면 <strong>!철회</strong>를 입력하세요.
+            채팅에 <strong>!동의</strong>를 입력하고 안내된 각 동의 단계를
+            완료해 주세요. 동의는 현재 방송 세션에서 유효하며, 철회하려면{" "}
+            <strong>!철회</strong>를 입력하세요.
           </aside>
         )}
         {messages.length === 0 && (
@@ -677,12 +679,13 @@ function Admin() {
               })
             }
           />
+          {!status.demo && <PrivacyPanel />}
           <section className="card" aria-label="익명 채팅 요약">
             <h2>채팅 분위기·주제 요약</h2>
             <p className="hint">
-              최근 2분의 동의한 채팅에서 여러 참여자에게 공통으로 나타난 표현만
-              요약합니다. 원문·닉네임은 포함하지 않으며, 동의 철회 시 다시
-              계산합니다.
+              현재 세션의 동의한 채팅에서 여러 참여자에게 공통으로 나타난 표현만
+              요약합니다. 원문·닉네임은 포함하지 않습니다. 철회 전에 승인된 익명
+              범주만 현재 세션 동안 유지하고 종료 시 삭제합니다.
             </p>
             {status.chatSummary?.state === "available" ? (
               <>
@@ -766,12 +769,7 @@ function Admin() {
                   Registered callback:{" "}
                   {status.setup?.chzzk?.redirectUri ?? "not available"}
                 </p>
-                <p>
-                  Groq speech:{" "}
-                  {status.setup?.audio?.credentialsConfigured
-                    ? "configured"
-                    : "add GROQ_API_KEY"}
-                </p>
+                <p>음성·영상 입력은 현재 운영 프로필에서 사용하지 않습니다.</p>
                 <p>
                   AI:{" "}
                   {status.setup?.ai?.connected && status.setup.ai.modelSelected
@@ -923,7 +921,10 @@ function Admin() {
                   automatically.
                 </p>
                 <div className="toolbar">
-                  <button onClick={() => void action("capture/start")}>
+                  <button
+                    disabled={!status.demo}
+                    onClick={() => void action("capture/start")}
+                  >
                     Start capture
                   </button>
                   <button
@@ -947,25 +948,10 @@ function Admin() {
                   {status.audio.latestText || "No recent speech transcript"}
                 </p>
                 <p className="hint">
-                  Recent transcripts enter AI context automatically. Successful
-                  transcripts are logged privately for up to{" "}
-                  {status.retentionDays}
-                  days; raw audio is not saved. Near-silent chunks are skipped.
-                  Configure the RTMP audio URL, Groq API key and audio review
-                  locally.
+                  현재 운영 프로필에서는 미동의 채팅이 섞일 수 있는 음성·전사
+                  경로를 사용하지 않습니다. 전사문 파일 내보내기도 제공하지
+                  않습니다.
                 </p>
-                <p>
-                  {status.audio.loggedCount} retained transcripts · input
-                  language: {status.audio.language}
-                </p>
-                <div className="toolbar">
-                  <a
-                    href="/api/admin/transcripts/export"
-                    download="transcripts.jsonl"
-                  >
-                    Download transcript log (JSONL)
-                  </a>
-                </div>
                 {status.audio.history.length > 0 && (
                   <ol>
                     {status.audio.history.map((entry: any) => (
@@ -981,7 +967,10 @@ function Admin() {
                   </ol>
                 )}
                 <div className="toolbar">
-                  <button onClick={() => void action("audio/start")}>
+                  <button
+                    disabled={!status.demo}
+                    onClick={() => void action("audio/start")}
+                  >
                     Start audio
                   </button>
                   <button
@@ -1081,7 +1070,8 @@ function Admin() {
                       ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
                   </p>
                 )}
-                {status.ai.provider === "chatgpt_subscription" &&
+                {status.demo &&
+                  status.ai.provider === "chatgpt_subscription" &&
                   !status.demo && (
                     <div className="pending">
                       <strong>ChatGPT plan connection</strong>
@@ -1194,9 +1184,9 @@ function Admin() {
                   )}
                 </div>
                 <p className="hint">
-                  AI는 직접 켜야 생성되며 서버 재시작 후 이전 실행 상태가
-                  복구됩니다. 방송 종료 시 자동 중지됩니다. 필수 입력을 모두
-                  켜고 영상이 수신되면 AI를 시작하세요.
+                  AI는 직접 켜야 생성됩니다. 서버 재시작 후 이전 참여·실행
+                  상태를 복구하지 않습니다. 방송 종료 시 세션 정보를 삭제합니다.
+                  운영 프로필과 모델 준비 상태를 확인한 뒤 시작하세요.
                 </p>
                 <p className="hint">
                   {status.ai.manualApproval
@@ -1206,27 +1196,10 @@ function Admin() {
                 <details>
                   <summary>AI inputs, tools and review</summary>
                   <p>
-                    Audio arrives as {status.ai.input.audioChunkSeconds}s chunks
-                    ({status.ai.input.audioLanguage}); transcription text enters
-                    AI, raw audio does not. Each decision gets{" "}
-                    {status.ai.input.last.newTranscripts} new /{" "}
-                    {status.ai.input.last.contextTranscripts} recent transcript
-                    chunks and {status.ai.input.last.newMessages} new /{" "}
-                    {status.ai.input.last.contextMessages} recent permitted chat
-                    messages from a {status.ai.input.contextWindowSeconds}s
-                    window.
-                  </p>
-                  <p>
-                    Visual mode: {status.ai.input.visualMode};{" "}
-                    {status.ai.input.last.frames} frames in the last decision.
-                    In on-request mode the first call has no image; an inspect
-                    decision lets the app send a fresh video frame in a
-                    follow-up call. Jev sees text only.
-                  </p>
-                  <p>
-                    동의한 시청자의 표시 가능한 채팅과 최근 자막, 공개 방송
-                    설명, 페르소나 정의를 AI 맥락에 사용합니다. 철회·숨김 처리된
-                    메시지는 이후 맥락에서 제외됩니다.
+                    현재 동의가 유효한 채팅, 공개 방송 설명, 자동 페르소나
+                    정의와 승인된 익명 범주를 사용합니다. 라이브에서는
+                    화면·음성을 전송하지 않습니다. 철회 시 원문·식별 가능한 파생
+                    문맥을 지우고 진행 중 응답도 취소합니다.
                   </p>
                   <p>
                     Available model tools: none. The model cannot call tools,
@@ -1265,16 +1238,14 @@ function Admin() {
                 <details>
                   <summary>Data processing review</summary>
                   <p>
-                    Input source: all configured platform receivers and live
-                    speech transcription.
+                    현재 운영 프로필은 단계별 동의가 완료된 채팅과 검증된 익명
+                    요약만 OpenAI API에 전달합니다. 영상·음성·다른 제공자는
+                    사용하지 않습니다.
                   </p>
                   <p>
-                    AI를 꺼도 채팅 수집과 음성 전사는 계속될 수 있습니다. 모든
-                    수집을 중지하려면 입력과 AI 모두 중지를 사용하세요.
-                  </p>
-                  <p>
-                    음성 전사 시 오디오는 Groq로 전송되며 로컬에는 저장하지
-                    않습니다. AI 화면 입력에는 최근 수신한 영상을 사용합니다.
+                    응답 저장은 요청하지 않지만 제공자 측 모든 로그가 삭제된다는
+                    의미는 아닙니다. 실제 보존 조건은 운영 프로필의 확인 내용을
+                    따릅니다.
                   </p>
                 </details>
               </section>
@@ -1352,9 +1323,9 @@ function Admin() {
               </button>
             </div>
             <p className="hint">
-              Retention: up to {status.retentionDays} days for chat and
-              transcripts. Frames, raw audio and prompts are not written to
-              disk. No platform chat sending is provided.
+              메모리 전용: 세션 종료·재시작 시 채팅과 전사문을 삭제합니다.
+              Frames, raw audio and prompts are not written to disk. No platform
+              chat sending is provided.
             </p>
           </section>
         </>

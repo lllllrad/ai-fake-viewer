@@ -29,6 +29,7 @@ export function wavFromPcm(pcm: Buffer) {
 
 const response = z.object({ text: z.string().max(4000) });
 export class Transcriber {
+  allowProcessing: () => boolean = () => true;
   state = "stopped";
   child?: ChildProcess;
   retryTimer?: NodeJS.Timeout;
@@ -44,6 +45,10 @@ export class Transcriber {
     public onTranscript?: (entry: Transcript) => boolean,
   ) {}
   start() {
+    if (!this.allowProcessing()) {
+      this.state = "privacy_blocked";
+      return;
+    }
     if (this.child) return;
     if (!this.config.url) {
       this.state = "config_required";
@@ -97,7 +102,8 @@ export class Transcriber {
     this.child.send({ type: "start", config: this.config });
   }
   async transcribe(pcm: Buffer, capturedAt = Date.now()) {
-    if (this.busy || this.state === "stopped") return;
+    if (!this.allowProcessing() || this.busy || this.state === "stopped")
+      return;
     if (this.requests >= this.config.maxRequests) {
       this.state = "budget_exhausted";
       this.child?.kill();

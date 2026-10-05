@@ -29,6 +29,7 @@ export function workerEnv() {
   ) as NodeJS.ProcessEnv;
 }
 export class Capture {
+  allowProcessing: () => boolean = () => true;
   frames: Frame[] = [];
   state = "stopped";
   child?: ChildProcess;
@@ -43,6 +44,10 @@ export class Capture {
     public demo = false,
   ) {}
   start() {
+    if (!this.allowProcessing()) {
+      this.state = "privacy_blocked";
+      return;
+    }
     if (this.child || this.timer) return;
     clearTimeout(this.retryTimer);
     this.frames = [];
@@ -117,6 +122,7 @@ export class Capture {
     },
     source: Frame["source"],
   ) {
+    if (!this.allowProcessing()) return;
     this.failures = 0;
     this.lastError = "";
     const dims = `${m.sourceWidth ?? m.width}x${m.sourceHeight ?? m.height}`;

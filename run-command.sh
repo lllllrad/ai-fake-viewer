@@ -1,6 +1,8 @@
 #!/bin/sh
 # Run repository tools with mise and the optional local Linux browser bundle.
 set -eu
+# Chat is memory-only; do not allow this launcher to produce core dumps.
+ulimit -c 0 2>/dev/null || true
 
 if [ "$#" -eq 0 ] || [ "${1-}" = "--help" ]; then
   cat <<'USAGE'

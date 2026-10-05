@@ -1,3 +1,4 @@
+import { privacyProfileSchema } from "./privacy-profile.ts";
 import { z } from "zod";
 import { readFileSync, existsSync } from "node:fs";
 import { parse } from "yaml";
@@ -32,6 +33,7 @@ export const configSchema = z
       })
       .strict()
       .default({ bindHost: "127.0.0.1", publicBaseUrl: "" }),
+    privacy: privacyProfileSchema.default(() => privacyProfileSchema.parse({})),
     database: z.string().default("data/chat.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
     youtube: z
@@ -140,7 +142,7 @@ export const configSchema = z
       .object({
         provider: z
           .enum(["chatgpt_subscription", "openai_api"])
-          .default("chatgpt_subscription"),
+          .default("openai_api"),
         gate: gateSchema.default(() => gateSchema.parse({})),
         pacing: z
           .object({
@@ -192,7 +194,7 @@ export const configSchema = z
       })
       .strict()
       .default({
-        provider: "chatgpt_subscription",
+        provider: "openai_api",
         gate: gateSchema.parse({}),
         pacing: { minSeconds: 35, maxSeconds: 95 },
         contextWindowSeconds: 120,

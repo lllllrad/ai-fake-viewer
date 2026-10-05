@@ -1,3 +1,10 @@
+import { Participation } from "../../packages/participation.ts";
+import {
+  PrivacyActionError,
+  privacyProfileSchema,
+  profileIssues,
+} from "../../packages/privacy-profile.ts";
+import { RightsQueue, rightsIntakeSchema } from "../../packages/rights.ts";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
@@ -15,7 +22,6 @@ import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
 import {
   mockModel,
   openaiModel,
-  chatgptModel,
   limitModelConcurrency,
 } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
@@ -23,11 +29,7 @@ import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
 import { PersonaService } from "../../packages/persona/service.ts";
-import {
-  chatgptPersonaGenerator,
-  demoPersonaGenerator,
-  openaiPersonaGenerator,
-} from "../../packages/persona/generator.ts";
+import { demoPersonaGenerator } from "../../packages/persona/generator.ts";
 import { hash as canonicalHash } from "../../packages/persona/contracts.ts";
 import { PersonaError } from "../../packages/persona/contracts.ts";
 export function equal(a: unknown, b: string) {
@@ -58,28 +60,121 @@ export async function createApp(
   )
     throw Error("Generate independent credentials using npm run setup");
   const app = Fastify({ logger: false, bodyLimit: 65536 });
-  const store = new Store(config.database);
+  config = structuredClone(config);
+  const participation = opts.demo
+    ? undefined
+    : new Participation(config.privacy, "");
+  const store = new Store(":memory:", participation);
+  const rights = new RightsQueue(
+    opts.demo ? ":memory:" : config.privacy.rightsDatabase,
+  );
+  const withdrawalTasks = new Map<string, string>();
+  const pendingRights = new Map<string, any>();
+  const flushRights = () => {
+    for (const [key, p] of pendingRights) {
+      try {
+        const task = rights.create(
+          {
+            platform: p.platform,
+            account: p.author,
+            session: p.session,
+            broadcaster: p.broadcaster,
+          },
+          p.requestIds,
+          true,
+        );
+        withdrawalTasks.set(key, task.id);
+        pendingRights.delete(key);
+      } catch {
+        /* Keep minimal follow-up work visible for retry, without blocking withdrawal. */
+      }
+    }
+  };
+  if (participation)
+    participation.onWithdraw = (p) => {
+      const key = `${p.id}:${p.epoch}`;
+      if ((p.published || p.requestIds.length) && !withdrawalTasks.has(key))
+        pendingRights.set(key, { ...p, session: store.sessionId });
+    };
+  store.on("context_invalidated", flushRights);
+  if (!opts.demo) config.ai.visualMode = "on_request";
+  const privacyReady = () =>
+    !participation ||
+    (!profileIssues(config.privacy).length &&
+      config.ai.provider === "openai_api" &&
+      !config.ai.gate.enabled &&
+      config.privacy.processing.model === process.env.OPENAI_MODEL);
+
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.recordTranscript(entry),
   );
+  if (!opts.demo) {
+    capture.allowProcessing = () => false;
+    transcriber.allowProcessing = () => false;
+    capture.state = "privacy_blocked";
+    transcriber.state = "privacy_blocked";
+  }
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
   );
+  const audiences = new WeakMap<object, any[]>();
   const personaModel = limitModelConcurrency(
     opts.demo
       ? mockModel
-      : config.ai.provider === "chatgpt_subscription"
-        ? chatgptModel(config.ai, chatgpt)
-        : openaiModel(config.ai),
+      : openaiModel(config.ai, {
+          endpoint: () => config.privacy.processing.endpoint,
+          model: () => config.privacy.processing.model,
+          authorize: (input) => {
+            if (
+              !privacyReady() ||
+              input.privacyRevision !== participation!.revision ||
+              input.frames.length ||
+              (input.transcripts?.length ?? 0) > 0 ||
+              input.messages.some((m) => !store.publicMessage(m.id))
+            )
+              throw Error(
+                "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
+              );
+            if (!audiences.has(input))
+              audiences.set(
+                input,
+                [...participation!.participants.values()]
+                  .filter((p) =>
+                    input.messages.some((m) => {
+                      const row = store.db
+                        .prepare(
+                          "SELECT a.author,m.platform,m.channel FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=?",
+                        )
+                        .get(m.id) as any;
+                      return (
+                        row &&
+                        row.author === p.author &&
+                        row.platform === p.platform &&
+                        row.channel === p.broadcaster
+                      );
+                    }),
+                  )
+                  .map((p) => ({ participant: p, epoch: p.epoch })),
+              );
+          },
+          requestId: (id, input) => {
+            for (const audience of audiences.get(input) ?? []) {
+              const p = audience.participant;
+              p.requestIds.push(id);
+              p.requestIds = p.requestIds.slice(-100);
+              const key = `${p.id}:${audience.epoch + 1}`;
+              const taskId = withdrawalTasks.get(key);
+              if (taskId) rights.attachRequest(taskId, id);
+              const pending = pendingRights.get(key);
+              if (pending) pending.requestIds.push(id);
+            }
+          },
+        }),
     2,
   );
-  const personaGenerator = opts.demo
-    ? demoPersonaGenerator()
-    : config.ai.provider === "chatgpt_subscription"
-      ? chatgptPersonaGenerator(chatgpt)
-      : openaiPersonaGenerator(config.ai);
+  const personaGenerator = opts.demo ? demoPersonaGenerator() : undefined;
   const personas = new PersonaService(
     store,
     personaModel,
@@ -94,9 +189,10 @@ export async function createApp(
     personaModel,
     !!opts.demo,
     () =>
-      config.ai.provider === "chatgpt_subscription"
+      privacyReady() &&
+      (config.ai.provider === "chatgpt_subscription"
         ? !!chatgpt.active?.refreshToken && !!chatgpt.active?.model
-        : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
+        : !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL),
     transcriber,
   );
   scheduler.preparePersonas = () => {
@@ -126,14 +222,8 @@ export async function createApp(
   scheduler.readyCheck = () => {
     if (opts.demo) return [];
     const missing: string[] = [];
-    if (!capture.latest() || Date.now() - capture.latest()!.capturedAt > 10000)
-      missing.push("실시간 송출 영상");
-    if (
-      !config.audio.url ||
-      !process.env.GROQ_API_KEY ||
-      !["listening", "receiving"].includes(transcriber.state)
-    )
-      missing.push("실행 중인 오디오 자막 입력");
+    if (!privacyReady())
+      missing.push("운영 프로필·국외 처리·OpenAI API 설정 확인");
     if (!scheduler.providerReady()) missing.push("연결된 AI 모델");
     return missing;
   };
@@ -155,16 +245,21 @@ export async function createApp(
       };
     const checks = [
       {
+        id: "privacy",
+        label: "운영 프로필 및 동의 범위",
+        ready: privacyReady(),
+      },
+      {
         id: "capture",
-        label: "실시간 송출 영상",
-        ready:
-          !!capture.latest() &&
-          Date.now() - capture.latest()!.capturedAt <= 10000,
+        label: "영상 입력 사용 안 함",
+        ready: true,
+        optional: true,
       },
       {
         id: "audio",
-        label: "실행 중인 음성 자막 입력",
-        ready: ["listening", "receiving"].includes(transcriber.state),
+        label: "음성 입력 사용 안 함",
+        ready: true,
+        optional: true,
       },
       {
         id: "receiver",
@@ -189,6 +284,10 @@ export async function createApp(
   supervisor.onBroadcastEnded = () => {
     scheduler.stop("broadcast_ended");
     personas.stopActive("broadcast_ended");
+    capture.stop();
+    transcriber.stop();
+    void supervisor.stop();
+    store.closeSession();
   };
   let soopAuthorizationPendingUntil = 0;
   let readerToken = opts.readerToken;
@@ -295,7 +394,7 @@ export async function createApp(
     reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
       error: validation
         ? "Invalid request fields"
-        : e instanceof AiStartError
+        : e instanceof AiStartError || e instanceof PrivacyActionError
           ? e.message
           : req.url.startsWith("/api/admin/")
             ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
@@ -912,6 +1011,92 @@ export async function createApp(
       );
     return reply.send(Readable.from(store.exportTranscripts()));
   });
+  app.get("/api/admin/privacy", async () => {
+    flushRights();
+    return {
+      pendingFollowups: pendingRights.size,
+      profile: config.privacy,
+      issues: profileIssues(config.privacy),
+      participants: participation
+        ? [...participation.participants.values()].map((p) => ({
+            id: p.id,
+            platform: p.platform,
+            broadcaster: p.broadcaster,
+            account: p.author,
+            state: p.state,
+            age: p.age,
+            stage: p.stage,
+            epoch: p.epoch,
+            observed: p.observed,
+            notice:
+              p.state === "WAITING_CONSENT" ? participation.notice(p.id) : null,
+          }))
+        : [],
+      rights: rights.list(),
+      videos: rights.videos(),
+    };
+  });
+  app.put("/api/admin/privacy/profile", async (req) => {
+    const profile = privacyProfileSchema.parse(req.body);
+    if (profile.rightsDatabase !== config.privacy.rightsDatabase)
+      throw Error("권리행사 저장소 변경은 재시작이 필요합니다.");
+    scheduler.stop("privacy_profile_changed");
+    await supervisor.stop();
+    const prior = participation ? [...participation.participants.values()] : [];
+    participation?.replaceProfile(profile);
+    config.privacy = profile;
+    for (const p of prior)
+      store.revokeParticipant(p.platform, p.broadcaster, p.author);
+    return { profile, issues: profileIssues(profile) };
+  });
+  app.post(
+    "/api/admin/privacy/participants/:id/notice-delivered",
+    async (req) => {
+      const body = z
+        .object({ delivered: z.literal(true) })
+        .strict()
+        .parse(req.body);
+      void body;
+      if (!participation) throw Error("Live 참여 상태가 없습니다.");
+      participation.delivered((req.params as any).id);
+      return { ok: true };
+    },
+  );
+  app.post(
+    "/api/admin/privacy/participants/:id/confirm-live-command",
+    async (req) => {
+      const body = z
+        .object({
+          observationId: z.string().uuid(),
+          verifiedLive: z.literal(true),
+        })
+        .strict()
+        .parse(req.body);
+      if (!participation) throw Error("Live 참여 상태가 없습니다.");
+      participation.confirmLiveCommand(
+        (req.params as any).id,
+        body.observationId,
+      );
+      return { ok: true };
+    },
+  );
+  app.post("/api/admin/privacy/participants/:id/block-age", async (req) => {
+    if (!participation) throw Error("Live 참여 상태가 없습니다.");
+    const p = participation.blockAge((req.params as any).id);
+    store.revokeParticipant(p.platform, p.broadcaster, p.author);
+    return { ok: true };
+  });
+  app.post("/api/admin/privacy/rights", async (req) =>
+    rights.create(rightsIntakeSchema.parse(req.body)),
+  );
+  app.patch("/api/admin/privacy/rights/:id", async (req) =>
+    rights.update((req.params as any).id, req.body),
+  );
+  app.delete("/api/admin/privacy/rights/:id", async (req) => {
+    rights.remove((req.params as any).id);
+    return { ok: true };
+  });
+  app.post("/api/admin/privacy/videos", async (req) => rights.video(req.body));
   app.get("/api/admin/status", async () => ({
     demo: !!opts.demo,
     generatedAt: Date.now(),
@@ -924,6 +1109,15 @@ export async function createApp(
     aiDesiredRunning: store.aiDesiredRunning(),
     personas: personas.automaticSummary(),
     chatSummary: store.chatSummary(),
+    privacy: {
+      memoryOnly: true,
+      textOnly: !opts.demo,
+      ready: privacyReady(),
+      issues: profileIssues(config.privacy),
+      pendingRights: rights
+        .list()
+        .filter((r) => !["completed", "limited"].includes(r.state)).length,
+    },
     retentionDays: config.retentionDays,
     connectors: supervisor.states,
     audio: {
@@ -1304,7 +1498,12 @@ export async function createApp(
     };
   });
   app.get("/api/admin/soop/chat-session", async (_req, reply) => {
-    if (opts.demo || config.soop.mode !== "official" || !config.soop.streamerId)
+    if (
+      opts.demo ||
+      !participation?.available("soop", config.soop.streamerId) ||
+      config.soop.mode !== "official" ||
+      !config.soop.streamerId
+    )
       return reply
         .code(409)
         .send({ error: "SOOP official mode and streamer ID are required." });
@@ -1340,6 +1539,13 @@ export async function createApp(
         ]),
       })
       .parse(req.body);
+    if (body.state !== "subscribed" && participation) {
+      const prior = [...participation.participants.values()];
+      participation.connectionLost("soop");
+      for (const p of prior)
+        if (p.state === "WITHDRAWN")
+          store.revokeParticipant(p.platform, p.broadcaster, p.author);
+    }
     supervisor.status("soop", body.state);
     return { ok: true };
   });
@@ -1493,6 +1699,19 @@ export async function createApp(
   }, 3600000);
   retention.unref();
   store.purge(Date.now() - config.retentionDays * 86400000);
+  app.addHook("onRequest", async (req, reply) => {
+    if (
+      !opts.demo &&
+      (/^\/api\/admin\/(?:chatgpt(?:\/|$)|audio(?:\/|$)|capture\/start|transcripts\/export)/.test(
+        req.url,
+      ) ||
+        (req.method !== "GET" && req.url.startsWith("/api/admin/persona/")))
+    )
+      return reply.code(409).send({
+        error:
+          "현재 프로필은 동의된 텍스트와 OpenAI API만 사용합니다. 영상·음성·다른 제공자·수동 페르소나 경로는 차단됩니다.",
+      });
+  });
   app.addHook("onClose", async () => {
     clearInterval(retention);
     scheduler.stop("server_shutdown", true);
@@ -1500,7 +1719,13 @@ export async function createApp(
     capture.stop();
     transcriber.stop();
     for (const s of sockets) s.close();
+    flushRights();
+    participation?.end();
+    store.deleteAll();
     store.close();
+    rights.close();
+    withdrawalTasks.clear();
+    pendingRights.clear();
   });
   if (opts.startInputs !== false && !store.closed()) {
     supervisor.start();
@@ -1508,6 +1733,7 @@ export async function createApp(
     transcriber.start();
   }
   const resumeAiIfRequested = () => {
+    if (!opts.demo) return false;
     if (
       store.closed() ||
       (!store.aiDesiredRunning() && !store.personaRuntime()?.armed)
@@ -1532,6 +1758,8 @@ export async function createApp(
     supervisor,
     transcriber,
     personas,
+    participation,
+    rights,
     resumeAiIfRequested,
   };
 }
