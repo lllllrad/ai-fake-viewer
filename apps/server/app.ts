@@ -371,6 +371,7 @@ export async function createApp(
         credentialsConfigured: !!(
           process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
         ),
+        redirectUri: config.chzzk.redirectUri,
       },
       soop: {
         mode: config.soop.mode,
@@ -588,24 +589,50 @@ export async function createApp(
     try {
       const q = z
         .object({
-          code: z.string().min(1).max(2048),
-          state: z.string().length(64),
+          code: z.string().min(1).max(2048).optional(),
+          state: z.string().length(64).optional(),
           error: z.string().optional(),
+          error_description: z.string().max(500).optional(),
         })
         .parse(req.query);
-      if (q.error) throw Error("CHZZK authorization was declined");
+      if (q.error || (!q.code && q.state)) {
+        if (q.state) auth.states.delete(q.state);
+        throw new Error("CHZZK_USER_DENIED");
+      }
+      if (!q.code || !q.state) {
+        if (q.state) auth.states.delete(q.state);
+        throw new Error("CHZZK_CALLBACK_MISSING_FIELDS");
+      }
       await auth.exchange(q.code, q.state);
       return reply
         .type("text/html; charset=utf-8")
         .send(
           '<!doctype html><meta charset="utf-8"><title>CHZZK 연결 완료</title><h1>CHZZK authorization complete</h1><p>인증이 저장됐습니다. 관리자 페이지로 돌아가 수신 시작을 누르세요.</p>',
         );
-    } catch {
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : "Unknown callback failure";
+      const message =
+        reason === "CHZZK_USER_DENIED"
+          ? "CHZZK authorization was canceled. Retry from the admin page."
+          : reason === "CHZZK_STATE_INVALID"
+            ? "OAuth state expired or was already used. Retry authorization."
+            : reason.startsWith("CHZZK_TOKEN_HTTP_")
+              ? `CHZZK token exchange failed (HTTP ${reason.slice("CHZZK_TOKEN_HTTP_".length)}). Check the registered redirect URL and app credentials.`
+              : reason.startsWith("CHZZK_TOKEN_API_CODE_")
+                ? "CHZZK did not issue a token. Check app registration and try authorization again."
+                : reason === "CHZZK_TOKEN_INVALID_JSON" ||
+                    reason === "CHZZK_TOKEN_INVALID_RESPONSE"
+                  ? "CHZZK returned an unexpected token response. Check app registration and try again."
+                  : reason.startsWith("fetch failed") ||
+                      reason.includes("timed out")
+                    ? "Could not reach CHZZK token service. Check network access and retry."
+                    : "CHZZK callback failed. Verify the registered redirect URL and retry authorization.";
       return reply
         .code(400)
         .type("text/html; charset=utf-8")
         .send(
-          '<!doctype html><meta charset="utf-8"><title>CHZZK 연결 실패</title><h1>CHZZK authorization failed</h1><p>리디렉션 URL, 앱 등록 정보 또는 인증 상태를 확인한 뒤 관리자 페이지에서 다시 시도하세요.</p>',
+          `<!doctype html><meta charset="utf-8"><title>CHZZK 연결 실패</title><h1>CHZZK authorization failed</h1><p>${message}</p>`,
         );
     }
   });

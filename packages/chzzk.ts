@@ -12,7 +12,9 @@ const root = "https://openapi.chzzk.naver.com";
 const tokenSchema = z.object({
   accessToken: z.string().min(1),
   refreshToken: z.string().min(1),
+  tokenType: z.literal("Bearer").optional(),
   expiresIn: z.coerce.number().positive(),
+  scope: z.string().optional(),
 });
 export const chzzkChatSchema = z.object({
   channelId: z.string(),
@@ -75,8 +77,7 @@ export class ChzzkAuth {
   async exchange(code: string, state: string) {
     const expiry = this.states.get(state);
     this.states.delete(state);
-    if (!expiry || expiry < Date.now())
-      throw Error("OAuth state expired or invalid");
+    if (!expiry || expiry < Date.now()) throw new Error("CHZZK_STATE_INVALID");
     await this.issue({ grantType: "authorization_code", code, state });
   }
   async issue(fields: Record<string, string>) {
@@ -90,8 +91,31 @@ export class ChzzkAuth {
       }),
       signal: AbortSignal.timeout(15000),
     });
-    if (!r.ok) throw Error("auth_required");
-    const t = tokenSchema.parse(await r.json());
+    if (!r.ok) {
+      // Do not include response bodies: providers may echo codes or credentials.
+      throw new Error(`CHZZK_TOKEN_HTTP_${r.status}`);
+    }
+    let payload: unknown;
+    try {
+      payload = await r.json();
+    } catch {
+      throw new Error("CHZZK_TOKEN_INVALID_JSON");
+    }
+    const envelope =
+      payload && typeof payload === "object" && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : undefined;
+    const tokenPayload =
+      envelope && envelope.content && typeof envelope.content === "object"
+        ? envelope.content
+        : payload;
+    if (!tokenPayload || typeof tokenPayload !== "object")
+      throw new Error("CHZZK_TOKEN_INVALID_RESPONSE");
+    const parsed = tokenSchema.safeParse(tokenPayload);
+    if (!parsed.success) throw new Error("CHZZK_TOKEN_INVALID_RESPONSE");
+    if (envelope && typeof envelope.code === "number" && envelope.code !== 200)
+      throw new Error(`CHZZK_TOKEN_API_CODE_${envelope.code}`);
+    const t = parsed.data;
     const next = {
       accessToken: t.accessToken,
       refreshToken: t.refreshToken,

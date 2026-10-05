@@ -409,6 +409,9 @@ function Admin() {
                     : "add developer app Client ID and Secret to .env"
                   : "disabled in config.yaml"}
               </p>
+              <p className="hint">
+                Registered callback: {status.setup.chzzk.redirectUri}
+              </p>
               <p>
                 SOOP:{" "}
                 {status.setup.soop.mode === "disabled"
@@ -483,14 +486,22 @@ function Admin() {
             </button>
             <button
               className="secondary"
-              onClick={() =>
+              disabled={
+                busy ||
+                !status.setup.chzzk.enabled ||
+                !status.setup.chzzk.credentialsConfigured
+              }
+              onClick={() => {
+                setError("");
+                setBusy(true);
                 void api("chzzk/authorize", "POST")
                   .then((r) => r.json())
                   .then((b) => {
                     location.href = b.url;
                   })
                   .catch((e) => setError(e.message))
-              }
+                  .finally(() => setBusy(false));
+              }}
             >
               Authorize CHZZK
             </button>

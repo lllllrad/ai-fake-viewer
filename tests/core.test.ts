@@ -140,9 +140,15 @@ test("A14: refresh single-flight and atomic encrypted token rotation", async () 
     await new Promise((r) => setTimeout(r, 10));
     return new Response(
       JSON.stringify({
-        accessToken: "new-access",
-        refreshToken: "new-refresh",
-        expiresIn: "86400",
+        code: 200,
+        message: "success",
+        content: {
+          accessToken: "new-access",
+          refreshToken: "new-refresh",
+          tokenType: "Bearer",
+          expiresIn: "86400",
+          scope: "channel",
+        },
       }),
       { status: 200 },
     );
