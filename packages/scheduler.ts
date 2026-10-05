@@ -1,3 +1,4 @@
+import { generationIssue } from "./model-errors.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
@@ -14,6 +15,13 @@ export class Scheduler {
   preparePersonas?: () => void;
   private activeInput?: ModelInput;
   state = "stopped";
+  lastIssue?: {
+    code: string;
+    message: string;
+    at: number;
+    continuing: boolean;
+  };
+  private transientFailures = 0;
   controller?: AbortController;
   timer?: NodeJS.Timeout;
   dispatchTimer?: NodeJS.Timeout;
@@ -108,6 +116,8 @@ export class Scheduler {
       );
     this.preparePersonas?.();
     this.stop();
+    this.lastIssue = undefined;
+    this.transientFailures = 0;
     this.state = "running";
     this.phase = "waiting_for_input";
     this.store.setAiDesiredRunning(true);
@@ -140,6 +150,12 @@ export class Scheduler {
       await this.tickOnce(now);
     } catch {
       this.rejects++;
+      this.lastIssue = {
+        code: "scheduler_error",
+        message: "AI 생성 준비 중 오류가 발생해 중지했습니다.",
+        at: Date.now(),
+        continuing: false,
+      };
       this.activeInput = undefined;
       this.busy = false;
       try {
@@ -585,6 +601,8 @@ export class Scheduler {
         return;
       }
       if (d.action === "skip") {
+        this.lastIssue = undefined;
+        this.transientFailures = 0;
         if (attemptId)
           this.store.finishPersonaAttempt(
             attemptId,
@@ -613,6 +631,8 @@ export class Scheduler {
           return;
         }
       }
+      this.lastIssue = undefined;
+      this.transientFailures = 0;
       if (
         this.store.closed() ||
         input.messages.some((m) => !this.store.publicMessage(m.id)) ||
@@ -686,11 +706,26 @@ export class Scheduler {
         );
       if (generation === this.generation) {
         this.rejects++;
-        this.stop(
-          error instanceof Error && error.message === "budget_exhausted"
-            ? "budget_exhausted"
-            : "model_error",
-        );
+        const issue = generationIssue(error);
+        if (issue.transient) this.transientFailures++;
+        const continuing =
+          issue.retryable && (!issue.transient || this.transientFailures < 3);
+        this.lastIssue = {
+          code: issue.code,
+          message: continuing
+            ? issue.message
+            : issue.transient
+              ? "AI 연결 오류가 3회 연속 발생해 중지했습니다. 연결 상태를 확인해 주세요."
+              : issue.message,
+          at: Date.now(),
+          continuing,
+        };
+        if (!continuing)
+          this.stop(
+            issue.code === "budget_exhausted"
+              ? "budget_exhausted"
+              : "model_error",
+          );
       }
     } finally {
       this.activeInput = undefined;

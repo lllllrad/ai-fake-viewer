@@ -155,6 +155,9 @@ export function OperationsDashboard({
         표시를 붙이며, 참여자의 이름과 출처도 공개합니다. 이 세션에서는 다시
         숨길 수 없습니다.
       </p>
+      {status.ai.lastIssue && (
+        <p role="status">{status.ai.lastIssue.message}</p>
+      )}
       <div className="operations-summary" role="status">
         <strong>
           {stale

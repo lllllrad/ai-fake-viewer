@@ -95,3 +95,20 @@ Use [config.example.yaml](config.example.yaml), [live setup](LIVE_SETUP.md) and 
 `chatgpt_subscription` uses the app's Sign in with ChatGPT account and selected model, with no API-key/environment-model requirement. The OpenAI Responses API HTTP request uses `store:false`, `stream:true` and explicit required history in `input`, with no tools/chaining. Inference succeeds only after `response.completed`; deltas alone, interrupted streams and failed/incomplete terminal events do not qualify. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.
 
 The explicit [operator-reviewed test configuration](docs/privacy-implementation.md#operator-reviewed-test-configuration) can defer descriptive profile metadata during reviewed testing. Viewer consent, withdrawal, channel approval, model compatibility and actual notice limits remain required.
+
+## Per-attempt failures and AI enablement
+
+Expired/replaced transcript context and rejected or invalid model decisions discard
+only the current attempt. AI remains enabled and waits for new input at the normal
+configured pace; the discarded input is not replayed automatically. Transient
+network/timeout failures may continue on fresh input, but three consecutive such
+failures stop generation. Authentication/provider failures, privacy restrictions,
+call budgets and unexpected scheduler failures still stop AI.
+
+The admin status exposes a sanitized `ai.lastIssue` category, timestamp, explanation
+and continuation flag; the dashboard shows the explanation next to AI controls.
+Raw provider payloads or transcript bodies are not included in this diagnostic.
+The original historical `model_error` state did not expose a precise cause, so it
+cannot by itself establish whether a past stop was a timeout, invalid output or
+stale input. Current transcript evidence is still revalidated before each model
+request, including draft review.

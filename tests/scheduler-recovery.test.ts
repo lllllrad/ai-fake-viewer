@@ -179,3 +179,67 @@ test("attempt context reservations are idempotent and legacy sequence-only table
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const recoverable of ["stale", "invalid", "timeout"] as const) {
+  test(`${recoverable} generation failure does not switch off AI before its retry limit`, async (t) => {
+    const { StaleModelContextError } =
+      await import("../packages/model-errors.ts");
+    let now = Date.now(),
+      calls = 0;
+    t.mock.method(Math, "random", () => 0);
+    t.mock.method(Date, "now", () => now);
+    const config = configSchema.parse({
+        ai: { visualMode: "on_request", reviewDraft: false },
+      }),
+      store = new Store(":memory:");
+    let transcript = { id: "first", text: "Synthetic speech", capturedAt: now };
+    const transcriber = {
+      recent: () => [transcript],
+      has: (id: string) => id === transcript.id,
+    } as Transcriber;
+    const model: Model = async () => {
+      calls++;
+      if (recoverable === "timeout")
+        throw new DOMException("Synthetic timeout", "TimeoutError");
+      if (calls === 1)
+        throw recoverable === "stale"
+          ? new StaleModelContextError()
+          : Error("Invalid evidence");
+      return { decision: skipped };
+    };
+    const scheduler = new Scheduler(
+      store,
+      new Capture(config.capture, false),
+      config,
+      model,
+      false,
+      () => true,
+      transcriber,
+    );
+    scheduler.state = "running";
+    store.setAiDesiredRunning(true);
+    try {
+      await scheduler.tick(now);
+      assert.equal(calls, 1);
+      assert.equal(scheduler.state, "running");
+      assert.equal(store.aiDesiredRunning(), true);
+      assert.equal(scheduler.lastIssue?.continuing, true);
+      now += 40000;
+      transcript = { ...transcript, id: "second", capturedAt: now };
+      await scheduler.tick(now);
+      assert.equal(calls, 2);
+      assert.equal(scheduler.state, "running");
+      if (recoverable === "timeout") {
+        now += 40000;
+        transcript = { ...transcript, id: "third", capturedAt: now };
+        await scheduler.tick(now);
+        assert.equal(scheduler.state, "model_error");
+        assert.equal(scheduler.lastIssue?.continuing, false);
+        assert.equal(store.aiDesiredRunning(), false);
+      } else assert.equal(scheduler.lastIssue, undefined);
+    } finally {
+      scheduler.stop();
+      store.close();
+    }
+  });
+}

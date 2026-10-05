@@ -4,6 +4,39 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Single-step test flow and AI enablement diagnostics — 2026-10-05
+
+Added explicit default-off `privacy.singleStepTest`: one short combined test notice
+and one fresh post-delivery consent command. The configured local notice fits one
+94-character CHZZK message including its numbered prefix. Overlong notices fail
+rather than split or truncate. Reviewed evidence and a new notice version are
+required. CHZZK now has the same default-off broadcaster-account testing option as
+YouTube, excluding automatic notice echoes. Local configuration enables both the
+simplified flow and CHZZK broadcaster testing. A read-only CHZZK account lookup
+confirmed the expected channel; YouTube separately reported `quota_blocked`.
+
+Live status also confirmed AI had switched itself off with `model_error` while the
+server remained healthy. The previous status omitted the specific error category,
+so the exact historical failure cannot be inferred from that state. Previously,
+all attempt errors disabled AI. Current stale-input and invalid-output failures
+now discard only that attempt; transient network/timeouts continue on fresh input
+with normal pacing, stopping after three consecutive failures. Budgets, provider/
+authentication failures and privacy restrictions still stop generation. Sanitized
+`ai.lastIssue` information is exposed in status and beside the AI controls.
+
+Validation: `sh run-command.sh npm run check` passed documentation/schema checks,
+TypeScript/Vite and all 152 tests. New synthetic cases cover single-message consent
+on both platforms, pre-delivery command rejection, withdrawal/age safeguards,
+versioning, and continued AI enablement after stale/invalid output with bounded
+timeout recovery. No viewer consent was submitted by the agent and no live model
+request was issued for this verification.
+
+The browser check passed on Chromium 153.0.8010.12 with no console errors.
+After a managed `just server-restart`, authenticated status confirmed the simplified
+test flow enabled, no profile issues, CHZZK subscribed with its notice sender ready,
+and AI stopped pending manual enablement. YouTube remained `quota_blocked` with its
+notice sender waiting for a connection; live YouTube delivery is not verified.
+
 ## Speech-only persona attempt crash recovery — 2026-10-05
 
 The live process exited on an unhandled SQLite uniqueness failure in

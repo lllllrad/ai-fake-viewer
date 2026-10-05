@@ -1,3 +1,4 @@
+import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
 import { Participation } from "../../packages/participation.ts";
@@ -149,11 +150,16 @@ export async function createApp(
     authorize: (input: ModelInput) => {
       if (
         !privacyReady() ||
-        input.privacyRevision !== participation!.revision ||
         input.frames.length ||
-        (input.transcripts ?? []).some(
+        ((input.transcripts?.length ?? 0) > 0 && !audioAllowed())
+      )
+        throw Error(
+          "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
+        );
+      if (
+        input.privacyRevision !== participation!.revision ||
+        [...(input.transcripts ?? []), ...(input.newTranscripts ?? [])].some(
           (t) =>
-            !audioAllowed() ||
             !transcriber
               .recent()
               .some(
@@ -165,9 +171,7 @@ export async function createApp(
         ) ||
         input.messages.some((m) => !store.publicMessage(m.id))
       )
-        throw Error(
-          "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
-        );
+        throw new StaleModelContextError();
       if (!audiences.has(input))
         audiences.set(
           input,
@@ -1232,6 +1236,7 @@ export async function createApp(
       contextWindowSeconds: config.ai.contextWindowSeconds,
       busy: scheduler.busy,
       phase: scheduler.phase,
+      lastIssue: scheduler.lastIssue,
       reviewDraft: config.ai.reviewDraft,
       reviewCount: scheduler.reviews,
       input: {
