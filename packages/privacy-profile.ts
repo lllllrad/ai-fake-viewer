@@ -91,7 +91,7 @@ export const privacyProfileSchema = z
       .default([]),
     notices: z
       .object({
-        perAccountIntervalMs: z.number().int().min(30000).default(30000),
+        perAccountIntervalMs: z.number().int().min(3000).default(30000),
         globalPerMinute: z.number().int().min(1).max(20).default(2),
         approvedLimitConfirmed: z.boolean().default(false),
         botUserIds: z.array(z.string()).default([]),

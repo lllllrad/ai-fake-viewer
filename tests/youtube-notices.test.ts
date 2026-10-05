@@ -644,3 +644,39 @@ test("YouTube normal REST poll continuation does not disconnect notice delivery"
   assert.equal(reads, 2);
   assert.deepEqual(states, ["connecting", "subscribed:rest", "stopped"]);
 });
+
+test("configured three-second spacing sends all stage parts without additional viewer chat", async (t) => {
+  const f = fixture(t);
+  f.p.profile.notices.perAccountIntervalMs = 3000;
+  f.p.profile.notices.globalPerMinute = 20;
+  assert(configSchema.safeParse({ privacy: f.p.profile }).success);
+  assert(
+    !configSchema.safeParse({
+      privacy: {
+        ...f.p.profile,
+        notices: { ...f.p.profile.notices, perAccountIntervalMs: 2999 },
+      },
+    }).success,
+  );
+  f.message("!동의");
+  const person = f.p.get("youtube", "fixture", "viewer")!;
+  await f.sender.tick(f.signal);
+  const total = Number(
+    f.sent[0].snippet.textMessageDetails.messageText.match(
+      /^\[안내 1\/(\d+)\]/,
+    )[1],
+  );
+  assert(total > 1);
+  for (let part = 2; part <= total; part++) {
+    f.tick(2999);
+    await f.sender.tick(f.signal);
+    assert.equal(f.sent.length, part - 1);
+    f.tick(1);
+    await f.sender.tick(f.signal);
+    assert.equal(f.sent.length, part);
+  }
+  assert.notEqual(person.deliveredAt, null);
+  assert.equal(person.stage, 0);
+  f.message("!동의");
+  assert.equal(person.stage, 1);
+});

@@ -137,3 +137,19 @@ sending the next consent command. A complete stage must not restart at part one
 without a new stage/session or a delivery failure. Ordinary receive continuation
 must not erase confirmed delivery. See the
 [YouTube acknowledgement rules](docs/privacy-implementation.md#youtube-notice-acknowledgements-during-receive-continuation).
+
+## Notice delivery speed
+
+`privacy.notices.perAccountIntervalMs` applies to each notice part, not only the
+initial invitation. The default 30,000 ms and global two attempts per minute can
+make a three-part stage take over a minute. Parts are sent by the server timer;
+additional viewer chat is not required between parts. A fresh consent command is
+needed only after the complete stage has been delivered.
+
+For reviewed interactive testing, a 3,000 ms account interval with
+`globalPerMinute: 20` permits about six seconds between the first and third parts
+when no other notices are queued. The supported minimum is 3,000 ms. These are app
+limits, not guaranteed platform quotas; platform errors still pause sends and
+failed attempts still consume the same budget. Shared traffic can add delay.
+Set the values in private YAML and use `sh run-command.sh just server-restart`;
+restart begins a new consent session. Defaults remain unchanged.
