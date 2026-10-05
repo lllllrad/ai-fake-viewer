@@ -20,6 +20,7 @@ export class NoticeBot {
     private participation: Participation,
     private broadcaster: string,
     private platform: "soop" | "youtube" | "chzzk" = "soop",
+    private allowBroadcasterTesting = false,
   ) {}
   reset() {
     this.pending = undefined;
@@ -53,7 +54,8 @@ export class NoticeBot {
       if (
         person.platform !== this.platform ||
         person.broadcaster !== this.broadcaster ||
-        person.author === this.broadcaster ||
+        (person.author === this.broadcaster &&
+          !(this.platform === "youtube" && this.allowBroadcasterTesting)) ||
         p.profile.notices.botUserIds.includes(person.author) ||
         person.age === "blocked"
       )

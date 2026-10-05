@@ -42,6 +42,8 @@ export class Supervisor {
       this.youtubeNotices = new YoutubeNotices(
         store.participation,
         youtubeAuth,
+        fetch,
+        config.youtube.allowBroadcasterTesting,
       );
       store.on("reset", () => this.youtubeNotices?.reset());
     }

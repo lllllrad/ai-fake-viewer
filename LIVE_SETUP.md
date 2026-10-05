@@ -98,3 +98,18 @@ Record the reviewer/date, selected API-key authentication or Sign in with ChatGP
 For each enabled platform, record the actual broadcaster identity, application permissions, notice-send permissions and limits, verified delivery/retry behavior and event ordering. Exercise a synthetic participation/withdrawal sequence in a permitted operational rehearsal and separately verify the published post-session contact reaches the responsible operator. Record app deletion, provider follow-up, public video and controlled copies as distinct outcomes or limitations. Leave an unchecked item explicitly pending; automated fixture results cannot complete it.
 
 Match the final published policy to the enabled profiles, transmitted fields, displayed real nicknames and declared countries/periods. The review addendum is not the revised public policy itself; no equality with unavailable public-policy text is claimed. Use the [evidence map](docs/privacy-review-evidence.md) for code/test ownership and the [exception inventory](docs/privacy-implementation.md#durable-exception-inventory-and-deletion) for retention/deletion procedures.
+
+## Temporary YouTube broadcaster-account testing
+
+By default, messages from the connected YouTube channel are excluded because that
+account sends the automatic notices. To exercise the viewer flow using that same
+account, temporarily set `youtube.allowBroadcasterTesting: true` in private
+`config.yaml` and run `sh run-command.sh just server-restart`. The account must not
+also be listed in `privacy.notices.botUserIds`. Send a new message after restart;
+normal staged consent and withdrawal still apply. This does not grant consent.
+
+Automatic notice parts retain a reserved numbered prefix and remain excluded for
+the connected channel, including history replay and reconnects. A manually copied
+notice with that prefix is also excluded; ordinary viewer accounts are unaffected.
+Set the option back to `false` and restart after testing. The example/default
+configuration keeps it disabled.

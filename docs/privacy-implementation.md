@@ -135,3 +135,12 @@ Changing or removing the review requires a new notice version, invalidating old
 participation through the usual profile-update handling. YAML changes require a
 server restart and a fresh session. This exception is for explicitly reviewed
 testing; completing the descriptive profile remains an operational task.
+
+## Temporary broadcaster participation
+
+YouTube normally excludes the authenticated sender account to avoid responding to
+its own notices. The opt-in `youtube.allowBroadcasterTesting` option admits its
+ordinary text and consent/withdrawal commands for testing, using the same staged
+participation rules. Numbered automatic-notice parts from that account remain
+excluded in both REST and gRPC paths, including after restart. Explicit configured
+bot exclusions still apply. See the [temporary testing runbook](../LIVE_SETUP.md#temporary-youtube-broadcaster-account-testing).

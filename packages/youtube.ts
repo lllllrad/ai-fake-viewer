@@ -55,6 +55,19 @@ export function normalizeYoutube(item: any, chat: string): Incoming | null {
     publishedAt: Number.isFinite(stamp) ? stamp : null,
   };
 }
+// Broadcaster test messages may participate; reserved automatic-notice parts never do.
+// Match the sender format even after reconnect/restart, when sent IDs are unavailable.
+export function ignoreYoutubeOwnMessage(
+  message: Incoming,
+  ownChannel: string | undefined,
+  allowBroadcasterTesting = false,
+) {
+  return (
+    message.author === ownChannel &&
+    (!allowBroadcasterTesting || /^\[안내 \d+\/\d+\] /u.test(message.text))
+  );
+}
+
 export class UpstreamError extends Error {
   constructor(
     public state: string,
@@ -133,6 +146,7 @@ export async function runYoutube(
     channelId?: string;
     transport: "grpc" | "rest";
     restFallback: boolean;
+    allowBroadcasterTesting?: boolean;
   },
   store: Store,
   signal: AbortSignal,
@@ -236,7 +250,15 @@ export async function runYoutube(
           (b.items ?? [])
             .map((i: any) => {
               const m = normalizeYoutube(i, chat);
-              if (m && m.author === options?.ownChannel?.()) return null;
+              if (
+                m &&
+                ignoreYoutubeOwnMessage(
+                  m,
+                  options?.ownChannel?.(),
+                  config.allowBroadcasterTesting,
+                )
+              )
+                return null;
               return m && broadcaster ? { ...m, channel: broadcaster } : m;
             })
             .filter(Boolean),
@@ -282,7 +304,15 @@ export async function runYoutube(
               (b.items ?? [])
                 .map((i: any) => {
                   const m = normalizeYoutube(i, chat);
-                  if (m && m.author === options?.ownChannel?.()) return null;
+                  if (
+                    m &&
+                    ignoreYoutubeOwnMessage(
+                      m,
+                      options?.ownChannel?.(),
+                      config.allowBroadcasterTesting,
+                    )
+                  )
+                    return null;
                   return m && broadcaster ? { ...m, channel: broadcaster } : m;
                 })
                 .filter(Boolean),

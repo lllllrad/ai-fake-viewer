@@ -35,6 +35,7 @@ export class YoutubeNotices {
     private participation: Participation,
     private auth: YoutubeAuth,
     private request: typeof fetch = fetch,
+    private allowBroadcasterTesting = false,
   ) {}
   resolve(chat: string, broadcaster: string) {
     this.reset();
@@ -66,7 +67,12 @@ export class YoutubeNotices {
     try {
       let bot = this.bots.get(target.broadcaster);
       if (!bot) {
-        bot = new NoticeBot(this.participation, target.broadcaster, "youtube");
+        bot = new NoticeBot(
+          this.participation,
+          target.broadcaster,
+          "youtube",
+          this.allowBroadcasterTesting,
+        );
         this.bots.set(target.broadcaster, bot);
       }
       if (this.job && !bot.valid(this.job.id)) {
