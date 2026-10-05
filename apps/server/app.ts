@@ -271,6 +271,18 @@ export async function createApp(
       confirmed: capture.confirmed,
       lastFrameAt: capture.latest()?.capturedAt ?? null,
       dimensions: capture.dimensions,
+      lastError: capture.lastError,
+      enabled: config.capture.enabled,
+      programConfirmed: config.capture.programConfirmed,
+      ffmpeg: config.capture.ffmpeg,
+      backend: config.capture.backend,
+      device: config.capture.backend === "rtmp" ? "" : config.capture.device,
+      lastFrameAgeMs: capture.latest()
+        ? Math.max(0, Date.now() - capture.latest()!.capturedAt)
+        : null,
+      framesInLastMinute: capture.frames.filter(
+        (f) => f.capturedAt > Date.now() - 60000,
+      ).length,
       masks: config.capture.masks,
     },
     ai: {

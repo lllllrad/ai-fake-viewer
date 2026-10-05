@@ -38,6 +38,7 @@ export class Capture {
   generation = 0;
   dimensions = "";
   confirmed = false;
+  lastError = "";
   constructor(
     public config: Config["capture"],
     public demo = false,
@@ -68,8 +69,12 @@ export class Capture {
     }
     if (!this.config.enabled || !this.config.programConfirmed) {
       this.state = "config_required";
+      this.lastError = !this.config.enabled
+        ? "Capture is disabled in config.yaml."
+        : "Set capture.programConfirmed: true after verifying OBS Program output.";
       return;
     }
+    this.lastError = "";
     this.state = "connecting";
     this.child = fork(new URL("../workers/capture.mjs", import.meta.url), [], {
       env: workerEnv(),
@@ -90,11 +95,13 @@ export class Capture {
     });
     this.child.on("error", () => {
       this.state = "failed";
+      this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and capture device/RTMP URL.`;
     });
-    this.child.on("exit", () => {
+    this.child.on("exit", (code, signal) => {
       if (generation === this.generation) {
         this.child = undefined;
         this.state = "failed";
+        this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, capture device/RTMP URL, and FFmpeg availability.`;
         this.confirmed = false;
         if (++this.failures <= 5) {
           this.state = "reconnecting";
@@ -119,6 +126,7 @@ export class Capture {
     source: Frame["source"],
   ) {
     this.failures = 0;
+    this.lastError = "";
     const dims = `${m.sourceWidth ?? m.width}x${m.sourceHeight ?? m.height}`;
     if (this.dimensions && dims !== this.dimensions) {
       this.confirmed = false;
@@ -154,6 +162,7 @@ export class Capture {
     if (!this.demo && !this.config.masks.length)
       throw Error("Configure chat/privacy masks before enabling image upload");
     this.confirmed = true;
+    this.lastError = "";
     this.state = this.demo ? "demo" : "receiving";
   }
   stop() {
@@ -167,5 +176,6 @@ export class Capture {
     this.frames = [];
     this.confirmed = false;
     this.state = "stopped";
+    this.lastError = "";
   }
 }

@@ -284,22 +284,36 @@ function Admin() {
     return () => clearInterval(timer);
   }, [session]);
   useEffect(() => {
-    if (session !== "signed_in" || !status?.capture.lastFrameAt) return;
-    let cancelled = false,
-      url = "";
-    void api("preview")
-      .then((r) => r.blob())
-      .then((b) => {
+    if (session !== "signed_in") return;
+    let cancelled = false;
+    let currentUrl = "";
+    const loadPreview = async () => {
+      if (
+        !status?.capture?.lastFrameAt ||
+        status.capture.lastFrameAgeMs > 10000
+      ) {
+        setPreview("");
+        return;
+      }
+      try {
+        const blob = await (await api("preview")).blob();
         if (cancelled) return;
-        url = URL.createObjectURL(b);
-        setPreview(url);
-      })
-      .catch(() => {});
+        const nextUrl = URL.createObjectURL(blob);
+        setPreview(nextUrl);
+        if (currentUrl) URL.revokeObjectURL(currentUrl);
+        currentUrl = nextUrl;
+      } catch {
+        if (!cancelled) setPreview("");
+      }
+    };
+    void loadPreview();
+    const timer = setInterval(() => void loadPreview(), 2000);
     return () => {
       cancelled = true;
-      if (url) URL.revokeObjectURL(url);
+      clearInterval(timer);
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
     };
-  }, [session, status?.capture.lastFrameAt]);
+  }, [session, status?.capture?.lastFrameAt, status?.capture?.lastFrameAgeMs]);
   const action = async (path: string) => {
     setBusy(true);
     setError("");
@@ -347,9 +361,15 @@ function Admin() {
           <h1>Broadcast studio</h1>
           <p>Platform chat and screen-aware characters, together.</p>
         </div>
-        <button className="stop" onClick={() => void action("ai/stop")}>
-          ■ Stop AI now
-        </button>
+        {status?.ai.state === "running" && (
+          <button
+            className="stop"
+            disabled={busy}
+            onClick={() => void action("ai/stop")}
+          >
+            ■ Stop AI now
+          </button>
+        )}
       </header>
       {error && (
         <div role="alert" className="error">
@@ -515,26 +535,55 @@ function Admin() {
                 <span className="status">{status.capture.state}</span>
               </div>
               <div className="preview">
-                {preview ? (
+                {preview && status.capture.lastFrameAgeMs <= 10000 ? (
                   <img
                     alt="Masked Program input. Verify all private areas and chat are hidden."
                     src={preview}
                   />
                 ) : (
-                  <p>No frame yet. Start OBS Virtual Camera in Program mode.</p>
+                  <p>
+                    {status.capture.state === "config_required"
+                      ? status.capture.lastError || "Capture is not configured."
+                      : status.capture.state === "connecting" ||
+                          status.capture.state === "reconnecting"
+                        ? "Connecting to video input…"
+                        : status.capture.lastError ||
+                          "No fresh frame received. Check the video input below."}
+                  </p>
                 )}
               </div>
               <p>
-                {status.capture.dimensions || "No input"} ·{" "}
+                Source: {status.capture.backend}
+                {status.capture.device
+                  ? ` · ${status.capture.device}`
+                  : ""} · {status.capture.dimensions || "no dimensions yet"} ·{" "}
+                {status.capture.lastFrameAgeMs === null
+                  ? "no frames received"
+                  : `last frame ${Math.floor(status.capture.lastFrameAgeMs / 1000)}s ago`}{" "}
+                · {status.capture.framesInLastMinute} frames / last minute
+              </p>
+              <p>
                 {status.capture.masks.length} masks ·{" "}
                 {status.capture.confirmed
                   ? "Preview confirmed"
                   : "Review required"}
+                {status.capture.programConfirmed
+                  ? " · Program source configured"
+                  : " · config.yaml Program confirmation missing"}
               </p>
+              {status.capture.lastError && (
+                <p className="error" role="status">
+                  {status.capture.lastError}
+                </p>
+              )}
               <p className="hint">
-                Set device and normalized mask rectangles in config.yaml, then
-                restart. Verify Program output and all chat areas in every scene
-                before confirming. Recheck after scene changes.
+                Config: capture{" "}
+                {status.capture.enabled ? "enabled" : "disabled"} · FFmpeg{" "}
+                {status.capture.ffmpeg}. For OBS Virtual Camera, select Program
+                output in OBS, then use Start capture here. For remote OBS,
+                configure capture.backend: rtmp and its private reader URL.
+                Start streaming/virtual camera before expecting frames. Verify
+                Program output and masks before confirming.
               </p>
               <div className="toolbar">
                 <button onClick={() => void action("capture/start")}>
@@ -612,9 +661,30 @@ function Admin() {
               <div className="section-title">
                 <h2>AI pipeline</h2>
                 <span className="status">
-                  {status.ai.phase} · {status.ai.state}
+                  {status.ai.state === "running" ? "AI running" : "AI stopped"}{" "}
+                  · {status.ai.phase}
                 </span>
               </div>
+              <p>
+                {status.ai.state === "running"
+                  ? status.ai.phase === "waiting_for_input"
+                    ? "Waiting for a new transcript or permitted chat message."
+                    : status.ai.phase === "random_wait"
+                      ? "Waiting for the next randomized reply interval."
+                      : status.ai.phase === "jev_timing_filter"
+                        ? "Jev is checking whether this is clearly a bad time to speak."
+                        : status.ai.phase === "generating_draft" ||
+                            status.ai.phase === "generating_draft_with_frame"
+                          ? "The answer model is preparing a reply."
+                          : status.ai.phase === "ai_review"
+                            ? "The answer model is reviewing its draft."
+                            : status.ai.phase === "awaiting_human_review"
+                              ? "A draft is waiting for your approval."
+                              : status.ai.phase === "published_local"
+                                ? "Reply published to this app's local chat."
+                                : `AI is running: ${status.ai.phase}.`
+                  : `AI is stopped (${status.ai.phase}). Start AI to begin processing.`}
+              </p>
               <div className="metric">
                 {status.ai.usage.calls}
                 <small> / {status.ai.maxCalls} calls</small>
@@ -735,12 +805,36 @@ function Admin() {
                     </button>
                   </div>
                 )}
-              <button
-                disabled={busy || status.closed}
-                onClick={() => void action("ai/start")}
-              >
-                Start AI
-              </button>
+              <div className="toolbar">
+                <button
+                  disabled={
+                    busy || status.closed || status.ai.state === "running"
+                  }
+                  onClick={() => {
+                    if (
+                      status.ai.visualMode === "continuous" ||
+                      status.capture.confirmed
+                    ) {
+                      void action("ai/start");
+                    } else if (status.capture.state === "stopped") {
+                      void action("capture/start");
+                    } else {
+                      void action("ai/start");
+                    }
+                  }}
+                >
+                  Start AI
+                </button>
+                {status.ai.state === "running" && (
+                  <button
+                    className="stop"
+                    disabled={busy}
+                    onClick={() => void action("ai/stop")}
+                  >
+                    Stop AI now
+                  </button>
+                )}
+              </div>
               {!status.demo && !status.setup.ai.providerReviewed && (
                 <p className="hint">
                   Start AI is blocked: review AI-provider sharing of
@@ -751,8 +845,10 @@ function Admin() {
               <p className="hint">
                 AI always starts manually. In on-request mode, transcription or
                 permitted chat starts a text-only decision; a fresh, confirmed
-                masked frame is sent only if AI requests visual inspection.
-                Receivers and transcription continue when AI stops.
+                masked frame is sent only if AI requests visual inspection. If
+                capture is stopped, Start AI first starts video capture so a
+                requested inspection can work. Receivers and transcription
+                continue when AI stops.
               </p>
               <p className="hint">
                 {status.ai.manualApproval
