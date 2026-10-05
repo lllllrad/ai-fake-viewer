@@ -136,7 +136,6 @@ export class Supervisor {
       try {
         this.status("chzzk", "connecting");
         await this.auth.access();
-        const me = await this.auth.api("/open/v1/users/me");
         const session = await this.auth.api("/open/v1/sessions/auth");
         if (signal.aborted) return;
         if (typeof session.url !== "string" || session.url.length > 4096)
@@ -151,6 +150,7 @@ export class Supervisor {
           throw Error("permission_blocked");
         child = this.worker("chzzk");
         let subscribed = false;
+        let subscribedChannel: string | undefined;
         const timeout = setTimeout(() => child?.kill(), 15000);
         await new Promise<void>((resolve, reject) => {
           child!.once("exit", () => {
@@ -177,8 +177,9 @@ export class Supervisor {
                   e.type === "subscribed" &&
                   e.data?.eventType === "CHAT"
                 ) {
-                  if (e.data.channelId !== me.channelId)
-                    throw Error("permission_blocked");
+                  if (typeof e.data.channelId !== "string" || !e.data.channelId)
+                    throw Error("invalid_subscription");
+                  subscribedChannel = e.data.channelId;
                   subscribed = true;
                   clearTimeout(timeout);
                   this.status("chzzk", "subscribed");
@@ -190,7 +191,7 @@ export class Supervisor {
                 }
               } else if (m.type === "CHAT" && subscribed) {
                 const parsed = normalizeChzzk(m.data);
-                if (parsed.channel !== me.channelId) return;
+                if (parsed.channel !== subscribedChannel) return;
                 this.receive("chzzk", parsed);
               }
             })().catch(() => {
