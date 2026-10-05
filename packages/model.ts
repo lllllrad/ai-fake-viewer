@@ -14,6 +14,10 @@ import type { ChatgptAuth } from "./chatgpt-auth.ts";
 const promptPath = (name: string) => resolve(process.cwd(), "prompts", name);
 const answerPrompt = readFileSync(promptPath("answer.md"), "utf8").trim();
 const reviewPrompt = readFileSync(promptPath("review.md"), "utf8").trim();
+const forceReplyTestPrompt = readFileSync(
+  promptPath("force-reply-test.md"),
+  "utf8",
+).trim();
 
 export interface ModelInput {
   frames: Frame[];
@@ -24,6 +28,7 @@ export interface ModelInput {
   privacyRevision?: number;
   chatSummary?: ChatSummary;
   reviewDraft?: string;
+  forceReplyTest?: boolean;
   persona: { name: string; style: string };
   description: string;
 }
@@ -113,6 +118,9 @@ export function modelMessages(input: ModelInput) {
                 : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
             ),
     },
+    ...(input.forceReplyTest
+      ? [{ role: "developer", content: forceReplyTestPrompt }]
+      : []),
     {
       role: "user",
       content: [
@@ -187,19 +195,16 @@ export function openaiModel(
       throw Error("Model request too large");
     signal.throwIfAborted();
     options?.authorize(input);
-    const count = await fetch(
-      `${endpoint}/responses/input_tokens`,
-      {
-        method: "POST",
-        headers,
-        signal,
-        body: JSON.stringify({
-          model: body.model,
-          input: messages,
-          text: body.text,
-        }),
-      },
-    );
+    const count = await fetch(`${endpoint}/responses/input_tokens`, {
+      method: "POST",
+      headers,
+      signal,
+      body: JSON.stringify({
+        model: body.model,
+        input: messages,
+        text: body.text,
+      }),
+    });
     const countRequestId = count.headers.get("x-request-id");
     if (countRequestId) options?.requestId?.(countRequestId, input);
     if (!count.ok) throw Error("Input token count unavailable");
@@ -239,7 +244,10 @@ export function chatgptModel(
   config: Config["ai"],
   auth: ChatgptAuth,
   request: typeof fetch = fetch,
-  options?: { authorize: (input: ModelInput) => void; requestId?: (id: string, input: ModelInput) => void },
+  options?: {
+    authorize: (input: ModelInput) => void;
+    requestId?: (id: string, input: ModelInput) => void;
+  },
 ): Model {
   return async (input, signal) => {
     options?.authorize(input);

@@ -47,6 +47,7 @@ ai:
   provider: openai_api # or chatgpt_subscription (ChatGPT plan, no API key)
   manualApproval: false # publish locally without human review
   reviewDraft: true # run a second model pass over each proposed reply
+  forceReplyTest: false # temporary reply test; bypass voluntary silence, not safety or budgets
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   gate:
     enabled: false # legacy/demo only; must remain false for live privacy profile

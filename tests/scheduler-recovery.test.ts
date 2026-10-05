@@ -9,7 +9,7 @@ import { Capture } from "../packages/capture.ts";
 import { configSchema } from "../packages/config.ts";
 import { PersonaService } from "../packages/persona/service.ts";
 import type { Transcriber } from "../packages/transcription.ts";
-import type { Model } from "../packages/model.ts";
+import { modelMessages, type Model } from "../packages/model.ts";
 
 const skipped = {
   action: "skip" as const,
@@ -237,6 +237,76 @@ for (const recoverable of ["stale", "invalid", "timeout"] as const) {
         assert.equal(scheduler.lastIssue?.continuing, false);
         assert.equal(store.aiDesiredRunning(), false);
       } else assert.equal(scheduler.lastIssue, undefined);
+    } finally {
+      scheduler.stop();
+      store.close();
+    }
+  });
+}
+
+for (const forceReplyTest of [false, true]) {
+  test(`reply test ${forceReplyTest} controls voluntary silence but retains fresh evidence and review`, async (t) => {
+    let now = Date.now();
+    t.mock.method(Date, "now", () => now);
+    t.mock.method(Math, "random", () => 0.9999);
+    const config = configSchema.parse({
+      ai: { visualMode: "on_request", forceReplyTest, reviewDraft: true },
+    });
+    const store = new Store(":memory:");
+    const service = new PersonaService(store, undefined, config);
+    const session = service.ensureAutomaticCast();
+    service.arm(session.id, session.control_epoch);
+    let evidence: Array<{ id: string; text: string; capturedAt: number }> = [];
+    const transcriber = {
+      recent: () => evidence,
+      has: (id: string) => evidence.some((t) => t.id === id),
+    } as Transcriber;
+    let calls = 0;
+    const model: Model = async (input) => {
+      calls++;
+      assert.equal(input.forceReplyTest, true);
+      assert.equal(!!input.reviewDraft, calls === 2);
+      const prompts = modelMessages(input).filter(
+        (m) => m.role === "developer",
+      );
+      assert.equal(prompts.length, 2);
+      assert.match(String(prompts[1].content), /Temporary reply test mode/);
+      assert.match(
+        String(prompts[1].content),
+        /privacy and safety restrictions still apply/,
+      );
+      return {
+        decision: {
+          action: "say",
+          text: "한 번 더 도전해 봐요.",
+          replyToMessageId: null,
+          evidenceMessageIds: [],
+          evidenceFrameIds: [],
+          evidenceTranscriptIds: ["test-speech"],
+        },
+      };
+    };
+    const scheduler = new Scheduler(
+      store,
+      new Capture(config.capture, false),
+      config,
+      model,
+      false,
+      () => true,
+      transcriber,
+    );
+    scheduler.state = "running";
+    try {
+      await scheduler.tick(now);
+      assert.equal(calls, 0);
+      evidence = [
+        { id: "test-speech", text: "한 번 더 도전할까요?", capturedAt: ++now },
+      ];
+      await scheduler.tick(now);
+      assert.equal(calls, forceReplyTest ? 2 : 0);
+      assert.equal(scheduler.reviews, forceReplyTest ? 1 : 0);
+      await scheduler.tick(now);
+      assert.equal(calls, forceReplyTest ? 2 : 0);
     } finally {
       scheduler.stop();
       store.close();

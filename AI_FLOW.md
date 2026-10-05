@@ -112,3 +112,19 @@ The original historical `model_error` state did not expose a precise cause, so i
 cannot by itself establish whether a past stop was a timeout, invalid output or
 stale input. Current transcript evidence is still revalidated before each model
 request, including draft review.
+
+## Temporary reply testing
+
+`ai.forceReplyTest` defaults to false. When enabled, an additional developer prompt
+asks generation and review to produce a short grounded Korean reply even for
+ordinary new input, overriding voluntary silence and novelty preferences. The
+scheduler bypasses probabilistic participation suppression and the optional timing
+gate. It still selects one eligible persona, not the entire cast.
+
+Fresh permitted evidence, persona presence, cooldowns, configured pacing, volume
+caps, consent, withdrawal, output validation, review, and call budgets remain in
+force. There is no fabricated fallback response or retry loop to force publication.
+The model can still skip unusable or unsafe input, and provider errors can still
+prevent a reply. Status and the administrator dashboard identify this temporary
+mode. Disable `ai.forceReplyTest` and restart to restore ordinary participation;
+restore any separately adjusted pacing values as well.

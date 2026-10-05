@@ -4,6 +4,26 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Temporary reply test mode — 2026-10-05
+
+Added default-off `ai.forceReplyTest` with a dedicated generation/review instruction
+that favors a short grounded reply over voluntary silence. It bypasses probability
+suppression and the optional timing gate, while retaining fresh permitted evidence,
+review, persona presence/cooldowns, volume limits, privacy checks and call budgets.
+There is no fabricated fallback or unbounded retry. The administrator dashboard
+labels the mode. The private test profile enables it with 20-second pacing; normal
+pacing was 35–95 seconds and can be restored separately when disabling the mode.
+
+`sh run-command.sh npm run check` passed all 154 tests, TypeScript/Vite and document/
+configuration checks. Synthetic scheduler tests force the random choice into the
+normally silent range, verify test mode invokes generation and review with the
+extra developer prompt, and verify no input or repeated input creates extra calls.
+These tests do not establish that the live provider always returns a reply.
+The browser check passed on Chromium 153.0.8010.12 without console errors. The
+managed server was restarted to apply the test configuration. A subsequent status
+check confirmed test mode enabled, 20-second pacing, AI running, the privacy profile
+ready and CHZZK subscribed. No live reply was asserted by this verification.
+
 ## CHZZK consent normalization repair — 2026-10-05
 
 Live participant metadata showed a received consent command held for ordering

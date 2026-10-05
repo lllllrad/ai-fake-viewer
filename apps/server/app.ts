@@ -1238,6 +1238,7 @@ export async function createApp(
       phase: scheduler.phase,
       lastIssue: scheduler.lastIssue,
       reviewDraft: config.ai.reviewDraft,
+      forceReplyTest: config.ai.forceReplyTest,
       reviewCount: scheduler.reviews,
       input: {
         audioChunkSeconds: config.audio.chunkSeconds,
