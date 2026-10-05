@@ -170,6 +170,7 @@ test("blind aliases and explicit reveal state survive database restart", () => {
     store.close();
     store = new Store(path);
     assert.equal(store.readerSnapshot().messages[0].attribution, "experiment");
+    assert.equal(store.readerSnapshot().messages[0].displayName, "Orbit");
   } finally {
     store.close();
     rmSync(directory, { recursive: true, force: true });

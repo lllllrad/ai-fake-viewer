@@ -198,7 +198,14 @@ export class Store extends EventEmitter {
     message: PublicMessage,
     revealed = this.originsRevealed(),
   ): PublicMessage {
-    if (revealed) return message;
+    const displayName =
+      message.attribution === "youtube"
+        ? message.displayName.replace(/^@/, "")
+        : message.attribution === "experiment"
+          ? message.displayName.replace(/\s*·\s*experiment\s*$/i, "").trim() ||
+            "시청자"
+          : message.displayName;
+    if (revealed) return { ...message, displayName };
     return {
       ...message,
       displayName: `시청자-${message.actorId.slice(0, 8)}`,

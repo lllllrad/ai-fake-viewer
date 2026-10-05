@@ -193,11 +193,11 @@ export const configSchema = z
           .max(6)
           .default([
             {
-              name: "Orbit · experiment",
+              name: "Orbit",
               style: "Brief, curious Korean spectator.",
             },
             {
-              name: "Pebble · experiment",
+              name: "Pebble",
               style: "Playful visual comparisons in short Korean.",
             },
           ]),
@@ -221,11 +221,11 @@ export const configSchema = z
         description: "A live broadcast. React only to what is visible.",
         personas: [
           {
-            name: "Orbit · experiment",
+            name: "Orbit",
             style: "Brief, curious Korean spectator.",
           },
           {
-            name: "Pebble · experiment",
+            name: "Pebble",
             style: "Playful visual comparisons in short Korean.",
           },
         ],

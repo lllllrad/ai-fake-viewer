@@ -122,6 +122,25 @@ test("T04: video selection rejects arbitrary hosts, paths and protocols", () => 
   ])
     assert.throws(() => videoId(v));
 });
+test("YouTube handles and AI persona display names omit platform markers", async () => {
+  const youtube = normalizeYoutube(
+    {
+      id: "youtube-message",
+      snippet: { type: "textMessageEvent", displayMessage: "hello" },
+      authorDetails: { channelId: "viewer", displayName: "@viewer" },
+    },
+    "live-chat",
+  );
+  assert.equal(youtube?.name, "viewer");
+
+  const h = harness(async (input: ModelInput) => say(input));
+  h.c.ai.personas = [{ name: "Orbit · experiment", style: "Brief." }];
+  await h.ai.tick();
+  assert.equal(h.s.snapshot().messages[0]?.displayName, "Orbit");
+  assert.equal(h.s.snapshot().messages[0]?.attribution, "experiment");
+  h.s.close();
+});
+
 test("T06: CHZZK object/string parser never treats chatChannelId as message ID", () => {
   const c = fixture("chzzk-chat");
   assert.deepEqual(normalizeChzzk(c), normalizeChzzk(JSON.stringify(c)));

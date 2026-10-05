@@ -67,7 +67,7 @@ ai:
   priceCheckedAt: ""
   description: A live broadcast. React only to visible events.
   personas:
-    - name: Orbit · experiment
+    - name: Orbit
       style: Brief, curious Korean spectator.
-    - name: Pebble · experiment
+    - name: Pebble
       style: Playful visual comparisons in short Korean.

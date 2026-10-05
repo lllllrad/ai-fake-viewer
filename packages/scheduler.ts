@@ -415,7 +415,10 @@ export class Scheduler {
         platform: "experiment",
         channel: this.store.sessionId,
         author: `persona-${p.persona}`,
-        name: this.config.ai.personas[p.persona].name,
+        name:
+          this.config.ai.personas[p.persona].name
+            .replace(/\s*·\s*experiment\s*$/i, "")
+            .trim() || "시청자",
         text: d.text!,
         replyToId: d.replyToMessageId,
       },

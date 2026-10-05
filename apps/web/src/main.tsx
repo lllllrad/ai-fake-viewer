@@ -2,8 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PublicMessage } from "../../../packages/contracts";
 import "./style.css";
-const disclosure =
-  "실제 플랫폼 채팅과 AI 캐릭터의 메시지가 함께 표시되는 실험 채팅입니다. 게임 캐릭터 수는 실제 시청자 수가 아닙니다.";
+const disclosure = "실시간 채팅 메시지와 참여자 반응이 표시됩니다.";
 function TokenForm({
   title,
   onSubmit,
@@ -53,7 +52,6 @@ function PublicChat() {
   const [messages, setMessages] = useState<PublicMessage[]>([]);
   const [state, setState] = useState("Connecting");
   const [demo, setDemo] = useState(false);
-  const [identities, setIdentities] = useState<any[]>([]);
   const [follow, setFollow] = useState(true);
   const end = useRef<HTMLDivElement>(null);
   const seq = useRef(0);
@@ -82,7 +80,6 @@ function PublicChat() {
           seq.current = m.lastSeq;
           setMessages(m.messages);
           setDemo(m.demo);
-          setIdentities(m.identities);
           setState(m.closed ? "Session closed" : "Connected");
         } else if (m.type === "event") {
           const v = m.event;
@@ -96,7 +93,6 @@ function PublicChat() {
                 .sort((x, y) => x.seq - y.seq)
                 .slice(-300),
             );
-          else if (v.type === "identity.revealed") setIdentities(v.payload);
           else if (v.type === "session.closed") setState("Session closed");
         }
       };
@@ -155,13 +151,6 @@ function PublicChat() {
             <div className="message-main">
               <div className="message-meta">
                 <strong>{m.displayName}</strong>
-                {m.attribution !== "mixed" && (
-                  <span className={`badge ${m.attribution}`}>
-                    {m.attribution === "experiment"
-                      ? "Experiment"
-                      : m.attribution.toUpperCase()}
-                  </span>
-                )}
                 <time>
                   {new Date(m.displayTime).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -170,14 +159,6 @@ function PublicChat() {
                 </time>
               </div>
               <p>{m.text}</p>
-              {identities.find((a) => a.actorId === m.actorId) && (
-                <small>
-                  {identities.find((a) => a.actorId === m.actorId).kind ===
-                  "system_generated"
-                    ? "System generated"
-                    : "Platform received"}
-                </small>
-              )}
             </div>
           </article>
         ))}
@@ -967,11 +948,6 @@ function Admin() {
                 .reverse()
                 .map((m: PublicMessage) => (
                   <div className="moderation-row" key={m.id}>
-                    {m.attribution !== "mixed" && (
-                      <span className={`badge ${m.attribution}`}>
-                        {m.attribution}
-                      </span>
-                    )}
                     <strong>{m.displayName}</strong>
                     <p>{m.text}</p>
                     <button
