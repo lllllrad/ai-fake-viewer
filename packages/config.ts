@@ -152,7 +152,7 @@ export const configSchema = z
           .enum(["chatgpt_subscription", "openai_api"])
           .default("chatgpt_subscription"),
         gate: gateSchema.default(() => gateSchema.parse({})),
-        manualApproval: z.boolean().default(true),
+        manualApproval: z.boolean().default(false),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
@@ -191,7 +191,7 @@ export const configSchema = z
       .default({
         provider: "chatgpt_subscription",
         gate: gateSchema.parse({}),
-        manualApproval: true,
+        manualApproval: false,
         visualMode: "continuous",
         maxCalls: 100,
         maxInputTokens: 24000,

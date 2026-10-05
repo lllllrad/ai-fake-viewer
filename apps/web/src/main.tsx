@@ -155,11 +155,13 @@ function PublicChat() {
             <div className="message-main">
               <div className="message-meta">
                 <strong>{m.displayName}</strong>
-                <span className={`badge ${m.attribution}`}>
-                  {m.attribution === "experiment"
-                    ? "Experiment"
-                    : m.attribution.toUpperCase()}
-                </span>
+                {m.attribution !== "mixed" && (
+                  <span className={`badge ${m.attribution}`}>
+                    {m.attribution === "experiment"
+                      ? "Experiment"
+                      : m.attribution.toUpperCase()}
+                  </span>
+                )}
                 <time>
                   {new Date(m.displayTime).toLocaleTimeString([], {
                     hour: "2-digit",
@@ -745,6 +747,11 @@ function Admin() {
                 masked frame is sent only if AI requests visual inspection.
                 Receivers and transcription continue when AI stops.
               </p>
+              <p className="hint">
+                {status.ai.manualApproval
+                  ? "Messages wait for your approval before publication."
+                  : "Messages publish automatically. Open Reader to watch without generation details; origins stay hidden until you reveal them."}
+              </p>
               {status.ai.pending && (
                 <div className="pending">
                   <span className="eyebrow">AWAITING REVIEW</span>
@@ -798,9 +805,11 @@ function Admin() {
                 .reverse()
                 .map((m: PublicMessage) => (
                   <div className="moderation-row" key={m.id}>
-                    <span className={`badge ${m.attribution}`}>
-                      {m.attribution}
-                    </span>
+                    {m.attribution !== "mixed" && (
+                      <span className={`badge ${m.attribution}`}>
+                        {m.attribution}
+                      </span>
+                    )}
                     <strong>{m.displayName}</strong>
                     <p>{m.text}</p>
                     <button

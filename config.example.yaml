@@ -44,7 +44,7 @@ policy:
   typesafeReviewed: false
 ai:
   provider: chatgpt_subscription # or openai_api
-  manualApproval: true
+  manualApproval: false # publish locally without reviewing each message
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   gate:
     enabled: false # requires on_request, TYPESAFE_API_KEY and typesafeReviewed

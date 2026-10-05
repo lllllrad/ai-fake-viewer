@@ -187,6 +187,42 @@ export class Store extends EventEmitter {
       closed: this.closed(),
     };
   }
+  originsRevealed() {
+    return !!this.db
+      .prepare(
+        "SELECT 1 FROM events WHERE session=? AND type='identity.revealed' LIMIT 1",
+      )
+      .get(this.sessionId);
+  }
+  readerMessage(
+    message: PublicMessage,
+    revealed = this.originsRevealed(),
+  ): PublicMessage {
+    if (revealed) return message;
+    return {
+      ...message,
+      displayName: `시청자-${message.actorId.slice(0, 8)}`,
+      attribution: "mixed",
+    };
+  }
+  readerSnapshot() {
+    const snapshot = this.snapshot();
+    const revealed = this.originsRevealed();
+    return {
+      ...snapshot,
+      messages: snapshot.messages
+        .filter((m): m is PublicMessage => m !== null)
+        .map((m) => this.readerMessage(m, revealed)),
+    };
+  }
+  readerEvent(event: PublicEvent): PublicEvent {
+    if (event.type === "message.added" || event.type === "message.updated")
+      return {
+        ...event,
+        payload: this.readerMessage(event.payload as PublicMessage),
+      };
+    return event;
+  }
   lastSeq() {
     return Number(
       (
@@ -265,6 +301,7 @@ export class Store extends EventEmitter {
       })),
     );
     this.emit("event", this.publicEvent(seq));
+    this.emit("reset");
   }
   closeSession() {
     if (this.closed()) return;

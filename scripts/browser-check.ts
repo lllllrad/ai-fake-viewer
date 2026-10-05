@@ -126,14 +126,26 @@ try {
   await adminPage
     .getByRole("button", { name: "Start AI", exact: true })
     .click();
-  await adminPage.getByText("AWAITING REVIEW").waitFor();
-  await adminPage.getByRole("button", { name: "Publish locally" }).click();
+
   await readerPage
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
     .waitFor();
   await overlay
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
     .waitFor();
+  assert.equal(await adminPage.getByText("AWAITING REVIEW").count(), 0);
+  for (const page of [readerPage, overlay]) {
+    assert.equal(await page.locator(".message .badge").count(), 0);
+    for (const name of await page
+      .locator(".message-meta strong")
+      .allTextContents())
+      assert.match(name, /^시청자-[0-9a-f]{8}$/);
+  }
+  await overlay.reload();
+  await overlay
+    .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
+    .waitFor();
+  assert.equal(await overlay.locator(".message .badge").count(), 0);
   await adminPage.getByRole("button", { name: "■ Stop AI now" }).click();
   store.ingestBatch([
     {
@@ -147,6 +159,12 @@ try {
   await readerPage
     .getByText("[DEMO] Receiver continues after AI stop")
     .waitFor();
+  await adminPage
+    .getByRole("button", { name: "Stop AI & reveal origins", exact: true })
+    .click();
+  await readerPage.getByText("System generated", { exact: true }).waitFor();
+  await overlay.getByText("System generated", { exact: true }).waitFor();
+  assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
   mkdirSync("test-results", { recursive: true });
   await adminPage.screenshot({
     path: "test-results/admin.png",

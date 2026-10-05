@@ -7,6 +7,7 @@ import { existsSync } from "node:fs";
 import { Readable } from "node:stream";
 import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
+import type { PublicEvent } from "../../packages/contracts.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
@@ -194,8 +195,9 @@ export async function createApp(
       }
       socket.send(JSON.stringify(data));
     };
-    const event = (e: unknown) => send({ type: "event", event: e });
-    const reset = () => send({ ...store.snapshot(), demo: !!opts.demo });
+    const event = (e: PublicEvent) =>
+      send({ type: "event", event: store.readerEvent(e) });
+    const reset = () => send({ ...store.readerSnapshot(), demo: !!opts.demo });
     socket.on("pong", () => {
       alive = true;
     });
@@ -273,6 +275,7 @@ export async function createApp(
     },
     ai: {
       state: scheduler.state,
+      manualApproval: config.ai.manualApproval,
       busy: scheduler.busy,
       pending: scheduler.pending
         ? {
@@ -355,7 +358,7 @@ export async function createApp(
       },
     },
     policy: config.policy,
-    messages: store.snapshot().messages,
+    messages: store.readerSnapshot().messages,
   }));
   app.get("/api/admin/links", async () => ({
     reader: `${publicOrigin}/reader#${readerToken}`,
