@@ -11,6 +11,7 @@ youtube:
   restFallback: true
 chzzk:
   enabled: false
+  # Register this exact URL in the CHZZK developer console. For a public HTTPS callback, replace only the origin.
   redirectUri: http://127.0.0.1:3210/oauth/chzzk/callback
 soop:
   mode: disabled

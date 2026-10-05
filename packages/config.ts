@@ -231,6 +231,36 @@ export const configSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
+    try {
+      const callback = new URL(c.chzzk.redirectUri);
+      const validPath = callback.pathname === "/oauth/chzzk/callback";
+      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
+      const validProtocol =
+        callback.protocol === "https:" ||
+        (callback.protocol === "http:" && loopback);
+      const validPort =
+        (callback.protocol === "https:" && !loopback) ||
+        (callback.protocol === "http:" &&
+          loopback &&
+          callback.port === String(c.port));
+      if (
+        !validPath ||
+        !validProtocol ||
+        !validPort ||
+        callback.username ||
+        callback.password ||
+        callback.search ||
+        callback.hash
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["chzzk", "redirectUri"],
+          message:
+            "CHZZK redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
+        });
+    } catch {
+      /* handled by URL schema */
+    }
     if (c.network.bindHost === "0.0.0.0") {
       let valid = false;
       try {

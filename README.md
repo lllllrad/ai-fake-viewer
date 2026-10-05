@@ -57,7 +57,7 @@ The complete official protocol sample, original hash, Apache license and one nec
 
 ### CHZZK: official OAuth and user session
 
-Register an application with **chat message read** and **user information read** permissions. Register the exact callback `http://127.0.0.1:3210/oauth/chzzk/callback` (or the corresponding configured port). Set `CHZZK_CLIENT_ID` and `CHZZK_CLIENT_SECRET` in `.env`, enable `chzzk.enabled`, and restart.
+Register an application with **chat message read** and **user information read** permissions. Register the exact callback configured by `chzzk.redirectUri` in `config.yaml`; the local default is `http://127.0.0.1:3210/oauth/chzzk/callback` (use the configured app port). If login is opened on a different PC, configure a public HTTPS callback and route its host/path to the app, then register that exact URL. Set `CHZZK_CLIENT_ID` and `CHZZK_CLIENT_SECRET` in `.env`, enable `chzzk.enabled`, and restart.
 
 Select **Authorize CHZZK**, sign in as the broadcaster and approve the requested read permissions. After the callback, return to admin and select **Start receivers**. Only the authenticated user's own channel is subscribed. Status becomes `subscribed` after the server confirms the CHAT subscription, not merely when the socket opens.
 
@@ -190,7 +190,7 @@ Both pages order by the original committed message sequence. Updates replace the
 
 **Hide** removes a message locally and erases its stored body. **Stop AI & reveal origins** stops generation before publishing a limited origin disclosure. Platform reception does not prove that the author did not use an external AI. **Close session** stops receivers and AI. **New session** starts a fresh history and budget; AI still requires a manual start.
 
-The browser UI bundles the OFL-licensed Noto Sans KR variable font for Korean messages. By default the server binds to `127.0.0.1`. For an OBS PC on the same private LAN, set `network.bindHost: 0.0.0.0` and `network.publicBaseUrl: http://APP_PC_LAN_IP:3210` in ignored `config.yaml`, then restart. The admin page, admin API and OAuth callbacks remain loopback-only on the app PC; copy the reader or overlay link from admin to OBS. Allow TCP 3210 between those two PCs in the host firewall if needed. Host and Origin checks, distinct role tokens, CSP and bounded inputs are enabled. Internet-facing access, HTTPS and proxy deployment are not supported in this release. Plain text rendering intentionally does not fetch arbitrary avatar/emote URLs. Custom platform badges and image emotes are not yet rendered.
+The browser UI bundles the OFL-licensed Noto Sans KR variable font for Korean messages. By default the server binds to `127.0.0.1`. For an OBS PC on the same private LAN, set `network.bindHost: 0.0.0.0` and `network.publicBaseUrl: http://APP_PC_LAN_IP:3210` in ignored `config.yaml`, then restart. The admin page and API remain loopback-only on the app PC. The CHZZK callback may use the exact configured HTTPS host for OAuth return; it does not expose admin routes. Copy the reader or overlay link from admin to OBS. Allow TCP 3210 between those two PCs in the host firewall if needed. Host and Origin checks, distinct role tokens, CSP and bounded inputs are enabled. Internet-facing access, HTTPS and proxy deployment are not supported in this release. Plain text rendering intentionally does not fetch arbitrary avatar/emote URLs. Custom platform badges and image emotes are not yet rendered.
 
 ## Storage and deletion
 
@@ -203,7 +203,7 @@ Use **Delete all local data** to stop receivers and AI, clear chat, transcripts,
 - Startup failure: use Node 24, run setup, check independent tokens, strict YAML fields, a writable database and a free port.
 - Receiver `config_required` / `auth_required`: check the relevant `.env` variables and app approval, then restart receivers. Do not substitute demo input for a failed live connection.
 - YouTube `waiting_live`: verify the broadcast is live, chat is enabled and your credentials can access it. `quota_blocked` requires quota review; `ended` requires a new live video.
-- CHZZK authorization cannot start in demo mode or before `chzzk.enabled: true` and both Client ID/Secret are set. Register an app with chat-read and user-info scopes and an exact local callback; restart in live mode. `permission_blocked`: verify own-channel login and scopes, then reauthorize. Silence during an active subscription is normal.
+- CHZZK authorization cannot start in demo mode or before `chzzk.enabled: true` and both Client ID/Secret are set. Register an app with chat-read and user-info scopes and the exact `chzzk.redirectUri` callback; use HTTPS if the login browser is remote, then restart in live mode. `permission_blocked`: verify own-channel login and scopes, then reauthorize. Silence during an active subscription is normal.
 - Capture: verify FFmpeg/device name, OBS camera startup, Program selection and masks. The preview is already masked. Capture stderr is not exposed because it may contain local paths.
 - AI: check the selected visual mode, Groq transcript status, preview confirmation when video is requested, ChatGPT sign-in and model selection (or API-key credentials and input-token-count support), review settings and remaining budget. It must be restarted manually after a pause/error.
 

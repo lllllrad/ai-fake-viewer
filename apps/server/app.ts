@@ -73,12 +73,14 @@ export async function createApp(
   const auth = new ChzzkAuth(opts.encryptionKey);
   const supervisor = new Supervisor(config, store, auth, !!opts.demo);
   let readerToken = opts.readerToken;
+  const chzzkCallback = new URL(config.chzzk.redirectUri);
   const origins = [
     `http://127.0.0.1:${config.port}`,
     `http://localhost:${config.port}`,
     ...(config.network.bindHost === "0.0.0.0"
       ? [config.network.publicBaseUrl]
       : []),
+    `${chzzkCallback.origin}`,
   ];
   const publicOrigin =
     config.network.bindHost === "0.0.0.0"
@@ -123,18 +125,27 @@ export async function createApp(
         "Content-Security-Policy",
         "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
       );
+    const requestPath = req.url.split("?", 1)[0];
+    const isChzzkCallback = requestPath === "/oauth/chzzk/callback";
     if (
       (req.url.startsWith("/api/admin/") ||
-        req.url.startsWith("/oauth/") ||
+        (req.url.startsWith("/oauth/") && !isChzzkCallback) ||
         ["/admin", "/"].includes(req.url)) &&
       !isLoopback(req.ip)
     )
       return reply
         .code(403)
         .send({ error: "Administrator access is local only" });
-    if (!hosts.includes(req.headers.host ?? ""))
-      return reply.code(403).send({ error: "Host rejected" });
-    if (req.headers.origin && !origins.includes(req.headers.origin))
+    const callbackHost = chzzkCallback.host;
+    const hostAllowed =
+      hosts.includes(req.headers.host ?? "") ||
+      (isChzzkCallback && req.headers.host === callbackHost);
+    if (!hostAllowed) return reply.code(403).send({ error: "Host rejected" });
+    if (
+      req.headers.origin &&
+      !origins.includes(req.headers.origin) &&
+      !(isChzzkCallback && req.headers.origin === chzzkCallback.origin)
+    )
       return reply.code(403).send({ error: "Origin rejected" });
     if (req.url.startsWith("/api/admin/") && req.url !== "/api/admin/login") {
       const token = req.headers.authorization?.replace(/^Bearer /, "");
@@ -574,18 +585,29 @@ export async function createApp(
     return { ok: true };
   });
   app.get("/oauth/chzzk/callback", async (req, reply) => {
-    const q = z
-      .object({
-        code: z.string().min(1).max(2048),
-        state: z.string().length(64),
-      })
-      .parse(req.query);
-    await auth.exchange(q.code, q.state);
-    return reply
-      .type("text/plain")
-      .send(
-        "CHZZK authorization saved. Return to the admin page and start receivers.",
-      );
+    try {
+      const q = z
+        .object({
+          code: z.string().min(1).max(2048),
+          state: z.string().length(64),
+          error: z.string().optional(),
+        })
+        .parse(req.query);
+      if (q.error) throw Error("CHZZK authorization was declined");
+      await auth.exchange(q.code, q.state);
+      return reply
+        .type("text/html; charset=utf-8")
+        .send(
+          '<!doctype html><meta charset="utf-8"><title>CHZZK 연결 완료</title><h1>CHZZK authorization complete</h1><p>인증이 저장됐습니다. 관리자 페이지로 돌아가 수신 시작을 누르세요.</p>',
+        );
+    } catch {
+      return reply
+        .code(400)
+        .type("text/html; charset=utf-8")
+        .send(
+          '<!doctype html><meta charset="utf-8"><title>CHZZK 연결 실패</title><h1>CHZZK authorization failed</h1><p>리디렉션 URL, 앱 등록 정보 또는 인증 상태를 확인한 뒤 관리자 페이지에서 다시 시도하세요.</p>',
+        );
+    }
   });
   if (existsSync(resolve("dist/web"))) {
     await app.register(fastifyStatic, {
