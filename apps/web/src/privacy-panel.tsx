@@ -89,6 +89,13 @@ export function PrivacyPanel() {
         </p>
       )}
       {error && <p role="alert">{error}</p>}
+      {data.profile.testReview && (
+        <p role="status" className="hint">
+          운영자 확인 테스트 설정입니다. 국가·보존·영상 공개의 상세 문구는 정리
+          중이며 시작을 차단하지 않습니다. 시청자 동의·철회와 안내 발송 제한은
+          적용됩니다.
+        </p>
+      )}
       <details>
         <summary>운영 프로필·공개 범위 확인</summary>
         <p>

@@ -121,6 +121,10 @@ try {
       "set OPENAI_MODEL and match privacy.processing.model",
     );
   }
+  if (config.privacy.testReview)
+    console.log(
+      "NOTE Operator-reviewed test configuration: descriptive policy metadata is deferred, not certified. Viewer consent and account/channel restrictions remain active.",
+    );
   const issues = profileIssues(config.privacy);
   report(
     "Live privacy profile",
@@ -153,7 +157,8 @@ try {
   }
   report(
     "Notice rate review",
-    config.privacy.notices.approvedLimitConfirmed,
+    config.privacy.notices.approvedLimitConfirmed ||
+      !!config.privacy.testReview,
     "confirm the actual permitted account/global rates before enabling notices",
   );
   console.log(

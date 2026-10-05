@@ -4,6 +4,15 @@ export class PrivacyActionError extends Error {}
 const text = z.string().trim().max(2000).default("");
 export const privacyProfileSchema = z
   .object({
+    // Explicit operator-reviewed testing may defer descriptive policy metadata.
+    // It never substitutes for viewer consent, authentication or channel approval.
+    testReview: z
+      .object({
+        reference: z.string().trim().min(1).max(2000),
+        checkedAt: z.string().datetime(),
+      })
+      .strict()
+      .optional(),
     operator: text,
     officer: text,
     contact: text,
@@ -115,22 +124,25 @@ export function profileIssues(p: PrivacyProfile): string[] {
     if (!p[key]) issues.push(`${key} 미설정`);
   for (const key of ["policyUrl", "noticeUrl"] as const)
     if (!/^https:\/\//.test(p[key])) issues.push(`${key} 공개 HTTPS 주소 필요`);
-  if (p.overseasBasis === "unconfirmed") issues.push("국외 처리 A/B 미확정");
+  if (!p.testReview && p.overseasBasis === "unconfirmed")
+    issues.push("국외 처리 A/B 미확정");
   const a = p.processing;
-  for (const key of [
-    "model",
-    "endpoint",
-    "subprocessors",
-    "retention",
-    "evidenceUrl",
-    "checkedAt",
-  ] as const)
+  for (const key of ["model", "endpoint"] as const)
     if (!a[key]) issues.push(`AI ${key} 미설정`);
+  if (!p.testReview)
+    for (const key of [
+      "subprocessors",
+      "retention",
+      "evidenceUrl",
+      "checkedAt",
+    ] as const)
+      if (!a[key]) issues.push(`AI ${key} 미설정`);
   if (
-    !a.countries.length ||
-    !a.accountSettingsVerified ||
-    !a.dataSharingDisabled ||
-    !a.noticeMatchesConfiguration
+    !p.testReview &&
+    (!a.countries.length ||
+      !a.accountSettingsVerified ||
+      !a.dataSharingDisabled ||
+      !a.noticeMatchesConfiguration)
   )
     issues.push("AI 국가·계약·보존·안내 일치 확인 필요");
   if (
@@ -147,8 +159,9 @@ export function profileIssues(p: PrivacyProfile): string[] {
   )
     issues.push("선택한 OpenAI 서비스의 확인된 endpoint 필요");
   if (
-    !p.publications.length ||
-    p.publications.some((x) => !x.reviewed || !x.noticeMatches)
+    !p.testReview &&
+    (!p.publications.length ||
+      p.publications.some((x) => !x.reviewed || !x.noticeMatches))
   )
     issues.push("영상 공개 플랫폼·채널·보관·국외 처리 확인 필요");
   return issues;
@@ -161,6 +174,7 @@ export function assertProfileUpdate(
 ) {
   const scope = (p: PrivacyProfile) =>
     JSON.stringify({
+      testReview: p.testReview,
       operator: p.operator,
       collection: p.collectionNotice,
       publication: p.publicationNotice,

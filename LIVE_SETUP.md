@@ -20,6 +20,16 @@ Populate `privacy` in `config.yaml` from the actual operator's decisions:
 
 Use `sh run-command.sh npm run setup:check` to list local configuration and authorization prerequisites without exposing secrets or calling providers. No blank value means “implicitly approved.” Read the current profile in admin before starting. Profile changes invalidate consent; restarting with edited YAML clears session data. The authenticated profile PUT endpoint affects only the current process, not YAML.
 
+If the operator has already confirmed the revised policy scope and explicitly
+requests testing before completing descriptive metadata, use the
+[operator-reviewed test configuration](docs/privacy-implementation.md#operator-reviewed-test-configuration).
+Set `privacy.testReview.reference` to the actual review record and `checkedAt` to
+its ISO UTC timestamp; do not invent provider countries or retention values. Keep
+real stage notices, broadcaster approvals and credentials. `setup:check` reports
+this exception; passing local checks does not verify remote API permissions.
+Restart after editing YAML. A CHZZK authorization error still requires correcting
+the app permissions and reconnecting the account.
+
 ## 3. Configure the model and permitted inputs
 
 Choose `ai.provider: chatgpt_subscription` to use the Responses API through Sign in with ChatGPT without `OPENAI_API_KEY` or `OPENAI_MODEL`. Open admin connection/AI details and start the **Sign in with ChatGPT** flow through the account connection control, authorize this app, load available models and select one. Set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, endpoint `https://api.openai.com/v1` and the same model slug; review that subscription's actual data handling in the public notice. Saved encrypted app accounts remain reusable. Codex CLI credentials are not imported.

@@ -69,6 +69,10 @@ ai:
 # Fill only from this operator's actual approvals, public notices and API settings.
 # Empty/unconfirmed defaults intentionally block live collection/AI.
 privacy:
+  # Optional only after an actual operator review for live testing; see LIVE_SETUP.md.
+  # testReview:
+  #   reference: <actual review record>
+  #   checkedAt: <ISO UTC timestamp>
   operator: ""
   officer: ""
   contact: ""

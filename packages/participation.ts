@@ -267,7 +267,9 @@ export class Participation {
       !["UNCONSENTED", "WAITING_CONSENT"].includes(p.state) ||
       !this.available(p.platform, p.broadcaster) ||
       !a?.fixedNotices ||
-      !this.profile.notices.approvedLimitConfirmed ||
+      !(
+        this.profile.notices.approvedLimitConfirmed || this.profile.testReview
+      ) ||
       now - p.lastNoticeAt < this.profile.notices.perAccountIntervalMs ||
       this.sent.length >= this.profile.notices.globalPerMinute
     )

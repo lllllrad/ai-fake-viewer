@@ -43,3 +43,5 @@ See [live setup](../LIVE_SETUP.md) for credentials, broadcaster identity, review
 ## Keeping this contract current
 
 When requirements change, update this overview and the owning detailed specification together, identify any implementation gap in TASKS, and record only checks actually run in the verification report. Explicit accepted requirement changes supersede older requirements; an implementation limitation does not silently redefine the desired behavior. Private source material stays private: preserve its accepted behavior here, not a broken link to an unavailable file. Dated research and verification are evidence for their stated revision and scope, not current acceptance.
+
+The explicit [operator-reviewed test configuration](privacy-implementation.md#operator-reviewed-test-configuration) can defer descriptive profile metadata during reviewed testing. Viewer consent, withdrawal, channel approval, model compatibility and actual notice limits remain required.

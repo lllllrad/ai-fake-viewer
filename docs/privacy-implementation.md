@@ -113,3 +113,25 @@ All credential and rights administration uses authenticated, local/Origin-restri
 | API keys, client secrets and app access/encryption keys | Operator-managed environment/configuration outside ordinary chat storage.                                                                                                                                                                                                                                         | OAuth disconnect does not remove externally supplied API keys or `.env` secrets. Stop use, revoke obsolete keys at the provider and remove the protected local configuration/backup copies when no longer needed.                                                                                                                                                                                                                                                                                             |
 
 Deleting app data is not a promise of immediate provider-log deletion, remote grant revocation or forensic removal from RAM/storage. See the [PC01–PC12 evidence map](privacy-review-evidence.md) and [live operational record](../LIVE_SETUP.md#provider-settings-and-live-acceptance-record).
+
+## Operator-reviewed test configuration
+
+An operator who has already reviewed the revised policy scope can explicitly set
+`privacy.testReview.reference` (nonempty review evidence) and `checkedAt` (ISO UTC
+timestamp) for live testing while descriptive profile fields are being completed.
+This optional configuration defers the startup checks for overseas-basis recording,
+provider countries/subprocessors/retention/evidence/date, account-setting review
+flags, publication metadata and the notice-rate review flag. It does not certify
+provider facts, change account data-sharing settings or establish platform approval.
+Unknown values stay unknown; the dashboard labels this as a test configuration.
+Without this explicit review, the ordinary complete-profile checks still apply.
+
+Operator/contact information, HTTPS policy/notice URLs, notice versions and stage
+texts, model/endpoint/provider compatibility and exact broadcaster approvals remain
+required. Authentication and API permissions are unchanged. Every viewer still
+needs each delivered consent stage followed by a fresh consent command. Withdrawal,
+raw-text exclusion and actual account/global notice-rate limits remain enforced.
+Changing or removing the review requires a new notice version, invalidating old
+participation through the usual profile-update handling. YAML changes require a
+server restart and a fresh session. This exception is for explicitly reviewed
+testing; completing the descriptive profile remains an operational task.

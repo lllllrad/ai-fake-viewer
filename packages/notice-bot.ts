@@ -34,7 +34,7 @@ export class NoticeBot {
     if (
       !p.available(this.platform, this.broadcaster) ||
       !p.approval(this.platform, this.broadcaster)?.fixedNotices ||
-      !p.profile.notices.approvedLimitConfirmed
+      !(p.profile.notices.approvedLimitConfirmed || p.profile.testReview)
     ) {
       this.pending = undefined;
       this.state = "approval_required";
@@ -112,7 +112,7 @@ export class NoticeBot {
         : person.state === "WAITING_CONSENT" && person.deliveredAt === null) &&
       p.available(this.platform, this.broadcaster) &&
       !!p.approval(this.platform, this.broadcaster)?.fixedNotices &&
-      p.profile.notices.approvedLimitConfirmed
+      (p.profile.notices.approvedLimitConfirmed || !!p.profile.testReview)
     );
   }
   reservePart(id: string) {
@@ -148,7 +148,7 @@ export class NoticeBot {
       person.epoch !== job.epoch ||
       !p.available(this.platform, this.broadcaster) ||
       !p.approval(this.platform, this.broadcaster)?.fixedNotices ||
-      !p.profile.notices.approvedLimitConfirmed
+      !(p.profile.notices.approvedLimitConfirmed || p.profile.testReview)
     ) {
       this.state = "delivery_unconfirmed";
       return true;

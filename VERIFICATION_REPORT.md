@@ -4,6 +4,29 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Operator-reviewed live-test configuration — 2026-10-05
+
+Added optional evidence-backed `privacy.testReview` for an operator who explicitly
+confirmed the revised scope while descriptive metadata is still pending. Unknown
+provider/publication values are not replaced with invented facts. Ordinary defaults
+remain strict. Viewer consent/delivery, withdrawal, exact channel approvals,
+provider compatibility and account/global notice limits remain enforced. Changing
+review evidence requires a new notice version. The dashboard explains the exception;
+local setup checks report it separately. See the
+[test configuration contract](docs/privacy-implementation.md#operator-reviewed-test-configuration).
+
+Validation: `sh run-command.sh npm run check` passed documentation/config checks,
+TypeScript/Vite and all 135 tests, including four new review-mode regression tests.
+`sh run-command.sh npm run test:browser` passed on Chromium 153.0.8010.12 without
+browser/CSP errors. Local `setup:check` passed. The idle live server was restarted
+with private operator-reviewed configuration: authenticated status reported privacy
+ready with no issues, AI readiness true, and YouTube/CHZZK receiver subscriptions.
+AI generation remained stopped. A separate authenticated CHZZK account-information
+lookup still returned a permission error; receiver subscription does not establish
+permission to send notices. No manual live notice or model request was issued.
+Actual notice delivery and full live acceptance remain unverified. Operator data,
+channel settings and credentials remain outside Git.
+
 ## CHZZK reauthorization action placement — 2026-10-05
 
 Moved the CHZZK authorization action from the lower receiver toolbar to the Live setup card immediately below its status/callback. The localized label explicitly describes connecting or reauthorizing. Saved-authorization presence is exposed separately from configured credentials; existing authorization does not hide or disable reauthorization. Instructions explain restarting after environment changes.
