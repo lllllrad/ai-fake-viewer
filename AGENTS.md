@@ -16,6 +16,13 @@ custom/system-library overrides, missing dependencies, test ports and artifacts.
 The wrapper does not install packages, load `.env`, start a server or run a model
 request unless the supplied command does so. Do not use a live server to run fixtures.
 
+Manage the shared live server through `sh run-command.sh just server-start`,
+`server-stop`, `server-restart` and `server-status` from [justfile](justfile).
+Do not launch a replacement detached server with `npm start`, `nohup` or a custom
+subprocess: those bypass `.local/server.pid` and break the managed restart flow.
+If an unmanaged process occupies the port, identify its repository and process
+before stopping it; do not kill arbitrary port owners or remove a live PID file.
+
 Update the owning documentation when behavior changes; consult the
 [documentation index](docs/README.md). Keep requirement gaps separate from verified
 implementation and record validation scope accurately.
