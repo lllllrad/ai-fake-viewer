@@ -50,7 +50,7 @@ export class Store extends EventEmitter {
  CREATE TABLE IF NOT EXISTS persona_name_denylist(session_id TEXT NOT NULL,normalized_name TEXT NOT NULL,reason TEXT,created INTEGER NOT NULL,PRIMARY KEY(session_id,normalized_name));
  CREATE TABLE IF NOT EXISTS persona_cast(session_id TEXT NOT NULL,member_id TEXT NOT NULL,persona_id TEXT NOT NULL,version_id TEXT NOT NULL,definition_snapshot TEXT NOT NULL,definition_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL,muted INTEGER NOT NULL DEFAULT 0,attention REAL NOT NULL DEFAULT 0.5,focus_tags TEXT NOT NULL DEFAULT '[]',epoch INTEGER NOT NULL DEFAULT 0,guessing_eligible INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(session_id,member_id));
  CREATE TABLE IF NOT EXISTS persona_presence(session_id TEXT NOT NULL,member_id TEXT NOT NULL,interval_no INTEGER NOT NULL,joined_at INTEGER NOT NULL,joined_after_seq INTEGER NOT NULL,left_at INTEGER,left_after_seq INTEGER,PRIMARY KEY(session_id,member_id,interval_no));
- CREATE TABLE IF NOT EXISTS persona_reaction_attempts(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,member_id TEXT NOT NULL,event_ids TEXT NOT NULL,context_cutoff INTEGER NOT NULL,session_epoch INTEGER NOT NULL,member_epoch INTEGER NOT NULL,definition_hash TEXT NOT NULL,config_revision INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,model_manifest TEXT,result TEXT,public_message_id TEXT,UNIQUE(session_id,member_id,context_cutoff));
+ CREATE TABLE IF NOT EXISTS persona_reaction_attempts(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,member_id TEXT NOT NULL,event_ids TEXT NOT NULL,context_cutoff INTEGER NOT NULL,session_epoch INTEGER NOT NULL,member_epoch INTEGER NOT NULL,definition_hash TEXT NOT NULL,config_revision INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,model_manifest TEXT,result TEXT,public_message_id TEXT,context_key TEXT NOT NULL,UNIQUE(session_id,member_id,context_key));
  CREATE TABLE IF NOT EXISTS persona_publication_outbox(message_id TEXT PRIMARY KEY,attempt_id TEXT NOT NULL UNIQUE,state TEXT NOT NULL,created INTEGER NOT NULL,dispatched INTEGER,FOREIGN KEY(attempt_id) REFERENCES persona_reaction_attempts(id));
  CREATE TABLE IF NOT EXISTS persona_operator_commands(id TEXT NOT NULL,session_id TEXT NOT NULL,operation TEXT NOT NULL,request_hash TEXT NOT NULL,result TEXT NOT NULL,status_code INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,PRIMARY KEY(session_id,operation,id));
  CREATE TABLE IF NOT EXISTS persona_jobs(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,progress INTEGER NOT NULL,total INTEGER NOT NULL,result TEXT,error TEXT,created INTEGER NOT NULL,updated INTEGER NOT NULL);
@@ -67,6 +67,35 @@ export class Store extends EventEmitter {
       this.db.exec(
         "ALTER TABLE messages ADD COLUMN consent_epoch INTEGER NOT NULL DEFAULT 0",
       );
+    const attemptColumns = (
+      this.db.prepare("PRAGMA table_info(persona_reaction_attempts)").all() as {
+        name: string;
+      }[]
+    ).map((c) => c.name);
+    if (!attemptColumns.includes("context_key")) {
+      const oldSql = (
+        this.db
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE name='persona_reaction_attempts'",
+          )
+          .get() as { sql: string }
+      ).sql;
+      const replacement = oldSql
+        .replace(
+          /CREATE TABLE(?: IF NOT EXISTS)? "?persona_reaction_attempts"?/,
+          "CREATE TABLE persona_reaction_attempts_v3",
+        )
+        .replace(
+          "UNIQUE(session_id,member_id,context_cutoff)",
+          "context_key TEXT NOT NULL,UNIQUE(session_id,member_id,context_key)",
+        );
+      this.transaction(() => {
+        this.db.exec(replacement);
+        this.db.exec(
+          "INSERT INTO persona_reaction_attempts_v3 SELECT *, 'legacy:' || context_cutoff FROM persona_reaction_attempts; DROP TABLE persona_reaction_attempts; ALTER TABLE persona_reaction_attempts_v3 RENAME TO persona_reaction_attempts;",
+        );
+      });
+    }
     const castColumns = (
       this.db.prepare("PRAGMA table_info(persona_cast)").all() as any[]
     ).map((c) => c.name);
@@ -1350,27 +1379,34 @@ export class Store extends EventEmitter {
     memberId: string;
     eventIds: string[];
     cutoff: number;
+    contextKey?: string;
     sessionEpoch: number;
     memberEpoch: number;
     definitionHash: string;
     configRevision: number;
   }) {
-    this.db
-      .prepare(
-        "INSERT INTO persona_reaction_attempts(id,session_id,member_id,event_ids,context_cutoff,session_epoch,member_epoch,definition_hash,config_revision,state,started_at) VALUES(?,?,?,?,?,?,?,?,?,'generating',?)",
-      )
-      .run(
-        input.id,
-        input.sessionId,
-        input.memberId,
-        JSON.stringify(input.eventIds),
-        input.cutoff,
-        input.sessionEpoch,
-        input.memberEpoch,
-        input.definitionHash,
-        input.configRevision,
-        Date.now(),
-      );
+    return (
+      this.db
+        .prepare(
+          "INSERT INTO persona_reaction_attempts(id,session_id,member_id,event_ids,context_cutoff,session_epoch,member_epoch,definition_hash,config_revision,state,started_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,'generating',?,?) ON CONFLICT(session_id,member_id,context_key) DO NOTHING",
+        )
+        .run(
+          input.id,
+          input.sessionId,
+          input.memberId,
+          JSON.stringify(input.eventIds),
+          input.cutoff,
+          input.sessionEpoch,
+          input.memberEpoch,
+          input.definitionHash,
+          input.configRevision,
+          Date.now(),
+          input.contextKey ??
+            createHash("sha256")
+              .update(JSON.stringify([input.cutoff, input.eventIds]))
+              .digest("hex"),
+        ).changes > 0
+    );
   }
   finishPersonaAttempt(
     id: string,

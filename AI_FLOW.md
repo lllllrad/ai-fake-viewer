@@ -49,6 +49,15 @@ Disabled live because screen chat cannot be reliably consent-filtered. No frame 
 
 Enabled AI waits when no new permitted human text or enabled transcript is available; readiness alone does not guarantee generation. New permitted human text or enabled speech triggers evaluation within `ai.contextWindowSeconds`; synthetic replies alone do not trigger loops. Random pacing, global/per-character cooldown, session budgets and busy-chat suppression apply. Current message DTOs, recent synthetic replies, automatic persona style and approved fixed summaries are explicit model context. Consent revision is captured with the input. Queue, review and publication invalidation uses the existing scheduler/persona cancellation controls.
 
+Reaction deduplication uses a hash of the current chat sequence and message,
+transcript and frame IDs, scoped to persona session/member. The chat sequence is
+still recorded for diagnostics, but it is not the sole identity: fresh speech can
+arrive without any new chat event. Duplicate context reservations are skipped
+without raising a database uniqueness error. The scheduler catches preparation
+errors as well as model failures; unexpected preparation failures stop AI with
+`scheduler_error` instead of terminating the server. Legacy standalone databases
+migrate the older sequence-only uniqueness constraint without dropping attempts.
+
 ### 4. Legacy Jev timing veto (disabled live)
 
 Legacy utility only. Enabling it blocks live readiness rather than transmitting text to TypeSafe.

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
 import type { Transcriber } from "./transcription.ts";
@@ -136,6 +136,20 @@ export class Scheduler {
     return ["experiment", "youtube", "chzzk", "soop"];
   }
   async tick(now = Date.now()) {
+    try {
+      await this.tickOnce(now);
+    } catch {
+      this.rejects++;
+      this.activeInput = undefined;
+      this.busy = false;
+      try {
+        this.stop("scheduler_error");
+      } catch {
+        /* The timer and local gate are already stopped. */
+      }
+    }
+  }
+  private async tickOnce(now: number) {
     if (this.state !== "running") return;
     if (
       this.config.ai.visualMode === "continuous" &&
@@ -458,8 +472,8 @@ export class Scheduler {
     input.chatSummary = this.store.chatSummary();
     this.activeInput = input;
     const attemptId = activeMember && personaRuntime ? randomUUID() : undefined;
-    if (attemptId && activeMember && personaRuntime)
-      this.store.beginPersonaAttempt({
+    if (attemptId && activeMember && personaRuntime) {
+      const created = this.store.beginPersonaAttempt({
         id: attemptId,
         sessionId: personaRuntime.id,
         memberId: activeMember.id,
@@ -470,11 +484,28 @@ export class Scheduler {
           ]),
         ].slice(0, 3),
         cutoff: this.store.lastSeq(),
+        contextKey: createHash("sha256")
+          .update(
+            JSON.stringify({
+              cutoff: this.store.lastSeq(),
+              messages: messages.map((m) => m.id),
+              transcripts: transcripts.map((t) => t.id),
+              frames: frames.map((f) => f.id),
+            }),
+          )
+          .digest("hex"),
         sessionEpoch: personaRuntime.controlEpoch,
         memberEpoch: activeMember.epoch,
         definitionHash: activeMember.hash,
         configRevision: personaRuntime.configRevision,
       });
+      if (!created) {
+        this.activeInput = undefined;
+        this.lastHash = hash;
+        this.phase = "waiting_for_input";
+        return;
+      }
+    }
     this.controller = new AbortController();
     const signal = AbortSignal.any([
       this.controller.signal,

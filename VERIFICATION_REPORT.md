@@ -4,6 +4,28 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Speech-only persona attempt crash recovery — 2026-10-05
+
+The live process exited on an unhandled SQLite uniqueness failure in
+`Store.beginPersonaAttempt`, before the scheduler's model-request error handler.
+Reaction attempts were unique by persona session/member and chat sequence alone;
+new speech could trigger the same member while the chat sequence had not changed.
+
+Attempts now use a context hash covering chat sequence and message/transcript/frame
+IDs. The original chat cutoff remains available for diagnostics. Duplicate context
+reservations return false instead of throwing; the scheduler skips them. A top-level
+scheduler boundary stops AI on unexpected preparation failure without terminating
+the web server. Standalone legacy tables migrate without losing attempts.
+
+Validation: `sh run-command.sh npm run check` passed documentation/schema checks,
+TypeScript/Vite and all 146 tests. New regressions reproduce successive speech-only
+inputs at an unchanged chat sequence, verify timer-triggered preparation failures
+stop AI safely, and exercise duplicate reservations and legacy-table migration.
+The service was first recovered through `just server-start`, then restarted through
+`just server-restart` after the fix. AI remains manually started after recovery;
+ordinary session/consent state is not restored. No live model call was issued for
+verification.
+
 ## YouTube repeated notices and stalled consent — 2026-10-05
 
 Live notice metadata showed repeated first parts of the same three-part stage.
