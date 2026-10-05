@@ -8,6 +8,8 @@ See [AI_FLOW.md](AI_FLOW.md) for the full AI input, tool, review and publication
 
 The administrator dashboard layout, system status and controls, viewer-consent notices, and required acceptance checks are specified in [the admin dashboard functional spec](docs/admin-dashboard-functional-spec.md). The first admin section is the operations dashboard: masked Program preview, per-platform chat reception, latest transcript, model readiness, AI on/off, emergency stop and explicit identity reveal. Healthy inputs show only “정상”; chat health is summarized across platforms. Preparation and failures show a brief next action. Transport states, counters and model stages are hidden under the initially collapsed “연결 및 AI 상세 설정” section; dashboard links open the relevant controls. Persona studio follows the dashboard. Its implementation-gap table records remaining work. See the [documentation index](docs/README.md) for document ownership and status.
 
+For development and validation, use `sh run-command.sh npm run check`. The launcher also prepares the existing Linux browser environment; see the [development guide](docs/development.md).
+
 ## Quick start
 
 Install Node.js **24.x** (including npm), then run from this repository:

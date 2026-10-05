@@ -4,6 +4,13 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. As of the 2026-10-05 documentation review, the current code also contains persona P0, consent gating, an official SOOP browser SDK path and automatic AI recovery; these are described in the [documentation index](docs/README.md). Historical statements that the official SOOP implementation was blocked are superseded as implementation descriptions, while live reception remains unverified.
 
+## Development command launcher — 2026-10-05
+
+- Added `run-command.sh`, root `AGENTS.md` and [development instructions](docs/development.md) so repository tools and browser checks can reuse mise and the existing temporary Linux library/font bundle without manual environment prefixes.
+- Shell syntax and launcher checks: PASS for repository working directory, arguments containing spaces/metacharacters, default environment, preserving existing library/font settings, system-library opt-out, missing explicit bundle diagnostics and command exit-code propagation.
+- `sh run-command.sh npm run test:browser`: PASS with the existing built web assets, Chromium 153.0.8010.12 and no page errors. No manual `LD_LIBRARY_PATH` or `FONTCONFIG_FILE` prefix was supplied.
+- Document links/config validation, changed Markdown formatting and whitespace checks: PASS. The wrapper does not provision missing OS dependencies; the guide records that limitation and recovery options.
+
 ## Simplified operational status — 2026-10-05
 
 - `npm run check`: PASS, build/documentation checks and **62 tests**. Health aggregation covers healthy transport variants, preparing/stopped/disabled/unknown inputs, partial failures and safe fallback text.
