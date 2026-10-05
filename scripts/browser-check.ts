@@ -10,13 +10,20 @@ const chatgptDir = mkdtempSync(join(tmpdir(), "mixed-chat-browser-"));
 const admin = "a".repeat(64),
   reader = "r".repeat(64);
 const { app, store, capture } = await createApp(
-  configSchema.parse({ port, database: ":memory:" }),
+  configSchema.parse({
+    port,
+    database: ":memory:",
+    chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
+    soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
+  }),
   {
     demo: true,
     adminToken: admin,
     readerToken: reader,
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(chatgptDir, "tokens"),
+    chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
+    soopTokenPath: join(chatgptDir, "soop.tokens"),
     startInputs: false,
   },
 );

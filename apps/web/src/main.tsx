@@ -2036,10 +2036,14 @@ function Admin() {
                 </p>
                 <p>
                   Platform text context approved: YouTube{" "}
-                  {String(status.ai.input.platformTextApproved.youtube)}, CHZZK{" "}
-                  {String(status.ai.input.platformTextApproved.chzzk)}, SOOP{" "}
-                  {String(status.ai.input.platformTextApproved.soop)}. Other
-                  input includes the broadcast description, persona style,
+                  {String(
+                    status.ai.input.platformTextApproved?.youtube ?? false,
+                  )}
+                  , CHZZK{" "}
+                  {String(status.ai.input.platformTextApproved?.chzzk ?? false)}
+                  , SOOP{" "}
+                  {String(status.ai.input.platformTextApproved?.soop ?? false)}.
+                  Other input includes the broadcast description, persona style,
                   pseudonymous speaker labels and recent spectator messages.
                 </p>
                 <p>
