@@ -4,6 +4,12 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## YouTube OAuth callback encoding — 2026-10-05
+
+The localized callback used `text/plain` without a charset, allowing browsers to misdecode its UTF-8 completion text. Both success and failure responses now explicitly use `text/plain; charset=utf-8`. The route fixture covers a complete synthetic OAuth exchange, connected status and exact localized messages/headers for both outcomes; callback credentials are not reflected in the response.
+
+Validation: `sh run-command.sh npx tsx --test tests/youtube-notices.test.ts` passed all 11 tests; `sh run-command.sh npx tsc --noEmit` passed. Local saved-authorization metadata confirmed configured credentials and a resolved channel without replaying the user's callback or making an external request. No real chat was sent and no running server was restarted.
+
 ## Local live-test setup diagnostics — 2026-10-05
 
 Added `sh run-command.sh npm run setup:check`, a read-only local configuration/credential-presence check. It does not refresh tokens or contact providers and reports missing privacy fields, authentication/model mismatches, broadcaster approvals and notice-rate confirmation without printing secrets. New-install setup includes YouTube/SOOP OAuth fields; `.env.example` distinguishes receipt-only API keys from OAuth sending credentials. Existing local files are not overwritten by the setup command.

@@ -193,6 +193,22 @@ test("long unbroken notice URLs are rejected instead of truncated", () => {
 });
 test("YouTube OAuth routes require admin initiation, validate public callback state and disallow manual delivery", async (t) => {
   env(t);
+  t.mock.method(globalThis, "fetch", async (url: any) => {
+    if (String(url) === "https://oauth2.googleapis.com/token")
+      return Response.json({
+        access_token: "fixture-access",
+        refresh_token: "fixture-refresh",
+        expires_in: 3600,
+        token_type: "Bearer",
+        scope: youtubeScope,
+      });
+    if (
+      String(url) ===
+      "https://www.googleapis.com/youtube/v3/channels?part=id&mine=true"
+    )
+      return Response.json({ items: [{ id: "fixture" }] });
+    throw Error("Unexpected fixture request");
+  });
   const dir = mkdtempSync(join(tmpdir(), "youtube-routes-"));
   const app = await createApp(
     configSchema.parse({
@@ -245,6 +261,28 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
     });
     assert.equal(callback.statusCode, 400);
     assert(!callback.body.includes("private-code"));
+    assert.match(
+      String(callback.headers["content-type"]),
+      /^text\/plain; charset=utf-8$/i,
+    );
+    assert(callback.body.includes("YouTube 연결 실패"));
+    const success = await app.app.inject({
+      url: `/oauth/youtube/callback?state=${encodeURIComponent(new URL(login.json().url).searchParams.get("state")!)}&code=fixture-code`,
+      headers: { host: "example.test" },
+      remoteAddress: "203.0.113.10",
+    });
+    assert.equal(success.statusCode, 200);
+    assert.match(
+      String(success.headers["content-type"]),
+      /^text\/plain; charset=utf-8$/i,
+    );
+    assert(success.body.includes("YouTube 연결 완료"));
+    assert(!success.body.includes("fixture-code"));
+    const status = (
+      await app.app.inject({ url: "/api/admin/status", headers })
+    ).json();
+    assert.equal(status.setup.youtube.connected, true);
+
     app.store.ingestBatch([privacyMessage("u", "hello", Date.now())]);
     const person = app.participation!.get("youtube", "fixture", "u")!;
     assert.equal(

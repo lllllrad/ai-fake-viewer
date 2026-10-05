@@ -1555,14 +1555,14 @@ export async function createApp(
       await youtubeAuth.callback(q.code, q.state, !!q.error);
       await supervisor.stopPlatform("youtube");
       return reply
-        .type("text/plain")
+        .type("text/plain; charset=utf-8")
         .send(
           "YouTube 연결 완료. 관리자 화면으로 돌아가 수신기를 시작해 주세요. 자동 안내는 연결한 채널의 승인된 방송에서 발송됩니다.",
         );
     } catch {
       return reply
         .code(400)
-        .type("text/plain")
+        .type("text/plain; charset=utf-8")
         .send(
           "YouTube 연결 실패. 클라이언트 정보·등록된 redirect URI·채팅 발송 권한을 확인하고 관리자 화면에서 다시 연결해 주세요.",
         );
