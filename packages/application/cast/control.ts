@@ -2,6 +2,7 @@ import { ensure } from "./errors.ts";
 export interface CastControlSnapshot {
   id: string;
   state: string;
+  armed: boolean;
   revision: number;
   controlEpoch: number;
 }
@@ -25,6 +26,15 @@ export class CastExecutionControl {
     private readonly repository: CastControlRepository,
     private readonly now: () => number,
   ) {}
+  ensureArmed(id: string) {
+    this.repository.transaction(() => {
+      ensure(!this.repository.closed(), "SESSION_CLOSED");
+      const snapshot = this.repository.read(id);
+      ensure(snapshot, "SESSION_NOT_FOUND");
+      ensure(snapshot.state === "live", "STALE_CONTROL_EPOCH");
+      if (!snapshot.armed) this.arm(id, snapshot.controlEpoch);
+    });
+  }
   arm(id: string, epoch: number) {
     this.repository.transaction(() => {
       ensure(!this.repository.closed(), "SESSION_CLOSED");

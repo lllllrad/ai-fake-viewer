@@ -273,6 +273,16 @@ Arming checks the current epoch and an open broadcast, and commits its audit in
 the same transaction. Failure cannot leave a half-applied control transition;
 re-arming never revives canceled attempts.
 
+Live server composition now instantiates only the
+[broadcast cast API](../../packages/application/cast/broadcast-cast.ts) through
+its [runtime factory](../../packages/infrastructure/cast/runtime.ts). AI startup
+prepares/reuses the cast and arms its current execution; status and shutdown use
+the same owners. It does not seed authoring templates, construct audition clients
+or install authoring idempotency hooks. The legacy endpoints and their persistence
+hooks are isolated in [demo routes](../../apps/server/demo/persona-routes.ts),
+loaded only for synthetic demo operation. They remain reference functionality,
+not part of the live product's architecture or UI.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

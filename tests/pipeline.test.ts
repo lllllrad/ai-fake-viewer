@@ -40,7 +40,7 @@ test("broadcast end turns off AI and clears its restart intent", async () => {
 
 test("global AI toggle arms the live persona and reveal disarms it with persisted status", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "pipeline-controls-"));
-  const { app, store, scheduler, personas, capture, transcriber, supervisor } =
+  const { app, store, scheduler, capture, transcriber, supervisor } =
     await createApp(
       configSchema.parse({
         database: ":memory:",
@@ -64,20 +64,6 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
     authorization: `Bearer ${"a".repeat(64)}`,
   };
   try {
-    const persona = personas.createBrief({
-      session_title: "Fixture",
-      topic: "Fixture",
-      audience_intent: "Observe",
-      public_context: "",
-      private_production_context: "",
-      tone_policy: "Brief",
-      candidate_count: 1,
-      cast_size: 1,
-    });
-    // Isolate the control path from authoring/model calls.
-    store.db
-      .prepare("UPDATE persona_sessions SET state='live' WHERE id=?")
-      .run(persona.id);
     let response = await app.inject({
       method: "POST",
       url: "/api/admin/ai/start",

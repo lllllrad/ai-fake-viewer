@@ -29,13 +29,14 @@ export class SqliteCastControl implements CastControlRepository {
   read(id: string) {
     const row = this.db
       .prepare(
-        "SELECT id,state,revision,control_epoch FROM persona_sessions WHERE id=? AND source_session=?",
+        "SELECT id,state,armed,revision,control_epoch FROM persona_sessions WHERE id=? AND source_session=?",
       )
       .get(id, this.runtime.sessionId());
     return row
       ? {
           id: String(row.id),
           state: String(row.state),
+          armed: !!row.armed,
           revision: Number(row.revision),
           controlEpoch: Number(row.control_epoch),
         }

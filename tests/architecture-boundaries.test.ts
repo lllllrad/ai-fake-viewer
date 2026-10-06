@@ -74,3 +74,43 @@ for (const [directory, allowed] of [
     }
   });
 }
+
+test("live server static dependencies exclude manual persona authoring and audition generation", () => {
+  const visited = new Set<string>();
+  const forbidden = new Set([
+    resolve("packages/persona/service.ts"),
+    resolve("packages/persona/generator.ts"),
+  ]);
+  const visit = (file: string) => {
+    assert(
+      !forbidden.has(file),
+      `Live composition loads authoring module: ${relative(process.cwd(), file)}`,
+    );
+    if (visited.has(file)) return;
+    visited.add(file);
+    const ast = ts.createSourceFile(
+      file,
+      readFileSync(file, "utf8"),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    for (const node of ast.statements) {
+      if (!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node))
+        continue;
+      if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly)
+        continue;
+      if (ts.isExportDeclaration(node) && node.isTypeOnly) continue;
+      const specifier = node.moduleSpecifier;
+      if (
+        !specifier ||
+        !ts.isStringLiteral(specifier) ||
+        !specifier.text.startsWith(".")
+      )
+        continue;
+      const target = resolve(dirname(file), specifier.text);
+      if (target.endsWith(".ts")) visit(target);
+    }
+  };
+  visit(resolve("apps/server/app.ts"));
+  assert(visited.has(resolve("packages/infrastructure/cast/runtime.ts")));
+});

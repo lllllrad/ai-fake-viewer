@@ -6,7 +6,7 @@ import type { Capture } from "../../capture.ts";
 import type { Transcriber } from "../../transcription.ts";
 import type { Scheduler } from "../../scheduler.ts";
 import type { Supervisor } from "../../supervisor.ts";
-import type { PersonaService } from "../../persona/service.ts";
+import type { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
 import type { RightsService } from "../../application/rights/service.ts";
 import type { ChatgptAuth } from "../../chatgpt-auth.ts";
 import type { YoutubeAuth } from "../../youtube-auth.ts";
@@ -51,7 +51,7 @@ interface RuntimeStatusDependencies {
     | "rejects"
   >;
   supervisor: Pick<Supervisor, "states" | "youtubeNotices" | "chzzkNotices">;
-  personas: Pick<PersonaService, "automaticSummary">;
+  personas: Pick<BroadcastCast, "automaticSummary">;
   rights: Pick<RightsService, "list">;
   chatgpt: Pick<ChatgptAuth, "active" | "status">;
   youtubeAuth: Pick<YoutubeAuth, "configured" | "connected" | "channelId">;

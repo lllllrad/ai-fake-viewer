@@ -41,7 +41,7 @@ Provenance records `automatic-research-composition`, research version, evidence 
 
 ## Legacy authoring and approval APIs
 
-**These are legacy demo/standalone-library paths. The live privacy profile blocks persona mutation APIs and uses automatic composition plus shared AI controls.** The default UI does not invoke these paths.
+**These are legacy demo/standalone-library paths. Live composition does not instantiate the authoring service or register its endpoints. Legacy mutation URLs remain rejected; legacy read URLs return not found. Live operation uses automatic composition plus shared AI controls.** The default UI does not invoke these paths.
 
 1. Creating a brief creates a `draft` session with title, topic, viewer intent, public/private production context, locale, tone policy, candidate/cast counts and game mode. Candidate default/range: 12, 1–24. Cast default/range: 6, 1–12, never above candidate count. Only `cast_mode: fresh` is supported.
 2. Candidate generation is asynchronous and uses six base behavioral templates. Only public planning and templates enter the model. Private production context is excluded, with an additional string-based output leak check that cannot guarantee semantic non-disclosure.
@@ -96,7 +96,7 @@ Live output uses shared `say / skip / inspect`, not the persona contract's separ
 
 ## APIs and concurrent changes
 
-The following table describes legacy/demo contracts. Live mutation is restricted to shared AI controls. Paths are under `/api/admin/persona`, with administrator authentication and same-origin protections. Mutations require an 8–128-character `Idempotency-Key`. Different bodies under the same path/key conflict; in-progress and completed retries are distinguished. Use `expected_revision` for sessions, `expected_member_epoch` for members and `expected_control_epoch` for arming. Exact bodies are in [server routes](../../apps/server/app.ts).
+The following table describes legacy/demo contracts. Live mutation is restricted to shared AI controls. Paths are under `/api/admin/persona`, with administrator authentication and same-origin protections. Mutations require an 8–128-character `Idempotency-Key`. Different bodies under the same path/key conflict; in-progress and completed retries are distinguished. Use `expected_revision` for sessions, `expected_member_epoch` for members and `expected_control_epoch` for arming. Exact bodies are in [demo routes](../../apps/server/demo/persona-routes.ts).
 
 | Operation                 | Method/path                                                                         |
 | ------------------------- | ----------------------------------------------------------------------------------- |

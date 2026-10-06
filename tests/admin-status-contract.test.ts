@@ -29,6 +29,73 @@ for (const demo of [false, true])
       },
     );
     try {
+      if (demo) {
+        const headers = {
+          host: "127.0.0.1:3210",
+          authorization: `Bearer ${"a".repeat(64)}`,
+        };
+        const templates = await app.inject({
+          url: "/api/admin/persona/templates",
+          headers,
+        });
+        assert.equal(templates.statusCode, 200);
+        assert.equal(templates.json().templates.length, 6);
+        const command = {
+          method: "POST" as const,
+          url: "/api/admin/persona/sessions",
+          headers,
+          payload: {
+            session_title: "Fixture",
+            topic: "Fixture",
+            audience_intent: "Observe",
+            public_context: "",
+            private_production_context: "",
+            tone_policy: "Brief",
+          },
+        };
+        assert.equal((await app.inject(command)).statusCode, 400);
+        const authorized = {
+          ...command,
+          headers: { ...headers, "idempotency-key": "synthetic-command" },
+        };
+        const first = await app.inject(authorized),
+          repeated = await app.inject(authorized);
+        assert.equal(first.statusCode, 200);
+        assert.equal(repeated.statusCode, 200);
+        assert.equal(first.json().id, repeated.json().id);
+      }
+      if (!demo) {
+        assert.equal(
+          store.db.prepare("SELECT COUNT(*) n FROM persona_templates").get()?.n,
+          0,
+        );
+        const headers = {
+          host: "127.0.0.1:3210",
+          authorization: `Bearer ${"a".repeat(64)}`,
+        };
+        assert.equal(
+          (await app.inject({ url: "/api/admin/persona/templates", headers }))
+            .statusCode,
+          404,
+        );
+        assert.equal(
+          (
+            await app.inject({
+              method: "POST",
+              url: "/api/admin/persona/sessions",
+              headers,
+              payload: {},
+            })
+          ).statusCode,
+          409,
+        );
+        assert.equal(
+          store.db
+            .prepare("SELECT COUNT(*) n FROM persona_operator_commands")
+            .get()?.n,
+          0,
+        );
+      }
       store.recordTranscript({
         id: "synthetic-1",
         capturedAt: 1000,
