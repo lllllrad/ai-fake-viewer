@@ -2,7 +2,11 @@ import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import { loadSync } from "@grpc/proto-loader";
 import { setTimeout as sleep } from "node:timers/promises";
-import type { Incoming } from "./contracts.ts";
+import { youtubeChatBatch } from "./infrastructure/platforms/youtube-chat-payload.ts";
+export {
+  normalizeYoutube,
+  ignoreYoutubeOwnMessage,
+} from "./infrastructure/platforms/youtube-chat-payload.ts";
 import type { Store } from "./storage.ts";
 export function videoId(input: string) {
   if (/^[\w-]{11}$/.test(input)) return input;
@@ -27,42 +31,6 @@ export function videoId(input: string) {
   if (!/^[\w-]{11}$/.test(id)) throw Error("Invalid YouTube video ID");
   return id;
 }
-export function normalizeYoutube(item: any, chat: string): Incoming | null {
-  const s = item.snippet ?? {},
-    a = item.authorDetails ?? item.author_details ?? {};
-  const type = s.type;
-  if (!["textMessageEvent", "TEXT_MESSAGE_EVENT", 1].includes(type))
-    return null;
-  const text =
-    s.displayMessage ??
-    s.display_message ??
-    s.textMessageDetails?.messageText ??
-    s.text_message_details?.message_text;
-  if (typeof text !== "string" || !text || !item.id) return null;
-  const stamp = Date.parse(s.publishedAt ?? s.published_at);
-  return {
-    platform: "youtube",
-    channel: chat,
-    sourceId: item.id,
-    author:
-      a.channelId ??
-      a.channel_id ??
-      s.authorChannelId ??
-      s.author_channel_id ??
-      `unknown-${item.id}`,
-    name: a.displayName ?? a.display_name ?? "YouTube viewer",
-    text,
-    publishedAt: Number.isFinite(stamp) ? stamp : null,
-  };
-}
-// Broadcast account messages (including automatic notices) are not viewer participation.
-export function ignoreYoutubeOwnMessage(
-  message: Incoming,
-  ownChannel: string | undefined,
-) {
-  return message.author === ownChannel;
-}
-
 export class UpstreamError extends Error {
   constructor(
     public state: string,
@@ -157,6 +125,10 @@ export async function runYoutube(
     ownChannel?: () => string | undefined;
   },
 ) {
+  if (signal.aborted) {
+    status("stopped");
+    return;
+  }
   if (
     !options?.access &&
     !process.env.YOUTUBE_API_KEY &&
@@ -187,6 +159,10 @@ export async function runYoutube(
         signal,
         options?.access,
       );
+      if (signal.aborted) {
+        status("stopped");
+        return;
+      }
       selectedVideo =
         live.items?.find((item: any) => typeof item.id?.videoId === "string")
           ?.id.videoId ?? "";
@@ -206,6 +182,10 @@ export async function runYoutube(
       signal,
       options?.access,
     );
+    if (signal.aborted) {
+      status("stopped");
+      return;
+    }
     chat = b.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
     if (store.participation) {
       broadcaster = b.items?.[0]?.snippet?.channelId;
@@ -223,6 +203,10 @@ export async function runYoutube(
       return;
     }
   } catch (e) {
+    if (signal.aborted) {
+      status("stopped");
+      return;
+    }
     status(
       e instanceof UpstreamError ? e.state : "config_required",
       e instanceof UpstreamError ? e.api : undefined,
@@ -251,28 +235,19 @@ export async function runYoutube(
           options?.access,
         );
         if (signal.aborted) break;
-        store.ingestion.ingest(
-          (b.items ?? [])
-            .map((i: any) => {
-              const m = normalizeYoutube(i, chat);
-              if (m && ignoreYoutubeOwnMessage(m, options?.ownChannel?.()))
-                return null;
-              return m && broadcaster ? { ...m, channel: broadcaster } : m;
-            })
-            .filter(Boolean),
-          { key, value: b.nextPageToken ?? "" },
+        const batch = youtubeChatBatch(
+          b,
+          { chat, broadcaster, ownChannel: options?.ownChannel?.() },
+          "rest",
         );
+        store.ingestion.ingest(batch.messages, { key, value: batch.cursor });
         status("subscribed:rest");
         failures = 0;
-        if (b.offlineAt) {
+        if (batch.ended) {
           status("ended");
           return;
         }
-        await sleep(
-          Math.max(1000, Number(b.pollingIntervalMillis) || 5000),
-          undefined,
-          { signal },
-        );
+        await sleep(batch.pollIntervalMs, undefined, { signal });
       } else {
         const client = makeGrpcClient();
         const metadata = new grpc.Metadata();
@@ -297,20 +272,18 @@ export async function runYoutube(
         try {
           for await (const b of stream) {
             if (signal.aborted) break;
-            store.ingestion.ingest(
-              (b.items ?? [])
-                .map((i: any) => {
-                  const m = normalizeYoutube(i, chat);
-                  if (m && ignoreYoutubeOwnMessage(m, options?.ownChannel?.()))
-                    return null;
-                  return m && broadcaster ? { ...m, channel: broadcaster } : m;
-                })
-                .filter(Boolean),
-              { key, value: b.next_page_token ?? "" },
+            const batch = youtubeChatBatch(
+              b,
+              { chat, broadcaster, ownChannel: options?.ownChannel?.() },
+              "grpc",
             );
+            store.ingestion.ingest(batch.messages, {
+              key,
+              value: batch.cursor,
+            });
             status("subscribed:grpc");
             failures = 0;
-            if (b.offline_at) {
+            if (batch.ended) {
               status("ended");
               return;
             }

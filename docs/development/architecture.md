@@ -214,6 +214,16 @@ provides transport, clock and identifiers; the old flat notice modules only
 re-export these constructors for reference callers. Remaining provider receive
 loops still require reconstruction.
 
+The [YouTube chat payload adapter](../../packages/infrastructure/platforms/youtube-chat-payload.ts)
+normalizes REST and gRPC messages through the shared incoming-message contract.
+Unusable individual messages are skipped; missing author identity is never
+replaced with a fabricated viewer account. Provider timestamps remain unknown
+when missing or invalid. Page cursors, offline timestamps and polling intervals
+are validated before ingestion/checkpoint updates; malformed envelopes cannot
+advance the cursor or end the broadcast. Both transports share own-channel
+exclusion and broadcaster mapping. Discovery responses received after cancellation
+do not resolve a channel or reopen receiver state.
+
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.
