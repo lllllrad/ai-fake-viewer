@@ -8,7 +8,7 @@ import type { Scheduler } from "../reactions/scheduler.ts";
 import type { Supervisor } from "../inputs/platform-supervisor.ts";
 import type { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
 import type { RightsService } from "../../application/rights/service.ts";
-import type { ChatgptAuth } from "../../chatgpt-auth.ts";
+import type { ChatgptAuth } from "../accounts/chatgpt-auth.ts";
 import type { YoutubeAuth } from "../accounts/youtube-auth.ts";
 import type { ChzzkAuth } from "../accounts/chzzk-auth.ts";
 import type { SoopAuth } from "../accounts/soop-auth.ts";

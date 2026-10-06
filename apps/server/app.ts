@@ -48,7 +48,7 @@ import { Scheduler } from "../../packages/infrastructure/reactions/scheduler.ts"
 import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts";
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";
-import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
+import { ChatgptAuth } from "../../packages/infrastructure/accounts/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/infrastructure/accounts/chzzk-auth.ts";
 import { SoopAuth } from "../../packages/infrastructure/accounts/soop-auth.ts";
 import { Supervisor } from "../../packages/infrastructure/inputs/platform-supervisor.ts";

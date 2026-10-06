@@ -1,9 +1,10 @@
+import { EncryptedTokenFile } from "../packages/infrastructure/accounts/encrypted-token-file.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
+import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts";
 import { chatgptModel } from "../packages/infrastructure/reactions/chatgpt-model.ts";
 import { configSchema } from "../packages/config.ts";
 const key = "e".repeat(64);
@@ -211,3 +212,76 @@ test("ChatGPT inference requires completed stream and sends masked image with su
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+for (const transition of ["account", "model", "authorization"] as const) {
+  test(`ChatGPT ${transition} replacement owns a new refresh before the old one settles`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "chatgpt-refresh-owner-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const path = join(dir, "tokens");
+    const account = (clientId: string) => ({
+      clientId,
+      subject: "fixture-subject",
+      email: null,
+      accessToken: "expired-fixture",
+      refreshToken: "refresh-fixture",
+      idToken: null,
+      expiresAt: 0,
+      earliestRefreshAt: 0,
+      scopes: response.scope.split(" "),
+      model: "model-fixture",
+    });
+    new EncryptedTokenFile(key, path, (value) => value).write({
+      hostId: "urn:uuid:fixture",
+      active: "first",
+      accounts: [account("first"), account("second")],
+    });
+    const pending: Array<(response: Response) => void> = [];
+    const clients: string[] = [];
+    const auth = new ChatgptAuth(
+      key,
+      path,
+      async (_url, init) => {
+        const body = new URLSearchParams(String(init?.body));
+        if (body.get("grant_type") === "authorization_code")
+          return Response.json({ ...response, expires_in: 1 });
+        clients.push(body.get("client_id")!);
+        return new Promise<Response>((resolve) => {
+          pending.push(resolve);
+        });
+      },
+      async () => ({ sub: "fixture-subject" }),
+    );
+    const authorization =
+      transition === "authorization"
+        ? new URL(auth.authorizationUrl(3210, "first"))
+        : undefined;
+    const old = auth.access();
+    const retired = assert.rejects(old, /changed/);
+    assert.equal(pending.length, 1);
+    if (transition === "account") auth.select("second");
+    else if (transition === "model") auth.setModel("new-model", ["new-model"]);
+    else
+      await auth.callback({
+        state: authorization!.searchParams.get("state")!,
+        code: "fixture-code",
+      });
+    const current = auth.access();
+    assert.equal(pending.length, 2);
+    assert.equal(clients[1], transition === "account" ? "second" : "first");
+    pending[0](Response.json({ ...response, access_token: "retired-access" }));
+    await retired;
+    const shared = auth.access();
+    assert.equal(pending.length, 2);
+    pending[1](Response.json({ ...response, access_token: "current-access" }));
+    assert.deepEqual(await Promise.all([current, shared]), [
+      "current-access",
+      "current-access",
+    ]);
+    assert.equal(auth.active?.accessToken, "current-access");
+    assert.equal(
+      new ChatgptAuth(key, path).active?.accessToken,
+      "current-access",
+    );
+    if (transition === "model") assert.equal(auth.active?.model, "new-model");
+  });
+}

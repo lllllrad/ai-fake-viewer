@@ -1,5 +1,6 @@
+import { AccountRefresh } from "../../application/accounts/refresh-flight.ts";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { EncryptedTokenFile } from "./infrastructure/accounts/encrypted-token-file.ts";
+import { EncryptedTokenFile } from "./encrypted-token-file.ts";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
@@ -56,7 +57,7 @@ export class ChatgptAuth {
   private generation = 0;
   private data: State;
   private pending: Pending | null = null;
-  private refreshing: Promise<string> | null = null;
+  private readonly refresh = new AccountRefresh<string>();
   constructor(
     key: string,
     path = "data/chatgpt.tokens",
@@ -133,6 +134,7 @@ export class ChatgptAuth {
     const nonce = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
     this.generation++;
+    this.refresh.invalidate();
     this.pending = {
       state,
       nonce,
@@ -223,6 +225,8 @@ export class ChatgptAuth {
       scopes,
       model: old?.model ?? null,
     };
+    this.generation++;
+    this.refresh.invalidate();
     this.data.accounts = [
       ...this.data.accounts.filter((a) => a.clientId !== clientId),
       next,
@@ -234,6 +238,7 @@ export class ChatgptAuth {
     if (!this.data.accounts.some((a) => a.clientId === clientId))
       throw Error("Unknown ChatGPT account");
     this.generation++;
+    this.refresh.invalidate();
     this.data.active = clientId;
     this.save();
   }
@@ -242,6 +247,7 @@ export class ChatgptAuth {
     if (!account || !available.includes(slug))
       throw Error("Model unavailable for active ChatGPT account");
     this.generation++;
+    this.refresh.invalidate();
     account.model = slug;
     this.save();
   }
@@ -250,9 +256,8 @@ export class ChatgptAuth {
     if (!a?.refreshToken || !a.scopes.includes("chatgpt.tokens.use.direct"))
       throw Error("Connect ChatGPT first");
     if (a.expiresAt > Date.now() + 60000) return a.accessToken;
-    if (this.refreshing) return this.refreshing;
     const generation = this.generation;
-    this.refreshing = (async () => {
+    return this.refresh.run(async () => {
       if (a.earliestRefreshAt > Date.now())
         throw Error("ChatGPT refresh is not available yet");
       const r = await this.request(tokenEndpoint, {
@@ -283,12 +288,7 @@ export class ChatgptAuth {
       a.scopes = t.scope.split(/\s+/);
       this.save();
       return a.accessToken;
-    })();
-    try {
-      return await this.refreshing;
-    } finally {
-      this.refreshing = null;
-    }
+    });
   }
   async models() {
     const token = await this.access();
@@ -315,6 +315,7 @@ export class ChatgptAuth {
   async disconnect() {
     const a = this.active;
     this.generation++;
+    this.refresh.invalidate();
     this.pending = null;
     if (!a) return { revoked: true };
     const refreshToken = a.refreshToken;

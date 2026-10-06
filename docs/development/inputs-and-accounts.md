@@ -247,6 +247,14 @@ CHZZK [chat decoding](../../packages/infrastructure/platforms/chzzk-chat-payload
 is independent of account persistence and refresh. Production composition and
 tests import the responsible account and payload adapters directly.
 
+The [Sign in with ChatGPT adapter](../../packages/infrastructure/accounts/chatgpt-auth.ts)
+also uses the shared refresh owner. Starting authorization, selecting an account or
+model, accepting new authorization and disconnecting retire the current refresh.
+A replacement can refresh immediately; the retired request cannot release its slot,
+return old credentials or overwrite the selected account. Successful authorization
+retires refreshes begun during its exchange as well. Identity validation, scopes,
+endpoints and encrypted credential format remain owned by the existing adapter.
+
 ### Credential persistence
 
 The [encrypted token file](../../packages/infrastructure/accounts/encrypted-token-file.ts)

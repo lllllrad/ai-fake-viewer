@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { SoopAuth } from "../packages/infrastructure/accounts/soop-auth.ts";
 import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { YoutubeAuth } from "../packages/infrastructure/accounts/youtube-auth.ts";
-import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
+import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts";
 
 for (const stage of ["status", "body"] as const) {
   test(`CHZZK ignores an API ${stage} response from a replaced account`, async (t) => {

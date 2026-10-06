@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
+import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts";
 import { chatgptModel } from "../packages/infrastructure/reactions/chatgpt-model.ts";
 import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
 import { configSchema } from "../packages/config.ts";
