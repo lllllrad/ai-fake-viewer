@@ -442,6 +442,20 @@ succeeds. Sign in with ChatGPT retains its independent multi-account state and
 sign-out behavior; the shared file mechanism does not own account selection or
 revocation.
 
+The [model account service](../../packages/application/accounts/model-account.ts)
+owns generation stop and context invalidation when the selected AI account or
+model changes. It rejects pending model lists and selections after another
+account command supersedes them, and stops generation again after asynchronous
+model validation in case an operator restarted it during the query. Successful
+account callback persistence always invalidates context, including a later
+command arriving before its continuation resumes. Sign-out invalidates pending
+selection before the adapter clears local secrets and awaits remote revocation.
+Model selection also advances the adapter's authorization generation so an
+older token exchange cannot overwrite the selection. The
+[HTTP routes](../../apps/server/http/routes/model-account.ts) validate fields
+before invoking effects and preserve existing endpoints; protocol and encrypted
+account state remain in the adapter.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.

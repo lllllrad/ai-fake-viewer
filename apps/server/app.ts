@@ -1,3 +1,8 @@
+import {
+  ModelAccount,
+  AccountChangedError,
+} from "../../packages/application/accounts/model-account.ts";
+import { registerModelAccountRoutes } from "./http/routes/model-account.ts";
 import { PlatformAccounts } from "../../packages/application/accounts/platform-accounts.ts";
 import { registerPlatformAccountRoutes } from "./http/routes/platform-accounts.ts";
 import { createModelAuthorization } from "../../packages/infrastructure/reactions/model-authorization.ts";
@@ -432,7 +437,8 @@ export async function createApp(
         : e instanceof AiStartError ||
             e instanceof PrivacyActionError ||
             e instanceof RightsActionError ||
-            e instanceof BroadcastCommandError
+            e instanceof BroadcastCommandError ||
+            e instanceof AccountChangedError
           ? e.message
           : req.url.startsWith("/api/admin/")
             ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
@@ -666,68 +672,19 @@ export async function createApp(
     store.hide(id);
     return { ok: true };
   });
-  const invalidateChatgptContext = () => {
-    scheduler.stop("chatgpt_account_changed");
-    participation?.invalidateAll();
-  };
-  app.post("/api/admin/chatgpt/authorize", async (req) => {
-    const body = z
-      .object({ clientId: z.string().optional() })
-      .parse(req.body ?? {});
-    return { url: chatgpt.authorizationUrl(config.port, body.clientId) };
+  const modelAccount = new ModelAccount({
+    authorizationUrl: (clientId) =>
+      chatgpt.authorizationUrl(config.port, clientId),
+    activeAccount: () => chatgpt.active?.clientId ?? null,
+    models: () => chatgpt.models(),
+    selectAccount: (clientId) => chatgpt.select(clientId),
+    selectModel: (slug, available) => chatgpt.setModel(slug, available),
+    callback: (query) => chatgpt.callback(query),
+    disconnect: () => chatgpt.disconnect(),
+    stopGeneration: () => scheduler.stop("chatgpt_account_changed"),
+    invalidateContext: () => participation?.invalidateAll(),
   });
-  app.get("/api/admin/chatgpt/models", async () => ({
-    models: await chatgpt.models(),
-  }));
-  app.post("/api/admin/chatgpt/select-account", async (req) => {
-    scheduler.stop();
-    const body = z.object({ clientId: z.string() }).parse(req.body);
-    chatgpt.select(body.clientId);
-    invalidateChatgptContext();
-    return { ok: true };
-  });
-  app.post("/api/admin/chatgpt/select-model", async (req) => {
-    scheduler.stop();
-    const body = z.object({ slug: z.string() }).parse(req.body);
-    const models = await chatgpt.models();
-    chatgpt.setModel(
-      body.slug,
-      models.map((m) => m.slug),
-    );
-    invalidateChatgptContext();
-    return { ok: true };
-  });
-  app.post("/api/admin/chatgpt/disconnect", async () => {
-    scheduler.stop();
-    invalidateChatgptContext();
-    return chatgpt.disconnect();
-  });
-  app.get("/oauth/chatgpt/callback", async (req, reply) => {
-    try {
-      const q = z
-        .object({
-          state: z.string().optional(),
-          code: z.string().optional(),
-          client_id: z.string().optional(),
-          error: z.string().optional(),
-        })
-        .parse(req.query);
-      await chatgpt.callback(q);
-      invalidateChatgptContext();
-      return reply
-        .type("text/plain")
-        .send(
-          "ChatGPT connected. Return to the admin page and select a model.",
-        );
-    } catch {
-      return reply
-        .code(400)
-        .type("text/plain")
-        .send(
-          "ChatGPT connection failed. Return to the admin page and try again.",
-        );
-    }
-  });
+  registerModelAccountRoutes(app, modelAccount);
   registerPlatformAccountRoutes(app, platformAccounts);
   app.get("/api/admin/soop/chat-session", async (_req, reply) => {
     if (

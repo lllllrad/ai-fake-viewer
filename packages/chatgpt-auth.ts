@@ -241,6 +241,7 @@ export class ChatgptAuth {
     const account = this.active;
     if (!account || !available.includes(slug))
       throw Error("Model unavailable for active ChatGPT account");
+    this.generation++;
     account.model = slug;
     this.save();
   }

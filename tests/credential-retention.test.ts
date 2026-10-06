@@ -202,3 +202,56 @@ test("PC07: Sign in with ChatGPT rejects an authorization callback completed aft
   assert.equal(auth.active, null);
   assert.deepEqual(new ChatgptAuth("a".repeat(64), path).status.accounts, []);
 });
+
+test("model selection supersedes an in-flight account callback before it can persist", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "model-selection-retention-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, "tokens");
+  let complete!: (response: Response) => void;
+  const auth = new ChatgptAuth(
+    "a".repeat(64),
+    path,
+    () =>
+      new Promise<Response>((resolve) => {
+        complete = resolve;
+      }),
+    async () => ({ sub: "synthetic" }),
+  );
+  (auth as any).data.accounts = [
+    {
+      clientId: "fixture",
+      subject: "synthetic",
+      email: null,
+      accessToken: "old",
+      refreshToken: "refresh",
+      idToken: null,
+      expiresAt: 0,
+      earliestRefreshAt: 0,
+      scopes: ["chatgpt.tokens.use.direct"],
+      model: "old-model",
+    },
+  ];
+  (auth as any).data.active = "fixture";
+  const login = new URL(auth.authorizationUrl(3210, "fixture"));
+  const callback = auth.callback({
+    state: login.searchParams.get("state")!,
+    code: "fixture",
+    client_id: "fixture",
+  });
+  const rejected = assert.rejects(callback, /authorization changed/);
+  auth.setModel("new-model", ["new-model"]);
+  complete(
+    Response.json({
+      access_token: "late",
+      refresh_token: "late-refresh",
+      id_token: "identity",
+      expires_in: 3600,
+      token_type: "Bearer",
+      scope: "resource.invoke offline_access chatgpt.tokens.use.direct",
+    }),
+  );
+  await rejected;
+  const restored = new ChatgptAuth("a".repeat(64), path);
+  assert.equal(restored.active?.model, "new-model");
+  assert.equal(restored.active?.accessToken, "old");
+});
