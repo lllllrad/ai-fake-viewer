@@ -1,3 +1,12 @@
+import {
+  YoutubeReadApi,
+  UpstreamError,
+} from "./infrastructure/platforms/youtube-read-api.ts";
+export {
+  googleJson,
+  UpstreamError,
+  videoId,
+} from "./infrastructure/platforms/youtube-read-api.ts";
 import { receiveYoutubeStream } from "./infrastructure/platforms/youtube-grpc.ts";
 export { makeGrpcClient } from "./infrastructure/platforms/youtube-grpc.ts";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -7,87 +16,6 @@ export {
   ignoreYoutubeOwnMessage,
 } from "./infrastructure/platforms/youtube-chat-payload.ts";
 import type { Store } from "./storage.ts";
-export function videoId(input: string) {
-  if (/^[\w-]{11}$/.test(input)) return input;
-  let u: URL;
-  try {
-    u = new URL(input);
-  } catch {
-    throw Error("Invalid YouTube video ID");
-  }
-  if (u.protocol !== "https:" || u.username || u.password)
-    throw Error("Invalid YouTube URL");
-  let id = "";
-  if (u.hostname === "youtu.be") id = u.pathname.slice(1);
-  else if (
-    ["youtube.com", "www.youtube.com", "m.youtube.com"].includes(u.hostname)
-  ) {
-    id =
-      u.pathname === "/watch"
-        ? (u.searchParams.get("v") ?? "")
-        : (u.pathname.match(/^\/live\/([\w-]{11})\/?$/)?.[1] ?? "");
-  }
-  if (!/^[\w-]{11}$/.test(id)) throw Error("Invalid YouTube video ID");
-  return id;
-}
-export class UpstreamError extends Error {
-  constructor(
-    public state: string,
-    public retryMs = 0,
-    public api = "YouTube Data API",
-  ) {
-    super(state);
-  }
-}
-export async function googleJson(
-  path: string,
-  params: Record<string, string>,
-  signal: AbortSignal,
-  access?: () => Promise<string>,
-) {
-  const url = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const headers: Record<string, string> = {};
-  if (access) headers.Authorization = `Bearer ${await access()}`;
-  else if (process.env.YOUTUBE_ACCESS_TOKEN)
-    headers.Authorization = `Bearer ${process.env.YOUTUBE_ACCESS_TOKEN}`;
-  else url.searchParams.set("key", process.env.YOUTUBE_API_KEY ?? "");
-  const r = await fetch(url, {
-    headers,
-    signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-  });
-  const b: any = await r.json();
-  if (!r.ok) {
-    const reason = b.error?.errors?.[0]?.reason;
-    const state = [
-      "liveChatEnded",
-      "liveChatDisabled",
-      "liveChatNotFound",
-    ].includes(reason)
-      ? "ended"
-      : reason === "invalidPageToken"
-        ? "invalid_cursor"
-        : reason === "invalidChannelId"
-          ? "config_required"
-          : r.status === 401
-            ? "auth_required"
-            : r.status === 429
-              ? "quota_blocked"
-              : r.status === 403
-                ? /quota|rateLimit/i.test(String(reason))
-                  ? "quota_blocked"
-                  : "permission_blocked"
-                : "reconnecting";
-    throw new UpstreamError(
-      state,
-      Number(r.headers.get("retry-after") ?? 0) * 1000,
-      path === "liveChat/messages"
-        ? "YouTube liveChatMessages.list"
-        : `YouTube ${path}.list`,
-    );
-  }
-  return b;
-}
 export async function runYoutube(
   config: {
     video: string;
@@ -116,6 +44,7 @@ export async function runYoutube(
     status("config_required");
     return;
   }
+  const api = new YoutubeReadApi(options?.access);
   let chat: string;
   let broadcaster: string | undefined;
   let selectedVideo = config.video.trim();
@@ -126,48 +55,28 @@ export async function runYoutube(
         status("config_required");
         return;
       }
-      const live = await googleJson(
-        "search",
-        {
-          part: "snippet",
-          channelId,
-          eventType: "live",
-          type: "video",
-          maxResults: "5",
-        },
-        signal,
-        options?.access,
-      );
+      selectedVideo = (await api.search(channelId, signal)) ?? "";
       if (signal.aborted) {
         status("stopped");
         return;
       }
-      selectedVideo =
-        live.items?.find((item: any) => typeof item.id?.videoId === "string")
-          ?.id.videoId ?? "";
       if (!selectedVideo) {
         status("waiting_live");
         return;
       }
     }
-    const b = await googleJson(
-      "videos",
-      {
-        part: store.participation
-          ? "liveStreamingDetails,snippet"
-          : "liveStreamingDetails",
-        id: videoId(selectedVideo),
-      },
+    const resolved = await api.video(
+      selectedVideo,
+      !!store.participation,
       signal,
-      options?.access,
     );
     if (signal.aborted) {
       status("stopped");
       return;
     }
-    chat = b.items?.[0]?.liveStreamingDetails?.activeLiveChatId;
+    chat = resolved.chat ?? "";
     if (store.participation) {
-      broadcaster = b.items?.[0]?.snippet?.channelId;
+      broadcaster = resolved.broadcaster;
       if (
         !broadcaster ||
         !store.participation.available("youtube", broadcaster)
@@ -202,17 +111,7 @@ export async function runYoutube(
     let token = store.checkpoint(key);
     try {
       if (transport === "rest") {
-        const b = await googleJson(
-          "liveChat/messages",
-          {
-            liveChatId: chat,
-            part: "id,snippet,authorDetails",
-            maxResults: "500",
-            ...(token ? { pageToken: token } : {}),
-          },
-          signal,
-          options?.access,
-        );
+        const b = await api.messages(chat, token, signal);
         if (signal.aborted) break;
         const batch = youtubeChatBatch(
           b,
@@ -297,11 +196,14 @@ export async function runYoutube(
         store.audit("youtube.grpc_to_rest");
       } else failures++;
       await sleep(
-        Math.max(
-          e.retryMs ?? 0,
-          Math.min(30000, 1000 * 2 ** Math.min(failures, 5)),
-        ) *
-          (1 + Math.random() * 0.2),
+        Math.min(
+          2147483647,
+          Math.max(
+            e.retryMs ?? 0,
+            Math.min(30000, 1000 * 2 ** Math.min(failures, 5)),
+          ) *
+            (1 + Math.random() * 0.2),
+        ),
         undefined,
         { signal },
       ).catch(() => {});

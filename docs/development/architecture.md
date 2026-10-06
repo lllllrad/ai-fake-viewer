@@ -233,6 +233,15 @@ batches are ignored and cleanup is idempotent. Upstream error codes remain intac
 for the receiver's quota and fallback decisions. Tests inject a stream client and
 never connect to the actual provider.
 
+The [YouTube read API adapter](../../packages/infrastructure/platforms/youtube-read-api.ts)
+owns credential selection, read-only HTTP requests and typed search/video discovery.
+Malformed discovery is distinct from an empty live list. Cancellation is checked
+before HTTP and after response decoding. HTTP failures retain search, video or
+chat-list attribution even when their body is not JSON; provider bodies are not
+exposed in errors. Retry delays are finite, nonnegative and bounded to the host
+timer range, including receiver jitter. Chat pages remain decoded by the shared
+payload adapter before persistence.
+
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.
