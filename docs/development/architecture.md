@@ -201,6 +201,20 @@ frequency rules. Silence is a normal result. Failures distinguish authentication
 quota, local budget, token bounds, timeouts and invalid output. Diagnostics contain
 fixed categories/counts/IDs, never raw input, drafts or credential payloads.
 
+The [decision contract](../../packages/contracts/decision.ts) owns the model-output
+shape. The [application validator](../../packages/application/reactions/validate-decision.ts)
+parses that shape and applies the
+[pure evidence/output policy](../../packages/domain/reactions/decision.ts).
+[Review and publication policies](../../packages/domain/reactions/publication.ts)
+drop expired background speech while rejecting expired cited speech; bind a
+candidate to its broadcast, generation, consent revision and deadline; and require
+all input message bodies to match their current permitted versions. An edited
+message is stale evidence even if its identifier still exists. The scheduler
+gathers current evidence through its adapters and applies the same checks after
+review and before publication. Invalid candidates are discarded before another
+publication-delay timer is scheduled. Rejection diagnostics contain fixed reasons,
+not input text.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

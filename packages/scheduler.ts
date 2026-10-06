@@ -17,7 +17,14 @@ import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
 import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
-import { validateDecision, type Model, type ModelInput } from "./model.ts";
+import type { Model, ModelInput } from "./model.ts";
+import { validateDecision } from "./application/reactions/validate-decision.ts";
+import {
+  evidenceProblem,
+  publicationProblem,
+  prepareReview,
+  type CurrentEvidence,
+} from "./domain/reactions/publication.ts";
 import { DecisionGate } from "./gate.ts";
 import { decisionSchema, type Decision } from "./contracts.ts";
 export class AiStartError extends Error {
@@ -81,6 +88,7 @@ export class Scheduler {
     input: ModelInput;
     persona: number;
     expires: number;
+    sessionId: string;
     generation: number;
     personaSessionId?: string;
     memberId?: string;
@@ -206,7 +214,7 @@ export class Scheduler {
       return;
     }
     if (this.pending) {
-      if (this.pending.expires < now) {
+      if (this.pending.expires <= now) {
         if (this.pending.attemptId)
           this.store.finishPersonaAttempt(
             this.pending.attemptId,
@@ -489,20 +497,13 @@ export class Scheduler {
       if (c.reviewDraft && !this.demo) {
         this.phase = "ai_review";
         this.reviews++;
-        // The rolling transcript window can advance during generation. Drop only
-        // expired background; a draft whose cited evidence expired is unusable.
-        if (d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)))
-          throw new StaleModelContextError();
-        const reviewInput = {
-          ...input,
-          transcripts: input.transcripts?.filter((t) =>
-            this.transcriber?.has(t.id),
-          ),
-          newTranscripts: input.newTranscripts?.filter((t) =>
-            this.transcriber?.has(t.id),
-          ),
-          reviewDraft: d.text!,
-        };
+        const activeTranscripts = new Set(
+          (input.transcripts ?? [])
+            .filter((t) => this.transcriber?.has(t.id))
+            .map((t) => t.id),
+        );
+        const reviewInput = prepareReview(input, d, activeTranscripts);
+        if (!reviewInput) throw new StaleModelContextError();
         this.activeInput = reviewInput;
         this.trace("review_context", {
           removedTranscripts:
@@ -532,16 +533,15 @@ export class Scheduler {
       }
       this.lastIssue = undefined;
       this.transientFailures = 0;
-      if (
-        this.store.closed() ||
-        input.messages.some((m) => !this.store.publicMessage(m.id)) ||
-        (input.frames.length > 0 && !this.capture.recent().length) ||
-        d.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
-        d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)) ||
-        d.evidenceMessageIds.some((id) => !this.store.publicMessage(id)) ||
-        (d.replyToMessageId && !this.store.publicMessage(d.replyToMessageId))
-      )
+      const problem = this.store.closed()
+        ? "broadcast_closed"
+        : evidenceProblem(input, d, this.currentEvidence(input, d));
+      if (problem) {
+        this.trace("candidate_discarded", { reason: problem });
+        if (attemptId)
+          this.store.finishPersonaAttempt(attemptId, "canceled", problem);
         return;
+      }
       const triggerTimes = [
         ...newMessages
           .map((x) => recent.find((m) => m?.id === x.id)?.displayTime)
@@ -564,6 +564,7 @@ export class Scheduler {
         : 0;
       const ttl = personaRuntime?.policy.reaction_ttl_ms ?? 30000;
       this.pending = {
+        sessionId: this.store.sessionId,
         decision: d,
         input,
         persona,
@@ -688,9 +689,55 @@ export class Scheduler {
     this.store.settle(usageId, result.inputTokens, result.outputTokens, cost);
     return result;
   }
+  private currentEvidence(
+    input: ModelInput,
+    decision: Decision,
+  ): CurrentEvidence {
+    const ids = new Set([
+      ...input.messages.map((message) => message.id),
+      ...decision.evidenceMessageIds,
+    ]);
+    if (decision.replyToMessageId) ids.add(decision.replyToMessageId);
+    const messages = new Map<string, string>();
+    for (const id of ids) {
+      const message = this.store.publicMessage(id);
+      if (message) messages.set(id, message.text.slice(0, 500));
+    }
+    return {
+      messages,
+      frames: new Set(
+        decision.evidenceFrameIds.filter((id) => this.capture.has(id)),
+      ),
+      transcripts: new Set(
+        decision.evidenceTranscriptIds.filter((id) =>
+          this.transcriber?.has(id),
+        ),
+      ),
+      recentVideo: this.capture.recent().length > 0,
+      privacyRevision: this.store.participation?.revision,
+    };
+  }
   approve() {
     const p = this.pending;
     if (!p) return;
+    const problem = publicationProblem(p, {
+      ...this.currentEvidence(p.input, p.decision),
+      generation: this.generation,
+      sessionId: this.store.sessionId,
+      now: Date.now(),
+      running: this.state === "running",
+      closed: this.store.closed(),
+    });
+    if (problem) {
+      this.pending = undefined;
+      clearTimeout(this.dispatchTimer);
+      this.dispatchTimer = undefined;
+      this.trace("publication_discarded", { reason: problem });
+      if (p.attemptId)
+        this.store.finishPersonaAttempt(p.attemptId, "expired", problem);
+      this.phase = this.state === "running" ? "waiting_for_input" : this.state;
+      return;
+    }
     if (p.notBefore && p.notBefore > Date.now()) {
       clearTimeout(this.dispatchTimer);
       this.dispatchTimer = setTimeout(
@@ -701,34 +748,7 @@ export class Scheduler {
       return;
     }
     this.pending = undefined;
-    if (
-      p.generation !== this.generation ||
-      p.expires < Date.now() ||
-      this.state !== "running" ||
-      this.store.closed() ||
-      p.input.messages.some((m) => !this.store.publicMessage(m.id)) ||
-      (p.input.frames.length > 0 && !this.capture.recent().length) ||
-      p.decision.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
-      p.decision.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id))
-    ) {
-      this.trace("publication_discarded", {
-        reason:
-          p.expires < Date.now() ? "candidate_expired" : "stale_or_stopped",
-      });
-      if (p.attemptId)
-        this.store.finishPersonaAttempt(
-          p.attemptId,
-          "expired",
-          "stale_or_expired_candidate",
-        );
-      return;
-    }
     const d = p.decision;
-    if (
-      d.evidenceMessageIds.some((id) => !this.store.publicMessage(id)) ||
-      (d.replyToMessageId && !this.store.publicMessage(d.replyToMessageId))
-    )
-      return;
     const now = Date.now();
     this.phase = "publishing_local";
     if (

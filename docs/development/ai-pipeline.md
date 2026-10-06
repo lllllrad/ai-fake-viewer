@@ -160,6 +160,24 @@ tokens as described in [Counting tokens](https://developers.openai.com/api/docs/
 An earlier generic `model_error` cannot be retroactively assigned a precise cause
 without the original detailed evidence.
 
+## Review and publication validation
+
+Model-output parsing is owned by the shared
+[decision contract](../../packages/contracts/decision.ts); evidence membership,
+length and output restrictions are checked by a
+[pure policy](../../packages/domain/reactions/decision.ts) through the application
+validator. Review may remove expired background transcript chunks, but must reject
+a draft when its cited speech expired.
+
+The [publication policy](../../packages/domain/reactions/publication.ts) rechecks
+broadcast identity, generation, running/closed state, consent revision, the exact
+candidate deadline, current message contents and cited media availability.
+Keeping the same message identifier does not permit publishing a response to text
+that was edited during generation or manual review. Expired or invalid candidates
+are discarded before scheduling another delay; diagnostics record only a fixed
+reason. The scheduler still owns provider calls, usage reservation and durable
+publication coordination during reconstruction.
+
 ## Reaction policy ownership
 
 [Evidence selection](../../packages/domain/reactions/evidence.ts) and

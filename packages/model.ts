@@ -94,39 +94,7 @@ export function limitModelConcurrency(model: Model, maximum = 2): Model {
     }
   };
 }
-export function validateDecision(raw: unknown, input: ModelInput) {
-  const d = decisionSchema.parse(raw);
-  const messages = new Set(input.messages.map((m) => m.id)),
-    frames = new Set(input.frames.map((f) => f.id)),
-    transcripts = new Set((input.transcripts ?? []).map((t) => t.id));
-  if (
-    d.evidenceFrameIds.some((id) => !frames.has(id)) ||
-    d.evidenceMessageIds.some((id) => !messages.has(id)) ||
-    d.evidenceTranscriptIds.some((id) => !transcripts.has(id)) ||
-    (d.replyToMessageId && !messages.has(d.replyToMessageId))
-  )
-    throw Error("Invalid evidence");
-  if (d.action === "skip" || d.action === "inspect") {
-    if (d.text !== null) throw Error("Skip and inspect must have null text");
-    return d;
-  }
-  if (
-    !d.text?.trim() ||
-    [...d.text].length > 120 ||
-    d.text.split("\n").length > 2 ||
-    (!d.evidenceFrameIds.length &&
-      !d.evidenceTranscriptIds.length &&
-      !d.evidenceMessageIds.length)
-  )
-    throw Error("Invalid output");
-  if (
-    /[<>]|https?:\/\/|(?:sk-|Bearer\s)[a-zA-Z0-9_-]{12,}|\b\d{3}[- ]\d{3,4}[- ]\d{4}\b|[\w.+-]+@[\w.-]+\.[a-z]{2,}|(?:system|admin)\s*:/i.test(
-      d.text,
-    )
-  )
-    throw Error("Rejected output");
-  return d;
-}
+export { validateDecision } from "./application/reactions/validate-decision.ts";
 export const mockModel: Model = async (input, signal) => {
   await sleep(100, undefined, { signal });
   return {
