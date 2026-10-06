@@ -5,6 +5,24 @@ boundaries. [Architecture](architecture.md) owns dependency rules and lifecycle;
 [participation and storage](participation-and-storage.md) owns admission and
 consent. For actual connection setup, use the [operator guide](../operations/setup.md).
 
+## Platform composition
+
+The [platform supervisor](../../packages/infrastructure/inputs/platform-supervisor.ts)
+wires receiver adapters, notice delivery sessions and the application task owner.
+Start checks current platform selection and participation availability rather than
+using an old status string as permission. Unselected platforms remain disabled;
+a formerly blocked receiver can start once currently permitted. Repeated input
+start preserves an official SOOP connection that is connecting or subscribed,
+so enabling AI cannot reset its receipt/admission gate to waiting for a browser.
+Closed broadcasts cannot restart this composition.
+
+The old root supervisor module only re-exports the infrastructure constructor.
+[Synthetic chat](../../packages/infrastructure/reference/demo-chat.ts) and the
+[historical SOOP library loop](../../packages/infrastructure/reference/soop-receiver.ts)
+are separate reference implementations. The library loop is loaded only when
+explicitly selected without live participation; live SOOP continues to use its
+official browser bridge. No new operating mode is introduced.
+
 ## CHZZK reception
 
 The [CHZZK connection adapter](../../packages/infrastructure/platforms/chzzk-connection.ts)
@@ -66,8 +84,8 @@ transport results and ignores late exceptions after reset. The
 [infrastructure composition](../../packages/infrastructure/participation/platform-notices.ts)
 provides transport, clock and identifiers; the old flat notice modules only
 re-export these constructors for reference callers. The YouTube receiver and
-CHZZK connection have separate owners; supervisor composition and the reference
-SOOP loop still require reconstruction.
+CHZZK connection have separate owners; platform composition connects their
+lifetimes without embedding provider protocols.
 
 ## YouTube reception
 

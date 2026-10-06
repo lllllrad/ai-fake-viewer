@@ -5,7 +5,7 @@ import type { Store } from "../../storage.ts";
 import type { Capture } from "../../capture.ts";
 import type { Transcriber } from "../../transcription.ts";
 import type { Scheduler } from "../../scheduler.ts";
-import type { Supervisor } from "../../supervisor.ts";
+import type { Supervisor } from "../inputs/platform-supervisor.ts";
 import type { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
 import type { RightsService } from "../../application/rights/service.ts";
 import type { ChatgptAuth } from "../../chatgpt-auth.ts";

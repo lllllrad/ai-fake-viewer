@@ -49,7 +49,7 @@ import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-mo
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
-import { Supervisor } from "../../packages/supervisor.ts";
+import { Supervisor } from "../../packages/infrastructure/inputs/platform-supervisor.ts";
 import { createBroadcastCast } from "../../packages/infrastructure/cast/runtime.ts";
 export { equal } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
 export async function createApp(
