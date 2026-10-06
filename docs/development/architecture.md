@@ -215,6 +215,15 @@ review and before publication. Invalid candidates are discarded before another
 publication-delay timer is scheduled. Rejection diagnostics contain fixed reasons,
 not input text.
 
+The [local publication service](../../packages/application/reactions/publication-service.ts)
+commits the response, full source-message provenance and cast attempt outcome in
+one transaction through its [SQLite adapter](../../packages/infrastructure/conversation/publication-sqlite.ts).
+Both cast and fallback generation use this path. Missing, hidden or foreign
+source messages and closed broadcasts reject publication. Reader notification
+runs after commit; notification failure does not turn a durable publication into
+a failed attempt that could be retried. Reconnect snapshots recover committed
+messages. A provenance write failure rolls back publication before any notification.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

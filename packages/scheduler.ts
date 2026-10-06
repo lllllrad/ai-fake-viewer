@@ -778,6 +778,7 @@ export class Scheduler {
       const publicMessageId = this.store.publishPersona({
         attemptId: p.attemptId,
         memberId: p.memberId,
+        sourceMessageIds: p.input.messages.map((message) => message.id),
         name:
           this.store.personaRuntime()?.members.find((m) => m.id === p.memberId)
             ?.displayName ?? p.input.persona.name,
@@ -794,10 +795,6 @@ export class Scheduler {
         this.phase = "suppressed";
         return;
       }
-      this.store.recordAiContext(
-        publicMessageId,
-        p.input.messages.map((m) => m.id),
-      );
       this.lastSpoke = now;
       this.phase = "published_local";
       this.trace("published");
@@ -806,28 +803,20 @@ export class Scheduler {
       this.speechTimes.push(now);
       return;
     }
-    const published = this.store.ingestBatch([
-      {
-        platform: "experiment",
-        channel: this.store.sessionId,
-        author: `persona-${p.persona}`,
-        name:
-          this.config.ai.personas[p.persona].name
-            .replace(/\s*·\s*experiment\s*$/i, "")
-            .trim() || "시청자",
-        text: d.text!,
-        replyToId: d.replyToMessageId,
-      },
-    ]);
-    for (const seq of published) {
-      const message = this.store.publicEvent(seq).payload as {
-        id?: string;
-      } | null;
-      if (message?.id)
-        this.store.recordAiContext(
-          message.id,
-          p.input.messages.map((m) => m.id),
-        );
+    const published = this.store.publishSynthetic({
+      actor: `persona-${p.persona}`,
+      name:
+        this.config.ai.personas[p.persona].name
+          .replace(/\s*·\s*experiment\s*$/i, "")
+          .trim() || "시청자",
+      text: d.text!,
+      replyToId: d.replyToMessageId,
+      sourceMessageIds: p.input.messages.map((message) => message.id),
+    });
+    if (!published) {
+      this.trace("publication_discarded", { reason: "publication_failed" });
+      this.phase = "suppressed";
+      return;
     }
     this.lastSpoke = now;
     this.phase = "published_local";

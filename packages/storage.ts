@@ -1,3 +1,8 @@
+import {
+  LocalPublicationService,
+  type LocalPublication,
+} from "./application/reactions/publication-service.ts";
+import { SqliteLocalPublication } from "./infrastructure/conversation/publication-sqlite.ts";
 import { ConversationProjection } from "./application/conversation/projection-service.ts";
 import { SqliteConversationProjection } from "./infrastructure/conversation/projection-sqlite.ts";
 import { ConversationContext } from "./application/conversation/context-service.ts";
@@ -23,6 +28,7 @@ export class Store extends EventEmitter {
   private readonly participationSnapshots: SqliteParticipationSnapshots;
   private readonly conversationContext: ConversationContext;
   private readonly conversationProjection: ConversationProjection;
+  private readonly publication: LocalPublicationService;
   sessionId: string;
   readerCollisionNames = new Set<string>();
   constructor(
@@ -44,6 +50,17 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.publication = new LocalPublicationService(
+      new SqliteLocalPublication(this.db, {
+        sessionId: () => this.sessionId,
+        id: randomUUID,
+        now: () => Date.now(),
+      }),
+      this.transactions,
+      (receipt) => {
+        this.emit("event", this.publicEvent(receipt.sequence));
+      },
+    );
     this.conversationProjection = new ConversationProjection(
       new SqliteConversationProjection(this.db),
       {
@@ -1257,103 +1274,28 @@ export class Store extends EventEmitter {
         id,
       );
   }
+  publishSynthetic(input: LocalPublication) {
+    try {
+      return this.publication.publish(input)?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
   publishPersona(input: {
     attemptId: string;
     memberId: string;
     name: string;
     text: string;
     replyToId: string | null;
+    sourceMessageIds?: string[];
   }) {
-    try {
-      return this.transaction(() => {
-        const attempt = this.db
-          .prepare(
-            "SELECT * FROM persona_reaction_attempts WHERE id=? AND state='dispatching'",
-          )
-          .get(input.attemptId) as any;
-        const s = attempt
-          ? (this.db
-              .prepare("SELECT * FROM persona_sessions WHERE id=?")
-              .get(attempt.session_id) as any)
-          : null;
-        const member = attempt
-          ? (this.db
-              .prepare(
-                "SELECT * FROM persona_cast WHERE session_id=? AND member_id=?",
-              )
-              .get(attempt.session_id, input.memberId) as any)
-          : null;
-        if (
-          !attempt ||
-          !s ||
-          !member ||
-          s.source_session !== this.sessionId ||
-          s.state !== "live" ||
-          !s.armed ||
-          s.control_epoch !== attempt.session_epoch ||
-          member.status !== "present" ||
-          member.muted ||
-          member.epoch !== attempt.member_epoch ||
-          member.definition_hash !== attempt.definition_hash
-        )
-          return null;
-        const author = `persona-${input.memberId}`;
-        let actor = (
-          this.db
-            .prepare(
-              "SELECT id FROM actors_private WHERE session=? AND source=? AND author=?",
-            )
-            .get(this.sessionId, "experiment", author) as any
-        )?.id as string | undefined;
-        if (!actor) {
-          actor = randomUUID();
-          this.db
-            .prepare(
-              "INSERT INTO actors_private(id,session,source,author,name) VALUES(?,?,?,?,?)",
-            )
-            .run(actor, this.sessionId, "experiment", author, input.name);
-        }
-        const id = randomUUID(),
-          now = Date.now();
-        const seq = Number(
-          this.db
-            .prepare(
-              "INSERT INTO events(session,type,target,at,payload) VALUES(?,'message.added',?,?,?)",
-            )
-            .run(this.sessionId, id, now, JSON.stringify({})).lastInsertRowid,
-        );
-        this.db
-          .prepare(
-            "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,hidden,seq) VALUES(?,?,?,?,?,?,?,?,?,?,0,?)",
-          )
-          .run(
-            id,
-            this.sessionId,
-            actor,
-            "experiment",
-            this.sessionId,
-            input.attemptId,
-            now,
-            now,
-            input.text,
-            input.replyToId,
-            seq,
-          );
-        this.db
-          .prepare(
-            "INSERT OR IGNORE INTO persona_publication_outbox(message_id,attempt_id,state,created,dispatched) VALUES(?,?,'dispatched',?,?)",
-          )
-          .run(id, input.attemptId, now, now);
-        this.db
-          .prepare(
-            "UPDATE persona_reaction_attempts SET state='published',finished_at=?,public_message_id=? WHERE id=? AND state='dispatching'",
-          )
-          .run(now, id, input.attemptId);
-        this.emit("event", this.publicEvent(seq));
-        return id;
-      });
-    } catch {
-      return null;
-    }
+    return this.publishSynthetic({
+      actor: `persona-${input.memberId}`,
+      name: input.name,
+      text: input.text,
+      replyToId: input.replyToId,
+      sourceMessageIds: input.sourceMessageIds ?? [],
+      cast: { attemptId: input.attemptId, memberId: input.memberId },
+    });
   }
 }
