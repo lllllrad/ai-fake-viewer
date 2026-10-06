@@ -1,3 +1,5 @@
+import { BroadcastLifetime } from "./application/broadcast/lifetime.ts";
+import { SqliteBroadcastLifetime } from "./infrastructure/broadcast/lifetime-sqlite.ts";
 import { SqliteCastDispatch } from "./infrastructure/reactions/dispatch-sqlite.ts";
 import type { CastDispatch } from "./application/reactions/dispatch.ts";
 import { SqliteCastRuntime } from "./infrastructure/cast/runtime-query.ts";
@@ -39,6 +41,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly lifetime: BroadcastLifetime;
   private readonly castRuntime: SqliteCastRuntime;
   readonly dispatch: CastDispatch;
   readonly attempts: ReactionAttempts;
@@ -88,6 +91,34 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.lifetime = new BroadcastLifetime(
+      new SqliteBroadcastLifetime(this.db),
+      this.transactions,
+      {
+        sessionId: () => this.sessionId,
+        closed: () => this.closed(),
+        live: () => !!this.participation,
+        id: randomUUID,
+        now: () => Date.now(),
+        replace: (sessionId, startedAt, closed, erase) => {
+          this.sessionId = sessionId;
+          if (erase) this.readerCollisionNames.clear();
+          if (this.participation) {
+            if (erase) this.participation.end();
+            this.participation.sessionId = sessionId;
+            this.participation.startedAt = startedAt;
+            this.participation.ended = closed;
+          }
+          this.saveParticipation();
+        },
+        reset: () => {
+          this.emit("reset");
+        },
+        closedEvent: (sequence) => {
+          this.emit("event", this.publicEvent(sequence));
+        },
+      },
+    );
     this.modelUsage = new SqliteModelUsage(
       this.db,
       {
@@ -744,42 +775,10 @@ export class Store extends EventEmitter {
     return rows.length;
   }
   closeSession() {
-    if (this.participation) {
-      this.deleteAll(true);
-      this.emit("reset");
-      return;
-    }
-    if (this.closed()) return;
-    this.setAiDesiredRunning(false);
-    this.db
-      .prepare(
-        "UPDATE persona_sessions SET state='ended',armed=0,control_epoch=control_epoch+1,revision=revision+1,updated=? WHERE source_session=? AND state IN ('live','paused')",
-      )
-      .run(Date.now(), this.sessionId);
-    this.db
-      .prepare(
-        "UPDATE persona_reaction_attempts SET state='canceled',reason='source_session_closed',finished_at=? WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND state IN ('generating','candidate','dispatching')",
-      )
-      .run(Date.now(), this.sessionId);
-    this.db
-      .prepare("UPDATE sessions SET closed=? WHERE id=?")
-      .run(Date.now(), this.sessionId);
-    const seq = this.event("session.closed", null);
-    this.emit("event", this.publicEvent(seq));
+    this.lifetime.end();
   }
   newSession() {
-    this.closeSession();
-    this.sessionId = randomUUID();
-    this.db
-      .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
-      .run(this.sessionId, Date.now());
-    if (this.participation) {
-      this.participation.sessionId = this.sessionId;
-      this.participation.ended = false;
-      this.participation.startedAt = Date.now();
-    }
-    this.saveParticipation();
-    this.emit("reset");
+    this.lifetime.createNext();
   }
   purge(before: number) {
     // An active broadcast owns its history until explicit broadcast end.
@@ -924,29 +923,7 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   deleteAll(closed = false) {
-    this.transaction(() => {
-      if (closed) this.participation?.end();
-      this.readerCollisionNames.clear();
-      this.participation?.participants.clear();
-      if (this.participation) this.participation.revision++;
-      this.db.exec(
-        "DELETE FROM chat_context_summaries; DELETE FROM ai_message_context; DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
-      );
-      this.sessionId = randomUUID();
-      if (this.participation) {
-        this.participation.sessionId = this.sessionId;
-        this.participation.startedAt = Date.now();
-        this.participation.ended = closed;
-      }
-      this.db
-        .prepare("INSERT INTO sessions VALUES(?,?,?)")
-        .run(this.sessionId, Date.now(), closed ? Date.now() : null);
-      this.saveParticipation();
-    });
-    this.db.exec(
-      "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);",
-    );
-    this.emit("reset");
+    this.lifetime.erase(closed);
   }
   recordTranscript(entry: Transcript) {
     return this.transcripts.record(entry);

@@ -377,6 +377,17 @@ failed write leave the candidate unclaimed; a second claim cannot succeed.
 
 ## Persistence and external effects
 
+The [broadcast lifetime service](../../packages/application/broadcast/lifetime.ts)
+owns end, replacement and explicit erasure. Its
+[SQLite repository](../../packages/infrastructure/broadcast/lifetime-sqlite.ts)
+owns the disposable record set and post-commit database compaction. A live
+broadcast replacement erases the prior data, creates one new session and updates
+the in-memory participation state in a single transaction. A failed write restores
+both SQL and memory; readers receive a reset only after commit. Ending an already
+closed broadcast is idempotent. Independent rights follow-ups and account tokens
+survive these transitions. The reference/demo path retains historical records on
+end, but its close and next-session creation share the same transaction boundary.
+
 One private SQLite broadcast database owns session-scoped records; a separate
 rights database and encrypted account files have independent lifetimes. Keep the
 current configured database usable through explicit, tested schema migrations.

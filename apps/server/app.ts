@@ -247,9 +247,9 @@ export async function createApp(
     repository: {
       closed: () => store.closed(),
       aiRequested: () => store.aiDesiredRunning(),
-      end: () => store.closeSession(),
-      createNext: () => store.newSession(),
-      erase: () => store.deleteAll(),
+      end: () => store.lifetime.end(),
+      createNext: () => store.lifetime.createNext(),
+      erase: () => store.lifetime.erase(),
       disclose: () => {
         store.reveal();
       },
