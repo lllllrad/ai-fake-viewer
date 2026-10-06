@@ -87,8 +87,8 @@ Shared scheduler checks remain: fresh input, randomized pacing, suppression abov
 | Consecutive speech by one persona    | At most two                                                                     |
 | Activity-dependent AI cap            | Per 60 seconds: external 0–4 => 4; 5–19 => 2; 20+ => 1; shared cap also applies |
 | Response delay                       | 500–2500 ms                                                                     |
-| Reaction TTL / fresh observation age | 12 seconds each                                                                 |
-| Model timeout                        | Six seconds                                                                     |
+| Reaction TTL / fresh observation age | 45-second reaction TTL / 12-second observation age                              |
+| Model timeout                        | Automatic cast: 30 seconds                                                      |
 | Live calls                           | 300, also bounded by shared Store usage and `ai.maxCalls`                       |
 | Authoring calls                      | 200, with candidate/scenario-count checks                                       |
 

@@ -1,94 +1,146 @@
-# Admin dashboard functional specification
+# Operator workspace and conversation surfaces
 
-Version 1.5. Operating controls remain the first priority. [Privacy implementation](participation.md) defines live participation, single-step consent and broadcast lifetime. Implementation evidence does not establish platform or provider approval.
+This defines the replacement UI for the current live feature set. The rewrite is
+in progress; the old single-page layout is not the design contract. Behavior is
+owned by [requirements](behavior.md), [participation](participation.md) and
+[personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
 
-## Implementation and requirement gaps
+## Operator tasks and navigation
 
-| Requirement    | Current behavior                                                                                       | Remaining acceptance                            |
-| -------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                         | Full accessibility audit                        |
-| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings        | Actual contracts and account configuration      |
-| Inputs         | Approved official receivers; optional broadcast transcription; screen remains unused                   | Review before enabling alternative input        |
-| Emergency stop | Available even with stale status; independent of receiver stop                                         | Extended network failure                        |
-| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                       | Match the actual viewer notice                  |
-| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                              | Host/service rehearsal                          |
-| Guidance       | Automatic fixed notices, observed-command assistance, one combined consent step and child restrictions | Real delivery permissions and event ordering    |
-| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session      | Provider/VOD actions                            |
-| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks                | Target identification, editing and notification |
+Use three clear destinations within the authenticated workspace:
 
-Sources: [operations-dashboard.tsx](../../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx), [main.tsx](../../apps/web/src/main.tsx) and [server](../../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
+- **Broadcast:** input health, AI enablement, conversation preview, recent speech,
+  automatic cast, disclosure and broadcast end/new-session controls.
+- **Connections:** selected platforms, account connection/reauthorization, input
+  configuration status, AI account/model and usage/diagnostics.
+- **Participation:** short guidance and individual consent status, withdrawal/age
+  controls, operating profile, rights requests and optional video follow-up.
 
-## 1. Product principles
+The broadcast screen is the landing page. The operator must not have to expand a
+large technical settings panel to turn AI on/off or diagnose missing input.
+Navigation must retain the single SOOP browser connection and its notice loop.
+Reader and overlay remain separate routes with separate reader authorization.
 
-The operator must immediately understand whether AI is running and which inputs are available. Do not show transport codes, internal counters or verbose healthy-state details on the primary dashboard. Do not present unknown or stale state as healthy. Explain the problem and next action. Notice toggles and administrator privileges cannot bypass viewer consent.
+## Broadcast screen
 
-## 2. First-screen layout
+Keep one primary AI switch visible with broadcast identity/status. Represent
+persisted intent separately from effective generation: enabled and waiting for
+input after restart is not disabled. Stop remains usable when status is stale or
+an input fails. Show a concise cause and a link to the relevant settings for a
+blocked start. Do not display duplicated AI switches or start buttons.
 
-The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Video and audio use their configured sources by default; missing configuration and missing data must be visible. Neither requires a preview-confirmation prerequisite. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
+Place three input summaries together: broadcast screen, platform chat and speech
+transcription. Healthy inputs say only that they are healthy. Unconfigured and
+selected-but-failing inputs are visibly different. Expanding details reveals
+source/backend, recent timestamps and corrective action; raw transport codes do
+not dominate normal operation. Configured screen/audio need no privacy toggle or
+mask/preview acknowledgement.
 
-There is no mask-confirmation control or `capture.confirmed` / `programConfirmed` start gate. Input restrictions prevent unconsented information from bypassing text filtering; a manual mask acknowledgement does not lift them.
+The primary work area contains recent permitted conversation and current speech.
+Show empty, waiting and failed states intentionally. Automatic AI viewers appear
+as a read-only cast overview; the operator does not create, audition or approve
+personas. Anonymous topic/mood context is secondary and can be cleared explicitly.
 
-## Basic status and details
+Broadcast end has a confirmation describing session deletion. Process restart is
+not broadcast end. A closed broadcast offers an explicit new-broadcast action and
+does not silently reopen when the page reloads or the process restarts.
 
-Use short healthy, unused, preparing, failed and stale states. Hide platform/transport names and counts in the normal summary; expand connection details for diagnosis. Mobile users must be able to find AI controls. Do not rely on color alone.
+## Controls and semantics
 
-## 3. Primary state
+| Control                     | User-visible meaning                                                | Server responsibility                                                  |
+| --------------------------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| AI enable                   | Generate local AI chat when required inputs and the model are ready | Persist intent, reuse/create cast, apply evidence and budget checks    |
+| AI disable / emergency stop | Cancel generation, review and pending publication                   | Persist disabled intent immediately; input collection is independent   |
+| Start inputs                | Connect configured screen/audio and selected platform receivers     | Do not enable AI or grant consent                                      |
+| Stop all inputs             | Stop collection and AI                                              | Cancel pending work before stopping adapters                           |
+| Disclose AI messages        | Label AI-generated chat and disclose origins in reader/overlay      | Stop generation; irreversible for this broadcast; names stay unchanged |
+| End broadcast               | Stop this broadcast and delete its session data                     | Atomically clear ordinary broadcast state and preserve closed marker   |
+| New broadcast               | Start a distinct session with fresh participation                   | New identity, disabled AI intent, empty cast/consent/history           |
+| Hide message                | Remove it from conversation and dependent model context             | Invalidate affected work and refresh every public surface              |
+| Approve/reject candidate    | Publish or discard a waiting draft when manual review is configured | Revalidate evidence/consent/expiry on approval                         |
 
-| Area         | Display and behavior                                                                              |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| Session      | Open/closed, new session and explicit close; uncertain connectivity is not proof of broadcast end |
-| Screen/audio | Video unused; enabled audio shows current transcription state and admin export                    |
-| Real chat    | Healthy/not ready/problem summary; unapproved channels cannot start                               |
-| AI           | Enable switch, failed prerequisites, emergency stop; model/budget details collapsed               |
-| Privacy      | Incomplete-profile warning, actual notice/consent stage and unsaved rights-task warning           |
+Use explicit localized action labels. A disclosure button must say what will be
+shown; a status such as “already disclosed” is not an action label. Confirm only
+destructive session/data actions and irreversible disclosure, not ordinary toggles.
 
-Poll every two seconds using `generatedAt`. Status data older than ten seconds, failed reads or missing required state block start. Stop remains available.
+## Connections and diagnostics
 
-## 4. Controls
+YouTube and CHZZK receive and send fixed notices on the server. SOOP uses its
+supported browser SDK and requires the connected administrator tab to stay open.
+Account connect/reauthorize actions remain visible when saved authorization exists.
+Show the registered callback where it helps configuration, not on the dashboard.
 
-### 4.1 AI generation and disclosure
+Authentication uses **Sign in with ChatGPT** or an explicitly selected API key.
+Inference uses the **Responses API**. Account/model selection and sign-out are
+separate from the AI switch. No silent provider fallback is allowed.
 
-The AI generation switch checks server readiness, automatically composes six personas and starts them. There are no operator authoring, audition or approval forms in the live UI. Stop cancels generation, review and pending publication independently of receivers. Restart does not resume AI automatically. AI can be enabled before fresh permitted chat arrives; it waits for input rather than producing unsolicited messages. Enabling AI does not start receivers.
+For limits or denied requests, identify the actual API and operation: receive/read,
+account lookup, fixed-notice send, transcription or AI generation/review. Distinguish
+provider quota from application call/token/cost budgets. An observed read failure
+does not prove that the send API separately exhausted its quota.
 
-The disclosure action explicitly identifies that it will label AI-generated chat. Confirmation disarms generation and the cast, then reveals origin labels. A status replaces the button afterward; disclosure is irreversible within the session. Actual viewer and synthetic persona names are visible both before and after disclosure.
+Diagnostics may expose sanitized timestamps, durations, stages, counts and reason
+codes. They do not show raw provider responses, credentials or unconsented text.
+Transcript download and media preview require administrator authorization.
 
-Authentication uses **Sign in with ChatGPT** when `chatgpt_subscription` is selected. Inference uses the **Responses API** with either that account's eligible ChatGPT plan usage or an explicitly configured API key. Authentication/billing and inference are distinct concepts.
+## Participation and rights
 
-### 4.2 Input controls
+Describe the normal flow once: one short delivered notice and one fresh individual
+consent command. Sharing delivery with recently observed viewers is not shared
+consent. The broadcast account is excluded. Display meaningful participant states
+such as waiting for guidance, waiting for consent, active, withdrawn and blocked;
+do not show obsolete multistage counters.
 
-Starting inputs does not start AI. Separate all-input stop from individual receiver state, and recheck settings/approvals on the server. Live screen start is rejected; audio start/export are permitted only when audio is enabled in the reviewed profile. If end detection is uncertain, the operator explicitly closes the session.
+Unconsented ordinary text is absent. Age is self-declared, never verified by chat.
+An operator can block a known under-14 account or verify a particular newly
+observed unordered command; there is no administrator activation shortcut. Failed
+or unconfirmed notice delivery cannot be marked successful by a button.
 
-### 4.3 Guidance and connection controls
+Keep the operating profile readable and separate from live controls. Show missing
+configuration with a relevant action. Profile edits do not bypass real account
+permissions or expand prior consent silently.
 
-Legacy overlay notice switches are informational, not delivery or consent. Their runtime values survive restart for the current broadcast. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send a short fixed participation notice. CHZZK uses the official Chat API from the server. These senders never send AI replies or viewer text.
+Rights requests survive broadcast end independently. Distinguish application
+removal, provider action, public-video action and controlled-copy action. Require
+an outcome or stated limitation before marking a request complete. The UI does
+not claim to have performed external deletion by changing a status. Allow removal
+of unnecessary resolved records and optional video inventory administration.
 
-CHZZK setup places its connect/reauthorize action directly next to its configuration status and callback. The action remains available when credentials are configured and authorization is already saved; disabled configuration explains the required correction. Saved authorization is not live permission verification. Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control. CHZZK also confirms every part through an API message ID, enforces attempt limits and disables manual delivery confirmation. Its server sender does not depend on an open admin tab. See the [platform behavior matrix](behavior.md#platform-execution-and-notice-delivery).
+## Reader and OBS overlay
 
-## 5. Participation and privacy
+Use a shared conversation renderer with variants for the reader and transparent
+OBS overlay. Actual viewer nicknames and synthetic persona names remain visible.
+Origin labels are hidden until disclosure; disclosure does not rename participants.
+The reader supports following new messages and jumping to the latest. The overlay
+has a bounded recent-message window and no administrator controls or diagnostics.
 
-An ordinary first chat schedules a single short notice. After confirmed delivery,
-one fresh exact consent command activates participation. Recently observed viewers
-in the same room share delivery, not consent. The participant list shows minimal
-account, notice, age and observed-command state; unconsented text is absent.
-Administrators cannot invent consent. All participation and AI execution intent
-survives restart until broadcast end.
+Reader authentication uses the existing reader token/links. Never store tokens,
+chat, transcripts or consent in localStorage, sessionStorage or IndexedDB. Reconnect
+replaces the window with a current permitted snapshot; removed messages cannot
+reappear through event replay. Broadcast end clears every conversation surface.
 
-Withdrawal invalidates consent, removes raw/derived context and cancels AI. Previously approved anonymous categories may remain until session end. A status command lets the operator inspect current participation. Age is shown as self-declared 14+, not verified. Known under-14 or contradictory declarations are blocked. There is no guardian-consent verification workflow, and self-issued commands cannot override the restriction.
+## Presentation and accessibility
 
-Profile changes invalidate old consent; processing-scope updates require a new notice version. New sessions begin without participation. Exact localized command strings and stage behavior are defined in [participation.ts](../../packages/participation.ts); see [privacy implementation](participation.md) for limits and APIs.
+Use one visual system: typography, spacing, surfaces, control states and semantic
+colors shared across screens. Prefer readable conversation space over nested
+cards and repeated status badges. Keep normal states calm and errors actionable.
+Avoid mixing untranslated operational prose into the Korean workspace; keep
+product names and configuration identifiers exact where necessary.
 
-## 6. Rights and video
+Support narrow screens without horizontal scrolling, keyboard navigation, visible
+focus, semantic labels and non-color status cues. Async actions show progress and
+recoverable errors. One failed request must not freeze unrelated controls or cause
+uncaught browser errors. Do not clear input forms merely because status polls.
 
-Withdrawal creates minimal follow-up work when there is display/external-processing history. Requests remain possible after a session ends. Contact details are optional; no unnecessary ID-document or raw-chat input field exists. App, provider, public video and original/edited/reuploaded copies require separate checks before completion. Notify limitations for records outside operator control. Status updates do not perform external deletion.
+## Data contracts and verification
 
-The optional content list records platform, location, broadcast time and publication state. Automatic editing, per-viewer indexes and exhaustive causal tracking are not mandatory. Long-term VOD publication is not automatically prohibited or deleted. Remove resolved request data when no longer needed. Session deletion does not remove unresolved rights tasks.
+A typed client owns request/error parsing. One workspace session owns status
+refresh, freshness and authentication; screens consume projections rather than
+making competing polling loops. Status older than ten seconds or failed status
+reads cannot be presented as healthy. Stop stays available.
 
-## 7. Data and API contract
-
-`GET /api/admin/status` returns session, inputs, readiness, privacy state and generation time. `GET /api/admin/privacy` returns public profile/issues, current participants, minimal rights tasks and optional video inventory. Mutations enforce authentication and local/Origin boundaries; browser confirmations cannot bypass server checks.
-
-Reader/overlay messages are projected from current permitted consent generations. They do not receive administrative account lists, consent records or rights tasks. Reconnection replaces content with the current filtered snapshot. Ordinary chat is not saved in browser storage.
-
-## 8. Acceptance
-
-Use [browser checks](../../scripts/browser-check.ts), [privacy UI checks](../../scripts/privacy-browser-check.ts) and [privacy tests](../../tests/privacy-requirements.test.ts). Verify first-screen placement, concise healthy status, stale-state blocking, keyboard/mobile controls, raw-text exclusion, observed-command handling, child restrictions, refusal to close app-only rights tasks and absence of browser/CSP errors. Platform contracts, real delivery and external/video actions remain operational acceptance, not synthetic PASS claims.
+Browser checks must cover navigation, controls, account actions, stale/error states,
+manual candidate review, shared notice/individual consent, withdrawal and reconnect,
+rights completion restrictions, reader/overlay synchronization and mobile layout.
+Use synthetic inputs and mocked external adapters. Screenshots alone do not prove
+server behavior, and fixture success does not certify real platform permissions.
