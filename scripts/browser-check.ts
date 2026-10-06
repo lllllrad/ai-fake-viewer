@@ -141,6 +141,33 @@ try {
     .waitFor();
   await adminPage.reload();
   await adminPage.getByRole("heading", { name: "방송 운영" }).waitFor();
+  // Keyboard navigation and direct details links move focus after status has loaded.
+  const workspaceNavigation = adminPage.getByRole("navigation", {
+    name: "운영 화면",
+  });
+  await workspaceNavigation
+    .getByRole("link", { name: "연결", exact: true })
+    .focus();
+  await adminPage.keyboard.press("Enter");
+  await expect(
+    adminPage.getByRole("heading", { name: "연결 및 입력 설정" }),
+  ).toBeFocused();
+  await adminPage.goto(`${origin}/admin#audio-details`);
+  await adminPage.reload();
+  await expect(
+    adminPage.getByRole("heading", { name: "음성 전사 · Groq" }),
+  ).toBeFocused();
+  await adminPage.goto(`${origin}/admin#program-details`);
+  await expect(
+    adminPage.getByRole("heading", { name: "송출 화면 입력", exact: true }),
+  ).toBeFocused();
+  await workspaceNavigation
+    .getByRole("link", { name: "방송", exact: true })
+    .focus();
+  await adminPage.keyboard.press("Enter");
+  await expect(
+    adminPage.getByRole("heading", { name: "방송 상태 및 AI 제어" }),
+  ).toBeFocused();
   assert(
     (
       await adminPage.evaluate(async () =>

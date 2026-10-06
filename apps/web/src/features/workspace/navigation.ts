@@ -16,17 +16,23 @@ export function workspacePage(hash: string): WorkspacePage {
     return "participation";
   return "broadcast";
 }
-export function useWorkspaceNavigation() {
-  const [page, setPage] = useState(() => workspacePage(location.hash));
+export function useWorkspaceNavigation(ready: boolean) {
+  const [hash, setHash] = useState(() => location.hash);
+  const page = workspacePage(hash);
   useEffect(() => {
-    const changed = () => setPage(workspacePage(location.hash));
+    const changed = () => setHash(location.hash);
     window.addEventListener("hashchange", changed);
     return () => window.removeEventListener("hashchange", changed);
   }, []);
   useEffect(() => {
-    const target = document.getElementById(location.hash.slice(1));
-    if (target) target.scrollIntoView({ block: "start" });
-    else window.scrollTo(0, 0);
-  }, [page]);
+    if (!ready) return;
+    const target =
+      document.getElementById(hash.slice(1)) ?? document.getElementById(page);
+    if (!target) return;
+    const heading = target.querySelector<HTMLElement>("h1, h2, h3") ?? target;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+    target.scrollIntoView({ block: "start" });
+  }, [hash, page, ready]);
   return page;
 }

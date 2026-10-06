@@ -1,4 +1,4 @@
-/* Workspace surfaces are scoped until the remaining legacy connection views are replaced. */
+/* Shared operator surfaces, separate from the reader and transparent overlay. */
 body:has(.operator-workspace),
 body:has(.login) {
   background: #f3f5f1;
@@ -51,7 +51,8 @@ body:has(.login) {
   border-color: #456d46;
   font-weight: 700;
 }
-.operator-workspace :is(button, a, input, select, summary):focus-visible {
+.operator-workspace
+  :is(button, a, input, select, summary, [tabindex="-1"]):focus-visible {
   outline: 3px solid #739675;
   outline-offset: 3px;
 }

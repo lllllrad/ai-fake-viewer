@@ -38,6 +38,12 @@ or discard unfinished participation forms. The broadcast conversation, transcrip
 cast, pending draft review and lifecycle controls are owned by
 [BroadcastConversation](../../apps/web/src/features/workspace/BroadcastConversation.tsx).
 
+Navigation waits for the authenticated workspace to exist before scrolling to the
+selected destination and focusing its heading. Direct detail links survive reload,
+and changing between details on the same screen still updates focus. Headings use
+programmatic focus without adding extra stops to normal Tab navigation. Routine
+status refreshes preserve the operator's current focus.
+
 ## Broadcast screen
 
 Keep one primary AI switch visible with broadcast identity/status. Represent

@@ -16,7 +16,6 @@ import { createRoot } from "react-dom/client";
 import { OperationsDashboard } from "./operations-dashboard";
 
 function Admin() {
-  const page = useWorkspaceNavigation();
   const {
     phase: session,
     data: status,
@@ -25,6 +24,7 @@ function Admin() {
     refresh,
     signOut,
   } = useAdminSession();
+  const page = useWorkspaceNavigation(session === "signed_in" && !!status);
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
