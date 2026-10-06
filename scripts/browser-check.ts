@@ -62,11 +62,83 @@ try {
   await expect(adminPage.getByLabel("관리자 접속 토큰")).toHaveCount(0);
   await adminPage.unroute("**/api/admin/status");
   await adminPage.getByRole("button", { name: "연결 다시 확인" }).click();
+  // Authentication uses the same single-flight action ownership as workspace commands.
+  await adminPage.getByLabel("관리자 접속 토큰").fill("invalid-fixture");
+  await adminPage
+    .getByRole("button", { name: "연결하기", exact: true })
+    .click();
+  await expect(adminPage.getByRole("alert")).toBeVisible();
+  await adminPage.getByLabel("관리자 접속 토큰").fill(admin);
+  let releaseLogin!: () => void;
+  const loginPending = new Promise<void>((resolve) => {
+    releaseLogin = resolve;
+  });
+  let logins = 0;
+  await adminPage.route("**/api/admin/login", async (route) => {
+    logins++;
+    await loginPending;
+    await route.continue();
+  });
+  try {
+    await adminPage
+      .getByRole("button", { name: "연결하기", exact: true })
+      .click();
+    await expect.poll(() => logins).toBe(1);
+    await expect(
+      adminPage.getByRole("button", { name: "연결 중…" }),
+    ).toBeDisabled();
+    await expect(adminPage.getByLabel("관리자 접속 토큰")).toBeDisabled();
+    await adminPage.locator("form").evaluate((form: HTMLFormElement) => {
+      form.requestSubmit();
+      form.requestSubmit();
+    });
+    releaseLogin();
+    await adminPage
+      .getByRole("heading", { name: "방송 운영", exact: true })
+      .waitFor();
+    assert.equal(logins, 1);
+  } finally {
+    releaseLogin();
+    await adminPage.unroute("**/api/admin/login");
+  }
+  let releaseLogout!: () => void;
+  const logoutPending = new Promise<void>((resolve) => {
+    releaseLogout = resolve;
+  });
+  let logouts = 0;
+  await adminPage.route("**/api/admin/logout", async (route) => {
+    logouts++;
+    await logoutPending;
+    await route.continue();
+  });
+  try {
+    await adminPage
+      .getByRole("button", { name: "로그아웃", exact: true })
+      .click();
+    await expect.poll(() => logouts).toBe(1);
+    const logoutButton = adminPage.getByRole("button", {
+      name: "로그아웃 중…",
+    });
+    await expect(logoutButton).toBeDisabled();
+    await logoutButton.evaluate((button: HTMLButtonElement) => button.click());
+    releaseLogout();
+    await expect(adminPage.getByLabel("관리자 접속 토큰")).toBeVisible();
+    await expect(adminPage.getByLabel("관리자 접속 토큰")).toHaveValue("");
+    await expect(
+      adminPage.getByRole("navigation", { name: "운영 화면" }),
+    ).toHaveCount(0);
+    assert.equal(logouts, 1);
+  } finally {
+    releaseLogout();
+    await adminPage.unroute("**/api/admin/logout");
+  }
   await adminPage.getByLabel("관리자 접속 토큰").fill(admin);
   await adminPage
     .getByRole("button", { name: "연결하기", exact: true })
     .click();
-  await adminPage.getByRole("heading", { name: "방송 운영" }).waitFor();
+  await adminPage
+    .getByRole("heading", { name: "방송 운영", exact: true })
+    .waitFor();
   await adminPage.reload();
   await adminPage.getByRole("heading", { name: "방송 운영" }).waitFor();
   assert(

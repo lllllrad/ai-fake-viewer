@@ -1,3 +1,4 @@
+import { AdminLogin } from "./features/workspace/AdminLogin";
 import { SoopConnector } from "./features/soop/SoopConnector";
 import { ConnectionsPage } from "./features/connections/ConnectionsPage";
 import "./style.css";
@@ -13,47 +14,6 @@ import { ParticipationPage } from "./features/participation/ParticipationPage";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { OperationsDashboard } from "./operations-dashboard";
-function TokenForm({
-  title,
-  onSubmit,
-  error,
-}: {
-  title: string;
-  onSubmit: (t: string) => void;
-  error?: string;
-}) {
-  const [token, setToken] = useState("");
-  return (
-    <main className="login">
-      <div className="eyebrow">MIXED CHAT / LOCAL STUDIO</div>
-      <h1>{title}</h1>
-      <p>로컬 .env 파일의 관리자 접속 토큰을 입력해 주세요.</p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          onSubmit(token.trim());
-        }}
-      >
-        <label>
-          관리자 접속 토큰
-          <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            autoComplete="off"
-            required
-          />
-        </label>
-        <button>연결하기</button>
-      </form>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-    </main>
-  );
-}
 
 function Admin() {
   const page = useWorkspaceNavigation();
@@ -70,7 +30,6 @@ function Admin() {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  const [error, setError] = useState("");
   const stale =
     statusFailed || !status?.generatedAt || now - status.generatedAt > 10000;
   const preview = usePreview(
@@ -82,12 +41,14 @@ function Admin() {
     status?.sessionId,
   );
   const actions = useAdminActions(refresh);
+  const logout = useAdminActions(async () => {});
   const busy = actions.pending;
   useEffect(() => {
-    if (session !== "signed_in") actions.reset();
-  }, [session, actions.reset]);
-  const api = (path: string, method = "GET") =>
-    adminClient.request(path, { method });
+    if (session !== "signed_in") {
+      actions.reset();
+      logout.reset();
+    }
+  }, [session, actions.reset, logout.reset]);
   const action = (path: string, body?: unknown) =>
     actions.run(path, async (signal) => {
       await adminClient.request(path, { method: "POST", body, signal });
@@ -113,22 +74,7 @@ function Admin() {
         )}
       </main>
     );
-  if (session === "signed_out")
-    return (
-      <TokenForm
-        title="방송 운영에 연결하기"
-        error={error}
-        onSubmit={(token) => {
-          void adminClient
-            .request("login", { method: "POST", body: { token } })
-            .then(async () => {
-              setError("");
-              await refresh();
-            })
-            .catch((e) => setError(e.message));
-        }}
-      />
-    );
+  if (session === "signed_out") return <AdminLogin refresh={refresh} />;
   return (
     <main className="admin operator-workspace">
       <header className="workspace-header">
@@ -157,12 +103,12 @@ function Admin() {
           </a>
         ))}
       </nav>
-      {(error || actions.error) && (
+      {(logout.error || actions.error) && (
         <div role="alert" className="error">
-          {actions.error || error}
+          {actions.error || logout.error}
           <button
             onClick={() => {
-              setError("");
+              logout.clearError();
               actions.clearError();
             }}
           >
@@ -256,15 +202,15 @@ function Admin() {
         방송 데이터는 재시작 후 유지되고 방송 종료 시 삭제됩니다.
         <button
           className="secondary"
+          disabled={logout.pending}
           onClick={() =>
-            void api("logout", "POST")
-              .then(() => {
-                signOut();
-              })
-              .catch((e) => setError(e.message))
+            void logout.run("logout", async (signal) => {
+              await adminClient.request("logout", { method: "POST", signal });
+              if (!signal.aborted) signOut();
+            })
           }
         >
-          로그아웃
+          {logout.pending ? "로그아웃 중…" : "로그아웃"}
         </button>
       </footer>
     </main>

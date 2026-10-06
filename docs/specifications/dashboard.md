@@ -24,6 +24,13 @@ large technical settings panel to turn AI on/off or diagnose missing input.
 Navigation must retain the single SOOP browser connection and its notice loop.
 Reader and overlay remain separate routes with separate reader authorization.
 
+The [login screen](../../apps/web/src/features/workspace/AdminLogin.tsx) owns its
+transient token and cancellable login action. Repeated submissions send one request;
+input and submit controls show pending state. Failed login keeps the form usable,
+and leaving it cancels its pending action. Logout also suppresses duplicate requests,
+shows progress and clears the workspace after success. Returning to login starts
+with an empty token field; credentials are never persisted in browser storage.
+
 Workspace navigation uses fragment links (`#broadcast`, `#connections`,
 `#participation`). Existing input-detail links select their owning screen. Screens
 retain their component lifetime while hidden: navigating must not reconnect SOOP
