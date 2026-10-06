@@ -175,6 +175,22 @@ them and rejects pre-reset frames arriving late. The application cannot remove
 unconsented content embedded in an upstream video; the reviewed Program source
 must provide the intended content. No mask-confirmation step is required.
 
+## Automatic viewers and quiet periods
+
+Enabling AI prepares six synthetic viewers automatically. The broadcast page's
+cast overview shows their names, motivations and participation styles; no brief,
+audition or persona approval is required. Turning AI off/on or restarting the
+server reuses the current broadcast's cast. Ending the broadcast clears it.
+
+Six viewers do not imply six replies, or a guaranteed reply to a direct question.
+Selection considers fresh observed context, presence, individual cooldowns and
+speech propensity. Busy human chat reduces AI participation, and the model may
+choose silence. If no response appears, inspect input health and AI diagnostics
+for the current phase, skip/rejection reason and usage limits. Manual message
+review, when configured, requires publishing the waiting draft; it is separate
+from persona creation. See the [persona contract](../specifications/personas.md)
+and [AI diagnostics](../development/ai-pipeline.md).
+
 ## Effective configuration and API limits
 
 There are no privacy enable switches for video or transcription. `capture` selects

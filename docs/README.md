@@ -15,6 +15,7 @@
 | Product contract | [Participation and data lifecycle](specifications/participation.md)   | Viewer consent, withdrawal, retention and rights handling                       |
 | Reference        | [Platform contracts](reference/platform-contracts.md)                 | Dated external platform research                                                |
 | Reference        | [SOOP](reference/soop.md)                                             | Official integration investigation                                              |
+| Reference        | [Legacy persona authoring](reference/persona-authoring.md)            | Demo-only authoring, auditions and API contracts                                |
 | Reference        | [Dependencies](reference/dependencies.md)                             | Dependency choices and constraints                                              |
 
 [README](../README.md) is the project entry point.
