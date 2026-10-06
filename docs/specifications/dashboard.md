@@ -38,6 +38,10 @@ persisted intent separately from effective generation: enabled and waiting for
 input after restart is not disabled. Stop remains usable when status is stale or
 an input fails. Show a concise cause and a link to the relevant settings for a
 blocked start. Do not display duplicated AI switches or start buttons.
+Broadcast commands use the shared cancellable action owner: repeated clicks for
+the same pending command issue one request, while emergency stop can run during
+another command. Finishing stop does not clear the remaining command's pending
+state. Signing out or losing authentication cancels pending broadcast actions.
 
 Place three input summaries together: broadcast screen, platform chat and speech
 transcription. Healthy inputs say only that they are healthy. Unconfigured and

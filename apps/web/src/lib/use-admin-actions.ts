@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 export function useAdminActions(refresh: () => Promise<void>) {
   const requests = useRef(new Map<string, AbortController>());
   const [pending, setPending] = useState<string[]>([]);
   const [error, setError] = useState("");
+  const reset = useCallback(() => {
+    for (const controller of requests.current.values()) controller.abort();
+    requests.current.clear();
+    setPending([]);
+    setError("");
+  }, []);
   useEffect(
     () => () => {
       for (const controller of requests.current.values()) controller.abort();
@@ -37,5 +43,12 @@ export function useAdminActions(refresh: () => Promise<void>) {
       if (!controller.signal.aborted) setPending([...requests.current.keys()]);
     }
   };
-  return { run, error, busy: (key: string) => pending.includes(key) };
+  return {
+    run,
+    error,
+    pending: pending.length > 0,
+    busy: (key: string) => pending.includes(key),
+    clearError: () => setError(""),
+    reset,
+  };
 }

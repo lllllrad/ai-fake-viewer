@@ -5,6 +5,7 @@ import { BroadcastConversation } from "./features/workspace/BroadcastConversatio
 import { useWorkspaceNavigation } from "./features/workspace/navigation";
 import "./features/workspace/workspace.css";
 import { adminClient } from "./lib/admin-client";
+import { useAdminActions } from "./lib/use-admin-actions";
 import { useAdminSession } from "./features/workspace/use-admin-session";
 import { ConversationPage } from "./features/conversation/ConversationPage";
 import { ParticipationPage } from "./features/participation/ParticipationPage";
@@ -70,23 +71,13 @@ function Admin() {
   }, []);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
-  const [busy, setBusy] = useState(false);
+  const actions = useAdminActions(refresh);
+  const busy = actions.pending;
+  useEffect(() => {
+    if (session !== "signed_in") actions.reset();
+  }, [session, actions.reset]);
   const api = (path: string, method = "GET") =>
     adminClient.request(path, { method });
-  const post = async (path: string, body: unknown) =>
-    (await adminClient.request(path, { method: "POST", body })).json();
-  const personaAction = async (fn: () => Promise<void>) => {
-    setBusy(true);
-    setError("");
-    try {
-      await fn();
-      await refresh();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
   useEffect(() => {
     if (session !== "signed_in") return;
     let cancelled = false;
@@ -119,18 +110,10 @@ function Admin() {
       if (currentUrl) URL.revokeObjectURL(currentUrl);
     };
   }, [session, status?.capture?.lastFrameAt, status?.capture?.lastFrameAgeMs]);
-  const action = async (path: string) => {
-    setBusy(true);
-    setError("");
-    try {
-      await api(path, "POST");
-      await refresh();
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+  const action = (path: string, body?: unknown) =>
+    actions.run(path, async (signal) => {
+      await adminClient.request(path, { method: "POST", body, signal });
+    });
   const revealOrigins = () => {
     if (
       window.confirm(
@@ -198,10 +181,17 @@ function Admin() {
           </a>
         ))}
       </nav>
-      {error && (
+      {(error || actions.error) && (
         <div role="alert" className="error">
-          {error}
-          <button onClick={() => setError("")}>닫기</button>
+          {actions.error || error}
+          <button
+            onClick={() => {
+              setError("");
+              actions.clearError();
+            }}
+          >
+            닫기
+          </button>
         </div>
       )}
       {!status ? (
@@ -230,9 +220,7 @@ function Admin() {
               }
               onReveal={revealOrigins}
               onNotice={(platform, enabled) =>
-                void personaAction(async () => {
-                  await post(`consent-notices/${platform}`, { enabled });
-                })
+                void action(`consent-notices/${platform}`, { enabled })
               }
             />
             <BroadcastConversation

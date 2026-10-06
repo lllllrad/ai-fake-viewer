@@ -182,6 +182,58 @@ try {
   await adminPage.unroute("**/api/admin/status");
   await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
   await expect(aiToggle).toBeEnabled();
+  // Emergency stop remains usable during another command, without duplicate writes
+  // or clearing the other command's pending state when stop finishes first.
+  let releaseInput!: () => void;
+  let releaseStop!: () => void;
+  const inputPending = new Promise<void>((resolve) => {
+    releaseInput = resolve;
+  });
+  const stopPending = new Promise<void>((resolve) => {
+    releaseStop = resolve;
+  });
+  let inputCommands = 0;
+  let stopCommands = 0;
+  await adminPage.route("**/api/admin/pipeline/start", async (route) => {
+    inputCommands++;
+    await inputPending;
+    await route.fulfill({ json: { ok: true } });
+  });
+  await adminPage.route("**/api/admin/ai/stop", async (route) => {
+    stopCommands++;
+    await stopPending;
+    await route.fulfill({ json: { ok: true } });
+  });
+  const startInputs = dashboard.getByRole("button", {
+    name: "필수 입력 시작",
+    exact: true,
+  });
+  const emergencyStop = dashboard.getByRole("button", {
+    name: "AI 긴급 중지",
+    exact: true,
+  });
+  try {
+    await startInputs.click();
+    await expect.poll(() => inputCommands).toBe(1);
+    await expect(startInputs).toBeDisabled();
+    await expect(emergencyStop).toBeEnabled();
+    await emergencyStop.dblclick();
+    await expect.poll(() => stopCommands).toBe(1);
+    const stopResponse = adminPage.waitForResponse("**/api/admin/ai/stop");
+    releaseStop();
+    await stopResponse;
+    await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect(startInputs).toBeDisabled();
+    releaseInput();
+    await expect(startInputs).toBeEnabled();
+    assert.equal(inputCommands, 1);
+    assert.equal(stopCommands, 1);
+  } finally {
+    releaseInput();
+    releaseStop();
+    await adminPage.unroute("**/api/admin/pipeline/start");
+    await adminPage.unroute("**/api/admin/ai/stop");
+  }
   // Pending drafts are operated from the broadcast screen, independently of connection details.
   let rejected = false;
   await adminPage.route("**/api/admin/status", async (route) => {
