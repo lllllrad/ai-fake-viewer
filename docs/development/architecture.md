@@ -224,6 +224,15 @@ advance the cursor or end the broadcast. Both transports share own-channel
 exclusion and broadcaster mapping. Discovery responses received after cancellation
 do not resolve a channel or reopen receiver state.
 
+The [YouTube gRPC adapter](../../packages/infrastructure/platforms/youtube-grpc.ts)
+owns one authenticated stream and its client. It creates no client until token
+refresh completes and cancellation is rechecked. Stream setup errors, consumer
+errors, upstream failures, early broadcast end and normal completion all release
+the client. Abort immediately cancels the stream and closes the client; queued
+batches are ignored and cleanup is idempotent. Upstream error codes remain intact
+for the receiver's quota and fallback decisions. Tests inject a stream client and
+never connect to the actual provider.
+
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.

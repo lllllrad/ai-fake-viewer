@@ -1,6 +1,5 @@
-import { fileURLToPath } from "node:url";
-import * as grpc from "@grpc/grpc-js";
-import { loadSync } from "@grpc/proto-loader";
+import { receiveYoutubeStream } from "./infrastructure/platforms/youtube-grpc.ts";
+export { makeGrpcClient } from "./infrastructure/platforms/youtube-grpc.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 import { youtubeChatBatch } from "./infrastructure/platforms/youtube-chat-payload.ts";
 export {
@@ -88,26 +87,6 @@ export async function googleJson(
     );
   }
   return b;
-}
-export function makeGrpcClient() {
-  const defs = loadSync(
-    fileURLToPath(
-      new URL("../vendor/youtube/stream_list.proto", import.meta.url),
-    ),
-    {
-      keepCase: true,
-      enums: String,
-      longs: String,
-      defaults: false,
-      oneofs: true,
-    },
-  );
-  const pkg = grpc.loadPackageDefinition(defs) as any;
-  return new pkg.youtube.api.v3.V3DataLiveChatMessageService(
-    "youtube.googleapis.com:443",
-    grpc.credentials.createSsl(),
-    { "grpc.max_receive_message_length": 4 * 1024 * 1024 },
-  );
 }
 export async function runYoutube(
   config: {
@@ -249,29 +228,10 @@ export async function runYoutube(
         }
         await sleep(batch.pollIntervalMs, undefined, { signal });
       } else {
-        const client = makeGrpcClient();
-        const metadata = new grpc.Metadata();
-        if (options?.access)
-          metadata.set("authorization", `Bearer ${await options.access()}`);
-        else if (process.env.YOUTUBE_ACCESS_TOKEN)
-          metadata.set(
-            "authorization",
-            `Bearer ${process.env.YOUTUBE_ACCESS_TOKEN}`,
-          );
-        else metadata.set("x-goog-api-key", process.env.YOUTUBE_API_KEY!);
-        const stream = client.StreamList(
-          {
-            live_chat_id: chat,
-            part: ["id", "snippet", "authorDetails"],
-            ...(token ? { page_token: token } : {}),
-          },
-          metadata,
-        );
-        const abort = () => stream.cancel();
-        signal.addEventListener("abort", abort, { once: true });
-        try {
-          for await (const b of stream) {
-            if (signal.aborted) break;
+        const completion = await receiveYoutubeStream(
+          { chat, cursor: token, access: options?.access },
+          signal,
+          (b) => {
             const batch = youtubeChatBatch(
               b,
               { chat, broadcaster, ownChannel: options?.ownChannel?.() },
@@ -285,14 +245,12 @@ export async function runYoutube(
             failures = 0;
             if (batch.ended) {
               status("ended");
-              return;
+              return "end";
             }
-          }
-        } finally {
-          signal.removeEventListener("abort", abort);
-          stream.cancel();
-          client.close();
-        }
+            return "continue";
+          },
+        );
+        if (completion === "end") return;
         await sleep(1000, undefined, { signal });
       }
     } catch (e: any) {
