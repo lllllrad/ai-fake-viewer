@@ -2,8 +2,8 @@
 
 This defines the replacement UI for the current live feature set. The broadcast,
 connections and participation destinations are implemented. The connection screen uses separate platform, media, AI account and reader-link
-components. The SOOP protocol adapter and rights components still require
-replacement as part of the ongoing reconstruction. Behavior is
+components. The SOOP browser connection uses a dedicated controller; rights components and
+remaining server adapters still require replacement during reconstruction. Behavior is
 owned by [requirements](behavior.md), [participation](participation.md) and
 [personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
 
@@ -86,6 +86,18 @@ are suppressed and requests are aborted on unmount. Authorization links, reader
 links and model choices use a shared validated [connection contract](../../packages/contracts/connections.ts).
 The screen hides routine transport details behind expandable settings and never
 adds a second AI enable control.
+
+The [SOOP controller](../../apps/web/src/features/soop/controller.ts) owns SDK
+connection generations, verified-room readiness, ordered forwarding and one
+fixed-notice poll at a time. Its [browser adapter](../../apps/web/src/features/soop/browser-adapter.ts)
+owns SDK loading and HTTP payload validation; the view only presents controls.
+Both SDK readiness and the configured broadcaster match are required before
+forwarding. Disconnect invalidates old callbacks immediately. Server input-stop commands and
+broadcast end disconnect the SDK; a new broadcast invalidates the old connection. A notice reserved
+for an old connection cannot be sent through its replacement. Forwarding retains
+at most 128 queued message bodies; overload and failures show fixed diagnostic
+messages without raw SDK payloads. Connection setup times out after 30 seconds.
+Only the server-observed notice echo confirms delivery.
 
 Authentication uses **Sign in with ChatGPT** or an explicitly selected API key.
 Inference uses the **Responses API**. Account/model selection and sign-out are

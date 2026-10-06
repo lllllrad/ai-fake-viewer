@@ -353,9 +353,13 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       ),
     );
     await navigation.getByRole("link", { name: "연결", exact: true }).click();
-    await page
-      .getByRole("button", { name: "SOOP 연결 해제", exact: true })
-      .click();
+    await expect(
+      page.getByRole("button", { name: "SOOP 연결 해제", exact: true }),
+    ).toBeDisabled();
+    assert.equal(
+      await page.evaluate(() => (window as any).__soopDisconnects),
+      1,
+    );
     await expect
       .poll(() =>
         app
