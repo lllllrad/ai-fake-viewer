@@ -438,6 +438,17 @@ Diagnostic count/export reflects all stored rows so closed or foreign records
 cannot be hidden from deletion verification. Context invalidation clears all
 stored speech, preserving the existing erasure boundary.
 
+The [participation administration service](../../packages/application/participation/administration.ts)
+owns the administrator projection and participation controls. Status retries
+durable rights follow-ups before reporting the pending count, projects only
+reviewed participant fields, and includes a notice only while awaiting consent.
+Participant-internal replay IDs, provider request IDs and accepted-policy
+bookkeeping are not copied into participant rows. Manual notice confirmation cannot bypass automatic delivery on
+YouTube, CHZZK or SOOP. Live-command confirmation and age blocking delegate to the
+same transactional participation owner used by ingestion. The
+[HTTP routes](../../apps/server/http/routes/participation.ts) validate participant
+identifiers and explicit confirmation fields; demo mode has no live controls.
+
 ## Platform account connections
 
 The [platform account service](../../packages/application/accounts/platform-accounts.ts)

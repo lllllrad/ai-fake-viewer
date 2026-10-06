@@ -1,3 +1,5 @@
+import { ParticipationAdministration } from "../../packages/application/participation/administration.ts";
+import { registerParticipationRoutes } from "./http/routes/participation.ts";
 import { ProfileUpdate } from "../../packages/application/participation/profile-update.ts";
 import { registerProfileRoutes } from "./http/routes/profile.ts";
 import {
@@ -32,7 +34,6 @@ import {
   profileIssues,
 } from "../../packages/privacy-profile.ts";
 import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
-import { participationStatusSchema } from "../../packages/contracts/participation.ts";
 import { registerRightsRoutes } from "./http/routes/rights.ts";
 import { RightsActionError } from "../../packages/application/rights/service.ts";
 import Fastify from "fastify";
@@ -509,36 +510,19 @@ export async function createApp(
       authenticate: (token) => equal(token, readerToken),
     },
   );
-  app.get("/api/admin/privacy", async () => {
-    followups.flush();
-    return participationStatusSchema.parse({
-      generatedAt: Date.now(),
-      pendingFollowups: followups.pendingCount,
+  const participationAdmin = new ParticipationAdministration({
+    participation,
+    profile: () => config.privacy,
+    rights,
+    followups,
+    notices: () => ({
       noticeBot: noticeBot?.state ?? "disabled",
       youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
       chzzkNoticeBot: supervisor.chzzkNotices?.state ?? "disabled",
-      profile: config.privacy,
-      issues: profileIssues(config.privacy),
-      participants: participation
-        ? [...participation.participants.values()].map((p) => ({
-            id: p.id,
-            platform: p.platform,
-            broadcaster: p.broadcaster,
-            account: p.author,
-            state: p.state,
-            age: p.age,
-            stage: p.stage,
-            deliveredAt: p.deliveredAt,
-            epoch: p.epoch,
-            observed: p.observed,
-            notice:
-              p.state === "WAITING_CONSENT" ? participation.notice(p.id) : null,
-          }))
-        : [],
-      rights: rights.list(),
-      videos: rights.videos(),
-    });
+    }),
+    now: () => Date.now(),
   });
+  registerParticipationRoutes(app, participationAdmin);
   const profileUpdate = new ProfileUpdate({
     current: () => config.privacy,
     reconfigure: (apply) => broadcast.reconfigureInputs(apply),
@@ -549,50 +533,6 @@ export async function createApp(
     },
   });
   registerProfileRoutes(app, profileUpdate);
-  app.post(
-    "/api/admin/privacy/participants/:id/notice-delivered",
-    async (req) => {
-      const body = z
-        .object({ delivered: z.literal(true) })
-        .strict()
-        .parse(req.body);
-      void body;
-      if (!participation) throw Error("Live 참여 상태가 없습니다.");
-      if (
-        ["soop", "youtube", "chzzk"].includes(
-          participation.byId((req.params as any).id).platform,
-        )
-      )
-        throw new PrivacyActionError(
-          "SOOP·YouTube 안내는 자동 발송 응답으로 확인합니다.",
-        );
-      participation.delivered((req.params as any).id);
-      return { ok: true };
-    },
-  );
-  app.post(
-    "/api/admin/privacy/participants/:id/confirm-live-command",
-    async (req) => {
-      const body = z
-        .object({
-          observationId: z.string().uuid(),
-          verifiedLive: z.literal(true),
-        })
-        .strict()
-        .parse(req.body);
-      if (!participation) throw Error("Live 참여 상태가 없습니다.");
-      participation.confirmLiveCommand(
-        (req.params as any).id,
-        body.observationId,
-      );
-      return { ok: true };
-    },
-  );
-  app.post("/api/admin/privacy/participants/:id/block-age", async (req) => {
-    if (!participation) throw Error("Live 참여 상태가 없습니다.");
-    participation.blockAge((req.params as any).id);
-    return { ok: true };
-  });
   registerRightsRoutes(app, rights);
   const statusSource = new RuntimeStatusSource({
     demo: !!opts.demo,
