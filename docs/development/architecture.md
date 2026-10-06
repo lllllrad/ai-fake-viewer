@@ -215,6 +215,16 @@ review and before publication. Invalid candidates are discarded before another
 publication-delay timer is scheduled. Rejection diagnostics contain fixed reasons,
 not input text.
 
+The [draft and review use case](../../packages/application/reactions/draft-review.ts)
+owns the bounded generation workflow: an initial response, at most one requested
+frame inspection, and optional independent review. It receives provider, current
+input and cancellation ports rather than storage or timer objects. Every awaited
+response is checked against the current execution before another request or a
+candidate can be returned. Review excludes expired background speech and rejects
+expired cited speech. Unavailable or repeated inspection ends the cast attempt as
+skipped instead of leaving it generating. The scheduler owns pacing and candidate
+publication; it does not duplicate the draft/review sequence.
+
 The [metered model-call use case](../../packages/application/reactions/model-call.ts)
 owns pre-request budget reservation, bounded diagnostic metadata and post-response
 usage settlement. The [SQLite usage adapter](../../packages/infrastructure/reactions/usage-sqlite.ts)

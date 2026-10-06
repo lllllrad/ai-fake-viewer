@@ -1,3 +1,5 @@
+import { StaleModelContextError } from "./application/reactions/errors.ts";
+export { StaleModelContextError } from "./application/reactions/errors.ts";
 import { ZodError } from "zod";
 
 export class ModelRequestError extends Error {
@@ -8,12 +10,6 @@ export class ModelRequestError extends Error {
     public retryable = false,
   ) {
     super(message);
-  }
-}
-
-export class StaleModelContextError extends Error {
-  constructor() {
-    super("stale_model_context");
   }
 }
 

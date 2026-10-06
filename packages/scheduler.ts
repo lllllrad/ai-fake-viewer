@@ -1,3 +1,4 @@
+import { generateReviewedDraft } from "./application/reactions/draft-review.ts";
 import { callMeteredModel } from "./application/reactions/model-call.ts";
 import {
   selectEvidenceWindow,
@@ -8,22 +9,16 @@ import {
   castPacingBlocked,
   chooseCastMember,
 } from "./domain/reactions/cast-selection.ts";
-import {
-  generationIssue,
-  StaleModelContextError,
-  ModelRequestError,
-} from "./model-errors.ts";
+import { generationIssue, ModelRequestError } from "./model-errors.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
 import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import type { Model, ModelInput } from "./model.ts";
-import { validateDecision } from "./application/reactions/validate-decision.ts";
 import {
   evidenceProblem,
   publicationProblem,
-  prepareReview,
   type CurrentEvidence,
 } from "./domain/reactions/publication.ts";
 import { DecisionGate } from "./gate.ts";
@@ -452,86 +447,50 @@ export class Scheduler {
       } else {
         consumeNewInput();
       }
-      this.phase = "generating_draft";
-      let r = await this.callModel(input, signal);
+      const outcome = await generateReviewedDraft({
+        input,
+        signal,
+        isCurrent: () =>
+          generation === this.generation && this.state === "running",
+        inspectAllowed: c.visualMode === "on_request",
+        review: c.reviewDraft && !this.demo,
+        latestFrames: () => this.capture.recent(),
+        hasTranscript: (id) => !!this.transcriber?.has(id),
+        model: (request, requestSignal) =>
+          this.callModel(request, requestSignal),
+        active: (request) => {
+          this.activeInput = request;
+        },
+        phase: (phase) => {
+          this.phase = phase;
+          if (phase === "ai_review") this.reviews++;
+        },
+        trace: (event, details) => this.trace(event, details),
+      });
       if (
+        outcome.kind === "canceled" ||
         generation !== this.generation ||
         signal.aborted ||
         this.state !== "running"
       )
         return;
-      let d = validateDecision(r.decision, input);
-      if (d.action === "inspect") {
-        if (c.visualMode !== "on_request" || !this.capture.recent().length) {
-          this.skips++;
-          return;
+      if (outcome.kind === "skipped") {
+        if (outcome.reason === "model_skip") {
+          this.lastIssue = undefined;
+          this.transientFailures = 0;
         }
-        input = { ...input, frames: this.capture.recent().slice(-1) };
-        this.activeInput = input;
-        this.phase = "generating_draft_with_frame";
-        r = await this.callModel(input, signal);
-        if (
-          generation !== this.generation ||
-          signal.aborted ||
-          this.state !== "running"
-        )
-          return;
-        d = validateDecision(r.decision, input);
-      }
-      if (d.action === "inspect") {
-        this.skips++;
-        return;
-      }
-      if (d.action === "skip") {
-        this.lastIssue = undefined;
-        this.transientFailures = 0;
         if (attemptId)
           this.store.finishPersonaAttempt(
             attemptId,
             "skipped",
-            "model_skip",
-            d,
+            outcome.reason,
+            outcome.decision,
           );
         this.skips++;
         return;
       }
-      if (c.reviewDraft && !this.demo) {
-        this.phase = "ai_review";
-        this.reviews++;
-        const activeTranscripts = new Set(
-          (input.transcripts ?? [])
-            .filter((t) => this.transcriber?.has(t.id))
-            .map((t) => t.id),
-        );
-        const reviewInput = prepareReview(input, d, activeTranscripts);
-        if (!reviewInput) throw new StaleModelContextError();
-        this.activeInput = reviewInput;
-        this.trace("review_context", {
-          removedTranscripts:
-            (input.transcripts?.length ?? 0) -
-            (reviewInput.transcripts?.length ?? 0),
-        });
-        const reviewResult = await this.callModel(reviewInput, signal);
-        if (
-          generation !== this.generation ||
-          signal.aborted ||
-          this.state !== "running"
-        )
-          return;
-        d = validateDecision(reviewResult.decision, reviewInput);
-        if (d.action === "skip" || d.action === "inspect") {
-          this.trace("review_rejected", { action: d.action });
-          if (attemptId)
-            this.store.finishPersonaAttempt(
-              attemptId,
-              "skipped",
-              "review_rejected",
-              d,
-            );
-          this.skips++;
-          return;
-        }
-      }
+      input = outcome.input;
+      const d = outcome.decision;
       this.lastIssue = undefined;
       this.transientFailures = 0;
       const problem = this.store.closed()

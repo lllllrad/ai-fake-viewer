@@ -102,3 +102,20 @@ for (const reason of ["edited", "expired"] as const)
       store.close();
     }
   });
+
+test("stop between draft completion and scheduler resumption cannot restore a candidate", async () => {
+  const { store, scheduler } = fixture(async (input) => {
+    queueMicrotask(() => queueMicrotask(() => scheduler.stop()));
+    return result(input);
+  });
+  try {
+    await scheduler.tick();
+    assert.equal(scheduler.state, "stopped");
+    assert.equal(scheduler.pending, undefined);
+    assert.equal(scheduler.dispatchTimer, undefined);
+    assert.equal(store.snapshot().messages.length, 1);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});
