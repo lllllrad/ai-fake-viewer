@@ -1,3 +1,4 @@
+import { initializeBroadcastDatabase } from "./infrastructure/storage/initialize.ts";
 import { BroadcastLifetime } from "./application/broadcast/lifetime.ts";
 import { SqliteBroadcastLifetime } from "./infrastructure/broadcast/lifetime-sqlite.ts";
 import { SqliteCastDispatch } from "./infrastructure/reactions/dispatch-sqlite.ts";
@@ -63,6 +64,17 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    try {
+      if (path !== ":memory:" && process.platform !== "win32")
+        chmodSync(path, 0o600);
+      this.sessionId = initializeBroadcastDatabase(this.db, {
+        now: () => Date.now(),
+        id: randomUUID,
+      });
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
     this.castRuntime = new SqliteCastRuntime(this.db, () => this.sessionId);
     this.dispatch = new SqliteCastDispatch(this.db, {
       sessionId: () => this.sessionId,
@@ -185,159 +197,6 @@ export class Store extends EventEmitter {
       },
       this.transactions,
     );
-    if (path !== ":memory:" && process.platform !== "win32")
-      chmodSync(path, 0o600);
-    this.db
-      .exec(`PRAGMA temp_store=MEMORY; PRAGMA journal_mode=WAL; PRAGMA secure_delete=ON; PRAGMA busy_timeout=5000;
- CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
- CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
- CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
- CREATE TABLE IF NOT EXISTS chat_context_summaries(session TEXT PRIMARY KEY,payload TEXT NOT NULL,expires INTEGER NOT NULL,cutoff INTEGER NOT NULL DEFAULT 0);
- CREATE TABLE IF NOT EXISTS ai_message_context(message_id TEXT NOT NULL,source_message_id TEXT NOT NULL,PRIMARY KEY(message_id,source_message_id));
- CREATE INDEX IF NOT EXISTS ai_message_context_source ON ai_message_context(source_message_id);
- CREATE TABLE IF NOT EXISTS viewer_consents(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author TEXT NOT NULL,granted INTEGER NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(session,platform,channel,author));
- CREATE TABLE IF NOT EXISTS consent_notice_targets(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author_hash TEXT NOT NULL,state TEXT NOT NULL,last_notice INTEGER,PRIMARY KEY(session,platform,channel,author_hash));
- CREATE TABLE IF NOT EXISTS consent_notice_state(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,last_notice INTEGER NOT NULL,PRIMARY KEY(session,platform,channel));
- CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT,type TEXT,target TEXT,at INTEGER,payload TEXT);
- CREATE TABLE IF NOT EXISTS connector_checkpoints(key TEXT PRIMARY KEY,value TEXT);
- CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,session TEXT,at INTEGER,reserved REAL,input INTEGER,output INTEGER,status TEXT);
- CREATE TABLE IF NOT EXISTS transcripts(id TEXT PRIMARY KEY,session TEXT NOT NULL,captured INTEGER NOT NULL,text TEXT NOT NULL);
- CREATE INDEX IF NOT EXISTS transcripts_captured ON transcripts(captured);
- CREATE TABLE IF NOT EXISTS audit_events(id INTEGER PRIMARY KEY,session TEXT,at INTEGER,action TEXT);
- CREATE TABLE IF NOT EXISTS runtime_flags(key TEXT PRIMARY KEY,value TEXT NOT NULL);
- CREATE TABLE IF NOT EXISTS persona_templates(id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,revision));
- CREATE TABLE IF NOT EXISTS persona_versions(id TEXT PRIMARY KEY,persona_id TEXT NOT NULL,version INTEGER NOT NULL,status TEXT NOT NULL,content TEXT NOT NULL,content_hash TEXT NOT NULL,provenance TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(persona_id,version));
-    CREATE TABLE IF NOT EXISTS persona_sessions(id TEXT PRIMARY KEY,source_session TEXT NOT NULL,revision INTEGER NOT NULL,brief TEXT NOT NULL,policy TEXT NOT NULL,state TEXT NOT NULL,armed INTEGER NOT NULL DEFAULT 0,control_epoch INTEGER NOT NULL DEFAULT 0,disclosure_confirmed INTEGER NOT NULL DEFAULT 0,revealed_at INTEGER,created INTEGER NOT NULL,updated INTEGER NOT NULL);
- CREATE TABLE IF NOT EXISTS persona_name_denylist(session_id TEXT NOT NULL,normalized_name TEXT NOT NULL,reason TEXT,created INTEGER NOT NULL,PRIMARY KEY(session_id,normalized_name));
- CREATE TABLE IF NOT EXISTS persona_cast(session_id TEXT NOT NULL,member_id TEXT NOT NULL,persona_id TEXT NOT NULL,version_id TEXT NOT NULL,definition_snapshot TEXT NOT NULL,definition_hash TEXT NOT NULL,display_name TEXT NOT NULL,status TEXT NOT NULL,muted INTEGER NOT NULL DEFAULT 0,attention REAL NOT NULL DEFAULT 0.5,focus_tags TEXT NOT NULL DEFAULT '[]',epoch INTEGER NOT NULL DEFAULT 0,guessing_eligible INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(session_id,member_id));
- CREATE TABLE IF NOT EXISTS persona_presence(session_id TEXT NOT NULL,member_id TEXT NOT NULL,interval_no INTEGER NOT NULL,joined_at INTEGER NOT NULL,joined_after_seq INTEGER NOT NULL,left_at INTEGER,left_after_seq INTEGER,PRIMARY KEY(session_id,member_id,interval_no));
- CREATE TABLE IF NOT EXISTS persona_reaction_attempts(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,member_id TEXT NOT NULL,event_ids TEXT NOT NULL,context_cutoff INTEGER NOT NULL,session_epoch INTEGER NOT NULL,member_epoch INTEGER NOT NULL,definition_hash TEXT NOT NULL,config_revision INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,model_manifest TEXT,result TEXT,public_message_id TEXT,context_key TEXT NOT NULL,UNIQUE(session_id,member_id,context_key));
- CREATE TABLE IF NOT EXISTS persona_publication_outbox(message_id TEXT PRIMARY KEY,attempt_id TEXT NOT NULL UNIQUE,state TEXT NOT NULL,created INTEGER NOT NULL,dispatched INTEGER,FOREIGN KEY(attempt_id) REFERENCES persona_reaction_attempts(id));
- CREATE TABLE IF NOT EXISTS persona_operator_commands(id TEXT NOT NULL,session_id TEXT NOT NULL,operation TEXT NOT NULL,request_hash TEXT NOT NULL,result TEXT NOT NULL,status_code INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,PRIMARY KEY(session_id,operation,id));
- CREATE TABLE IF NOT EXISTS persona_jobs(id TEXT PRIMARY KEY,session_id TEXT NOT NULL,kind TEXT NOT NULL,status TEXT NOT NULL,progress INTEGER NOT NULL,total INTEGER NOT NULL,result TEXT,error TEXT,created INTEGER NOT NULL,updated INTEGER NOT NULL);
- CREATE TABLE IF NOT EXISTS persona_model_runs(id TEXT PRIMARY KEY,job_id TEXT NOT NULL,category TEXT NOT NULL,provider TEXT NOT NULL,model TEXT,scenario TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,status TEXT,input_tokens INTEGER,output_tokens INTEGER,manifest TEXT,error_code TEXT);
- CREATE TABLE IF NOT EXISTS persona_evaluations(id TEXT NOT NULL,session_id TEXT NOT NULL,version_id TEXT NOT NULL,fixture_set TEXT NOT NULL,result TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,version_id));
- CREATE TABLE IF NOT EXISTS persona_reviews(id TEXT PRIMARY KEY,evaluation_id TEXT NOT NULL,version_id TEXT NOT NULL,reviewer TEXT NOT NULL,decision TEXT NOT NULL,created INTEGER NOT NULL);
- CREATE TABLE IF NOT EXISTS persona_audit(id INTEGER PRIMARY KEY,session_id TEXT,at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,prior_revision INTEGER,new_revision INTEGER,reason TEXT);
- PRAGMA user_version=2;`);
-    if (
-      !(this.db.prepare("PRAGMA table_info(messages)").all() as any[]).some(
-        (c) => c.name === "consent_epoch",
-      )
-    )
-      this.db.exec(
-        "ALTER TABLE messages ADD COLUMN consent_epoch INTEGER NOT NULL DEFAULT 0",
-      );
-    const attemptColumns = (
-      this.db.prepare("PRAGMA table_info(persona_reaction_attempts)").all() as {
-        name: string;
-      }[]
-    ).map((c) => c.name);
-    if (!attemptColumns.includes("context_key")) {
-      const oldSql = (
-        this.db
-          .prepare(
-            "SELECT sql FROM sqlite_master WHERE name='persona_reaction_attempts'",
-          )
-          .get() as { sql: string }
-      ).sql;
-      const replacement = oldSql
-        .replace(
-          /CREATE TABLE(?: IF NOT EXISTS)? "?persona_reaction_attempts"?/,
-          "CREATE TABLE persona_reaction_attempts_v3",
-        )
-        .replace(
-          "UNIQUE(session_id,member_id,context_cutoff)",
-          "context_key TEXT NOT NULL,UNIQUE(session_id,member_id,context_key)",
-        );
-      this.transaction(() => {
-        this.db.exec(replacement);
-        this.db.exec(
-          "INSERT INTO persona_reaction_attempts_v3 SELECT *, 'legacy:' || context_cutoff FROM persona_reaction_attempts; DROP TABLE persona_reaction_attempts; ALTER TABLE persona_reaction_attempts_v3 RENAME TO persona_reaction_attempts;",
-        );
-      });
-    }
-    const castColumns = (
-      this.db.prepare("PRAGMA table_info(persona_cast)").all() as any[]
-    ).map((c) => c.name);
-    if (!castColumns.includes("attention"))
-      this.db.exec(
-        "ALTER TABLE persona_cast ADD COLUMN attention REAL NOT NULL DEFAULT 0.5",
-      );
-    if (!castColumns.includes("focus_tags"))
-      this.db.exec(
-        "ALTER TABLE persona_cast ADD COLUMN focus_tags TEXT NOT NULL DEFAULT '[]'",
-      );
-    const sessionColumns = (
-      this.db.prepare("PRAGMA table_info(persona_sessions)").all() as any[]
-    ).map((c) => c.name);
-    if (!sessionColumns.includes("revealed_at"))
-      this.db.exec(
-        "ALTER TABLE persona_sessions ADD COLUMN revealed_at INTEGER",
-      );
-    const commandColumns = (
-      this.db
-        .prepare("PRAGMA table_info(persona_operator_commands)")
-        .all() as any[]
-    ).map((c) => c.name);
-    if (!commandColumns.includes("status_code"))
-      this.db.exec(
-        "ALTER TABLE persona_operator_commands ADD COLUMN status_code INTEGER NOT NULL DEFAULT 0",
-      );
-    const commandKeys = (
-      this.db
-        .prepare("PRAGMA table_info(persona_operator_commands)")
-        .all() as any[]
-    )
-      .filter((c) => c.pk > 0)
-      .sort((a, b) => a.pk - b.pk)
-      .map((c) => c.name);
-    if (commandKeys.join(",") !== "session_id,operation,id")
-      this.db.exec(
-        "ALTER TABLE persona_operator_commands RENAME TO persona_operator_commands_old; CREATE TABLE persona_operator_commands(id TEXT NOT NULL,session_id TEXT NOT NULL,operation TEXT NOT NULL,request_hash TEXT NOT NULL,result TEXT NOT NULL,status_code INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,PRIMARY KEY(session_id,operation,id)); INSERT INTO persona_operator_commands SELECT id,session_id,operation,request_hash,result,status_code,created FROM persona_operator_commands_old; DROP TABLE persona_operator_commands_old;",
-      );
-    const templateKeys = (
-      this.db.prepare("PRAGMA table_info(persona_templates)").all() as any[]
-    )
-      .filter((c) => c.pk > 0)
-      .sort((a, b) => a.pk - b.pk)
-      .map((c) => c.name);
-    if (templateKeys.join(",") !== "id,revision")
-      this.db.exec(
-        "ALTER TABLE persona_templates RENAME TO persona_templates_old; CREATE TABLE persona_templates(id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,revision)); INSERT OR IGNORE INTO persona_templates SELECT id,revision,content,created FROM persona_templates_old; DROP TABLE persona_templates_old;",
-      );
-    this.db
-      .prepare(
-        "DELETE FROM persona_operator_commands WHERE status_code=0 AND created<?",
-      )
-      .run(Date.now() - 60 * 60 * 1000);
-    const evaluationKeys = (
-      this.db.prepare("PRAGMA table_info(persona_evaluations)").all() as any[]
-    )
-      .filter((c) => c.pk > 0)
-      .sort((a, b) => a.pk - b.pk)
-      .map((c) => c.name);
-    if (evaluationKeys.length === 1 && evaluationKeys[0] === "id")
-      this.db.exec(
-        "ALTER TABLE persona_evaluations RENAME TO persona_evaluations_old; CREATE TABLE persona_evaluations(id TEXT NOT NULL,session_id TEXT NOT NULL,version_id TEXT NOT NULL,fixture_set TEXT NOT NULL,result TEXT NOT NULL,created INTEGER NOT NULL,PRIMARY KEY(id,version_id)); INSERT INTO persona_evaluations SELECT * FROM persona_evaluations_old; DROP TABLE persona_evaluations_old;",
-      );
-    this.db.exec(
-      "UPDATE persona_sessions SET control_epoch=control_epoch+1,updated=unixepoch('subsec')*1000 WHERE state='live'; UPDATE persona_reaction_attempts SET state='canceled',reason='server_restart',finished_at=unixepoch('subsec')*1000 WHERE state IN ('generating','candidate','dispatching');",
-    );
-    this.db
-      .exec(`INSERT OR IGNORE INTO ai_message_context(message_id,source_message_id)
-      SELECT p.public_message_id,j.value FROM persona_reaction_attempts p,json_each(p.model_manifest,'$.inputMessages') j
-      WHERE p.public_message_id IS NOT NULL AND p.model_manifest IS NOT NULL AND j.type='text'`);
-    const active = this.db
-      .prepare(
-        "SELECT id FROM sessions ORDER BY started DESC, rowid DESC LIMIT 1",
-      )
-      .get() as any;
-    this.sessionId = active?.id ?? randomUUID();
-    if (!active)
-      this.db
-        .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
-        .run(this.sessionId, Date.now());
     if (this.participation) {
       this.participation.sessionId = this.sessionId;
       try {

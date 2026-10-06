@@ -377,6 +377,18 @@ failed write leave the candidate unclaimed; a second claim cannot succeed.
 
 ## Persistence and external effects
 
+[Database initialization](../../packages/infrastructure/storage/initialize.ts)
+sets connection pragmas and rejects schemas newer than this application supports
+before writing broadcast records. The
+[schema owner](../../packages/infrastructure/storage/schema.ts) creates and
+upgrades tables; the
+[restart recovery owner](../../packages/infrastructure/storage/recovery.ts)
+invalidates unfinished reactions, advances live cast epochs and selects the
+latest broadcast, including its closed marker. Schema changes, recovery and the
+schema version commit in one transaction. Failure restores the prior database;
+startup closes its connection instead of exposing a partially initialized Store.
+Recovery preserves chat, participation, transcripts and durable AI intent.
+
 The [broadcast lifetime service](../../packages/application/broadcast/lifetime.ts)
 owns end, replacement and explicit erasure. Its
 [SQLite repository](../../packages/infrastructure/broadcast/lifetime-sqlite.ts)
