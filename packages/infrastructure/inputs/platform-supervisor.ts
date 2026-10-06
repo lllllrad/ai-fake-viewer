@@ -10,7 +10,7 @@ import { YoutubeAuth } from "../accounts/youtube-auth.ts";
 import { fork, type ChildProcess } from "node:child_process";
 import type { Store } from "../../storage.ts";
 import type { Config } from "../../config.ts";
-import { incomingSchema } from "../../contracts.ts";
+import { incomingSchema } from "../../contracts/incoming.ts";
 import { runYoutube } from "../platforms/youtube-receiver.ts";
 import { ChzzkAuth } from "../accounts/chzzk-auth.ts";
 import { workerEnv } from "./worker-session.ts";

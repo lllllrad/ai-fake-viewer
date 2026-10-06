@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
-import { chatgptModel } from "../packages/model.ts";
+import { chatgptModel } from "../packages/infrastructure/reactions/chatgpt-model.ts";
 import { configSchema } from "../packages/config.ts";
 const key = "e".repeat(64);
 const response = {

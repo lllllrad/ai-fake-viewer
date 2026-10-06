@@ -42,11 +42,11 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { type Incoming } from "./contracts/incoming.ts";
 import {
-  type Incoming,
-  type PublicMessage,
+  type ConversationMessage as PublicMessage,
   type PublicEvent,
-} from "./contracts.ts";
+} from "./contracts/conversation.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
   readonly checkpoints: SqliteConnectorCheckpoints;

@@ -13,12 +13,12 @@ import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { Store } from "../packages/storage.ts";
 import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { createApp } from "../apps/server/app.ts";
+import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
+import { validateDecision } from "../packages/application/reactions/validate-decision.ts";
 import {
-  modelMessages,
-  validateDecision,
   type Model,
   type ModelInput,
-} from "../packages/model.ts";
+} from "../packages/application/reactions/model-port.ts";
 
 const audioUrl = "rtmp://127.0.0.1:1935/program?user=reader&pass=private";
 
@@ -139,7 +139,7 @@ test("text-first AI sends no image until it asks to inspect masked video", async
     has: (id: string) => id === transcript.id,
   } as Transcriber;
   const calls: number[] = [];
-  const model: Model = async (input: ModelInput) => {
+  const model: Model<Buffer> = async (input: ModelInput<Buffer>) => {
     calls.push(input.frames.length);
     const content = modelMessages(input)[1].content as any[];
     assert.equal(
@@ -474,7 +474,7 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
     await transcriber.transcribe(Buffer.alloc(320000));
     assert.equal(store.transcriptCount(), 1);
     assert.equal(transcriber.recent().length, 1);
-    const input: ModelInput = {
+    const input: ModelInput<Buffer> = {
       frames: [],
       messages: [],
       transcripts: transcriber.recent(),

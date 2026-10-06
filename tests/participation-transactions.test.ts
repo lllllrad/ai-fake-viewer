@@ -10,7 +10,7 @@ import {
   activateFixture,
   privacyMessage,
 } from "./privacy-fixtures.ts";
-import type { Incoming } from "../packages/contracts.ts";
+import type { Incoming } from "../packages/contracts/incoming.ts";
 
 function fixture(t: TestContext) {
   let now = Date.now();

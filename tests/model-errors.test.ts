@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chatgptModel } from "../packages/model.ts";
+import { chatgptModel } from "../packages/infrastructure/reactions/chatgpt-model.ts";
 import { configSchema } from "../packages/config.ts";
 import {
   generationIssue,

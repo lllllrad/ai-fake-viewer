@@ -17,11 +17,9 @@ import {
 } from "./privacy-fixtures.ts";
 import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
-import {
-  modelMessages,
-  openaiModel,
-  type ModelInput,
-} from "../packages/model.ts";
+import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
+import { openaiModel } from "../packages/infrastructure/reactions/responses-api.ts";
+import { type ModelInput } from "../packages/application/reactions/model-port.ts";
 
 function fixture(t: any) {
   let now = Date.now();
@@ -310,7 +308,7 @@ test("T10, T19–T20: endpoint stays pinned, no automatic fallback, and authoriz
     valid = false;
     return Response.json({ input_tokens: 5 });
   });
-  const input: ModelInput = {
+  const input: ModelInput<Buffer> = {
     frames: [],
     messages: [],
     persona: { name: "test", style: "test" },
@@ -575,7 +573,7 @@ test("PC01: API-key requests disable response storage and include explicit input
     if (previousModel === undefined) delete process.env.OPENAI_MODEL;
     else process.env.OPENAI_MODEL = previousModel;
   });
-  const input: ModelInput = {
+  const input: ModelInput<Buffer> = {
     frames: [],
     messages: [
       {

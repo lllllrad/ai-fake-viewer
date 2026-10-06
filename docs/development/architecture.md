@@ -71,6 +71,8 @@ by responsibility, not by an arbitrary line-count target.
 | Rights              | Intake, minimal follow-up, outcomes and deletion                                             | Separate rights database, retained beyond broadcast end as required               |
 | Status              | Project actual readiness, desired versus effective execution, scoped API errors              | No independently mutable copy of runtime state                                    |
 
+Shared payloads are imported from their owning `packages/contracts/` module;
+there is no root contract barrel combining conversation and model decisions.
 Ports describe only operations their consumer uses. Repository adapters implement
 explicit queries and transactions, not generic `get/set<any>` bags. HTTP handlers
 validate requests, call one use case and map its outcome. Cross-service workflows

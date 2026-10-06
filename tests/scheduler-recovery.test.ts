@@ -10,7 +10,8 @@ import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { configSchema } from "../packages/config.ts";
 import { PersonaService } from "../packages/persona/service.ts";
 import type { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
-import { modelMessages, type Model } from "../packages/model.ts";
+import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
+import { type Model } from "../packages/application/reactions/model-port.ts";
 
 const skipped = {
   action: "skip" as const,
@@ -36,7 +37,7 @@ test("successive speech contexts with unchanged chat sequence create independent
     text: "Synthetic speech",
   };
   let calls = 0;
-  const model: Model = async () => {
+  const model: Model<Buffer> = async () => {
     calls++;
     return { decision: skipped };
   };
@@ -203,7 +204,7 @@ for (const recoverable of ["stale", "invalid", "timeout"] as const) {
       recent: () => [transcript],
       has: (id: string) => id === transcript.id,
     } as Transcriber;
-    const model: Model = async () => {
+    const model: Model<Buffer> = async () => {
       calls++;
       if (recoverable === "timeout")
         throw new DOMException("Synthetic timeout", "TimeoutError");
@@ -279,7 +280,7 @@ for (const [expireEvidence, reviewSkip] of [
       has: (id: string) => evidence.some((t) => t.id === id),
     } as Transcriber;
     let calls = 0;
-    const model: Model = async (input) => {
+    const model: Model<Buffer> = async (input) => {
       calls++;
       if (calls === 1) {
         now += 2000;
@@ -371,7 +372,7 @@ test("questions received during pacing remain new alongside later narration", as
     has: (id: string) => evidence.some((t) => t.id === id),
   } as Transcriber;
   let calls = 0;
-  const model: Model = async (input) => {
+  const model: Model<Buffer> = async (input) => {
     calls++;
     assert.deepEqual(
       input.newTranscripts?.map((t) => t.id),
@@ -428,7 +429,7 @@ test("generation and review receive the latest ten transcript chunks", async (t)
     has: (id: string) => chunks.some((t) => t.id === id),
   } as Transcriber;
   let calls = 0;
-  const model: Model = async (input) => {
+  const model: Model<Buffer> = async (input) => {
     calls++;
     assert.deepEqual(
       input.transcripts?.map((t) => t.id),

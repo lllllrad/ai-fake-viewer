@@ -8,12 +8,12 @@ import { Store } from "../packages/storage.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { configSchema } from "../packages/config.ts";
+import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
 import {
-  modelMessages,
   type Model,
   type ModelInput,
-} from "../packages/model.ts";
-import type { Incoming } from "../packages/contracts.ts";
+} from "../packages/application/reactions/model-port.ts";
+import type { Incoming } from "../packages/contracts/incoming.ts";
 
 const msg = (author: string, text: string): Incoming => ({
   platform: "youtube",
@@ -26,7 +26,7 @@ function add(store: Store, author: string, text: string) {
   store.grantConsent("youtube", "c", author);
   store.ingestBatch([msg(author, text)]);
 }
-function fixture(model: Model, reviewDraft = false) {
+function fixture(model: Model<Buffer>, reviewDraft = false) {
   const config = configSchema.parse({
     database: ":memory:",
     ai: { provider: "openai_api", manualApproval: true, reviewDraft },
@@ -49,7 +49,7 @@ function fixture(model: Model, reviewDraft = false) {
   add(store, "a", "PRIVATE_ORIGINAL 코드 오류가 왜 나나요?");
   return { store, capture, scheduler, config };
 }
-const say = (input: ModelInput) => ({
+const say = (input: ModelInput<Buffer>) => ({
   decision: {
     action: "say" as const,
     text: "화면이 바뀌었네요",
@@ -147,7 +147,7 @@ for (const phase of ["generation", "review"] as const)
       entered = resolve;
     });
     let signalSeen: AbortSignal | undefined;
-    let inputSeen: ModelInput | undefined;
+    let inputSeen: ModelInput<Buffer> | undefined;
     let calls = 0;
     const h = fixture(async (input, signal) => {
       calls++;

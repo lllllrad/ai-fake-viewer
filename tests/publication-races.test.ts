@@ -4,7 +4,11 @@ import { Store } from "../packages/storage.ts";
 import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { configSchema } from "../packages/config.ts";
-import type { Model, ModelInput, ModelResult } from "../packages/model.ts";
+import type {
+  Model,
+  ModelInput,
+  ModelResult,
+} from "../packages/application/reactions/model-port.ts";
 
 const original = {
   platform: "youtube" as const,
@@ -14,7 +18,7 @@ const original = {
   sourceId: "one",
   text: "ORIGINAL_FIXTURE",
 };
-function result(input: ModelInput): ModelResult {
+function result(input: ModelInput<Buffer>): ModelResult {
   return {
     decision: {
       action: "say",
@@ -26,7 +30,7 @@ function result(input: ModelInput): ModelResult {
     },
   };
 }
-function fixture(model: Model) {
+function fixture(model: Model<Buffer>) {
   const config = configSchema.parse({
     ai: { visualMode: "on_request", manualApproval: true, reviewDraft: false },
   });
@@ -157,7 +161,7 @@ for (const cancel of ["stop", "context"] as const)
         }),
     );
     const signals: AbortSignal[] = [];
-    const inputs: ModelInput[] = [];
+    const inputs: ModelInput<Buffer>[] = [];
     let calls = 0;
     const { store, scheduler } = fixture(async (input, signal) => {
       const index = calls++,

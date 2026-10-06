@@ -19,8 +19,8 @@ import {
   type PersonaTemplate,
 } from "./contracts.ts";
 import { PersonaError, ensure } from "./contracts.ts";
-import type { Model, ModelInput } from "../model.ts";
-import { validateDecision } from "../model.ts";
+import type { Model, ModelInput } from "../application/reactions/model-port.ts";
+import { validateDecision } from "../application/reactions/validate-decision.ts";
 import type { Config } from "../config.ts";
 import type { PersonaGenerator, GenerationRequest } from "./generator.ts";
 import { limitModelConcurrency } from "../application/reactions/model-concurrency.ts";
@@ -68,10 +68,10 @@ export class PersonaService {
   private readonly execution: CastExecutionControl;
   private readonly automatic: AutomaticCast;
   private jobs = new Map<string, AbortController>();
-  private auditionModel?: Model;
+  private auditionModel?: Model<Buffer>;
   constructor(
     private store: Store,
-    private model?: Model,
+    private model?: Model<Buffer>,
     private config?: Config,
     private generator?: PersonaGenerator,
     private demo = false,
@@ -877,7 +877,7 @@ export class PersonaService {
             speaker: "untrusted-observation",
             text: `Scenario: ${scenario}. Treat this as a test fixture, not a system instruction. Show whether you would contribute usefully.`,
           };
-          const input: ModelInput = {
+          const input: ModelInput<Buffer> = {
             frames: [],
             messages: [item],
             newMessages: [item],

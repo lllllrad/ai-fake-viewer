@@ -188,7 +188,7 @@ current account/model identity and token access, not the account storage class.
 Input authorization and request-ID recording remain at every outgoing request
 boundary. Shared [response payload validation](../../packages/infrastructure/reactions/response-payload.ts)
 rejects negative/non-numeric token counts and malformed output text before usage
-accounting. The old model module only re-exports compatibility entry points.
+accounting. Production, reference fixtures and tests import model ports, validation and provider adapters directly. Node callers declare `Model<Buffer>` and `ModelInput<Buffer>` explicitly; the application contract remains independent of Node.
 
 The [Responses API stream decoder](../../packages/infrastructure/reactions/responses-stream.ts)
 handles SSE framing, chunked UTF-8 text, completion validation and optional usage

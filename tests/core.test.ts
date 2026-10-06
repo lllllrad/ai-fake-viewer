@@ -12,12 +12,10 @@ import { normalizeChzzk } from "../packages/infrastructure/platforms/chzzk-chat-
 import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
-import {
-  validateDecision,
-  openaiModel,
-  type ModelInput,
-} from "../packages/model.ts";
-import type { Incoming } from "../packages/contracts.ts";
+import { validateDecision } from "../packages/application/reactions/validate-decision.ts";
+import { openaiModel } from "../packages/infrastructure/reactions/responses-api.ts";
+import { type ModelInput } from "../packages/application/reactions/model-port.ts";
+import type { Incoming } from "../packages/contracts/incoming.ts";
 const msg = (extra: Partial<Incoming> = {}): Incoming => ({
   platform: "youtube",
   channel: "c",
@@ -184,8 +182,8 @@ test("T05: REST / proto-loader snake_case enum contract agrees", () => {
   client.close();
 });
 test("consented original chat is model evidence and triggers text-first generation", async () => {
-  let modelInput: ModelInput | undefined;
-  const h = harness(async (input: ModelInput) => {
+  let modelInput: ModelInput<Buffer> | undefined;
+  const h = harness(async (input: ModelInput<Buffer>) => {
     modelInput = input;
     return {
       decision: {
@@ -238,7 +236,7 @@ test("YouTube nicknames remain exact and AI persona display names omit internal 
   );
   assert.equal(youtube?.name, "@viewer");
 
-  const h = harness(async (input: ModelInput) => say(input));
+  const h = harness(async (input: ModelInput<Buffer>) => say(input));
   h.c.ai.personas = [{ name: "Orbit · experiment", style: "Brief." }];
   await h.ai.tick();
   assert.equal(h.s.snapshot().messages[0]?.displayName, "Orbit");
@@ -314,7 +312,7 @@ function harness(model: any) {
   ai.state = "running";
   return { s, capture, ai, c };
 }
-const say = (input: ModelInput) => ({
+const say = (input: ModelInput<Buffer>) => ({
   decision: {
     action: "say",
     text: "보이는 도형이 움직이네요.",
@@ -326,7 +324,7 @@ const say = (input: ModelInput) => ({
 test("A07: stop discards late model response and platform ingestion continues", async () => {
   let resolve: any;
   const h = harness(
-    (i: ModelInput) =>
+    (i: ModelInput<Buffer>) =>
       new Promise((r) => {
         resolve = () => r(say(i));
       }),
@@ -343,7 +341,7 @@ test("A07: stop discards late model response and platform ingestion continues", 
 });
 test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", async () => {
   let calls = 0;
-  const h = harness(async (i: ModelInput) => {
+  const h = harness(async (i: ModelInput<Buffer>) => {
     calls++;
     return say(i);
   });
@@ -399,8 +397,8 @@ test("A13: call and money limits survive restart; provider failures retain reser
   rmSync(dir, { recursive: true, force: true });
 });
 test("A17: configured platform context enters the model without raw account IDs", async () => {
-  let input: ModelInput | undefined;
-  const h = harness(async (i: ModelInput) => {
+  let input: ModelInput<Buffer> | undefined;
+  const h = harness(async (i: ModelInput<Buffer>) => {
     input = i;
     return say(i);
   });
@@ -420,7 +418,7 @@ test("A17: configured platform context enters the model without raw account IDs"
 });
 test("A10–A11: evidence, prompt-like content and unsafe generated text are constrained", () => {
   const h = harness(() => {});
-  const input: ModelInput = {
+  const input: ModelInput<Buffer> = {
     frames: h.capture.frames,
     messages: [],
     persona: { name: "x", style: "" },
@@ -451,7 +449,7 @@ test("A10–A11: evidence, prompt-like content and unsafe generated text are con
   h.s.close();
 });
 test("Manual approval discarded after evidence deletion and capture invalidation", async () => {
-  const h = harness(async (i: ModelInput) => ({
+  const h = harness(async (i: ModelInput<Buffer>) => ({
     ...say(i),
     decision: { ...say(i).decision, replyToMessageId: i.messages[0].id },
   }));
@@ -584,7 +582,7 @@ test("SOOP OAuth encrypts tokens at rest and refreshes through the official toke
 });
 
 test("publication drops a candidate citing frames removed by source resolution change", async () => {
-  const h = harness(async (input: ModelInput) => say(input));
+  const h = harness(async (input: ModelInput<Buffer>) => say(input));
   h.c.ai.manualApproval = true;
   try {
     await h.ai.tick();

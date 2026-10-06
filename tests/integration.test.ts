@@ -13,7 +13,7 @@ import { createApp } from "../apps/server/app.ts";
 import { configSchema } from "../packages/config.ts";
 import { runYoutube } from "../packages/infrastructure/platforms/youtube-receiver.ts";
 import { Store } from "../packages/storage.ts";
-import { openaiModel } from "../packages/model.ts";
+import { openaiModel } from "../packages/infrastructure/reactions/responses-api.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { workerEnv } from "../packages/infrastructure/inputs/worker-session.ts";
 const admin = "a".repeat(64),

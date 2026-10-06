@@ -7,7 +7,7 @@ import { generationIssue, ModelRequestError } from "../../model-errors.ts";
 import type { Store } from "../../storage.ts";
 import type { Capture } from "../inputs/screen-input.ts";
 import type { Config } from "../../config.ts";
-import type { Model } from "../../model.ts";
+import type { Model } from "../../application/reactions/model-port.ts";
 import type { Transcriber } from "../inputs/speech-input.ts";
 
 /** Node composition only; the application coordinator owns generation and publication flow. */
@@ -20,7 +20,7 @@ export class Scheduler extends ReactionCoordinator<Buffer, NodeJS.Timeout> {
     store: Store,
     capture: Capture,
     config: Config,
-    model: Model,
+    model: Model<Buffer>,
     demo = false,
     providerReady: () => boolean = () =>
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,

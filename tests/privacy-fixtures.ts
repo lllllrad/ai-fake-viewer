@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { privacyProfileSchema } from "../packages/privacy-profile.ts";
 import type { Store } from "../packages/storage.ts";
-import type { Incoming } from "../packages/contracts.ts";
+import type { Incoming } from "../packages/contracts/incoming.ts";
 export const approvedProfile = () =>
   privacyProfileSchema.parse({
     operator: "Fixture operator",

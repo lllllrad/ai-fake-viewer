@@ -6,14 +6,14 @@ import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { Store } from "../packages/storage.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import type { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
-import type { ModelInput } from "../packages/model.ts";
+import type { ModelInput } from "../packages/application/reactions/model-port.ts";
 
 const response = (noul: number) =>
   Response.json({
     model: "jev-1.13.0",
     answers: { should_respond: { type: "noul", noul } },
   });
-const input: ModelInput = {
+const input: ModelInput<Buffer> = {
   frames: [],
   messages: [],
   transcripts: [
@@ -140,7 +140,7 @@ test("Jev uses the documented text-only API and inclusive probability threshold"
         { id: "private-id", speaker: "viewer-1", text: "x".repeat(2000) },
       ],
       frames: [{ bytes: Buffer.from("secret-image") }],
-    } as ModelInput;
+    } as ModelInput<Buffer>;
     assert.equal(await gate.allow(state, new AbortController().signal), true);
     assert.equal(await gate.allow(state, new AbortController().signal), false);
     assert.equal(gate.filtered, 1);
