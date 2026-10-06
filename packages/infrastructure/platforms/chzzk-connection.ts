@@ -2,7 +2,7 @@ import type { ChildProcess } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import { z } from "zod";
 import { ApiQuotaError } from "../../api-health.ts";
-import { normalizeChzzk } from "../../chzzk.ts";
+import { normalizeChzzk } from "./chzzk-chat-payload.ts";
 import type { Incoming } from "../../contracts/incoming.ts";
 
 export interface ChzzkConnectionPorts {

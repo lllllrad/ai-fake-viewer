@@ -210,9 +210,27 @@ validate callback inputs and render fixed UTF-8 responses while preserving exist
 administrator endpoints and OAuth callback URLs. Provider details are mapped to
 bounded diagnostic messages. SOOP consumes its pending approval before exchange;
 a superseding authorization invalidates both the old token write and its late
-status update. Existing token adapters still own provider protocol and refresh and remain
-candidates for the remaining adapter rewrite.
+status update. Provider protocol and encrypted account state belong to the
+[YouTube](../../packages/infrastructure/accounts/youtube-auth.ts),
+[CHZZK](../../packages/infrastructure/accounts/chzzk-auth.ts) and
+[SOOP](../../packages/infrastructure/accounts/soop-auth.ts) account adapters.
 SOOP browser chat operations and AI provider accounts have separate lifecycles.
+
+### Refresh ownership
+
+The [account refresh owner](../../packages/application/accounts/refresh-flight.ts)
+shares one pending refresh within an account generation. Authorization changes
+and forgetting credentials retire that request immediately; its late completion
+cannot release a replacement refresh or return retired credentials. Provider
+adapters retain their generation checks before encrypted writes. Successful
+CHZZK/SOOP authorization also retires refreshes started while that exchange was
+pending. CHZZK session API responses are bound to the requesting account before
+sending, before applying status and after body decoding, so an old response
+cannot expire a new token or supply its session result.
+
+CHZZK [chat decoding](../../packages/infrastructure/platforms/chzzk-chat-payload.ts)
+is independent of account persistence and refresh. The root account modules only
+re-export compatibility entry points; production composition imports the adapters.
 
 ### Credential persistence
 

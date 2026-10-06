@@ -8,6 +8,57 @@ import { ChzzkAuth } from "../packages/chzzk.ts";
 import { YoutubeAuth } from "../packages/youtube-auth.ts";
 import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
 
+for (const stage of ["status", "body"] as const) {
+  test(`CHZZK ignores an API ${stage} response from a replaced account`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "chzzk-api-account-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    let complete!: (response: Response) => void;
+    let decoded!: (body: unknown) => void;
+    const auth = new ChzzkAuth(
+      "a".repeat(64),
+      join(dir, "tokens"),
+      async () =>
+        new Promise<Response>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    auth.token = {
+      accessToken: "old",
+      refreshToken: "old-refresh",
+      expiresAt: Date.now() + 3600000,
+    };
+    const request = auth.api("/open/v1/sessions/auth");
+    const rejected = assert.rejects(request, /CHZZK authorization changed/);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    if (stage === "body") {
+      const response = Response.json({});
+      t.mock.method(
+        response,
+        "json",
+        () =>
+          new Promise<unknown>((resolve) => {
+            decoded = resolve;
+          }),
+      );
+      complete(response);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    auth.forget();
+    const replacement = {
+      accessToken: "replacement",
+      refreshToken: "replacement-refresh",
+      expiresAt: Date.now() + 3600000,
+    };
+    auth.token = replacement;
+    if (stage === "status") complete(new Response(null, { status: 401 }));
+    else
+      decoded({ code: 200, content: { url: "wss://fixture.invalid/session" } });
+    await rejected;
+    assert.equal(auth.token, replacement);
+    assert(replacement.expiresAt > Date.now());
+  });
+}
+
 for (const platform of ["soop", "chzzk", "youtube"] as const) {
   test(`PC07: ${platform} forgetting credentials cannot be undone by an in-flight refresh`, async (t) => {
     const dir = mkdtempSync(join(tmpdir(), "credential-retention-"));
@@ -255,3 +306,73 @@ test("model selection supersedes an in-flight account callback before it can per
   assert.equal(restored.active?.model, "new-model");
   assert.equal(restored.active?.accessToken, "old");
 });
+
+for (const platform of ["soop", "chzzk", "youtube"] as const) {
+  test(`${platform} replacement refresh is independent of a retired account request`, async (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "replacement-refresh-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    const oldClient = process.env.YOUTUBE_CLIENT_ID;
+    process.env.YOUTUBE_CLIENT_ID = "fixture";
+    t.after(() => {
+      if (oldClient === undefined) delete process.env.YOUTUBE_CLIENT_ID;
+      else process.env.YOUTUBE_CLIENT_ID = oldClient;
+    });
+    const responses: Array<(response: Response) => void> = [];
+    const request: typeof fetch = async () =>
+      new Promise<Response>((resolve) => {
+        responses.push(resolve);
+      });
+    const path = join(dir, "tokens"),
+      key = "a".repeat(64);
+    const auth =
+      platform === "soop"
+        ? new SoopAuth(key, path, request)
+        : platform === "chzzk"
+          ? new ChzzkAuth(key, path, request)
+          : new YoutubeAuth(key, path, request);
+    const token = (name: string) => ({
+      accessToken: name,
+      refreshToken: name + "-refresh",
+      expiresAt: 0,
+      clientId: "fixture",
+      channelId: "fixture",
+    });
+    const access = () =>
+      auth instanceof SoopAuth
+        ? auth.access("client", "secret")
+        : auth.access();
+    const response = (name: string) =>
+      Response.json(
+        platform === "chzzk"
+          ? {
+              accessToken: name,
+              refreshToken: name + "-refresh",
+              expiresIn: 3600,
+            }
+          : {
+              access_token: name,
+              refresh_token: name + "-refresh",
+              expires_in: 3600,
+              token_type: "Bearer",
+            },
+      );
+    (auth as any).token = token("old");
+    const old = access();
+    const rejected = assert.rejects(old);
+    assert.equal(responses.length, 1);
+    auth.forget();
+    (auth as any).token = token("replacement");
+    const fresh = access();
+    assert.equal(responses.length, 2);
+    responses[0](response("retired"));
+    await rejected;
+    const joined = access();
+    assert.equal(responses.length, 2);
+    responses[1](response("current"));
+    assert.deepEqual(await Promise.all([fresh, joined]), [
+      "current",
+      "current",
+    ]);
+    assert.equal((auth as any).token.accessToken, "current");
+  });
+}

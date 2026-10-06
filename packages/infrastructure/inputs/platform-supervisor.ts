@@ -6,13 +6,13 @@ import {
   YoutubeNotices,
 } from "../participation/platform-notices.ts";
 import { runChzzkReceiver } from "../platforms/chzzk-receiver.ts";
-import { YoutubeAuth } from "../../youtube-auth.ts";
+import { YoutubeAuth } from "../accounts/youtube-auth.ts";
 import { fork, type ChildProcess } from "node:child_process";
 import type { Store } from "../../storage.ts";
 import type { Config } from "../../config.ts";
 import { incomingSchema } from "../../contracts.ts";
 import { runYoutube } from "../platforms/youtube-receiver.ts";
-import { ChzzkAuth } from "../../chzzk.ts";
+import { ChzzkAuth } from "../accounts/chzzk-auth.ts";
 import { workerEnv } from "../../capture.ts";
 export class Supervisor {
   youtubeNotices?: YoutubeNotices;

@@ -25,7 +25,7 @@ import { RuntimeStatusSource } from "../../packages/infrastructure/status/runtim
 import { projectAdminStatus } from "../../packages/application/status/projection.ts";
 import { BroadcastService } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
-import { YoutubeAuth } from "../../packages/youtube-auth.ts";
+import { YoutubeAuth } from "../../packages/infrastructure/accounts/youtube-auth.ts";
 import { FixedNoticeDelivery } from "../../packages/application/participation/fixed-notice-delivery.ts";
 import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
 import { profileIssues } from "../../packages/privacy-profile.ts";
@@ -47,8 +47,8 @@ import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
-import { ChzzkAuth } from "../../packages/chzzk.ts";
-import { SoopAuth } from "../../packages/soop.ts";
+import { ChzzkAuth } from "../../packages/infrastructure/accounts/chzzk-auth.ts";
+import { SoopAuth } from "../../packages/infrastructure/accounts/soop-auth.ts";
 import { Supervisor } from "../../packages/infrastructure/inputs/platform-supervisor.ts";
 import { createBroadcastCast } from "../../packages/infrastructure/cast/runtime.ts";
 export { equal } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
