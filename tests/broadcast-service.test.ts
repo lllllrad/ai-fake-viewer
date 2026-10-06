@@ -351,3 +351,64 @@ test("input HTTP routes preserve media responses and enforce broadcast command c
       409,
     );
 });
+
+test("configuration change drains inputs and holds the start barrier until installation finishes", async () => {
+  const f = fixture(),
+    stopped = deferred();
+  f.dependencies.inputs.stopChat = () => stopped.promise;
+  let applied = false;
+  const change = f.service.reconfigureInputs(() => {
+    assert.throws(() => f.service.startInputs(), BroadcastCommandError);
+    assert.throws(() => f.service.enableAi(), BroadcastCommandError);
+    applied = true;
+  });
+  assert.throws(() => f.service.startInput("speech"), BroadcastCommandError);
+  assert.equal(applied, false);
+  stopped.resolve();
+  assert.equal(await change, true);
+  assert.equal(applied, true);
+  f.service.startInputs();
+});
+test("broadcast end supersedes a pending configuration installation", async () => {
+  const f = fixture(),
+    stopped = deferred();
+  f.dependencies.inputs.stopChat = () => stopped.promise;
+  let applied = false;
+  const change = f.service.reconfigureInputs(() => {
+    applied = true;
+  });
+  const end = f.service.endBroadcast();
+  stopped.resolve();
+  assert.equal(await change, false);
+  await end;
+  assert.equal(applied, false);
+  assert.equal(f.state.closed, true);
+});
+test("only the newest configuration installs after shared input teardown", async () => {
+  const f = fixture(),
+    stopped = deferred();
+  f.dependencies.inputs.stopChat = () => stopped.promise;
+  const installed: number[] = [];
+  const first = f.service.reconfigureInputs(() => {
+    installed.push(1);
+  });
+  const second = f.service.reconfigureInputs(() => {
+    installed.push(2);
+  });
+  stopped.resolve();
+  assert.equal(await first, false);
+  assert.equal(await second, true);
+  assert.deepEqual(installed, [2]);
+});
+test("failed configuration installation releases its barrier and does not restart generation", async () => {
+  const f = fixture();
+  f.service.enableAi();
+  await assert.rejects(
+    f.service.reconfigureInputs(() => {
+      throw new Error("install failed");
+    }),
+  );
+  assert.equal(f.state.requested, false);
+  assert.equal(f.state.running, false);
+  f.service.startInput("speech");
+});

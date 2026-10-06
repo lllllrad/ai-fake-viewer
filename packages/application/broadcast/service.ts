@@ -27,6 +27,7 @@ export class BroadcastCommandError extends Error {
 export class BroadcastService {
   private shuttingDown = false;
   private commandRevision = 0;
+  private configurationChanges = 0;
   private inputStop?: Promise<void>;
   private readonly adapterStops = new Map<BroadcastInput, Promise<void>>();
   private shutdownResult?: Promise<void>;
@@ -37,7 +38,10 @@ export class BroadcastService {
     return {
       closed: this.dependencies.repository.closed(),
       shuttingDown: this.shuttingDown,
-      stoppingInputs: !!this.inputStop || this.adapterStops.size > 0,
+      stoppingInputs:
+        !!this.inputStop ||
+        this.adapterStops.size > 0 ||
+        this.configurationChanges > 0,
     };
   }
 
@@ -129,6 +133,21 @@ export class BroadcastService {
   stopInputs() {
     this.disableAi();
     return this.stopInputAdapters();
+  }
+
+  async reconfigureInputs(apply: () => void) {
+    if (this.shuttingDown) throw new BroadcastCommandError("shutting_down");
+    this.disableAi("configuration_changed");
+    const revision = this.commandRevision;
+    this.configurationChanges++;
+    try {
+      await this.stopInputAdapters();
+      if (revision !== this.commandRevision || this.shuttingDown) return false;
+      apply();
+      return true;
+    } finally {
+      this.configurationChanges--;
+    }
   }
 
   endBroadcast() {

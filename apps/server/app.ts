@@ -1,3 +1,5 @@
+import { ProfileUpdate } from "../../packages/application/participation/profile-update.ts";
+import { registerProfileRoutes } from "./http/routes/profile.ts";
 import {
   SoopBridge,
   SoopBridgeError,
@@ -27,8 +29,6 @@ import { NoticeBot } from "../../packages/notice-bot.ts";
 import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
 import {
   PrivacyActionError,
-  privacyProfileSchema,
-  assertProfileUpdate,
   profileIssues,
 } from "../../packages/privacy-profile.ts";
 import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
@@ -539,20 +539,16 @@ export async function createApp(
       videos: rights.videos(),
     });
   });
-  app.put("/api/admin/privacy/profile", async (req) => {
-    const profile = privacyProfileSchema.parse(req.body);
-    if (profile.rightsDatabase !== config.privacy.rightsDatabase)
-      throw Error("권리행사 저장소 변경은 재시작이 필요합니다.");
-    assertProfileUpdate(config.privacy, profile);
-    scheduler.stop("privacy_profile_changed");
-    capture.stop();
-    transcriber.stop();
-    store.transcripts.clear();
-    await supervisor.stop();
-    participation?.replaceProfile(profile);
-    config.privacy = profile;
-    return { profile, issues: profileIssues(profile) };
+  const profileUpdate = new ProfileUpdate({
+    current: () => config.privacy,
+    reconfigure: (apply) => broadcast.reconfigureInputs(apply),
+    clearSpeech: () => store.transcripts.clear(),
+    install: (profile) => {
+      participation?.replaceProfile(profile);
+      config.privacy = profile;
+    },
   });
+  registerProfileRoutes(app, profileUpdate);
   app.post(
     "/api/admin/privacy/participants/:id/notice-delivered",
     async (req) => {

@@ -109,6 +109,19 @@ stopping speech or chat preserves independent AI intent. The
 [input HTTP routes](../../apps/server/http/routes/inputs.ts) only map commands and
 serve the configured preview/transcript queries; they do not own lifecycle rules.
 
+The [profile update use case](../../packages/application/participation/profile-update.ts)
+validates the submitted profile before effects, preserves the rights-database
+restart requirement and requires a new notice version for processing changes.
+It installs through the broadcast coordinator's configuration command rather
+than stopping adapters independently in an HTTP handler. The coordinator
+disables generation and disarms the cast, drains all inputs, and holds a start
+barrier through synchronous installation. A newer stop/end/configuration command
+or shutdown supersedes an older pending installation. Teardown failure does not
+install a new profile; speech erasure must succeed before consent/profile
+replacement. The [profile HTTP route](../../apps/server/http/routes/profile.ts)
+only delegates the submitted body. Configuration updates do not restart inputs
+or resume AI automatically.
+
 ## Ingestion, consent and withdrawal
 
 1. Normalize the external event at the adapter boundary; retain original event
