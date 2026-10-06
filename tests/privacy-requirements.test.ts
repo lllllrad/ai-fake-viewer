@@ -334,7 +334,7 @@ test("T10, T19–T20: endpoint stays pinned, no automatic fallback, and authoriz
   }
 });
 
-test("T16–T19, T23: live app blocks alternative inputs/export and creates automatic withdrawal follow-up without another email", async (t) => {
+test("T16–T19, T23: live app rejects unselected authentication, allows transcript export and preserves withdrawal follow-up", async (t) => {
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
   const dir = mkdtempSync(join(tmpdir(), "private-app-"));
