@@ -377,6 +377,16 @@ failed write leave the candidate unclaimed; a second claim cannot succeed.
 
 ## Persistence and external effects
 
+The [conversation identity service](../../packages/application/conversation/identity-service.ts)
+owns origin disclosure and collision refresh. Its
+[SQLite repository](../../packages/infrastructure/conversation/identity-sqlite.ts)
+projects only visible, current-broadcast actor IDs, display names and origin
+kinds. Full disclosure disables durable AI intent and writes the disclosure event
+in one transaction; reference cast disclosure selects only that cast's synthetic
+actors. Collision normalization is a pure domain rule. Readers receive the event
+and reset only after commit, and transaction rollback restores the collision cache
+along with persisted intent. Private account identifiers are never disclosure fields.
+
 The [incoming message contract](../../packages/contracts/incoming.ts) validates
 platform input before persistence. The
 [incoming SQLite writer](../../packages/infrastructure/conversation/incoming-sqlite.ts)

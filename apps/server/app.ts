@@ -251,7 +251,7 @@ export async function createApp(
       createNext: () => store.lifetime.createNext(),
       erase: () => store.lifetime.erase(),
       disclose: () => {
-        store.reveal();
+        store.identities.reveal();
       },
     },
     ai: {

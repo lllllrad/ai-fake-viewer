@@ -1,3 +1,5 @@
+import { ConversationIdentities } from "./application/conversation/identity-service.ts";
+import { SqliteConversationIdentities } from "./infrastructure/conversation/identity-sqlite.ts";
 import { ConversationIngestion } from "./application/conversation/ingestion.ts";
 import { ReferenceAdmission } from "./infrastructure/participation/reference-admission.ts";
 import { SqliteIncomingMessages } from "./infrastructure/conversation/incoming-sqlite.ts";
@@ -46,6 +48,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly identities: ConversationIdentities;
   readonly ingestion: ConversationIngestion;
   private readonly referenceAdmission: ReferenceAdmission;
   private readonly incomingMessages: SqliteIncomingMessages;
@@ -116,6 +119,23 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.identities = new ConversationIdentities(
+      new SqliteConversationIdentities(this.db),
+      this.transactions,
+      {
+        sessionId: () => this.sessionId,
+        now: () => Date.now(),
+        rememberCollisions: (names) => {
+          this.readerCollisionNames = names;
+        },
+        publish: (sequence) => {
+          this.emit("event", this.publicEvent(sequence));
+        },
+        reset: () => {
+          this.emit("reset");
+        },
+      },
+    );
     this.referenceAdmission = new ReferenceAdmission(this.db, {
       sessionId: () => this.sessionId,
       now: () => Date.now(),
@@ -354,22 +374,7 @@ export class Store extends EventEmitter {
     return this.conversationProjection.disclosed();
   }
   private collisionNameSet() {
-    const names = this.db
-      .prepare(
-        "SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id WHERE m.session=? AND m.hidden=0",
-      )
-      .all(this.sessionId) as any[];
-    const counts = new Map<string, number>();
-    for (const row of names) {
-      const key = row.name
-        .normalize("NFKC")
-        .toLocaleLowerCase()
-        .replace(/[\s\p{Cf}\p{P}]/gu, "");
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return new Set(
-      [...counts].filter(([, count]) => count > 1).map(([key]) => key),
-    );
+    return this.identities.collisions();
   }
   readerMessage(
     message: PublicMessage,
@@ -469,45 +474,10 @@ export class Store extends EventEmitter {
       .run(value ? "1" : "0");
   }
   reveal() {
-    this.setAiDesiredRunning(false);
-    const rows = this.db
-      .prepare(
-        "SELECT DISTINCT a.id,a.name,a.source FROM actors_private a JOIN messages m ON m.actor=a.id WHERE a.session=? AND m.hidden=0",
-      )
-      .all(this.sessionId) as any[];
-    const seq = this.event(
-      "identity.revealed",
-      null,
-      rows.map((a) => ({
-        actorId: a.id,
-        displayName: a.name,
-        kind:
-          a.source === "experiment" ? "system_generated" : "platform_received",
-      })),
-    );
-    this.readerCollisionNames = this.collisionNameSet();
-    this.emit("event", this.publicEvent(seq));
-    this.emit("reset");
+    this.identities.reveal();
   }
   revealPersonaIdentities(personaSessionId: string) {
-    const rows = this.db
-      .prepare(
-        "SELECT DISTINCT a.id,a.name FROM actors_private a JOIN messages m ON m.actor=a.id JOIN persona_cast c ON c.session_id=? AND a.author=('persona-'||c.member_id) WHERE a.session=? AND m.hidden=0 AND m.platform='experiment'",
-      )
-      .all(personaSessionId, this.sessionId) as any[];
-    const seq = this.event(
-      "identity.revealed",
-      null,
-      rows.map((a) => ({
-        actorId: a.id,
-        displayName: a.name,
-        kind: "system_generated",
-      })),
-    );
-    this.readerCollisionNames = this.collisionNameSet();
-    this.emit("event", this.publicEvent(seq));
-    this.emit("reset");
-    return rows.length;
+    return this.identities.reveal(personaSessionId);
   }
   closeSession() {
     this.lifetime.end();
