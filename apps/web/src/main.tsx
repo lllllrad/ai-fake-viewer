@@ -7,6 +7,7 @@ import "./features/workspace/workspace.css";
 import { adminClient } from "./lib/admin-client";
 import { useAdminActions } from "./lib/use-admin-actions";
 import { useAdminSession } from "./features/workspace/use-admin-session";
+import { usePreview } from "./features/workspace/use-preview";
 import { ConversationPage } from "./features/conversation/ConversationPage";
 import { ParticipationPage } from "./features/participation/ParticipationPage";
 import React, { useEffect, useState } from "react";
@@ -70,7 +71,16 @@ function Admin() {
     return () => clearInterval(timer);
   }, []);
   const [error, setError] = useState("");
-  const [preview, setPreview] = useState("");
+  const stale =
+    statusFailed || !status?.generatedAt || now - status.generatedAt > 10000;
+  const preview = usePreview(
+    session === "signed_in" &&
+      !stale &&
+      !status?.closed &&
+      !!status?.capture.lastFrameAt &&
+      now - status.capture.lastFrameAt <= 10000,
+    status?.sessionId,
+  );
   const actions = useAdminActions(refresh);
   const busy = actions.pending;
   useEffect(() => {
@@ -78,38 +88,6 @@ function Admin() {
   }, [session, actions.reset]);
   const api = (path: string, method = "GET") =>
     adminClient.request(path, { method });
-  useEffect(() => {
-    if (session !== "signed_in") return;
-    let cancelled = false;
-    let currentUrl = "";
-    const loadPreview = async () => {
-      if (
-        !status?.capture?.lastFrameAt ||
-        status.capture.lastFrameAgeMs === null ||
-        status.capture.lastFrameAgeMs > 10000
-      ) {
-        setPreview("");
-        return;
-      }
-      try {
-        const blob = await (await api("preview")).blob();
-        if (cancelled) return;
-        const nextUrl = URL.createObjectURL(blob);
-        setPreview(nextUrl);
-        if (currentUrl) URL.revokeObjectURL(currentUrl);
-        currentUrl = nextUrl;
-      } catch {
-        if (!cancelled) setPreview("");
-      }
-    };
-    void loadPreview();
-    const timer = setInterval(() => void loadPreview(), 2000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-      if (currentUrl) URL.revokeObjectURL(currentUrl);
-    };
-  }, [session, status?.capture?.lastFrameAt, status?.capture?.lastFrameAgeMs]);
   const action = (path: string, body?: unknown) =>
     actions.run(path, async (signal) => {
       await adminClient.request(path, { method: "POST", body, signal });
@@ -122,8 +100,6 @@ function Admin() {
     )
       void action("reveal");
   };
-  const stale =
-    statusFailed || !status?.generatedAt || now - status.generatedAt > 10000;
   if (session === "checking" || session === "unavailable")
     return (
       <main className="login">
@@ -284,7 +260,6 @@ function Admin() {
             void api("logout", "POST")
               .then(() => {
                 signOut();
-                setPreview("");
               })
               .catch((e) => setError(e.message))
           }

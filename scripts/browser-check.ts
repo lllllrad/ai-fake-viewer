@@ -93,6 +93,59 @@ try {
     ).toBeVisible();
   const aiToggle = dashboard.getByRole("switch", { name: "AI 채팅 생성 사용" });
   await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  // Status updates must not restart a slow preview request or retain stale images.
+  let releasePreview!: () => void;
+  const previewPending = new Promise<void>((resolve) => {
+    releasePreview = resolve;
+  });
+  let previewRequests = 0;
+  let previewStale = false;
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.capture.lastFrameAt = Date.now();
+    body.capture.lastFrameAgeMs = 0;
+    if (previewStale) body.generatedAt = Date.now() - 60000;
+    await route.fulfill({ json: body });
+  });
+  await adminPage.route("**/api/admin/preview", async (route) => {
+    previewRequests++;
+    await previewPending;
+    await route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aD1sAAAAASUVORK5CYII=",
+        "base64",
+      ),
+    });
+  });
+  try {
+    await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect.poll(() => previewRequests).toBe(1);
+    for (let i = 0; i < 3; i++) {
+      const received = adminPage.waitForResponse("**/api/admin/status");
+      await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+      await received;
+    }
+    releasePreview();
+    const previewImage = dashboard.getByAltText("송출 화면 미리보기");
+    await expect(previewImage).toBeVisible();
+    await expect
+      .poll(() =>
+        previewImage.evaluate(
+          (node) => (node as HTMLImageElement).naturalWidth,
+        ),
+      )
+      .toBe(1);
+    assert.equal(previewRequests, 1);
+    previewStale = true;
+    await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect(previewImage).toHaveCount(0);
+  } finally {
+    releasePreview();
+    await adminPage.unroute("**/api/admin/status");
+    await adminPage.unroute("**/api/admin/preview");
+  }
   const chatSummary = dashboard.locator("article").filter({
     has: adminPage.getByRole("heading", { name: "실제 채팅 정보" }),
   });

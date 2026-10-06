@@ -50,6 +50,14 @@ source/backend, recent timestamps and corrective action; raw transport codes do
 not dominate normal operation. Configured screen/audio need no privacy toggle or
 mask/preview acknowledgement.
 
+The [preview session](../../apps/web/src/features/workspace/preview-session.ts)
+owns one image request and schedules the next poll after completion. Routine
+status/frame updates do not restart that request. Stale status, an expired frame,
+broadcast close/replacement and sign-out disable the preview, cancel its request
+and release its image URL. Retired responses cannot allocate or restore an image;
+a current request failure clears the old image and remains retryable. The broadcast
+and connection views share this one preview lifetime.
+
 The primary work area contains recent permitted conversation and current speech.
 Show empty, waiting and failed states intentionally. Automatic AI viewers appear
 as a read-only cast overview; the operator does not create, audition or approve
