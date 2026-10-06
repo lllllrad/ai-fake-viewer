@@ -224,6 +224,18 @@ review and before publication. Invalid candidates are discarded before another
 publication-delay timer is scheduled. Rejection diagnostics contain fixed reasons,
 not input text.
 
+The [model authorization service](../../packages/application/reactions/model-authorization.ts)
+revalidates the exact outgoing message text, frame bytes/capture time and both
+background/new transcript windows at each provider boundary. Current consent
+revision, profile availability and an open broadcast are required even for
+text-only or empty contexts. An edited message with the same ID is stale input.
+The [audience query](../../packages/infrastructure/reactions/model-audience.ts)
+loads message authors in one broadcast-scoped query and matches platform/account/
+channel identities. Only participant IDs and authorized epochs are retained for
+late provider request tracking, never mutable participant objects or raw chat.
+The [runtime adapter](../../packages/infrastructure/reactions/model-authorization.ts)
+connects these ports to current media, consent, storage and rights follow-up owners.
+
 The [draft and review use case](../../packages/application/reactions/draft-review.ts)
 owns the bounded generation workflow: an initial response, at most one requested
 frame inspection, and optional independent review. It receives provider, current

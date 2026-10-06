@@ -1,3 +1,4 @@
+import { createModelAuthorization } from "../../packages/infrastructure/reactions/model-authorization.ts";
 import { WithdrawalFollowups } from "../../packages/application/rights/withdrawal-followups.ts";
 import { registerReaderStream } from "./http/reader-stream.ts";
 import { projectReadiness } from "../../packages/application/status/readiness.ts";
@@ -9,7 +10,6 @@ import {
   BroadcastCommandError,
 } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
-import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
 import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
@@ -44,7 +44,6 @@ import {
   mockModel,
   openaiModel,
   chatgptModel,
-  type ModelInput,
   limitModelConcurrency,
 } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
@@ -143,73 +142,15 @@ export async function createApp(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
   );
-  const audiences = new WeakMap<object, any[]>();
-  const modelBoundary = {
-    authorize: (input: ModelInput) => {
-      if (
-        !privacyReady() ||
-        (input.frames.length > 0 && !inputSessionOpen()) ||
-        ((input.transcripts?.length ?? 0) > 0 && !inputSessionOpen())
-      )
-        throw Error(
-          "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
-        );
-      if (
-        input.privacyRevision !== participation!.revision ||
-        input.frames.some(
-          (f) =>
-            !capture.has(f.id) ||
-            !capture.frames.some(
-              (current) =>
-                current.id === f.id &&
-                current.capturedAt === f.capturedAt &&
-                current.bytes.equals(f.bytes),
-            ),
-        ) ||
-        [...(input.transcripts ?? []), ...(input.newTranscripts ?? [])].some(
-          (t) =>
-            !transcriber
-              .recent()
-              .some(
-                (current) =>
-                  current.id === t.id &&
-                  current.text === t.text &&
-                  current.capturedAt === t.capturedAt,
-              ),
-        ) ||
-        input.messages.some((m) => !store.publicMessage(m.id))
-      )
-        throw new StaleModelContextError();
-      if (!audiences.has(input))
-        audiences.set(
-          input,
-          [...participation!.participants.values()]
-            .filter((p) =>
-              input.messages.some((m) => {
-                const row = store.db
-                  .prepare(
-                    "SELECT a.author,m.platform,m.channel FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=?",
-                  )
-                  .get(m.id) as any;
-                return (
-                  row &&
-                  row.author === p.author &&
-                  row.platform === p.platform &&
-                  row.channel === p.broadcaster
-                );
-              }),
-            )
-            .map((p) => ({ participant: p, epoch: p.epoch })),
-        );
-    },
-    requestId: (id: string, input: ModelInput) => {
-      for (const audience of audiences.get(input) ?? []) {
-        const p = audience.participant;
-        participation?.recordRequest(p.id, id);
-        followups.requestReturned(p.id, audience.epoch, id);
-      }
-    },
-  };
+  const modelBoundary = createModelAuthorization({
+    store,
+    capture,
+    transcriber,
+    participation,
+    followups,
+    profileReady: privacyReady,
+    sessionOpen: inputSessionOpen,
+  });
   const personaModel = limitModelConcurrency(
     opts.demo
       ? mockModel
