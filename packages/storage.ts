@@ -1,3 +1,4 @@
+import { SqliteIncomingMessages } from "./infrastructure/conversation/incoming-sqlite.ts";
 import { BroadcastRetention } from "./application/broadcast/retention.ts";
 import { SqliteRetention } from "./infrastructure/storage/retention-sqlite.ts";
 import { initializeBroadcastDatabase } from "./infrastructure/storage/initialize.ts";
@@ -44,6 +45,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  private readonly incomingMessages: SqliteIncomingMessages;
   readonly retention: BroadcastRetention;
   readonly lifetime: BroadcastLifetime;
   private readonly castRuntime: SqliteCastRuntime;
@@ -78,6 +80,11 @@ export class Store extends EventEmitter {
       this.db.close();
       throw error;
     }
+    this.incomingMessages = new SqliteIncomingMessages(this.db, {
+      sessionId: () => this.sessionId,
+      now: () => Date.now(),
+      id: randomUUID,
+    });
     this.castRuntime = new SqliteCastRuntime(this.db, () => this.sessionId);
     this.dispatch = new SqliteCastDispatch(this.db, {
       sessionId: () => this.sessionId,
@@ -366,72 +373,34 @@ export class Store extends EventEmitter {
           this.recordConsentNoticeTarget(m);
           continue;
         }
-        let a = this.db
-          .prepare(
-            "SELECT * FROM actors_private WHERE session=? AND source=? AND author=?",
-          )
-          .get(this.sessionId, m.platform, m.author) as any;
-        if (!a) {
-          a = { id: randomUUID() };
-          this.db
-            .prepare("INSERT INTO actors_private VALUES(?,?,?,?,?)")
-            .run(a.id, this.sessionId, m.platform, m.author, m.name);
-        }
-        const old = m.sourceId
-          ? (this.db
-              .prepare(
-                "SELECT * FROM messages WHERE session=? AND platform=? AND channel=? AND source_id=?",
-              )
-              .get(this.sessionId, m.platform, m.channel, m.sourceId) as any)
-          : null;
-        if (old) {
-          if (old.hidden || old.text === m.text) continue;
-          this.db
-            .prepare("UPDATE messages SET text=? WHERE id=?")
-            .run(m.text, old.id);
-          seqs.push(this.event("message.updated", old.id));
-        } else {
-          const id = randomUUID();
-          const seq = this.event("message.added", id);
-          this.db
-            .prepare(
-              "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,seq,consent_epoch) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
-            )
-            .run(
-              id,
-              this.sessionId,
-              a.id,
-              m.platform,
-              m.channel,
-              m.sourceId,
-              m.publishedAt,
-              Date.now(),
-              m.text,
-              m.replyToId,
-              seq,
-              consentEpoch,
-            );
-          seqs.push(seq);
-        }
+        const sequence = this.incomingMessages.write(m, consentEpoch);
+        if (sequence !== undefined) seqs.push(sequence);
       }
       if (checkpoint)
-        this.db
-          .prepare("INSERT OR REPLACE INTO connector_checkpoints VALUES(?,?)")
-          .run(checkpoint.key, checkpoint.value);
+        this.incomingMessages.checkpoint(checkpoint.key, checkpoint.value);
+      this.chatSummary();
+      // An enclosing transaction may still fail: publish only after its commit.
+      if (invalidated)
+        this.transactions.afterCommit(() => {
+          this.emit("context_invalidated");
+        });
+      for (const seq of seqs)
+        this.transactions.afterCommit(() => {
+          this.emit("event", this.publicEvent(seq));
+        });
+      this.transactions.afterCommit(() => this.emitConsentNoticeIfDue());
+      if (seqs.length && this.originsRevealed()) {
+        const colliding = this.collisionNameSet();
+        const fresh = [...colliding].some(
+          (name) => !this.readerCollisionNames.has(name),
+        );
+        this.readerCollisionNames = colliding;
+        if (fresh)
+          this.transactions.afterCommit(() => {
+            this.emit("reset");
+          });
+      }
     });
-    if (invalidated) this.emit("context_invalidated");
-    this.chatSummary();
-    for (const seq of seqs) this.emit("event", this.publicEvent(seq));
-    this.emitConsentNoticeIfDue();
-    this.emitConsentNoticeIfDue();
-    if (seqs.length && this.originsRevealed()) {
-      const colliding = this.collisionNameSet();
-      const fresh = [...colliding].some(
-        (name) => !this.readerCollisionNames.has(name),
-      );
-      this.readerCollisionNames = colliding;
-      if (fresh) this.emit("reset");
-    }
     return seqs;
   }
   private viewerHash(platform: string, channel: string, author: string) {

@@ -377,6 +377,18 @@ failed write leave the candidate unclaimed; a second claim cannot succeed.
 
 ## Persistence and external effects
 
+The [incoming message contract](../../packages/contracts/incoming.ts) validates
+platform input before persistence. The
+[incoming SQLite writer](../../packages/infrastructure/conversation/incoming-sqlite.ts)
+accepts only admitted messages and owns source deduplication, immutable author
+binding, actor creation, edits, message events and connector checkpoints. It runs
+inside the ingestion transaction; summary updates share that transaction and
+reader notifications wait for its outermost commit. Failed batches leave no
+messages, actor records, summary or advanced cursor. A closed broadcast admits
+neither content nor post-ingestion summary writes. Ingestion admission still
+coordinates live participation and reference consent through Store while those
+remaining coordination responsibilities are being replaced.
+
 [Broadcast retention](../../packages/application/broadcast/retention.ts) keeps
 active live-broadcast history regardless of its age. For eligible historical
 records, its [SQLite repository](../../packages/infrastructure/storage/retention-sqlite.ts)
