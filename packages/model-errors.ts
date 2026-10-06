@@ -1,5 +1,16 @@
 import { ZodError } from "zod";
 
+export class ModelRequestError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public details: Record<string, number> = {},
+    public retryable = false,
+  ) {
+    super(message);
+  }
+}
+
 export class StaleModelContextError extends Error {
   constructor() {
     super("stale_model_context");
@@ -7,6 +18,57 @@ export class StaleModelContextError extends Error {
 }
 
 export function generationIssue(error: unknown) {
+  if (error instanceof SyntaxError)
+    return {
+      code: "provider_invalid_json",
+      message:
+        "AI 응답 JSON을 해석하지 못했습니다. 다음 입력에서 다시 시도합니다.",
+      retryable: true,
+      transient: true,
+    };
+  if (error instanceof ModelRequestError)
+    return {
+      code: error.code,
+      message:
+        error.code === "output_token_limit"
+          ? "AI 응답이 설정된 출력 토큰 한도를 초과했습니다."
+          : error.code === "input_token_limit"
+            ? "AI 입력이 설정된 토큰 한도를 초과했습니다."
+            : `AI 요청 오류 (${error.code}). 연결 상태와 설정을 확인해 주세요.`,
+      retryable: error.retryable,
+      transient: error.retryable,
+    };
+  if (
+    error instanceof Error &&
+    [
+      "ChatGPT stream ended before completion",
+      "ChatGPT response failed or incomplete",
+      "terminated",
+    ].includes(error.message)
+  )
+    return {
+      code: "provider_stream_interrupted",
+      message:
+        "AI 응답 스트림이 완료되지 않았습니다. 다음 입력에서 다시 시도합니다.",
+      retryable: true,
+      transient: true,
+    };
+  if (
+    error instanceof Error &&
+    [
+      "ChatGPT output empty",
+      "ChatGPT output too large",
+      "ChatGPT response too large",
+      "Invalid ChatGPT text delta",
+    ].includes(error.message)
+  )
+    return {
+      code: "provider_invalid_output",
+      message:
+        "AI 응답 형식이 올바르지 않습니다. 다음 입력에서 다시 시도합니다.",
+      retryable: true,
+      transient: true,
+    };
   if (error instanceof StaleModelContextError)
     return {
       code: "stale_context",

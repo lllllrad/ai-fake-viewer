@@ -4,6 +4,31 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Provider failure diagnostics and bounded recovery — 2026-10-06
+
+A previous live review failed under the generic `model_error` category after a
+successful generation. The old log does not preserve enough evidence to identify
+that historical failure more precisely. It must not be reported as a confirmed
+HTTP, token-budget or stream failure.
+
+The adapter now exposes fixed HTTP categories and actual/configured counts for
+input/output token limits. Interrupted streams, malformed response JSON and
+transient HTTP 408/429/5xx use bounded next-input recovery rather than immediately
+disabling AI. Authentication/permission failures and configured token limits remain
+stopping conditions. No partial output, provider error body or credential is logged
+or published. Model-request diagnostics also include frame count and latest new
+speech timestamp to align pipeline timing without recording transcript text.
+
+The full check passed all 165 tests, TypeScript/Vite and documentation/configuration
+validation. Added synthetic cases distinguish authentication, throttling, server
+errors, input/output budgets and incomplete streams without body leakage. Following
+a managed restart/resumption with error classification, four consecutive live
+attempts completed generation, review and server publication without errors. The
+original intermittent error was not reproduced in those attempts. The existing
+500-token local output limit was preserved, not silently raised. Official Sign in
+with ChatGPT limitations still prohibit sending `max_output_tokens`; see the linked
+provider guidance in the AI pipeline document.
+
 ## Reviewed OBS Program input — 2026-10-06
 
 The private RTMP URL and FFmpeg Docker wrapper were already configured, but live

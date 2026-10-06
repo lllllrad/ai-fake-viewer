@@ -150,3 +150,19 @@ the previous 6-second request deadline and 12-second reaction lifetime, which co
 abort review after generation had already succeeded. Existing explicit session
 policies are not rewritten. Evidence expiry, withdrawal and session changes can
 still discard a result sooner; this is not an extension of transcript retention.
+
+## Provider error classification
+
+Sign in with ChatGPT failures now distinguish HTTP status, interrupted streams,
+invalid output, and input/output token-limit violations. The latter log only actual
+and configured token counts. Authentication/permission errors and configured token
+limits stop generation; transient HTTP 408/429/5xx and interrupted streams use the
+existing three-consecutive-failure bound with fresh input and normal pacing. No
+partial streamed text is published and no other account/provider is tried.
+
+The [Sign in with ChatGPT preview limitations](https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations)
+exclude `max_output_tokens`, so this adapter continues to omit that request field.
+Its local output-token check uses reported total usage, which includes non-visible
+tokens as described in [Counting tokens](https://developers.openai.com/api/docs/guides/token-counting).
+An earlier generic `model_error` cannot be retroactively assigned a precise cause
+without the original detailed evidence.

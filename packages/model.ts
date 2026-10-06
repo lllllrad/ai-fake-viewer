@@ -11,6 +11,7 @@ import type { Frame } from "./capture.ts";
 import type { Transcript } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import type { ChatgptAuth } from "./chatgpt-auth.ts";
+import { ModelRequestError } from "./model-errors.ts";
 const promptPath = (name: string) => resolve(process.cwd(), "prompts", name);
 const answerPrompt = readFileSync(promptPath("answer.md"), "utf8").trim();
 const reviewPrompt = readFileSync(promptPath("review.md"), "utf8").trim();
@@ -287,7 +288,7 @@ export function chatgptModel(
     });
     const requestId = r.headers.get("x-request-id");
     if (requestId) options?.requestId?.(requestId, input);
-    if (!r.ok || !r.body) throw Error("ChatGPT inference unavailable");
+    if (!r.ok || !r.body) throw new ModelRequestError(`provider_http_${r.status}`, "ChatGPT inference unavailable", {status:r.status}, r.status === 408 || r.status === 429 || r.status >= 500);
     let completed: any;
     let buffer = "";
     let streamedText = "";
@@ -343,11 +344,10 @@ export function chatgptModel(
     if (!output || output.length > 10000)
       throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
     const usage = completed.usage;
-    if (
-      usage?.input_tokens > config.maxInputTokens ||
-      usage?.output_tokens > config.maxOutputTokens
-    )
-      throw Error("ChatGPT token budget exceeded");
+    if (usage?.input_tokens > config.maxInputTokens)
+      throw new ModelRequestError("input_token_limit", "ChatGPT token budget exceeded", {actual:usage.input_tokens,limit:config.maxInputTokens});
+    if (usage?.output_tokens > config.maxOutputTokens)
+      throw new ModelRequestError("output_token_limit", "ChatGPT token budget exceeded", {actual:usage.output_tokens,limit:config.maxOutputTokens});
     let decision: unknown;
     try {
       decision = JSON.parse(output);

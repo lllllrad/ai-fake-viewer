@@ -1,4 +1,8 @@
-import { generationIssue, StaleModelContextError } from "./model-errors.ts";
+import {
+  generationIssue,
+  StaleModelContextError,
+  ModelRequestError,
+} from "./model-errors.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
@@ -754,7 +758,10 @@ export class Scheduler {
       if (generation === this.generation) {
         this.rejects++;
         const issue = generationIssue(error);
-        this.trace("attempt_error", { code: issue.code });
+        this.trace("attempt_error", {
+          code: issue.code,
+          ...(error instanceof ModelRequestError ? error.details : {}),
+        });
         if (issue.transient) this.transientFailures++;
         const continuing =
           issue.retryable && (!issue.transient || this.transientFailures < 3);
@@ -794,6 +801,11 @@ export class Scheduler {
       stage: input.reviewDraft ? "review" : "generation",
       newMessages: input.newMessages?.length ?? 0,
       newTranscripts: input.newTranscripts?.length ?? 0,
+      frames: input.frames.length,
+      latestSpeechAt: Math.max(
+        0,
+        ...(input.newTranscripts ?? []).map((t) => t.capturedAt),
+      ),
     });
     const c = this.config.ai;
     const priced =
