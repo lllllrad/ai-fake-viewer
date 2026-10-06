@@ -53,7 +53,10 @@ import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
-import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
+import {
+  AiStartError,
+  Scheduler,
+} from "../../packages/infrastructure/reactions/scheduler.ts";
 import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts";
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";

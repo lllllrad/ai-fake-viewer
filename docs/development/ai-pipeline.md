@@ -175,8 +175,10 @@ candidate deadline, current message contents and cited media availability.
 Keeping the same message identifier does not permit publishing a response to text
 that was edited during generation or manual review. Expired or invalid candidates
 are discarded before scheduling another delay; diagnostics record only a fixed
-reason. The scheduler still owns provider calls, usage reservation and durable
-publication coordination during reconstruction.
+reason. The [application coordinator](../../packages/application/reactions/coordinator.ts)
+owns provider calls, usage reservation and durable publication coordination through
+explicit ports. Node clocks, hashing and concrete store/input adapters are wired
+in the infrastructure composition.
 
 ## Reaction policy ownership
 
@@ -191,7 +193,7 @@ The scheduler's duplicate key includes a hash of an edited message's current
 version, so an unchanged platform identifier does not suppress updated text.
 It includes every unconsumed human message and transcript identifier, so a delayed
 older transcript chunk is not suppressed merely because a newer chunk was already
-processed. Existing generation/review/publication orchestration remains in the scheduler.
+processed. Generation, review and publication orchestration belongs to the application coordinator.
 
 ## Questions, transcript context and readable images
 
