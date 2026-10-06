@@ -167,7 +167,12 @@ A single subscription owns authorization, reconnects and cleanup; the pure state
 reducer rejects foreign-session and replayed events. The shared public
 [contract](../../packages/contracts/conversation.ts) validates inbound packets
 before rendering. A disconnected surface clears its cached conversation until a
-current snapshot arrives. The reader retains at most 300 messages; the overlay
+current snapshot arrives. The server-side
+[projection service](../../packages/application/conversation/projection-service.ts)
+rechecks consent/visibility when delivering a cached message event, reads the
+snapshot window in one joined query, and limits disclosed identity mappings to
+the current permitted window. Closed and foreign-broadcast cached events cannot
+restore old message text. The reader retains at most 300 messages; the overlay
 keeps the latest 12 and clips older rows to keep the newest entry on the canvas.
 
 ## Presentation and accessibility

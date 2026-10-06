@@ -20,13 +20,7 @@ export const incomingSchema = z
   .strict();
 export type Incoming = z.input<typeof incomingSchema>;
 export type { ConversationMessage as PublicMessage } from "./contracts/conversation.ts";
-export interface PublicEvent {
-  seq: number;
-  sessionId: string;
-  type: string;
-  occurredAt: number;
-  payload: unknown;
-}
+export type { PublicEvent } from "./contracts/conversation.ts";
 export const decisionSchema = z
   .object({
     action: z.enum(["say", "skip", "inspect"]),

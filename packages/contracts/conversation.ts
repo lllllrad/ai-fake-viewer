@@ -60,3 +60,17 @@ export const conversationPacketSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("consent_notice"), occurredAt: timestamp }),
 ]);
 export type ConversationPacket = z.infer<typeof conversationPacketSchema>;
+
+export interface PublicEvent {
+  seq: number;
+  sessionId: string;
+  type: string;
+  occurredAt: number;
+  payload: unknown;
+}
+export const conversationIdentitySchema = z.object({
+  actorId: z.string(),
+  displayName: z.string(),
+  kind: z.enum(["system_generated", "platform_received"]),
+});
+export type ConversationIdentity = z.infer<typeof conversationIdentitySchema>;

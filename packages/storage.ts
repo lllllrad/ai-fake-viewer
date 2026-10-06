@@ -1,3 +1,5 @@
+import { ConversationProjection } from "./application/conversation/projection-service.ts";
+import { SqliteConversationProjection } from "./infrastructure/conversation/projection-sqlite.ts";
 import { ConversationContext } from "./application/conversation/context-service.ts";
 import { SqliteConversationContext } from "./infrastructure/conversation/context-sqlite.ts";
 import { SqliteTransactions } from "./infrastructure/storage/transactions.ts";
@@ -20,6 +22,7 @@ export class Store extends EventEmitter {
   private readonly transactions: SqliteTransactions;
   private readonly participationSnapshots: SqliteParticipationSnapshots;
   private readonly conversationContext: ConversationContext;
+  private readonly conversationProjection: ConversationProjection;
   sessionId: string;
   readerCollisionNames = new Set<string>();
   constructor(
@@ -41,6 +44,23 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.conversationProjection = new ConversationProjection(
+      new SqliteConversationProjection(this.db),
+      {
+        sessionId: () => this.sessionId,
+        closed: () => this.closed(),
+        permitted: (message) =>
+          !this.participation ||
+          (message.sessionId === this.sessionId &&
+            (message.attribution === "experiment" ||
+              this.participation.allowed(
+                message.attribution,
+                message.channel,
+                message.author,
+                message.consentEpoch,
+              ))),
+      },
+    );
     this.conversationContext = new ConversationContext(
       new SqliteConversationContext(this.db),
       {
@@ -476,85 +496,16 @@ export class Store extends EventEmitter {
       .get(this.sessionId, platform, channel);
   }
   publicMessage(id: string): PublicMessage | null {
-    const m = this.db
-      .prepare(
-        "SELECT m.*,a.name,a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.id=? AND m.hidden=0",
-      )
-      .get(id) as any;
-    if (
-      !m ||
-      (this.participation &&
-        m.platform !== "experiment" &&
-        !this.participation.allowed(
-          m.platform,
-          m.channel,
-          m.author,
-          m.consent_epoch,
-        ))
-    )
-      return null;
-    return {
-      id: m.id,
-      sessionId: m.session,
-      actorId: m.actor,
-      displayName: m.name,
-      text: m.text,
-      replyToId: m.reply,
-      displayTime: m.received,
-      attribution: m.platform,
-      seq: m.seq,
-    };
+    return this.conversationProjection.message(id);
   }
   publicEvent(seq: number): PublicEvent {
-    const e = this.db
-      .prepare("SELECT * FROM events WHERE seq=?")
-      .get(seq) as any;
-    let payload = JSON.parse(e.payload);
-    let type = e.type;
-    if (type.startsWith("message.")) {
-      payload =
-        type === "message.added" || type === "message.updated"
-          ? this.publicMessage(e.target)
-          : { id: e.target };
-      if (!payload) {
-        type = "message.hidden";
-        payload = { id: e.target };
-      }
-    }
-    return {
-      seq: e.seq,
-      sessionId: e.session,
-      type,
-      occurredAt: e.at,
-      payload,
-    };
+    return this.conversationProjection.event(seq);
   }
   snapshot() {
-    const ids = this.db
-      .prepare(
-        "SELECT id FROM messages WHERE session=? AND hidden=0 ORDER BY seq DESC LIMIT 300",
-      )
-      .all(this.sessionId) as any[];
-    const reveal = this.db
-      .prepare(
-        "SELECT payload FROM events WHERE session=? AND type='identity.revealed' ORDER BY seq DESC LIMIT 1",
-      )
-      .get(this.sessionId) as any;
-    return {
-      type: "snapshot",
-      sessionId: this.sessionId,
-      lastSeq: this.lastSeq(),
-      messages: ids.reverse().map((m) => this.publicMessage(m.id)),
-      identities: reveal ? JSON.parse(reveal.payload) : [],
-      closed: this.closed(),
-    };
+    return this.conversationProjection.snapshot();
   }
   originsRevealed() {
-    return !!this.db
-      .prepare(
-        "SELECT 1 FROM events WHERE session=? AND type='identity.revealed' LIMIT 1",
-      )
-      .get(this.sessionId);
+    return this.conversationProjection.disclosed();
   }
   private collisionNameSet() {
     const names = this.db
@@ -578,58 +529,19 @@ export class Store extends EventEmitter {
     message: PublicMessage,
     revealed = this.originsRevealed(),
   ): PublicMessage {
-    // Disclosure controls origin badges only; viewers always keep their platform nickname.
-    const displayName =
-      message.attribution === "experiment"
-        ? message.displayName.replace(/\s*·\s*experiment\s*$/i, "").trim() ||
-          "시청자"
-        : message.displayName;
-    return {
-      ...message,
-      displayName,
-      attribution: revealed ? message.attribution : "mixed",
-    };
+    return this.conversationProjection.readerMessage(message, revealed);
   }
-
   readerSnapshot() {
-    const snapshot = this.snapshot();
-    const revealed = this.originsRevealed();
-    return {
-      ...snapshot,
-      messages: snapshot.messages
-        .filter((m): m is PublicMessage => m !== null)
-        .map((m) => this.readerMessage(m, revealed)),
-    };
+    return this.conversationProjection.readerSnapshot();
   }
   readerEvent(event: PublicEvent): PublicEvent {
-    if (event.type === "message.added" || event.type === "message.updated")
-      return {
-        ...event,
-        payload: this.readerMessage(event.payload as PublicMessage),
-      };
-    if (event.type.startsWith("message."))
-      return { ...event, payload: { id: (event.payload as any)?.id } };
-    return event;
+    return this.conversationProjection.readerEvent(event);
   }
   lastSeq() {
-    return Number(
-      (
-        this.db
-          .prepare(
-            "SELECT COALESCE(MAX(seq),0) AS seq FROM events WHERE session=?",
-          )
-          .get(this.sessionId) as any
-      ).seq,
-    );
+    return this.conversationProjection.lastSequence();
   }
   replay(after: number) {
-    return (
-      this.db
-        .prepare(
-          "SELECT seq FROM events WHERE session=? AND seq>? ORDER BY seq LIMIT 1001",
-        )
-        .all(this.sessionId, after) as any[]
-    ).map((e) => this.publicEvent(e.seq));
+    return this.conversationProjection.replay(after);
   }
   chatSummary(now = Date.now()) {
     return this.conversationContext.summary(now);

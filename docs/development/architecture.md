@@ -149,8 +149,8 @@ port. Its [SQLite adapter](../../packages/infrastructure/conversation/context-sq
 owns context queries, event writes and attempt cleanup. A
 [pure dependency traversal](../../packages/domain/conversation/dependencies.ts)
 includes transitive replies/provenance and terminates on cycles. The legacy
-conversation store still supplies the permitted-message projection and composes
-these services; its remaining SQL and projections require replacement.
+conversation store composes these services; its ingestion, persistence lifecycle
+and persona-storage SQL still require replacement.
 
 The [summary policy](../../packages/domain/conversation/summary.ts) classifies
 recent permitted human messages into fixed labels with a three-account threshold
@@ -215,6 +215,23 @@ read/modify/write operations in transactions. The
 and delegate to the service; they do not access SQL. The shared
 [profile contract](../../packages/contracts/privacy-profile.ts) is independent
 of profile fingerprinting and runtime participation behavior.
+
+The [conversation projection service](../../packages/application/conversation/projection-service.ts)
+owns public DTO creation, current consent checks, origin disclosure, snapshot
+windows and replay projection. Its
+[read adapter](../../packages/infrastructure/conversation/projection-sqlite.ts)
+loads the latest 300 visible messages in one joined query, in chronological order;
+replay remains bounded to 1,001 events. Private account/channel/consent fields
+never enter the public DTO. The
+[disclosure policy](../../packages/domain/conversation/disclosure.ts) preserves
+actual names and changes only origin labels, with the existing synthetic-name
+suffix normalization.
+
+Reader event delivery rechecks message visibility and permission rather than
+trusting cached payload text. Closed or foreign broadcasts cannot revive cached
+messages. Identity payloads are rebuilt for the currently visible permitted
+window; removed identities and extra stored fields are excluded. The server's
+synchronous snapshot/listener registration remains unchanged.
 
 ## UI and contracts
 

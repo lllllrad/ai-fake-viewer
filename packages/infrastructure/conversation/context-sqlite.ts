@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { z } from "zod";
+import { conversationIdentitySchema } from "../../contracts/conversation.ts";
 import type {
   ContextRepository,
   SummaryRow,
@@ -7,13 +7,7 @@ import type {
 import type { ChatSummary } from "../../domain/conversation/summary.ts";
 import type { MessageDependency } from "../../domain/conversation/dependencies.ts";
 
-const identitiesSchema = z.array(
-  z.object({
-    actorId: z.string(),
-    displayName: z.string(),
-    kind: z.enum(["system_generated", "platform_received"]),
-  }),
-);
+const identitiesSchema = conversationIdentitySchema.array();
 export class SqliteConversationContext implements ContextRepository {
   constructor(private readonly database: DatabaseSync) {}
   summary(session: string) {
