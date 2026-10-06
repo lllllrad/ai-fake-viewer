@@ -10,32 +10,19 @@ import {
   profileIssues,
   type PrivacyProfile,
 } from "./privacy-profile.ts";
-export type ParticipationState =
-  "UNCONSENTED" | "WAITING_CONSENT" | "ACTIVE" | "WITHDRAWN" | "ENDED";
-export type ConsentStage = "combined";
-export type Participant = {
-  id: string;
-  platform: string;
-  broadcaster: string;
-  author: string;
-  state: ParticipationState;
-  epoch: number;
-  stage: number;
-  age: "unknown" | "self_declared_14_plus" | "blocked";
-  version: string;
-  accepted: string[];
-  activeAfter: number;
-  lastEventAt: number;
-  lastSeenAt: number;
-  lastNoticeAt: number;
-  deliveredAt: number | null;
-  observed?: { id: string; receivedAt: number; command: string };
-  eventIds: Set<string>;
-  introPending: boolean;
-  introDelivered: boolean;
-  published: boolean;
-  requestIds: string[];
-};
+import type {
+  Participant,
+  ConsentStage,
+} from "./domain/participation/model.ts";
+export type {
+  Participant,
+  ConsentStage,
+  ParticipationState,
+} from "./domain/participation/model.ts";
+import {
+  receiveParticipantMessage,
+  confirmObservedConsent,
+} from "./domain/participation/consent.ts";
 export class Participation {
   participants = new Map<string, Participant>();
   revision = 0;
@@ -139,120 +126,34 @@ export class Participation {
       this.profile.notices.botUserIds.includes(m.author)
     )
       return { allow: false, withdraw: false, epoch: 0 };
-    const command = m.text.trim();
-    const p = this.obtain(m);
-    if (
-      m.publishedAt != null &&
-      m.publishedAt >= this.startedAt &&
-      m.publishedAt <= Date.now() + 5000
-    )
-      p.lastSeenAt = Math.max(p.lastSeenAt, m.publishedAt);
-    if (command === "!철회") {
-      if (p.state !== "WITHDRAWN") {
-        p.epoch++;
-        this.revision++;
-        p.state = "WITHDRAWN";
-        p.accepted = [];
-        if (p.age !== "blocked") p.age = "unknown";
-        p.deliveredAt = null;
-        p.observed = undefined;
-        p.lastEventAt = Math.max(p.lastEventAt, m.publishedAt ?? Date.now());
-        this.onWithdraw?.(structuredClone(p));
-      }
-      return { allow: false, withdraw: true, epoch: p.epoch };
-    }
-    if (command === "!참여상태") {
-      p.observed = { id: randomUUID(), receivedAt: Date.now(), command };
-      return { allow: false, withdraw: false, epoch: p.epoch };
-    }
-    if (command === "!동의") {
-      if (p.state === "ACTIVE")
-        return { allow: false, withdraw: false, epoch: p.epoch };
-      if (!this.available(m.platform, m.channel) || p.age === "blocked")
-        return { allow: false, withdraw: false, epoch: p.epoch };
-      if (m.sourceId && p.eventIds.has(m.sourceId))
-        return { allow: false, withdraw: false, epoch: p.epoch };
-      if (m.sourceId) p.eventIds.add(m.sourceId);
-      if (
-        m.publishedAt != null &&
-        (m.publishedAt <= p.lastEventAt ||
-          m.publishedAt < this.startedAt ||
-          m.publishedAt > Date.now() + 5000)
-      )
-        return { allow: false, withdraw: false, epoch: p.epoch };
-      // Unknown ordering never grants consent. Operator may verify this exact observed command as live.
-      const ordered =
-        !!m.sourceId &&
-        m.publishedAt != null &&
-        m.publishedAt > p.lastEventAt &&
-        m.publishedAt >= this.startedAt &&
-        m.publishedAt <= Date.now() + 5000;
-      if (!ordered) {
-        p.observed = { id: randomUUID(), receivedAt: Date.now(), command };
-        return { allow: false, withdraw: false, epoch: p.epoch };
-      }
-      p.lastEventAt = m.publishedAt!;
-      this.acceptCommand(p, m.publishedAt!);
-      return { allow: false, withdraw: false, epoch: p.epoch };
-    }
-    const fresh =
-      m.publishedAt != null &&
-      m.publishedAt > p.activeAfter &&
-      m.publishedAt >= this.startedAt;
-    // SDKs without source timestamps require an operator-verified live connection; see confirmLiveCommand.
-    const liveWithoutTimestamp =
-      m.publishedAt == null && p.accepted.includes("manual_live_order");
-    const allow =
-      (fresh || liveWithoutTimestamp) &&
-      this.allowed(m.platform, m.channel, m.author, p.epoch);
-    if (allow) p.published = true;
-    else if (p.state === "UNCONSENTED" && !p.introDelivered)
-      p.introPending = true;
-    return { allow, withdraw: false, epoch: p.epoch };
-  }
-  private acceptCommand(p: Participant, at: number) {
-    if (p.state !== "WAITING_CONSENT") {
-      p.epoch++;
-      this.revision++;
-      p.state = "WAITING_CONSENT";
-      p.stage = 0;
-      p.accepted = [];
-      p.age = "unknown";
-      p.deliveredAt = null;
-      p.version = this.fingerprint;
-      return;
-    }
-    if (p.deliveredAt === null || at <= p.deliveredAt) return;
-    const stage = this.stages()[p.stage];
-    p.accepted.push(stage);
-    p.age = "self_declared_14_plus";
-    p.stage++;
-    p.deliveredAt = null;
-    p.observed = undefined;
-    if (p.stage === this.stages().length) {
-      p.epoch++;
-      this.revision++;
-      p.state = "ACTIVE";
-      p.activeAfter = at;
-    }
+    const participant = this.obtain(m);
+    const transition = receiveParticipantMessage(participant, m, {
+      now: Date.now(),
+      startedAt: this.startedAt,
+      fingerprint: this.fingerprint,
+      available: this.available(m.platform, m.channel),
+      observationId: randomUUID(),
+    });
+    Object.assign(participant, transition.participant);
+    this.revision += transition.revisionDelta;
+    if (transition.withdrawn) this.onWithdraw?.(structuredClone(participant));
+    return transition.result;
   }
   confirmLiveCommand(id: string, observationId: string) {
-    const p = this.byId(id);
-    if (
-      !this.available(p.platform, p.broadcaster) ||
-      !p.observed ||
-      p.observed.id !== observationId ||
-      p.observed.command !== "!동의" ||
-      Date.now() - p.observed.receivedAt > 60000 ||
-      p.age === "blocked"
-    )
+    const participant = this.byId(id);
+    const transition = confirmObservedConsent(participant, observationId, {
+      now: Date.now(),
+      startedAt: this.startedAt,
+      fingerprint: this.fingerprint,
+      available: this.available(participant.platform, participant.broadcaster),
+      observationId,
+    });
+    if (!transition)
       throw new PrivacyActionError("새로운 실제 동의 명령 확인이 필요합니다.");
-    const at = p.observed.receivedAt;
-    p.observed = undefined;
-    this.acceptCommand(p, at);
-    if (p.state === "ACTIVE") p.accepted.push("manual_live_order");
+    Object.assign(participant, transition.participant);
+    this.revision += transition.revisionDelta;
     this.changed();
-    return p;
+    return participant;
   }
   byId(id: string) {
     const p = [...this.participants.values()].find((p) => p.id === id);

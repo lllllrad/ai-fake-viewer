@@ -116,6 +116,14 @@ testable operations, with resources closed exactly once.
    version, account, platform, broadcaster and broadcast identity boundaries.
 7. Admit only messages after that viewer's current consent generation.
 
+The [consent policy](../../packages/domain/participation/consent.ts) is a pure
+state transition over explicit time, profile availability and observation identity.
+It returns the next participant, permission result and invalidation revision;
+it performs no persistence, identifier generation or callbacks. The legacy
+participation coordinator currently applies these transitions to its stored
+participant references and invokes downstream invalidation. Notice scheduling,
+profile replacement and snapshot storage remain separate reconstruction work.
+
 Withdrawal must commit consent invalidation and local raw/dependent deletion in
 one storage transaction, then invalidate running work and refresh all projections.
 External-request authorization is rechecked after asynchronous preparation and
