@@ -253,6 +253,17 @@ runs after commit; notification failure does not turn a durable publication into
 a failed attempt that could be retried. Reconnect snapshots recover committed
 messages. A provenance write failure rolls back publication before any notification.
 
+The [automatic cast service](../../packages/application/cast/automatic.ts) reuses
+the current broadcast cast or composes exactly six distinct synthetic identities.
+It validates the [definition contract](../../packages/contracts/persona-definition.ts)
+and resolves normalized display-name collisions without modifying composition
+seeds. The [SQLite adapter](../../packages/infrastructure/cast/automatic-sqlite.ts)
+commits approved definitions, present members, initial presence intervals and
+system provenance together. This path does not invoke manual candidate creation,
+operator review, audition or cast approval. A storage failure leaves no partial
+cast. The legacy persona facade delegates automatic preparation and summary to
+these owners; legacy authoring and cast-control methods still require cleanup.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate
