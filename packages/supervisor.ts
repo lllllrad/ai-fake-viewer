@@ -4,7 +4,7 @@ import {
   ChzzkNotices,
   YoutubeNotices,
 } from "./infrastructure/participation/platform-notices.ts";
-import { runChzzk } from "./infrastructure/platforms/chzzk-connection.ts";
+import { runChzzkReceiver } from "./infrastructure/platforms/chzzk-receiver.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
 import { fork, type ChildProcess } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -235,27 +235,18 @@ export class Supervisor {
     child.once("exit", () => this.children.delete(child));
     return child;
   }
-  async chzzk(signal: AbortSignal) {
-    await runChzzk(
-      {
-        account: this.auth,
-        worker: () => this.worker("chzzk"),
-        available: (channel) =>
-          !this.store.participation ||
-          this.store.participation.available("chzzk", channel),
-        subscribed: (channel) => this.chzzkNotices?.resolve(channel, channel),
-        receive: (message) => this.receive("chzzk", message),
-        status: (state, api) => {
-          this.status("chzzk", state);
-          this.states.chzzk.api = api;
-        },
-        recovered: () => {
-          this.states.chzzk.recoveries++;
-        },
-        reset: () => this.chzzkNotices?.reset(),
+  chzzk(signal: AbortSignal) {
+    return runChzzkReceiver(this.store, this.auth, signal, {
+      worker: () => this.worker("chzzk"),
+      notices: this.chzzkNotices,
+      status: (state, api) => {
+        this.status("chzzk", state);
+        this.states.chzzk.api = api;
       },
-      signal,
-    );
+      recovered: () => {
+        this.states.chzzk.recoveries++;
+      },
+    });
   }
   async soop(signal: AbortSignal) {
     let attempts = 0;

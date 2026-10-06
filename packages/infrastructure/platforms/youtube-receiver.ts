@@ -1,3 +1,4 @@
+import { withBroadcastInput } from "../inputs/broadcast-input.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 import {
   receiveYoutube,
@@ -61,54 +62,56 @@ export function runYoutube(
   },
 ) {
   const api = new YoutubeReadApi(options?.access);
-  const broadcastId = store.sessionId;
-  return receiveYoutube(
-    config,
-    {
-      broadcastId,
-      configured: !!(
-        options?.access ||
-        process.env.YOUTUBE_API_KEY ||
-        process.env.YOUTUBE_ACCESS_TOKEN
-      ),
-      current: () => store.sessionId === broadcastId && !store.closed(),
-      requiresParticipation: !!store.participation,
-      available: (broadcaster) =>
-        !!store.participation?.available("youtube", broadcaster),
-      resolve: (chat, broadcaster) => options?.resolve?.(chat, broadcaster),
-      status,
-      search: (channel, signal) => api.search(channel, signal),
-      video: (video, signal) => api.video(video, !!store.participation, signal),
-      messages: async (chat, cursor, broadcaster, signal) =>
-        youtubeChatBatch(
-          await api.messages(chat, cursor, signal),
-          { chat, broadcaster, ownChannel: options?.ownChannel?.() },
-          "rest",
+  return withBroadcastInput(store, signal, (scope) =>
+    receiveYoutube(
+      config,
+      {
+        broadcastId: scope.broadcastId,
+        configured: !!(
+          options?.access ||
+          process.env.YOUTUBE_API_KEY ||
+          process.env.YOUTUBE_ACCESS_TOKEN
         ),
-      stream: (chat, cursor, broadcaster, signal, receive) =>
-        receiveYoutubeStream(
-          { chat, cursor, access: options?.access },
-          signal,
-          (raw) =>
-            receive(
-              youtubeChatBatch(
-                raw,
-                { chat, broadcaster, ownChannel: options?.ownChannel?.() },
-                "grpc",
+        current: scope.current,
+        requiresParticipation: !!store.participation,
+        available: (broadcaster) =>
+          !!store.participation?.available("youtube", broadcaster),
+        resolve: (chat, broadcaster) => options?.resolve?.(chat, broadcaster),
+        status,
+        search: (channel, signal) => api.search(channel, signal),
+        video: (video, signal) =>
+          api.video(video, !!store.participation, signal),
+        messages: async (chat, cursor, broadcaster, signal) =>
+          youtubeChatBatch(
+            await api.messages(chat, cursor, signal),
+            { chat, broadcaster, ownChannel: options?.ownChannel?.() },
+            "rest",
+          ),
+        stream: (chat, cursor, broadcaster, signal, receive) =>
+          receiveYoutubeStream(
+            { chat, cursor, access: options?.access },
+            signal,
+            (raw) =>
+              receive(
+                youtubeChatBatch(
+                  raw,
+                  { chat, broadcaster, ownChannel: options?.ownChannel?.() },
+                  "grpc",
+                ),
               ),
-            ),
-        ),
-      checkpoint: (key) => store.checkpoints.get(key),
-      clearCheckpoint: (key) => store.checkpoints.clear(key),
-      ingest: (messages, checkpoint) => {
-        store.ingestion.ingest(messages, checkpoint);
+          ),
+        checkpoint: (key) => store.checkpoints.get(key),
+        clearCheckpoint: (key) => store.checkpoints.clear(key),
+        ingest: (messages, checkpoint) => {
+          store.ingestion.ingest(messages, checkpoint);
+        },
+        fallback: () => store.audit("youtube.grpc_to_rest"),
+        issue: youtubeReceiveIssue,
+        sleep: (milliseconds, signal) =>
+          sleep(milliseconds, undefined, { signal }),
+        random: Math.random,
       },
-      fallback: () => store.audit("youtube.grpc_to_rest"),
-      issue: youtubeReceiveIssue,
-      sleep: (milliseconds, signal) =>
-        sleep(milliseconds, undefined, { signal }),
-      random: Math.random,
-    },
-    signal,
+      scope.signal,
+    ),
   );
 }

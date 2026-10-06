@@ -255,6 +255,16 @@ cursor. Invalid cursors clear only their own key. Normal polling does not signal
 reconnection, and REST decoder failures identify the list API rather than the
 stream API. The old YouTube module only re-exports compatibility entry points.
 
+The [broadcast input scope](../../packages/infrastructure/inputs/broadcast-input.ts)
+binds both platform receivers to one open broadcast and combines caller cancellation
+with broadcast retirement. It observes committed reset/close events, so idle
+streams are canceled without waiting for another chat event. Unrelated reader
+resets do not stop reception; subscriptions are removed when the task settles.
+The [CHZZK receiver composition](../../packages/infrastructure/platforms/chzzk-receiver.ts)
+uses that scope for worker cancellation, admission, notice resolution and status
+updates. A late token refresh cannot create a worker for a replaced broadcast,
+and retired worker messages cannot enter the new broadcast.
+
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.
