@@ -1,10 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { apiIssues } from "../packages/api-health.ts";
-import { googleJson, UpstreamError } from "../packages/youtube.ts";
-import { Transcriber } from "../packages/transcription.ts";
+import {
+  googleJson,
+  UpstreamError,
+} from "../packages/infrastructure/platforms/youtube-read-api.ts";
+import { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
 import { configSchema } from "../packages/config.ts";
-import { ChzzkNotices } from "../packages/chzzk-notices.ts";
+import { ChzzkNotices } from "../packages/infrastructure/participation/platform-notices.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 const base = {
@@ -129,7 +132,8 @@ test("Groq provider quota is separate from the app transcription call cap", asyn
 });
 
 test("CHZZK session API rate limit retains method scope without its private query", async () => {
-  const { ChzzkAuth } = await import("../packages/chzzk.ts");
+  const { ChzzkAuth } =
+    await import("../packages/infrastructure/accounts/chzzk-auth.ts");
   const { randomUUID } = await import("node:crypto");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ChzzkNotices } from "../packages/chzzk-notices.ts";
+import { ChzzkNotices } from "../packages/infrastructure/participation/platform-notices.ts";
 import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
-import type { ChzzkAuth } from "../packages/chzzk.ts";
+import type { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
@@ -193,7 +193,8 @@ test("CHZZK stops stale jobs on reset and abort", async (t) => {
 
 test("CHZZK supervisor wires subscription to automatic notices and excludes own-channel messages", async (t) => {
   const { EventEmitter } = await import("node:events");
-  const { Supervisor } = await import("../packages/supervisor.ts");
+  const { Supervisor } =
+    await import("../packages/infrastructure/inputs/platform-supervisor.ts");
   const { configSchema } = await import("../packages/config.ts");
   let now = Date.now();
   t.mock.method(Date, "now", () => now);

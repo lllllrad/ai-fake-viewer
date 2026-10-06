@@ -127,7 +127,7 @@ gRPC callbacks before writes or status changes. Each failed gRPC attempt counts
 once; configured fallback begins after three failures, using the REST-specific
 cursor. Invalid cursors clear only their own key. Normal polling does not signal
 reconnection, and REST decoder failures identify the list API rather than the
-stream API. The old YouTube module only re-exports compatibility entry points.
+stream API. Production and tests import the responsible YouTube adapters directly.
 
 ## Broadcast-bound input lifetime
 
@@ -147,8 +147,7 @@ The [screen adapter](../../packages/infrastructure/inputs/screen-input.ts) wires
 worker events to bounded screen context. Its artificial image renderer is loaded
 only for demo capture. The [speech adapter](../../packages/infrastructure/inputs/speech-input.ts)
 wires worker PCM to the transcription use case, provider transport and durable
-publication callback. Root media modules retain compatibility exports only;
-production composition imports these adapters directly.
+publication callback. Production composition and tests import these adapters directly.
 
 Speech requests have identity-bound ownership. Context invalidation and input
 stop detach the current request before aborting it, so fresh context need not wait
@@ -245,8 +244,8 @@ sending, before applying status and after body decoding, so an old response
 cannot expire a new token or supply its session result.
 
 CHZZK [chat decoding](../../packages/infrastructure/platforms/chzzk-chat-payload.ts)
-is independent of account persistence and refresh. The root account modules only
-re-export compatibility entry points; production composition imports the adapters.
+is independent of account persistence and refresh. Production composition and
+tests import the responsible account and payload adapters directly.
 
 ### Credential persistence
 

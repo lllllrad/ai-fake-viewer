@@ -5,7 +5,7 @@ import {
   SpeechProviderError,
   type Transcript,
 } from "../packages/application/inputs/transcribe-speech.ts";
-import { Transcriber } from "../packages/transcription.ts";
+import { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
 import { configSchema } from "../packages/config.ts";
 function fixture() {
   const events: string[] = [],

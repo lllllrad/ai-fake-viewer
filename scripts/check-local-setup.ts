@@ -3,8 +3,8 @@ import { loadEnvFile } from "node:process";
 import { loadConfig } from "../packages/config.ts";
 import { profileIssues } from "../packages/privacy-profile.ts";
 import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
-import { ChzzkAuth } from "../packages/chzzk.ts";
-import { YoutubeAuth } from "../packages/youtube-auth.ts";
+import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
+import { YoutubeAuth } from "../packages/infrastructure/accounts/youtube-auth.ts";
 
 // Read-only: no token refresh, platform receipt, notice send or model call.
 // Never print credentials, account identifiers or raw configuration/error objects.

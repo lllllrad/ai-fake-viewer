@@ -5,8 +5,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../packages/storage.ts";
-import { Capture } from "../packages/capture.ts";
-import { Scheduler } from "../packages/scheduler.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { configSchema } from "../packages/config.ts";
 import {
   modelMessages,

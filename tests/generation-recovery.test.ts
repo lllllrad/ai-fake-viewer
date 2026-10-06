@@ -4,11 +4,11 @@ import {
   GenerationRecovery,
   type GenerationIssue,
 } from "../packages/application/reactions/recovery.ts";
-import { Scheduler } from "../packages/scheduler.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { Store } from "../packages/storage.ts";
-import { Capture } from "../packages/capture.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { configSchema } from "../packages/config.ts";
-import type { Transcriber } from "../packages/transcription.ts";
+import type { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
 const transient: GenerationIssue = {
   code: "temporary_request_failure",
   message: "Fixture transient issue",

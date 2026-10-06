@@ -11,7 +11,7 @@ Personas are synthetic viewers inside the app, not platform accounts. Their resp
 | Definition, brief and policy schemas          | [contracts.ts](../../packages/persona/contracts.ts)                         |
 | Candidate model input/generation              | [generator.ts](../../packages/persona/generator.ts)                         |
 | Versions, auditions, approval and sessions    | [service.ts](../../packages/persona/service.ts)                             |
-| Observations, speech, review and cancellation | [scheduler.ts](../../packages/scheduler.ts)                                 |
+| Observations, speech, review and cancellation | [scheduler.ts](../../packages/infrastructure/reactions/scheduler.ts)        |
 | Storage, publication guards and retention     | [storage.ts](../../packages/storage.ts)                                     |
 | Authenticated APIs and UI                     | [app.ts](../../apps/server/app.ts), [main.tsx](../../apps/web/src/main.tsx) |
 | Regression coverage                           | [persona.test.ts](../../tests/persona.test.ts)                              |

@@ -165,6 +165,8 @@ commands and abort requests when their owning component is removed.
 Use a shared conversation renderer with variants for the reader and transparent
 OBS overlay. Actual viewer nicknames and synthetic persona names remain visible.
 Origin labels are hidden until disclosure; disclosure does not rename participants.
+The operator explanation must distinguish adding origin labels from showing names,
+which are already visible before disclosure.
 The reader supports following new messages and jumping to the latest. The overlay
 has a bounded recent-message window and no administrator controls or diagnostics.
 

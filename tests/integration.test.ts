@@ -11,10 +11,11 @@ import sharp from "sharp";
 import WebSocket from "ws";
 import { createApp } from "../apps/server/app.ts";
 import { configSchema } from "../packages/config.ts";
-import { runYoutube } from "../packages/youtube.ts";
+import { runYoutube } from "../packages/infrastructure/platforms/youtube-receiver.ts";
 import { Store } from "../packages/storage.ts";
 import { openaiModel } from "../packages/model.ts";
-import { Capture, workerEnv } from "../packages/capture.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
+import { workerEnv } from "../packages/infrastructure/inputs/worker-session.ts";
 const admin = "a".repeat(64),
   reader = "r".repeat(64),
   encryptionKey = "e".repeat(64);

@@ -4,7 +4,7 @@ import { Supervisor } from "../packages/infrastructure/inputs/platform-superviso
 import { Store } from "../packages/storage.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { configSchema } from "../packages/config.ts";
-import type { ChzzkAuth } from "../packages/chzzk.ts";
+import type { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { approvedProfile } from "./privacy-fixtures.ts";
 
 function fixture(t: TestContext, selected = true) {

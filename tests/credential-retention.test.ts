@@ -3,9 +3,9 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { SoopAuth } from "../packages/soop.ts";
-import { ChzzkAuth } from "../packages/chzzk.ts";
-import { YoutubeAuth } from "../packages/youtube-auth.ts";
+import { SoopAuth } from "../packages/infrastructure/accounts/soop-auth.ts";
+import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
+import { YoutubeAuth } from "../packages/infrastructure/accounts/youtube-auth.ts";
 import { ChatgptAuth } from "../packages/chatgpt-auth.ts";
 
 for (const stage of ["status", "body"] as const) {

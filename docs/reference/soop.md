@@ -4,7 +4,7 @@ Checked 2026-10-02. Official and experimental paths have independent statuses.
 
 ## Current repository implementation
 
-Code review on 2026-10-05 found an implemented official OAuth and browser SDK path in [packages/soop.ts](../../packages/soop.ts), [server routes](../../apps/server/app.ts) and [administrator UI](../../apps/web/src/main.tsx). The signed-in admin page hosts the SDK and receives messages for the authenticated broadcaster. See the [current setup guide](../../README.md#soop-official-chat). This is code evidence, not new verification of the external SDK contract, account approval or live reception.
+Code review on 2026-10-05 found an implemented official OAuth and browser SDK path in [packages/infrastructure/accounts/soop-auth.ts](../../packages/infrastructure/accounts/soop-auth.ts), [server routes](../../apps/server/app.ts) and [administrator UI](../../apps/web/src/main.tsx). The signed-in admin page hosts the SDK and receives messages for the authenticated broadcaster. See the [current setup guide](../../README.md#soop-official-chat). This is code evidence, not new verification of the external SDK contract, account approval or live reception.
 
 ## Server-side support recheck — 2026-10-05
 

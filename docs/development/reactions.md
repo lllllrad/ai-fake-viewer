@@ -41,8 +41,8 @@ conversation/cast state, usage and attempt storage, screen/speech evidence, and
 runtime time, timers, identifiers, hashing and sanitized provider-error mapping.
 It imports no concrete store, capture worker, provider adapter or Node runtime.
 The [Node composition](../../packages/infrastructure/reactions/scheduler.ts)
-connects those ports to the existing durable services; the root scheduler module
-only preserves import compatibility. The same candidate and evidence guards run
+connects those ports to the durable services. Production and tests import this
+composition directly. The same candidate and evidence guards run
 for automatic dispatch and manual approval.
 
 Every attempt carries broadcast/context/consent and cast revisions. Review and

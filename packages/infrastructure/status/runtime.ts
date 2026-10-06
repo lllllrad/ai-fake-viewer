@@ -4,7 +4,7 @@ import type { Config } from "../../config.ts";
 import type { Store } from "../../storage.ts";
 import type { Capture } from "../inputs/screen-input.ts";
 import type { Transcriber } from "../inputs/speech-input.ts";
-import type { Scheduler } from "../../scheduler.ts";
+import type { Scheduler } from "../reactions/scheduler.ts";
 import type { Supervisor } from "../inputs/platform-supervisor.ts";
 import type { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
 import type { RightsService } from "../../application/rights/service.ts";

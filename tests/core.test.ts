@@ -5,14 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../packages/storage.ts";
 import { configSchema } from "../packages/config.ts";
-import {
-  normalizeYoutube,
-  videoId,
-  makeGrpcClient,
-} from "../packages/youtube.ts";
-import { normalizeChzzk, ChzzkAuth } from "../packages/chzzk.ts";
-import { Capture } from "../packages/capture.ts";
-import { Scheduler } from "../packages/scheduler.ts";
+import { normalizeYoutube } from "../packages/infrastructure/platforms/youtube-chat-payload.ts";
+import { videoId } from "../packages/infrastructure/platforms/youtube-read-api.ts";
+import { makeGrpcClient } from "../packages/infrastructure/platforms/youtube-grpc.ts";
+import { normalizeChzzk } from "../packages/infrastructure/platforms/chzzk-chat-payload.ts";
+import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import {
   validateDecision,
   openaiModel,
@@ -529,7 +528,8 @@ test("T09: source resolution change clears old frames and continues receiving", 
 });
 
 test("SOOP OAuth encrypts tokens at rest and refreshes through the official token endpoint", async () => {
-  const { SoopAuth } = await import("../packages/soop.ts");
+  const { SoopAuth } =
+    await import("../packages/infrastructure/accounts/soop-auth.ts");
   const directory = mkdtempSync(join(tmpdir(), "soop-auth-test-"));
   const path = join(directory, "soop.tokens");
   const key = "a".repeat(64);

@@ -2,10 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { configSchema } from "../packages/config.ts";
 import { DecisionGate } from "../packages/gate.ts";
-import { Scheduler } from "../packages/scheduler.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { Store } from "../packages/storage.ts";
-import { Capture } from "../packages/capture.ts";
-import type { Transcriber } from "../packages/transcription.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
+import type { Transcriber } from "../packages/infrastructure/inputs/speech-input.ts";
 import type { ModelInput } from "../packages/model.ts";
 
 const response = (noul: number) =>

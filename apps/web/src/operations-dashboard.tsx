@@ -134,8 +134,8 @@ export function OperationsDashboard({
       </div>
       <p className="hint">
         표시하기를 누르면 AI 생성을 중지하고 리더·오버레이의 AI 채팅에 ‘AI 생성’
-        표시를 붙이며, 참여자의 이름과 출처도 공개합니다. 이 세션에서는 다시
-        숨길 수 없습니다.
+        표시를 붙입니다. 닉네임은 그대로 유지되며 AI 여부와 출처가 공개됩니다.
+        이 방송에서는 다시 숨길 수 없습니다.
       </p>
       {!stale && status.apiIssues?.length > 0 && (
         <ul aria-label="API 사용 한도 및 권한 문제">

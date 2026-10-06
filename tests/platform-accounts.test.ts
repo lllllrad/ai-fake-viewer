@@ -7,7 +7,7 @@ import {
   type PlatformAccountPorts,
 } from "../packages/application/accounts/platform-accounts.ts";
 import { registerPlatformAccountRoutes } from "../apps/server/http/routes/platform-accounts.ts";
-import { SoopAuth } from "../packages/soop.ts";
+import { SoopAuth } from "../packages/infrastructure/accounts/soop-auth.ts";
 import { mkdtempSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

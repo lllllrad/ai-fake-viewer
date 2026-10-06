@@ -404,7 +404,8 @@ test("T16–T19, T23: live app blocks alternative inputs/export and creates auto
 });
 
 test("receiver approval is checked against the resolved YouTube broadcaster before reading chat", async (t) => {
-  const { runYoutube } = await import("../packages/youtube.ts");
+  const { runYoutube } =
+    await import("../packages/infrastructure/platforms/youtube-receiver.ts");
   const { store } = fixture(t);
   const oldKey = process.env.YOUTUBE_API_KEY;
   process.env.YOUTUBE_API_KEY = "synthetic-key";

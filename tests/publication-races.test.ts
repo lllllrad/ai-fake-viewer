@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "../packages/storage.ts";
-import { Scheduler } from "../packages/scheduler.ts";
-import { Capture } from "../packages/capture.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { configSchema } from "../packages/config.ts";
 import type { Model, ModelInput, ModelResult } from "../packages/model.ts";
 

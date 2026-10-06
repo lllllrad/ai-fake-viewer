@@ -5,10 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import { configSchema } from "../packages/config.ts";
-import { Transcriber, wavFromPcm } from "../packages/transcription.ts";
-import { Capture } from "../packages/capture.ts";
+import {
+  Transcriber,
+  wavFromPcm,
+} from "../packages/infrastructure/inputs/speech-input.ts";
+import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { Store } from "../packages/storage.ts";
-import { Scheduler } from "../packages/scheduler.ts";
+import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { createApp } from "../apps/server/app.ts";
 import {
   modelMessages,

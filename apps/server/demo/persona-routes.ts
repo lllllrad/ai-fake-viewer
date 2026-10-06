@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Store } from "../../../packages/storage.ts";
-import type { Scheduler } from "../../../packages/scheduler.ts";
+import type { Scheduler } from "../../../packages/infrastructure/reactions/scheduler.ts";
 import type { Config } from "../../../packages/config.ts";
 import type { Model } from "../../../packages/model.ts";
 import { PersonaService } from "../../../packages/persona/service.ts";

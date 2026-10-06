@@ -4,7 +4,7 @@ import {
   normalizeYoutube,
   youtubeChatBatch,
 } from "../packages/infrastructure/platforms/youtube-chat-payload.ts";
-import { runYoutube } from "../packages/youtube.ts";
+import { runYoutube } from "../packages/infrastructure/platforms/youtube-receiver.ts";
 import { Store } from "../packages/storage.ts";
 const item = (id = "one", author = "viewer") => ({
   id,

@@ -16,9 +16,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EncryptedTokenFile } from "../packages/infrastructure/accounts/encrypted-token-file.ts";
 import { platformTokenSchema } from "../packages/contracts/account-tokens.ts";
-import { SoopAuth } from "../packages/soop.ts";
-import { ChzzkAuth } from "../packages/chzzk.ts";
-import { YoutubeAuth } from "../packages/youtube-auth.ts";
+import { SoopAuth } from "../packages/infrastructure/accounts/soop-auth.ts";
+import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
+import { YoutubeAuth } from "../packages/infrastructure/accounts/youtube-auth.ts";
 
 const key = "a".repeat(64);
 const token = {

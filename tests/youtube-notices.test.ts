@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { YoutubeAuth, youtubeScope } from "../packages/youtube-auth.ts";
-import { YoutubeNotices } from "../packages/youtube-notices.ts";
+import {
+  YoutubeAuth,
+  youtubeScope,
+} from "../packages/infrastructure/accounts/youtube-auth.ts";
+import { YoutubeNotices } from "../packages/infrastructure/participation/platform-notices.ts";
 import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
@@ -326,7 +329,8 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
 });
 
 test("supervisor sends fixed notices and excludes broadcast account messages", async (t) => {
-  const { Supervisor } = await import("../packages/supervisor.ts");
+  const { Supervisor } =
+    await import("../packages/infrastructure/inputs/platform-supervisor.ts");
   const p = new Participation(approvedProfile(), "session"),
     store = new Store(":memory:", p);
   const config = configSchema.parse({
@@ -497,7 +501,8 @@ test("YouTube forbidden/quota responses pause writes without acknowledging deliv
 });
 
 test("broadcast account messages are excluded from viewer participation", async () => {
-  const { ignoreYoutubeOwnMessage } = await import("../packages/youtube.ts");
+  const { ignoreYoutubeOwnMessage } =
+    await import("../packages/infrastructure/platforms/youtube-chat-payload.ts");
   assert.equal(
     ignoreYoutubeOwnMessage(
       privacyMessage("fixture", "hello", Date.now()),
@@ -579,7 +584,8 @@ test("YouTube pauses during credential refresh disconnect without dropping confi
 });
 
 test("YouTube normal REST poll continuation does not disconnect notice delivery", async (t) => {
-  const { runYoutube } = await import("../packages/youtube.ts");
+  const { runYoutube } =
+    await import("../packages/infrastructure/platforms/youtube-receiver.ts");
   const f = fixture(t),
     controller = new AbortController();
   const states: string[] = [];

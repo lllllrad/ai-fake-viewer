@@ -2,9 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
-import { YoutubeNotices } from "../packages/youtube-notices.ts";
-import { ChzzkNotices } from "../packages/chzzk-notices.ts";
-import { normalizeChzzk } from "../packages/chzzk.ts";
+import { YoutubeNotices } from "../packages/infrastructure/participation/platform-notices.ts";
+import { ChzzkNotices } from "../packages/infrastructure/participation/platform-notices.ts";
+import { normalizeChzzk } from "../packages/infrastructure/platforms/chzzk-chat-payload.ts";
 import { profileIssues } from "../packages/privacy-profile.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 
