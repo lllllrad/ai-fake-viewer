@@ -128,3 +128,25 @@ The model can still skip unusable or unsafe input, and provider errors can still
 prevent a reply. Status and the administrator dashboard identify this temporary
 mode. Disable `ai.forceReplyTest` and restart to restore ordinary participation;
 restore any separately adjusted pacing values as well.
+
+Before draft review, expired background transcripts are removed from both the
+context and new-transcript lists. If a draft cites an expired transcript, that
+attempt is discarded instead. Review still rechecks the original privacy revision
+and all current permissions; expiration cleanup never authorizes withdrawn data.
+
+AI diagnostics retain the last 100 structured events in authenticated
+`/api/admin/status` under `ai.diagnostics`. The managed server also writes these as
+`ai_diagnostic` JSON lines to `.local/server.log`. Events distinguish generation
+and review requests/results, review rejection, expired context, and publication or
+candidate discard. They contain timestamps, stages, validated decision actions,
+counts, durations and fixed reason codes, never chat/transcript/draft text, names,
+credentials or raw provider errors. A reviewer `skip` is recorded as a rejection;
+its internal rationale is not inferred or logged. Logs are local diagnostics, not
+proof that a browser displayed a published message.
+
+New persona sessions allow 30 seconds total for generation plus review, with a
+45-second reaction lifetime measured from the triggering observation. This replaces
+the previous 6-second request deadline and 12-second reaction lifetime, which could
+abort review after generation had already succeeded. Existing explicit session
+policies are not rewritten. Evidence expiry, withdrawal and session changes can
+still discard a result sooner; this is not an extension of transcript retention.

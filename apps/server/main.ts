@@ -10,9 +10,8 @@ try {
     config.database = "data/demo.sqlite";
     config.ai.visualMode = "continuous";
   }
-  const { app, store, supervisor, capture, transcriber } = await createApp(
-    config,
-    {
+  const { app, store, supervisor, capture, transcriber, scheduler } =
+    await createApp(config, {
       startInputs: false,
       demo,
       adminToken: process.env.ADMIN_TOKEN ?? "",
@@ -31,8 +30,9 @@ try {
         renameSync(".env.tmp", ".env");
         process.env.READER_TOKEN = token;
       },
-    },
-  );
+    });
+  scheduler.onDiagnostic = (entry) =>
+    console.log(JSON.stringify({ type: "ai_diagnostic", ...entry }));
   await app
     .listen({ host: config.network.bindHost, port: config.port })
     .catch(async (error) => {

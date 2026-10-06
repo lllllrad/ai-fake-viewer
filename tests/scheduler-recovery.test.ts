@@ -313,3 +313,101 @@ for (const forceReplyTest of [false, true]) {
     }
   });
 }
+
+for (const [expireEvidence, reviewSkip] of [
+  [false, false],
+  [true, false],
+  [false, true],
+]) {
+  test(`review handles rolling transcript expiry (cited evidence expired: ${expireEvidence}, review skip: ${reviewSkip})`, async (t) => {
+    let now = Date.now();
+    t.mock.method(Date, "now", () => now);
+    t.mock.method(Math, "random", () => 0);
+    const config = configSchema.parse({
+      ai: { visualMode: "on_request", forceReplyTest: true, reviewDraft: true },
+    });
+    const store = new Store(":memory:");
+    const background = {
+      id: "background",
+      text: "Earlier unrelated speech",
+      capturedAt: now - 5000,
+    };
+    const fresh = {
+      id: "fresh",
+      text: "한 번 더 도전할까요?",
+      capturedAt: now,
+    };
+    let evidence = [background, fresh];
+    const transcriber = {
+      recent: () => evidence,
+      has: (id: string) => evidence.some((t) => t.id === id),
+    } as Transcriber;
+    let calls = 0;
+    const model: Model = async (input) => {
+      calls++;
+      if (calls === 1) {
+        now += 2000;
+        evidence = expireEvidence ? [] : [fresh];
+      } else {
+        assert.deepEqual(
+          input.transcripts?.map((t) => t.id),
+          ["fresh"],
+        );
+        assert.deepEqual(
+          input.newTranscripts?.map((t) => t.id),
+          ["fresh"],
+        );
+        assert.equal(input.reviewDraft, "한 번 더 도전해 봐요.");
+        if (reviewSkip) return { decision: skipped };
+      }
+      return {
+        decision: {
+          action: "say",
+          text: "한 번 더 도전해 봐요.",
+          replyToMessageId: null,
+          evidenceMessageIds: [],
+          evidenceFrameIds: [],
+          evidenceTranscriptIds: ["fresh"],
+        },
+      };
+    };
+    const scheduler = new Scheduler(
+      store,
+      new Capture(config.capture, false),
+      config,
+      model,
+      false,
+      () => true,
+      transcriber,
+    );
+    scheduler.state = "running";
+    try {
+      await scheduler.tick(now);
+      assert.equal(calls, expireEvidence ? 1 : 2);
+      assert.equal(
+        store.snapshot().messages.length,
+        expireEvidence || reviewSkip ? 0 : 1,
+      );
+      const events = scheduler.diagnostics.map((d) => d.event);
+      assert(
+        events.includes(
+          expireEvidence
+            ? "attempt_error"
+            : reviewSkip
+              ? "review_rejected"
+              : "published",
+        ),
+      );
+      assert(!JSON.stringify(scheduler.diagnostics).includes(fresh.text));
+      assert(!JSON.stringify(scheduler.diagnostics).includes(background.text));
+      assert.equal(
+        scheduler.lastIssue?.code,
+        expireEvidence ? "stale_context" : undefined,
+      );
+      assert.equal(scheduler.state, "running");
+    } finally {
+      scheduler.stop();
+      store.close();
+    }
+  });
+}

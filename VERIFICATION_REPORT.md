@@ -4,6 +4,38 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Reply review expiry and diagnostics — 2026-10-06
+
+Live status showed AI running, permitted CHZZK messages present, transcription
+receiving, eleven model calls, five reviews and six rejected attempts. The latest
+failure was `stale_context`, not a recorded model `skip`. The rolling transcript
+window could remove old background between generation and review, causing the
+review request to fail authorization even when the draft cited fresh evidence.
+
+Review now excludes expired background transcripts from both context and new-input
+lists. Expired cited evidence still discards the attempt; privacy revision and
+permission checks remain. Structured diagnostics distinguish model request/result
+stages, review rejection, normalized errors, and publication/discard outcomes.
+Authenticated status retains 100 events; managed server logs receive sanitized JSON
+lines without input/draft text or credentials. Review rejection also finalizes the
+persona attempt instead of leaving it unresolved.
+
+The full check passed all 157 tests, TypeScript/Vite and documentation/configuration
+checks. Regression cases cover expired background with successful publication,
+expired cited evidence with no review request/publication, and an explicit reviewer
+skip with a distinct diagnostic outcome. Diagnostics exclude fixture input text.
+The managed server was restarted and the existing AI test was resumed to observe
+live outcomes. The first two traced live attempts generated `say` in about 4.1 and
+4.9 seconds, then failed during review at the shared 6-second deadline. Neither
+returned a review decision. New persona-session defaults now allow 30 seconds total
+for both calls and a 45-second reaction lifetime, with current-evidence checks
+unchanged. Explicit existing session policies are not rewritten.
+
+After applying the new defaults with a managed restart and resuming AI, a live
+speech-triggered attempt completed generation with `say` in 4556 ms, review with
+`say` in 4352 ms, and emitted `published`. This verifies actual model/review and
+server publication, not a visual inspection of the operator's OBS overlay.
+
 ## Temporary reply test mode — 2026-10-05
 
 Added default-off `ai.forceReplyTest` with a dedicated generation/review instruction

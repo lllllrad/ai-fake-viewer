@@ -1237,6 +1237,7 @@ export async function createApp(
       busy: scheduler.busy,
       phase: scheduler.phase,
       lastIssue: scheduler.lastIssue,
+      diagnostics: scheduler.diagnostics,
       reviewDraft: config.ai.reviewDraft,
       forceReplyTest: config.ai.forceReplyTest,
       reviewCount: scheduler.reviews,

@@ -23,6 +23,8 @@ test("automatic cast needs no authoring, model request or operator approval and 
   let service = new PersonaService(store, undefined, config);
   const first = service.ensureAutomaticCast();
   assert.equal(first.cast.length, 6);
+  assert.equal(first.policy.model_timeout_ms, 30000);
+  assert.equal(first.policy.reaction_ttl_ms, 45000);
   assert.equal(first.state, "live");
   assert.equal(first.armed, false);
   assert.equal(first.disclosure_confirmed, false);

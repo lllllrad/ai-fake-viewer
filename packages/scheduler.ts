@@ -1,4 +1,4 @@
-import { generationIssue } from "./model-errors.ts";
+import { generationIssue, StaleModelContextError } from "./model-errors.ts";
 import { randomUUID, createHash } from "node:crypto";
 import type { Store } from "./storage.ts";
 import type { Capture } from "./capture.ts";
@@ -6,11 +6,28 @@ import type { Transcriber } from "./transcription.ts";
 import type { Config } from "./config.ts";
 import { validateDecision, type Model, type ModelInput } from "./model.ts";
 import { DecisionGate } from "./gate.ts";
-import type { Decision } from "./contracts.ts";
+import { decisionSchema, type Decision } from "./contracts.ts";
 export class AiStartError extends Error {
   statusCode = 409;
 }
 export class Scheduler {
+  diagnostics: Array<{
+    at: number;
+    event: string;
+    phase: string;
+    details: Record<string, string | number>;
+  }> = [];
+  onDiagnostic?: (entry: Scheduler["diagnostics"][number]) => void;
+  private trace(event: string, details: Record<string, string | number> = {}) {
+    const entry = { at: Date.now(), event, phase: this.phase, details };
+    this.diagnostics.push(entry);
+    this.diagnostics = this.diagnostics.slice(-100);
+    try {
+      this.onDiagnostic?.(entry);
+    } catch {
+      /* Diagnostics cannot stop generation. */
+    }
+  }
   readyCheck?: () => string[];
   preparePersonas?: () => void;
   private activeInput?: ModelInput;
@@ -620,8 +637,26 @@ export class Scheduler {
       if (c.reviewDraft && !this.demo) {
         this.phase = "ai_review";
         this.reviews++;
-        const reviewInput = { ...input, reviewDraft: d.text! };
+        // The rolling transcript window can advance during generation. Drop only
+        // expired background; a draft whose cited evidence expired is unusable.
+        if (d.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id)))
+          throw new StaleModelContextError();
+        const reviewInput = {
+          ...input,
+          transcripts: input.transcripts?.filter((t) =>
+            this.transcriber?.has(t.id),
+          ),
+          newTranscripts: input.newTranscripts?.filter((t) =>
+            this.transcriber?.has(t.id),
+          ),
+          reviewDraft: d.text!,
+        };
         this.activeInput = reviewInput;
+        this.trace("review_context", {
+          removedTranscripts:
+            (input.transcripts?.length ?? 0) -
+            (reviewInput.transcripts?.length ?? 0),
+        });
         const reviewResult = await this.callModel(reviewInput, signal);
         if (
           generation !== this.generation ||
@@ -631,6 +666,14 @@ export class Scheduler {
           return;
         d = validateDecision(reviewResult.decision, reviewInput);
         if (d.action === "skip" || d.action === "inspect") {
+          this.trace("review_rejected", { action: d.action });
+          if (attemptId)
+            this.store.finishPersonaAttempt(
+              attemptId,
+              "skipped",
+              "review_rejected",
+              d,
+            );
           this.skips++;
           return;
         }
@@ -711,6 +754,7 @@ export class Scheduler {
       if (generation === this.generation) {
         this.rejects++;
         const issue = generationIssue(error);
+        this.trace("attempt_error", { code: issue.code });
         if (issue.transient) this.transientFailures++;
         const continuing =
           issue.retryable && (!issue.transient || this.transientFailures < 3);
@@ -745,6 +789,12 @@ export class Scheduler {
     }
   }
   async callModel(input: ModelInput, signal: AbortSignal) {
+    const started = Date.now();
+    this.trace("model_request", {
+      stage: input.reviewDraft ? "review" : "generation",
+      newMessages: input.newMessages?.length ?? 0,
+      newTranscripts: input.newTranscripts?.length ?? 0,
+    });
     const c = this.config.ai;
     const priced =
       c.provider === "openai_api" &&
@@ -759,6 +809,12 @@ export class Scheduler {
     const usageId = this.store.reserve(c.maxCalls, c.maxUsd, reserve);
     if (!usageId) throw Error("budget_exhausted");
     const result = await this.model(input, signal);
+    const parsedDecision = decisionSchema.safeParse(result.decision);
+    this.trace("model_result", {
+      stage: input.reviewDraft ? "review" : "generation",
+      action: parsedDecision.success ? parsedDecision.data.action : "invalid",
+      elapsedMs: Date.now() - started,
+    });
     let cost: number | null = null;
     if (
       priced &&
@@ -795,6 +851,10 @@ export class Scheduler {
       p.decision.evidenceFrameIds.some((id) => !this.capture.has(id)) ||
       p.decision.evidenceTranscriptIds.some((id) => !this.transcriber?.has(id))
     ) {
+      this.trace("publication_discarded", {
+        reason:
+          p.expires < Date.now() ? "candidate_expired" : "stale_or_stopped",
+      });
       if (p.attemptId)
         this.store.finishPersonaAttempt(
           p.attemptId,
@@ -826,6 +886,7 @@ export class Scheduler {
         p.attemptId,
       );
       if (!canPublish) {
+        this.trace("publication_discarded", { reason: "stale_epoch_or_state" });
         this.store.finishPersonaAttempt(
           p.attemptId,
           "suppressed",
@@ -844,6 +905,7 @@ export class Scheduler {
         replyToId: d.replyToMessageId,
       });
       if (!publicMessageId) {
+        this.trace("publication_discarded", { reason: "publication_failed" });
         this.store.finishPersonaAttempt(
           p.attemptId,
           "suppressed",
@@ -858,6 +920,7 @@ export class Scheduler {
       );
       this.lastSpoke = now;
       this.phase = "published_local";
+      this.trace("published");
       this.personaTimes[p.persona] = now;
       this.speechTimes = this.speechTimes.filter((t) => t > now - 60000);
       this.speechTimes.push(now);
@@ -888,6 +951,7 @@ export class Scheduler {
     }
     this.lastSpoke = now;
     this.phase = "published_local";
+    this.trace("published");
     this.personaTimes[p.persona] = now;
     this.speechTimes = this.speechTimes.filter((t) => t > now - 60000);
     this.speechTimes.push(now);
