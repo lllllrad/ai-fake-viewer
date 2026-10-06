@@ -56,6 +56,7 @@ test("reviewed live video reaches model and is invalidated by withdrawal, includ
   });
   const dir = mkdtempSync(join(tmpdir(), "live-video-"));
   const config = configSchema.parse({
+    database: ":memory:",
     privacy: profile,
     ai: { visualMode: "continuous" },
   });

@@ -1,20 +1,20 @@
 # AI viewer persona system implementation specification
 
-This document records implemented P0 behavior and limitations, including automatic composition and memory-only privacy controls. It does not claim to reconstruct a missing original specification. See the [dashboard specification](dashboard.md) for UI goals and [AI_FLOW](../development/ai-pipeline.md) for the shared model pipeline.
+This document records implemented P0 behavior and limitations, including automatic composition and broadcast-lifetime privacy controls. It does not claim to reconstruct a missing original specification. See the [dashboard specification](dashboard.md) for UI goals and [AI_FLOW](../development/ai-pipeline.md) for the shared model pipeline.
 
 ## Scope and implementation evidence
 
 Personas are synthetic viewers inside the app, not platform accounts. Their responses appear only in the local reader and OBS overlay. Local rules compose the default cast; the selected model generates chat. Demo chat uses fixtures.
 
-| Responsibility                                | Source                                                                |
-| --------------------------------------------- | --------------------------------------------------------------------- |
-| Definition, brief and policy schemas          | [contracts.ts](../../packages/persona/contracts.ts)                      |
-| Candidate model input/generation              | [generator.ts](../../packages/persona/generator.ts)                      |
-| Versions, auditions, approval and sessions    | [service.ts](../../packages/persona/service.ts)                          |
-| Observations, speech, review and cancellation | [scheduler.ts](../../packages/scheduler.ts)                              |
-| Storage, publication guards and retention     | [storage.ts](../../packages/storage.ts)                                  |
+| Responsibility                                | Source                                                                      |
+| --------------------------------------------- | --------------------------------------------------------------------------- |
+| Definition, brief and policy schemas          | [contracts.ts](../../packages/persona/contracts.ts)                         |
+| Candidate model input/generation              | [generator.ts](../../packages/persona/generator.ts)                         |
+| Versions, auditions, approval and sessions    | [service.ts](../../packages/persona/service.ts)                             |
+| Observations, speech, review and cancellation | [scheduler.ts](../../packages/scheduler.ts)                                 |
+| Storage, publication guards and retention     | [storage.ts](../../packages/storage.ts)                                     |
 | Authenticated APIs and UI                     | [app.ts](../../apps/server/app.ts), [main.tsx](../../apps/web/src/main.tsx) |
-| Regression coverage                           | [persona.test.ts](../../tests/persona.test.ts)                           |
+| Regression coverage                           | [persona.test.ts](../../tests/persona.test.ts)                              |
 
 ## Default behavior: automatic composition
 
@@ -35,7 +35,7 @@ Six characters are a product default, not an estimate of domestic audience propo
 
 The model receives motivation, interests, knowledge boundaries, voice and speech/silence conditions. Propensity also affects scheduler probability/weights. The model may skip when irrelevant or underinformed.
 
-Stopping and restarting only AI within the same process/broadcast session reuses definitions and names. Broadcast end or server restart clears the cast without recovery. A new stream session creates a new cast on its next AI start; an existing live cast is not replaced. The UI exposes a read-only summary, not authoring, selection, approval or arming forms.
+Stopping and restarting only AI within the same process/broadcast session reuses definitions and names. Broadcast end clears the cast; server restart restores it. A new stream session creates a new cast on its next AI start; an existing live cast is not replaced. The UI exposes a read-only summary, not authoring, selection, approval or arming forms.
 
 Provenance records `automatic-research-composition`, research version, evidence IDs and `human_review: false`. Internal `approved` means schema/name checks passed, not human quality approval. No operator ratings or model auditions are fabricated.
 
@@ -70,7 +70,7 @@ The primary AI switch controls the live cast too. Disclosure disarms generation 
 
 Legacy APIs can change presence, mute, attention and interest tags during live/paused sessions. Live server mutation restrictions still apply. Changes cancel affected reactions and increment epochs; policy updates invalidate pending candidates. The default UI remains read-only apart from shared AI/disclosure controls.
 
-Start requires the current operating profile and selected Responses API authentication/model readiness. Screen/audio are disabled and are not prerequisites. Human chat needs platform receipt/publication/external-AI approvals and current staged consent. See [privacy implementation](participation.md). Restart starts a new memory session, without restoring execution intent or arming.
+Start requires the current operating profile and selected Responses API authentication/model readiness. Screen/audio follow configured sources; continuous visual mode requires fresh frames. Human chat needs platform receipt/publication/external-AI approvals and current consent. See [privacy implementation](participation.md). Restart restores the broadcast session and AI execution intent, waiting for required inputs.
 
 ## Observation and speech selection
 
@@ -114,7 +114,7 @@ The following table describes legacy/demo contracts. Live mutation is restricted
 
 ## Storage and publication boundaries
 
-Briefs, versions, frozen casts, presence, jobs, model metadata, auditions, ratings, audit entries, reactions and publication records live in the process's memory SQLite and do not survive end/restart. Public views do not receive operational information or private briefs. Identity disclosure is a one-time confirmed action on a disarmed `live` or `ended` session.
+Briefs, versions, frozen casts, presence, jobs, model metadata, auditions, ratings, audit entries, reactions and publication records live in the private broadcast SQLite database, survive restart and are deleted at broadcast end. Public views do not receive operational information or private briefs. Identity disclosure is a one-time confirmed action on a disarmed `live` or `ended` session.
 
 Reports aggregate member publication counts/reactions. `usage` is shared stream Store usage, not an independent persona-session bill. Replay reads stored administrator records, not a model rerun. Details may disappear after retention cleanup. Standalone Store/service fixture retention is not the live persistence policy. No long-term memory storage/retrieval pipeline is connected.
 

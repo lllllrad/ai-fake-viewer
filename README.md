@@ -1,6 +1,6 @@
 # Mixed Chat Studio
 
-A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI service profile with optional broadcast transcription**. An incomplete operating profile blocks collection and external AI processing.
+A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **durable broadcast sessions, single-step viewer consent and a reviewed OpenAI service profile with configured broadcast inputs**. An incomplete operating profile blocks collection and external AI processing.
 
 Start with [live setup](docs/operations/setup.md), [privacy implementation](docs/specifications/participation.md), [AI flow](docs/development/ai-pipeline.md) or the [documentation index](docs/README.md). Historical integration experiments are not current deployment approval.
 
@@ -19,7 +19,7 @@ Setup creates private credentials/configuration. Open the local address printed 
 
 ## Automatic personas and viewer consent
 
-Starting AI composes six synthetic personas from research-informed participation patterns, with no operator authoring requirement and no real-viewer profiling. The current session's cast disappears on restart. See the [persona specification](docs/specifications/personas.md).
+Starting AI composes six synthetic personas from research-informed participation patterns, with no operator authoring requirement and no real-viewer profiling. The current broadcast's cast survives restart and is deleted at broadcast end. See the [persona specification](docs/specifications/personas.md).
 
 UI controls and viewer commands are described in English here; the app retains localized labels. Exact commands are defined in [participation.ts](packages/participation.ts).
 
@@ -27,11 +27,11 @@ The first exact consent command starts guidance; it does not grant participation
 
 The withdrawal command invalidates the consent generation immediately, removes original and identifiable derived context, cancels queued/in-flight AI work and retracts tracked dependent replies. Late results cannot be published. Previously approved fixed-category anonymous topic/mood context may remain only until the session ends. The participation-status command lets an operator confirm the account's current participation state. Commands are not chat or AI input.
 
-The **Privacy and participation** panel exposes staged guidance, explicit age self-declaration (not age verification), age blocking and separate external/VOD follow-up work. The official SOOP SDK automatically sends a fixed non-display/participation notice after unconsented ordinary chat, and sends the next consent-stage notice when ready. Account/global limits apply before each attempt; the authenticated broadcaster’s matching MESSAGE echo confirms delivery. Keep the connected admin tab open. Failed or unconfirmed delivery never grants consent. Legacy overlay-notice switches are informational, not viewer consent.
+The **Privacy and participation** panel shows one-step consent, age self-declaration, withdrawal and separate provider/VOD follow-up. A single short notice links the full notice. Confirmed delivery covers recently observed viewers in that room, but consent is individual. Broadcast accounts are excluded. Failed delivery never grants consent. See [participation behavior](docs/specifications/participation.md).
 
 ## Live configuration
 
-Copy the structure in [config.example.yaml](config.example.yaml) into ignored `config.yaml`. Fill `privacy` with the real operator, contact, public policy/notice versions, actual API processing conditions, publication channels/periods and separately verified platform permissions. Empty defaults intentionally fail closed. YAML changes apply on restart, which clears the session and requires new consent. Do not copy synthetic test approvals into production.
+Copy the structure in [config.example.yaml](config.example.yaml) into ignored `config.yaml`. Fill `privacy` with the real operator, contact, public policy/notice versions, actual API processing conditions, publication channels/periods and separately verified platform permissions. Empty defaults intentionally fail closed. YAML changes apply on restart. End the previous broadcast before changing its consent profile. Do not copy synthetic test approvals into production.
 
 The inference interface is the **Responses API**. Choose `ai.provider: chatgpt_subscription` for **Sign in with ChatGPT** and eligible ChatGPT plan usage without an API key, or `openai_api` for an independently billed API key. Keep `ai.gate.enabled: false`. Admin provides the **Sign in with ChatGPT** flow, saved accounts and model selection; use the same ChatGPT account you use for Codex, with this app's own official sign-in. It does not read Codex CLI credential files or run Codex CLI tools.
 
@@ -43,7 +43,7 @@ Set private `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`, enable `youtube`, a
 
 ### CHZZK: official OAuth and user session
 
-Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. The server automatically sends fixed participation introductions and stage notices using the official Chat API. Enable chat-message sending and user-info lookup permissions as well as chat receipt, then reauthorize the broadcaster account. Notices are split into messages of at most 100 characters; all parts must return a message ID before a fresh consent command can advance participation. No open administrator tab or manual delivery confirmation is required. See the [platform behavior matrix](docs/specifications/behavior.md#platform-execution-and-notice-delivery).
+Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. The server automatically sends a short fixed participation notice using the official Chat API. Enable chat-message sending and user-info lookup permissions as well as chat receipt, then reauthorize the broadcaster account. A notice must fit one message of at most 100 characters and return a message ID before a fresh consent command enables participation. No open administrator tab or manual delivery confirmation is required. See the [platform behavior matrix](docs/specifications/behavior.md#platform-execution-and-notice-delivery).
 
 ### SOOP: separate official and experimental paths
 
@@ -63,7 +63,7 @@ Use the app's OBS Browser Source overlay for publication. OBS Program capture an
 
 ## Groq speech and AI model data review
 
-Configure `audio.url` and `GROQ_API_KEY` for broadcast transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
+Configure `audio.url` and `GROQ_API_KEY` for broadcast transcription, recent speech as AI context and authenticated transcript export. Transcripts survive restart and are cleared on withdrawal, context invalidation or broadcast end/reset. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
 
 ### Legacy Jev filter (disabled live)
 
@@ -75,7 +75,7 @@ Live requests contain current permitted text, configured recent broadcast inputs
 
 `store:false` does not mean every provider log is deleted; regional and retention options require actual account eligibility and matching notices. See [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). In API-key mode, token counting and generation use the same configured endpoint with no global fallback. Sign in with ChatGPT uses its supported Responses API endpoint without that token-counting preflight. Optional draft review uses the same approved API provider. Manual approval can be enabled with `ai.manualApproval`.
 
-Call/input/output limits and optional verified-price USD estimates still apply. Counters are session memory, so restart resets local limits; use provider account limits for cross-restart spending controls. Cost estimates are not billing guarantees.
+Call/input/output limits and optional verified-price USD estimates still apply. Counters survive restart for the current broadcast; use provider account limits for cross-broadcast spending controls. Cost estimates are not billing guarantees.
 
 ## Reader, overlay and operations
 
@@ -87,11 +87,11 @@ Reader tokens are URL fragments, not admin credentials. Admin uses a local HttpO
 
 ## Storage and deletion
 
-Every app instance uses SQLite **in memory** for chat, identities, consent, persona state, summaries, budgets and pending work. Session close and restart discard these; `database` and `retentionDays` no longer select a live chat file or promise a seven-day log. Standalone legacy Store fixtures still test old storage behavior, not the app's live persistence policy. Chat export remains unavailable; reviewed audio permits authenticated session transcript export.
+Live broadcasts use the private SQLite file selected by `database`. Chat, consent, notice delivery, transcripts, personas, counters and the AI enabled setting survive server restarts. Broadcast end purges session data; a closed session remains closed after restart. Raw audio/video remain transient. Active broadcasts are not purged by `retentionDays`. Demo instances use memory. See [restart and end](docs/operations/setup.md#broadcast-restart-and-end).
 
 `privacy.rightsDatabase` is a separate owner-only file for exceptional rights requests and video inventory. It contains minimum account/session/video/request identifiers and handling status, not ordinary chat, consent lists or AI context. App data reset does not erase unresolved requests. After each external/video/copy action and result notice, remove unnecessary resolved request records from admin. Credentials remain separate.
 
-**Migration:** the new runtime never opens old chat databases. Stop the old server and remove its old `data/chat.sqlite`, `data/demo.sqlite`, associated `-wal`/`-shm`, exports and backups under your control after identifying them; custom old `database` paths need the same review. The app does not silently delete arbitrary pre-existing files. Review OS dump/swap/backup behavior using the [development guide](docs/development/guide.md). Memory reference removal is not a forensic-erasure guarantee. Platform VODs, provider records and third-party captures require separate handling.
+**Migration:** the default broadcast file is `data/broadcast.sqlite`, separate from historical chat/demo databases. An existing `database` setting explicitly selects its file; point it at the intended broadcast store before deployment. The old memory-only runtime cannot recover data it never saved. Do not delete unrelated old files automatically. Review exports, backups and OS dump/swap behavior using the [development guide](docs/development/guide.md). Local deletion does not delete platform VODs, provider records or third-party copies.
 
 ## Troubleshooting and verification
 

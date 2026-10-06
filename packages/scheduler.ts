@@ -462,10 +462,7 @@ export class Scheduler {
           ...eligible.map((x) => x.m.snapshot.participation.base_propensity),
         ),
       );
-      if (
-        !eligible.length ||
-        (!this.config.ai.forceReplyTest && Math.random() > chance)
-      ) {
+      if (!eligible.length || Math.random() > chance) {
         this.lastHash = hash;
         this.lastExternal = externalSeq;
         this.skips++;
@@ -498,7 +495,6 @@ export class Scheduler {
       ? `${personaRuntime.brief.topic}. ${personaRuntime.brief.audience_intent}. ${personaRuntime.brief.public_context}`
       : c.description;
     let input: ModelInput = {
-      forceReplyTest: c.forceReplyTest,
       privacyRevision: this.store.participation?.revision,
       frames,
       transcripts,
@@ -577,7 +573,7 @@ export class Scheduler {
             messageVersion(message),
           );
       };
-      if (!this.demo && c.gate.enabled && !c.forceReplyTest) {
+      if (!this.demo && c.gate.enabled) {
         this.phase = "jev_timing_filter";
         consumeNewInput();
         const allowed = await this.gate.allow(input, signal);

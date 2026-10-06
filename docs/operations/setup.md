@@ -13,19 +13,19 @@ Review host crash/core dumps, swap, service diagnostics and backup paths. The la
 Populate `privacy` in `config.yaml` from the actual operator's decisions:
 
 - Operator, responsible officer, contact, public HTTPS privacy/consent pages and versions.
-- Separate 14+ self-declaration (not verified age), collection/use, screen/recording/VOD/edited-video publication and overseas notices; separate third-party notice if needed. Publication notice must explain that actual nicknames are shown from the start and state the actual video retention period. The current operating scope is self-declared age 14+: block known under-14 or contradictory declarations. The app has no guardian-consent verification workflow and does not enable those users through chat commands.
+- A combined short notice links the full age, collection/use, screen/recording/VOD/edited-video publication, overseas and applicable third-party disclosures. Publication notice must explain that actual nicknames are shown from the start and state the actual video retention period. The current operating scope is self-declared age 14+: block known under-14 or contradictory declarations. The app has no guardian-consent verification workflow and does not enable those users through chat commands.
 - Reviewed overseas basis A or B; real OpenAI API model, endpoint, countries, subprocessors, retention, evidence and check date; account data sharing disabled and actual settings verified.
 - Actual publication platforms/channels, video retention and overseas review, separately from AI transfers.
 - Per-platform/broadcaster permissions for receipt, fixed notices, screen publication and external AI, with contract evidence and dates. Confirm allowed notice rates and own/other bot IDs.
 
-Use `sh run-command.sh npm run setup:check` to list local configuration and authorization prerequisites without exposing secrets or calling providers. No blank value means “implicitly approved.” Read the current profile in admin before starting. Profile changes invalidate consent; restarting with edited YAML clears session data. The authenticated profile PUT endpoint affects only the current process, not YAML.
+Use `sh run-command.sh npm run setup:check` to list local configuration and authorization prerequisites without exposing secrets or calling providers. No blank value means “implicitly approved.” Read the current profile in admin before starting. Profile changes invalidate consent; end the broadcast before changing its consent profile in YAML. The authenticated profile PUT endpoint affects only the current process, not YAML.
 
 If the operator has already confirmed the revised policy scope and explicitly
 requests testing before completing descriptive metadata, use the
 [operator-reviewed test configuration](../specifications/participation.md#operator-reviewed-test-configuration).
 Set `privacy.testReview.reference` to the actual review record and `checkedAt` to
 its ISO UTC timestamp; do not invent provider countries or retention values. Keep
-real stage notices, broadcaster approvals and credentials. `setup:check` reports
+real public notices, broadcaster approvals and credentials. `setup:check` reports
 this exception; passing local checks does not verify remote API permissions.
 Restart after editing YAML. A CHZZK authorization error still requires correcting
 the app permissions and reconnecting the account.
@@ -48,9 +48,9 @@ The official SOOP SDK automatically sends fixed participation notices for uncons
 
 1. Enable **YouTube Data API v3** in the same Google Cloud project. Create a **Web application** OAuth client. Authorized JavaScript origins may be empty for this server-side flow. Register `http://127.0.0.1:3210/oauth/youtube/callback`, or the exact existing public HTTPS callback origin plus `/oauth/youtube/callback`. Set that identical URI in `youtube.redirectUri` in `config.yaml`.
 2. Put the issued `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET` in the local `.env`. Enable `youtube.enabled` and configure `youtube.video` or `youtube.channelId`. Restart the server to load them. If the Google app is in testing, include the broadcasting account among its test users. Do not paste the secret into chat or tracked files.
-3. In the admin page's connection details choose **Connect YouTube account**, select the broadcasting channel and grant the requested `youtube.force-ssl` scope. Return to admin and start receivers. The connected channel must match the broadcaster resolved from the video; a different channel cannot send notices through this app. OAuth tokens are encrypted in `data/youtube.tokens` with `TOKEN_ENCRYPTION_KEY`, independently of memory-only viewer participation. **Disconnect YouTube** stops receipt/sending and removes local tokens; it does not revoke the grant in Google account settings.
+3. In the admin page's connection details choose **Connect YouTube account**, select the broadcasting channel and grant the requested `youtube.force-ssl` scope. Return to admin and start receivers. The connected channel must match the broadcaster resolved from the video; a different channel cannot send notices through this app. OAuth tokens are encrypted in `data/youtube.tokens` with `TOKEN_ENCRYPTION_KEY`, separately from broadcast participation storage. **Disconnect YouTube** stops receipt/sending and removes local tokens; it does not revoke the grant in Google account settings.
 4. Complete the normal operating profile and the actual broadcaster's YouTube `receive`, `fixedNotices`, `screenPublication`, `externalAi` approvals. Confirm actual allowed notice rates. OAuth consent by the operator does not replace viewer participation consent. The old `consentNoticeEnabled` overlay toggle is not a sending permission or a way to bypass this profile.
-5. Automatic introductions and consent-stage notices use `liveChatMessages.insert`. The returned ID, live chat, author and exact text must match before recording delivery. All parts of a long notice must be confirmed; failures or ambiguous responses do not advance consent. Attempts, including every part and failures, share account/global limits. After confirmed introduction, later ordinary messages and receiver reconnection do not repeat it within the same app session.
+5. A single automatic consent notice use `liveChatMessages.insert`. The returned ID, live chat, author and exact text must match before recording delivery. Delivery must be confirmed; failures or ambiguous responses do not grant consent. Attempts, including failures, share account/global limits. After confirmed introduction, later ordinary messages and receiver reconnection do not repeat it within the same app session.
 
 Sending is serialized on the server, pauses when receipt stops, and rechecks session, participant, profile and channel after token refresh and immediately before sending. Own-channel/bot messages are excluded from viewer input. YouTube has no manual notice-delivery confirmation button. A 401/403 response pauses retries for five minutes and shows an account/permission/quota issue; ambiguous failures wait at least a minute. A write that succeeded remotely but whose response was lost may be retried; the API integration cannot promise exactly-once remote writes. Long unbroken URLs over the local chunk budget must be shortened in the reviewed notice rather than truncated. No arbitrary-text sending API is exposed.
 
@@ -71,7 +71,7 @@ Register the actual destination channel, recording/VOD and edited-copy retention
 3. Start AI manually. Six synthetic personas are generated automatically. Verify local reader/overlay publication; no native-platform AI sending exists.
 4. Send the withdrawal command. Verify local disappearance, cancelled pending replies and a separate external/video follow-up task where relevant. No email resubmission is required for this live request.
 5. Verify the participation-status command, reconnection snapshots and a new session requiring new consent. Do not infer SDK event-order guarantees from synthetic tests.
-6. Close the session. Chat, mappings, consent, personas and summaries disappear. Restart does not automatically restart AI or restore participants.
+6. Close the session. Chat, mappings, consent, personas and summaries disappear. Restart during an open broadcast restores participants and enabled AI; restart after broadcast end restores neither.
 
 ## 7. Video requests and shutdown
 
@@ -99,28 +99,13 @@ For each enabled platform, record the actual broadcaster identity, application p
 
 Match the final published policy to the enabled profiles, transmitted fields, displayed real nicknames and declared countries/periods. The review addendum is not the revised public policy itself; no equality with unavailable public-policy text is claimed. Use the [evidence map](../specifications/behavior.md) for code/test ownership and the [exception inventory](../specifications/participation.md#durable-exception-inventory-and-deletion) for retention/deletion procedures.
 
-## Temporary YouTube broadcaster-account testing
-
-By default, messages from the connected YouTube channel are excluded because that
-account sends the automatic notices. To exercise the viewer flow using that same
-account, temporarily set `youtube.allowBroadcasterTesting: true` in private
-`config.yaml` and run `sh run-command.sh just server-restart`. The account must not
-also be listed in `privacy.notices.botUserIds`. Send a new message after restart;
-normal staged consent and withdrawal still apply. This does not grant consent.
-
-Automatic notice parts retain a reserved numbered prefix and remain excluded for
-the connected channel, including history replay and reconnects. A manually copied
-notice with that prefix is also excluded; ordinary viewer accounts are unaffected.
-Set the option back to `false` and restart after testing. The example/default
-configuration keeps it disabled.
-
 ## Broadcast audio and transcription
 
 Configure `audio.url` and provide `GROQ_API_KEY`. No additional privacy enable flag is needed.
 Restart with `sh run-command.sh just server-restart`; the configured input starts
 automatically, and admin audio controls can stop/start it. Speech chunks use the
 existing Groq transcription adapter; recent transcripts can supply AI evidence
-without a camera or new viewer chat. AI generation still requires explicit start.
+without a camera or new viewer chat. AI generation requires an enabled AI toggle, which survives restart.
 The dashboard shows the current transcript and an authenticated export link.
 
 This scope includes broadcast speech, not only consented platform chat. Update the
@@ -128,50 +113,39 @@ actual audio/provider notice and give profile changes a new `noticeVersion`.
 There is no automatic speaker identification or filtering of chat read aloud.
 Withdrawal/context invalidation conservatively erases all session transcripts and
 aborts in-flight transcription; further captured speech is new input. Session
-end/restart also erases records. Downloaded JSONL files and provider-side records
+end also erases records; restart restores them. Downloaded JSONL files and provider-side records
 remain separate operator-managed copies. Use the audio stop control to stop transcription; missing configuration is reported rather than silently disabling it.
 
-When testing YouTube staged consent, wait for all numbered notice parts before
-sending the next consent command. A complete stage must not restart at part one
-without a new stage/session or a delivery failure. Ordinary receive continuation
-must not erase confirmed delivery. See the
-[YouTube acknowledgement rules](../specifications/participation.md#youtube-notice-acknowledgements-during-receive-continuation).
+## Consent and notice delivery
 
-## Notice delivery speed
+Use a separate viewer account: the broadcast channel account and configured bots are excluded.
+An ordinary first chat schedules one short notice with the full notice URL. After
+confirmed delivery, one fresh consent command enables subsequent chat. Viewers
+observed in the room within five minutes of that delivery share the notice; they
+still consent individually. Unknown later arrivals receive guidance when needed.
+Do not shorten the URL by truncation: use an appropriate public notice URL if the
+100-character CHZZK message cap cannot accommodate it.
 
-`privacy.notices.perAccountIntervalMs` applies to each notice part, not only the
-initial invitation. The default 30,000 ms and global two attempts per minute can
-make a three-part stage take over a minute. Parts are sent by the server timer;
-additional viewer chat is not required between parts. A fresh consent command is
-needed only after the complete stage has been delivered.
+Account/global rate limits apply to attempts, including failures. Delivery runs on
+a timer without further viewer messages. Restart retains delivered guidance and
+consent. There are no broadcaster-account, multistage-consent or forced-AI-reply
+test modes. Use normal viewer accounts and synthetic fixtures for verification.
 
-For reviewed interactive testing, a 3,000 ms account interval with
-`globalPerMinute: 20` permits about six seconds between the first and third parts
-when no other notices are queued. The supported minimum is 3,000 ms. These are app
-limits, not guaranteed platform quotas; platform errors still pause sends and
-failed attempts still consume the same budget. Shared traffic can add delay.
-Set the values in private YAML and use `sh run-command.sh just server-restart`;
-restart begins a new consent session. Defaults remain unchanged.
+## Broadcast restart and end
 
-## Temporary single-step consent test
+`database` selects the private SQLite broadcast state file. Keep it on persistent
+local storage, outside tracked files and public static directories. Server restart
+restores chat, consent, notices, personas, counters and the AI enabled setting.
+AI waits for required inputs/model authentication before resuming. Stopping AI
+explicitly preserves the off setting on restart. Temporary disconnection does not
+end a broadcast. Use the broadcast-end control when the stream has ended; it
+purges local session state. A closed broadcast remains closed after restart.
+Start a new session explicitly for the next broadcast.
 
-After explicit operator review, set `privacy.singleStepTest: true` together with
-`privacy.testReview`, a real public `privacy.noticeUrl`, and a new notice version.
-A first chat or consent command queues one short combined test notice, including
-age self-declaration, collection/use, publication, overseas processing and the
-notice link. Enabled audio and third-party scope are identified when applicable.
-One fresh consent command after confirmed delivery activates participation. A
-command before delivery never does. The normal four-stage flow remains the default;
-this abbreviated test flow does not certify the completeness of production notices.
-
-YouTube and CHZZK reject an overlong combined notice instead of splitting or
-truncating it. Their fixed numbered notice format stays excluded from broadcaster
-test input. Both `youtube.allowBroadcasterTesting` and
-`chzzk.allowBroadcasterTesting` are independent default-off test options. Explicit
-bot IDs remain excluded. Withdrawal and known-underage restrictions remain active.
-Use `just server-restart` through the repository wrapper after YAML changes; the
-restart clears the old participation session. Platform quota or permission errors
-still prevent actual delivery and cannot be removed by the simplified flow.
+Keep the same privacy profile while recovering a broadcast. If YAML changes its
+consent fingerprint, startup rejects reuse of the saved consent. End the old
+broadcast before applying a changed profile. The old memory-only implementation
+cannot recover data that it never saved; durability starts with this version.
 
 ## OBS Program video input
 

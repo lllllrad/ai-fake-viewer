@@ -72,7 +72,10 @@ export async function createApp(
   const participation = opts.demo
     ? undefined
     : new Participation(config.privacy, "");
-  const store = new Store(":memory:", participation);
+  const store = new Store(
+    opts.demo ? ":memory:" : config.database,
+    participation,
+  );
   const noticeBot = participation
     ? new NoticeBot(participation, config.soop.streamerId)
     : undefined;
@@ -124,6 +127,10 @@ export async function createApp(
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.recordTranscript(entry),
   );
+  transcriber.transcripts = store.recentTranscripts();
+  transcriber.requests = Number(store.checkpoint("audio:requests") ?? 0);
+  transcriber.onRequest = (count) =>
+    store.ingestBatch([], { key: "audio:requests", value: String(count) });
   if (!opts.demo) {
     capture.allowProcessing = inputSessionOpen;
     transcriber.allowProcessing = inputSessionOpen;
@@ -136,7 +143,10 @@ export async function createApp(
     store.clearTranscripts();
   };
   store.on("context_invalidated", clearSpeechContext);
-  store.on("reset", clearSpeechContext);
+  store.on("reset", () => {
+    clearSpeechContext();
+    transcriber.requests = Number(store.checkpoint("audio:requests") ?? 0);
+  });
   const chatgpt = new ChatgptAuth(
     opts.encryptionKey,
     opts.chatgptTokenPath ?? "data/chatgpt.tokens",
@@ -205,6 +215,7 @@ export async function createApp(
         const p = audience.participant;
         p.requestIds.push(id);
         p.requestIds = p.requestIds.slice(-100);
+        participation?.changed();
         const key = `${p.id}:${audience.epoch + 1}`;
         const taskId = withdrawalTasks.get(key);
         if (taskId) rights.attachRequest(taskId, id);
@@ -1099,6 +1110,7 @@ export async function createApp(
             state: p.state,
             age: p.age,
             stage: p.stage,
+            deliveredAt: p.deliveredAt,
             epoch: p.epoch,
             observed: p.observed,
             notice:
@@ -1195,7 +1207,7 @@ export async function createApp(
     personas: personas.automaticSummary(),
     chatSummary: store.chatSummary(),
     privacy: {
-      memoryOnly: true,
+      memoryOnly: !!opts.demo || config.database === ":memory:",
       ready: privacyReady(),
       issues: profileIssues(config.privacy),
       pendingRights: rights
@@ -1256,7 +1268,6 @@ export async function createApp(
       lastIssue: scheduler.lastIssue,
       diagnostics: scheduler.diagnostics,
       reviewDraft: config.ai.reviewDraft,
-      forceReplyTest: config.ai.forceReplyTest,
       reviewCount: scheduler.reviews,
       input: {
         audioChunkSeconds: config.audio.chunkSeconds,
@@ -1476,6 +1487,7 @@ export async function createApp(
   });
   app.post("/api/admin/session/close", async () => {
     scheduler.stop();
+    capture.stop();
     await supervisor.stop();
     store.closeSession();
     transcriber.stop();
@@ -1894,14 +1906,13 @@ export async function createApp(
   });
   app.addHook("onClose", async () => {
     clearInterval(retention);
+    clearInterval(restartRecovery);
     scheduler.stop("server_shutdown", true);
     await supervisor.stop();
     capture.stop();
     transcriber.stop();
     for (const s of sockets) s.close();
     flushRights();
-    participation?.end();
-    store.deleteAll();
     store.close();
     rights.close();
     withdrawalTasks.clear();
@@ -1913,23 +1924,19 @@ export async function createApp(
     transcriber.start();
   }
   const resumeAiIfRequested = () => {
-    if (!opts.demo) return false;
-    if (
-      store.closed() ||
-      (!store.aiDesiredRunning() && !store.personaRuntime()?.armed)
-    )
-      return false;
-    if (!capture.latest() || Date.now() - capture.latest()!.capturedAt > 10000)
-      return false;
+    if (store.closed() || !store.aiDesiredRunning()) return false;
+    if (scheduler.state === "running") return true;
     try {
       scheduler.start();
       return true;
     } catch {
-      scheduler.stop("restart_preflight_failed");
-      personas.stopActive("restart_preflight_failed");
+      scheduler.state = "waiting_restart_inputs";
+      scheduler.phase = "waiting_restart_inputs";
       return false;
     }
   };
+  const restartRecovery = setInterval(resumeAiIfRequested, 1000);
+  restartRecovery.unref();
   return {
     app,
     store,

@@ -117,7 +117,7 @@ test("YouTube sends only fixed intro, confirms insert resource and never repeats
     await f.sender.tick(f.signal);
     assert(f.sent.length < 10);
   }
-  assert.equal(person.state, "UNCONSENTED");
+  assert.equal(person.state, "WAITING_CONSENT");
   assert(!JSON.stringify(f.sent).includes("PRIVATE_VIEWER_TEXT"));
   const count = f.sent.length;
   f.tick(600001);
@@ -131,20 +131,16 @@ test("YouTube sends only fixed intro, confirms insert resource and never repeats
   await f.sender.tick(f.signal);
   assert.equal(f.sent.length, count);
 });
-test("YouTube multi-part stages require every confirmed part and a later command", async (t) => {
+test("YouTube single notice requires confirmed delivery and a later command", async (t) => {
   const f = fixture(t);
   f.message("!동의");
   const person = f.p.get("youtube", "fixture", "viewer")!;
-  await f.sender.tick(f.signal);
   assert.equal(person.deliveredAt, null);
   f.message("!동의");
   assert.equal(person.stage, 0);
-  for (let i = 0; person.deliveredAt === null && i < 20; i++) {
-    f.tick();
-    await f.sender.tick(f.signal);
-  }
+  await f.sender.tick(f.signal);
   assert.notEqual(person.deliveredAt, null);
-  assert(f.sent.length > 1);
+  assert.equal(f.sent.length, 1);
   assert(
     f.sent.every((b) => b.snippet.textMessageDetails.messageText.length <= 200),
   );
@@ -212,6 +208,7 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
   const dir = mkdtempSync(join(tmpdir(), "youtube-routes-"));
   const app = await createApp(
     configSchema.parse({
+      database: ":memory:",
       youtube: {
         enabled: true,
         redirectUri: "https://example.test/oauth/youtube/callback",
@@ -327,110 +324,102 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
   }
 });
 
-for (const broadcasterTest of [false, true])
-  test(`supervisor sends fixed notices and excludes echoes with broadcaster testing ${broadcasterTest}`, async (t) => {
-    const { Supervisor } = await import("../packages/supervisor.ts");
-    const p = new Participation(approvedProfile(), "session"),
-      store = new Store(":memory:", p);
-    const config = configSchema.parse({
-      youtube: {
-        enabled: true,
-        video: "abcdefghijk",
-        transport: "rest",
-        allowBroadcasterTesting: broadcasterTest,
-      },
-      privacy: approvedProfile(),
-    });
-    let writes = 0,
-      reads = 0;
-    t.mock.method(globalThis, "fetch", async (url: any, init: any) => {
-      assert.equal(
-        init.headers.Authorization ?? init.headers.authorization,
-        "Bearer fixture-token",
-      );
-      if (String(url).includes("/videos?"))
-        return Response.json({
-          items: [
-            {
-              snippet: { channelId: "fixture" },
-              liveStreamingDetails: { activeLiveChatId: "live-chat" },
-            },
-          ],
-        });
-      if (init.method === "POST") {
-        writes++;
-        const body = JSON.parse(init.body);
-        assert(!JSON.stringify(body).includes("PRIVATE_VIEWER"));
-        return Response.json({
-          id: "sent",
-          snippet: { ...body.snippet, authorChannelId: "fixture" },
-        });
-      }
-      reads++;
-      return Response.json({
-        pollingIntervalMillis: 1000,
-        nextPageToken: "cursor",
-        items:
-          reads === 1
-            ? [
-                {
-                  id: "viewer-event",
-                  snippet: {
-                    type: "textMessageEvent",
-                    publishedAt: new Date(Date.now() + 1).toISOString(),
-                    displayMessage: "PRIVATE_VIEWER",
-                  },
-                  authorDetails: {
-                    channelId: broadcasterTest ? "fixture" : "viewer",
-                    displayName: "PRIVATE_NAME",
-                  },
-                },
-                {
-                  id: "self-event",
-                  snippet: {
-                    type: "textMessageEvent",
-                    publishedAt: new Date().toISOString(),
-                    displayMessage: "[안내 1/1] fixed bot notice",
-                  },
-                  authorDetails: {
-                    channelId: "fixture",
-                    displayName: "broadcaster",
-                  },
-                },
-              ]
-            : [],
-      });
-    });
-    const auth = {
-      connected: true,
-      channelId: "fixture",
-      access: async () => "fixture-token",
-    } as YoutubeAuth;
-    const supervisor = new Supervisor(config, store, {} as any, false, auth);
-    try {
-      supervisor.start();
-      for (
-        let n = 0;
-        n < 300 &&
-        !p.get("youtube", "fixture", broadcasterTest ? "fixture" : "viewer")
-          ?.introDelivered;
-        n++
-      )
-        await new Promise((r) => setTimeout(r, 10));
-      assert.equal(writes, 1);
-      assert.equal(
-        p.get("youtube", "fixture", broadcasterTest ? "fixture" : "viewer")
-          ?.introDelivered,
-        true,
-      );
-      if (!broadcasterTest)
-        assert.equal(p.get("youtube", "fixture", "fixture"), undefined);
-      assert.equal(store.snapshot().messages.length, 0);
-    } finally {
-      await supervisor.stop();
-      store.close();
-    }
+test("supervisor sends fixed notices and excludes broadcast account messages", async (t) => {
+  const { Supervisor } = await import("../packages/supervisor.ts");
+  const p = new Participation(approvedProfile(), "session"),
+    store = new Store(":memory:", p);
+  const config = configSchema.parse({
+    database: ":memory:",
+    youtube: {
+      enabled: true,
+      video: "abcdefghijk",
+      transport: "rest",
+    },
+    privacy: approvedProfile(),
   });
+  let writes = 0,
+    reads = 0;
+  t.mock.method(globalThis, "fetch", async (url: any, init: any) => {
+    assert.equal(
+      init.headers.Authorization ?? init.headers.authorization,
+      "Bearer fixture-token",
+    );
+    if (String(url).includes("/videos?"))
+      return Response.json({
+        items: [
+          {
+            snippet: { channelId: "fixture" },
+            liveStreamingDetails: { activeLiveChatId: "live-chat" },
+          },
+        ],
+      });
+    if (init.method === "POST") {
+      writes++;
+      const body = JSON.parse(init.body);
+      assert(!JSON.stringify(body).includes("PRIVATE_VIEWER"));
+      return Response.json({
+        id: "sent",
+        snippet: { ...body.snippet, authorChannelId: "fixture" },
+      });
+    }
+    reads++;
+    return Response.json({
+      pollingIntervalMillis: 1000,
+      nextPageToken: "cursor",
+      items:
+        reads === 1
+          ? [
+              {
+                id: "viewer-event",
+                snippet: {
+                  type: "textMessageEvent",
+                  publishedAt: new Date(Date.now() + 1).toISOString(),
+                  displayMessage: "PRIVATE_VIEWER",
+                },
+                authorDetails: {
+                  channelId: "viewer",
+                  displayName: "PRIVATE_NAME",
+                },
+              },
+              {
+                id: "self-event",
+                snippet: {
+                  type: "textMessageEvent",
+                  publishedAt: new Date().toISOString(),
+                  displayMessage: "[안내 1/1] fixed bot notice",
+                },
+                authorDetails: {
+                  channelId: "fixture",
+                  displayName: "broadcaster",
+                },
+              },
+            ]
+          : [],
+    });
+  });
+  const auth = {
+    connected: true,
+    channelId: "fixture",
+    access: async () => "fixture-token",
+  } as YoutubeAuth;
+  const supervisor = new Supervisor(config, store, {} as any, false, auth);
+  try {
+    supervisor.start();
+    for (
+      let n = 0;
+      n < 300 && !p.get("youtube", "fixture", "viewer")?.introDelivered;
+      n++
+    )
+      await new Promise((r) => setTimeout(r, 10));
+    assert.equal(writes, 1);
+    assert.equal(p.get("youtube", "fixture", "viewer")?.introDelivered, true);
+    assert.equal(p.get("youtube", "fixture", "fixture"), undefined);
+    assert.equal(store.snapshot().messages.length, 0);
+  } finally {
+    await supervisor.stop();
+    store.close();
+  }
+});
 
 test("YouTube rejects expired authorization and insufficient scope before saving credentials", async (t) => {
   env(t);
@@ -506,39 +495,22 @@ test("YouTube forbidden/quota responses pause writes without acknowledging deliv
   assert.equal(f.p.get("youtube", "fixture", "viewer")!.introDelivered, false);
 });
 
-test("broadcaster test filter handles REST and gRPC messages and reserves all automatic notice parts", async () => {
-  const { normalizeYoutube, ignoreYoutubeOwnMessage } =
-    await import("../packages/youtube.ts");
-  assert.equal(configSchema.parse({}).youtube.allowBroadcasterTesting, false);
-  for (const text of [
-    "hello",
-    "!동의",
-    "!철회",
-    ...noticeParts("fixed notice ".repeat(50)),
-  ]) {
-    for (const item of [
-      {
-        id: "rest",
-        snippet: { type: "textMessageEvent", displayMessage: text },
-        authorDetails: { channelId: "fixture" },
-      },
-      {
-        id: "grpc",
-        snippet: { type: "TEXT_MESSAGE_EVENT", display_message: text },
-        author_details: { channel_id: "fixture" },
-      },
-    ]) {
-      const m = normalizeYoutube(item, "chat")!;
-      assert(ignoreYoutubeOwnMessage(m, "fixture"));
-      assert.equal(
-        ignoreYoutubeOwnMessage(m, "fixture", true),
-        text.startsWith("[안내 "),
-      );
-      assert(
-        !ignoreYoutubeOwnMessage({ ...m, author: "viewer" }, "fixture", true),
-      );
-    }
-  }
+test("broadcast account messages are excluded from viewer participation", async () => {
+  const { ignoreYoutubeOwnMessage } = await import("../packages/youtube.ts");
+  assert.equal(
+    ignoreYoutubeOwnMessage(
+      privacyMessage("fixture", "hello", Date.now()),
+      "fixture",
+    ),
+    true,
+  );
+  assert.equal(
+    ignoreYoutubeOwnMessage(
+      privacyMessage("viewer", "hello", Date.now()),
+      "fixture",
+    ),
+    false,
+  );
 });
 
 test("YouTube retains confirmed parts when receive state changes during an insertion", async (t) => {
@@ -565,7 +537,7 @@ test("YouTube retains confirmed parts when receive state changes during an inser
   }
   assert.equal(person.stage, 1);
   assert.equal(new Set(parts).size, parts.length);
-  assert(parts.length > 1);
+  assert.equal(parts.length, 1);
   assert(parts[0].startsWith("[안내 1/"));
 });
 
@@ -589,7 +561,7 @@ test("YouTube confirms an intro across receive rollover and does not send it aga
   assert.equal(f.sent.length, 1);
 });
 
-test("YouTube pauses during credential refresh disconnect without dropping partial progress", async (t) => {
+test("YouTube pauses during credential refresh disconnect without dropping confirmed delivery", async (t) => {
   let disconnect = false;
   const f = fixture(t, async () => {
     if (disconnect) f.sender.connected = false;
@@ -605,9 +577,9 @@ test("YouTube pauses during credential refresh disconnect without dropping parti
   disconnect = false;
   f.sender.connected = true;
   await f.sender.tick(f.signal);
-  assert.equal(f.sent.length, 2);
+  assert.equal(f.sent.length, 1);
   assert(
-    f.sent[1].snippet.textMessageDetails.messageText.startsWith("[안내 2/"),
+    f.sent[0].snippet.textMessageDetails.messageText.startsWith("[안내 1/1]"),
   );
 });
 
@@ -645,7 +617,7 @@ test("YouTube normal REST poll continuation does not disconnect notice delivery"
   assert.deepEqual(states, ["connecting", "subscribed:rest", "stopped"]);
 });
 
-test("configured three-second spacing sends all stage parts without additional viewer chat", async (t) => {
+test("single notice is delivered without additional viewer chat", async (t) => {
   const f = fixture(t);
   f.p.profile.notices.perAccountIntervalMs = 3000;
   f.p.profile.notices.globalPerMinute = 20;
@@ -666,7 +638,7 @@ test("configured three-second spacing sends all stage parts without additional v
       /^\[안내 1\/(\d+)\]/,
     )[1],
   );
-  assert(total > 1);
+  assert.equal(total, 1);
   for (let part = 2; part <= total; part++) {
     f.tick(2999);
     await f.sender.tick(f.signal);

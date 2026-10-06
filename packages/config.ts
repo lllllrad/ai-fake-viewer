@@ -34,7 +34,7 @@ export const configSchema = z
       .strict()
       .default({ bindHost: "127.0.0.1", publicBaseUrl: "" }),
     privacy: privacyProfileSchema.default(() => privacyProfileSchema.parse({})),
-    database: z.string().default("data/chat.sqlite"),
+    database: z.string().default("data/broadcast.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
     youtube: z
       .object({
@@ -44,7 +44,6 @@ export const configSchema = z
           .default("http://127.0.0.1:3210/oauth/youtube/callback"),
         enabled: z.boolean().default(false),
         consentNoticeEnabled: z.boolean().default(false),
-        allowBroadcasterTesting: z.boolean().default(false),
         video: z.string().default(""),
         channelId: z.string().default(""),
         transport: z.enum(["grpc", "rest"]).default("grpc"),
@@ -55,7 +54,6 @@ export const configSchema = z
         redirectUri: "http://127.0.0.1:3210/oauth/youtube/callback",
         enabled: false,
         consentNoticeEnabled: false,
-        allowBroadcasterTesting: false,
         video: "",
         channelId: "",
         transport: "grpc",
@@ -64,7 +62,6 @@ export const configSchema = z
     chzzk: z
       .object({
         enabled: z.boolean().default(false),
-        allowBroadcasterTesting: z.boolean().default(false),
         consentNoticeEnabled: z.boolean().default(false),
         redirectUri: z
           .string()
@@ -74,7 +71,6 @@ export const configSchema = z
       .strict()
       .default({
         enabled: false,
-        allowBroadcasterTesting: false,
         consentNoticeEnabled: false,
         redirectUri: "http://127.0.0.1:3210/oauth/chzzk/callback",
       }),
@@ -167,7 +163,6 @@ export const configSchema = z
         contextWindowSeconds: z.number().int().min(30).max(300).default(120),
         manualApproval: z.boolean().default(false),
         reviewDraft: z.boolean().default(true),
-        forceReplyTest: z.boolean().default(false),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
         maxCalls: z.number().int().min(1).max(10000).default(100),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
@@ -210,7 +205,6 @@ export const configSchema = z
         contextWindowSeconds: 120,
         manualApproval: false,
         reviewDraft: true,
-        forceReplyTest: false,
         visualMode: "continuous",
         maxCalls: 100,
         maxInputTokens: 24000,

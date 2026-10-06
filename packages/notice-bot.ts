@@ -10,7 +10,6 @@ export class NoticeBot {
     stage: number;
     revision: number;
     session: string;
-    kind: "intro" | "stage";
     expiresAt: number;
     text: string;
   };
@@ -20,7 +19,6 @@ export class NoticeBot {
     private participation: Participation,
     private broadcaster: string,
     private platform: "soop" | "youtube" | "chzzk" = "soop",
-    private allowBroadcasterTesting = false,
   ) {}
   reset() {
     this.pending = undefined;
@@ -54,22 +52,13 @@ export class NoticeBot {
       if (
         person.platform !== this.platform ||
         person.broadcaster !== this.broadcaster ||
-        (person.author === this.broadcaster &&
-          !(
-            ["youtube", "chzzk"].includes(this.platform) &&
-            this.allowBroadcasterTesting
-          )) ||
+        person.author === this.broadcaster ||
         p.profile.notices.botUserIds.includes(person.author) ||
         person.age === "blocked"
       )
         continue;
-      const kind =
-        person.state === "UNCONSENTED" && person.introPending
-          ? "intro"
-          : person.state === "WAITING_CONSENT" && person.deliveredAt === null
-            ? "stage"
-            : undefined;
-      if (!kind) continue;
+      if (person.state !== "WAITING_CONSENT" || person.deliveredAt !== null)
+        continue;
       try {
         p.reserveNotice(person.id);
         this.attempts.push(Date.now());
@@ -77,10 +66,7 @@ export class NoticeBot {
         continue;
       }
       const id = randomUUID();
-      const text =
-        kind === "intro"
-          ? "[참여 안내] 동의 절차를 완료하지 않은 채팅은 이 앱의 방송 화면에 표시되거나 AI 입력으로 사용되지 않습니다. 참여 안내를 받으려면 !동의를 입력해 주세요. 철회: !철회 / 상태 확인: !참여상태."
-          : p.notice(person.id).text;
+      const text = p.notice(person.id).text;
       this.pending = {
         id,
         participant: person.id,
@@ -88,12 +74,9 @@ export class NoticeBot {
         stage: person.stage,
         revision: p.revision,
         session: p.sessionId,
-        kind,
         expiresAt: Date.now() + (this.platform === "soop" ? 15000 : 900000),
         text:
-          p.profile.singleStepTest && this.platform !== "soop"
-            ? text
-            : `${text} [안내 ${id.slice(0, 8)}]`,
+          this.platform !== "soop" ? text : `${text} [안내 ${id.slice(0, 8)}]`,
       };
       this.state = "awaiting_echo";
       return { id, text: this.pending.text, expiresAt: this.pending.expiresAt };
@@ -115,9 +98,8 @@ export class NoticeBot {
       p.revision === j.revision &&
       person.epoch === j.epoch &&
       person.stage === j.stage &&
-      (j.kind === "intro"
-        ? person.state === "UNCONSENTED"
-        : person.state === "WAITING_CONSENT" && person.deliveredAt === null) &&
+      person.state === "WAITING_CONSENT" &&
+      person.deliveredAt === null &&
       p.available(this.platform, this.broadcaster) &&
       !!p.approval(this.platform, this.broadcaster)?.fixedNotices &&
       (p.profile.notices.approvedLimitConfirmed || !!p.profile.testReview)
@@ -161,16 +143,7 @@ export class NoticeBot {
       this.state = "delivery_unconfirmed";
       return true;
     }
-    if (job.kind === "intro" && person.state === "UNCONSENTED") {
-      person.introPending = false;
-      person.introDelivered = true;
-    }
-    if (
-      job.kind === "stage" &&
-      person.state === "WAITING_CONSENT" &&
-      person.stage === job.stage
-    )
-      person.deliveredAt = Date.now();
+    p.noticeDelivered(this.platform, this.broadcaster, Date.now(), person.id);
     this.state = "ready";
     return true;
   }

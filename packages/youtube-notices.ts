@@ -37,7 +37,6 @@ export class YoutubeNotices {
     private participation: Participation,
     private auth: YoutubeAuth,
     private request: typeof fetch = fetch,
-    private allowBroadcasterTesting = false,
   ) {}
   resolve(chat: string, broadcaster: string) {
     this.reset();
@@ -70,12 +69,7 @@ export class YoutubeNotices {
     try {
       let bot = this.bots.get(target.broadcaster);
       if (!bot) {
-        bot = new NoticeBot(
-          this.participation,
-          target.broadcaster,
-          "youtube",
-          this.allowBroadcasterTesting,
-        );
+        bot = new NoticeBot(this.participation, target.broadcaster, "youtube");
         this.bots.set(target.broadcaster, bot);
       }
       if (this.job && !bot.valid(this.job.id)) {
@@ -93,8 +87,7 @@ export class YoutubeNotices {
         let parts: string[];
         try {
           parts = noticeParts(next.text);
-          if (this.participation.profile.singleStepTest && parts.length !== 1)
-            throw Error("notice_too_long");
+          if (parts.length !== 1) throw Error("notice_too_long");
         } catch (error) {
           bot.failed(next.id);
           throw error;

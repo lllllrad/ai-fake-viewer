@@ -10,13 +10,13 @@ Operators populate `privacy` with actual public information, notice versions, ov
 
 ## Participation and guidance
 
-Participation is keyed by platform, broadcaster, app stream session and original platform user ID. States are `UNCONSENTED → WAITING_CONSENT → ACTIVE`, with `WITHDRAWN` from any stage and full clearing on session end. Nicknames do not identify consent, and consent is not shared across platforms or sessions. Exact localized consent, withdrawal and status commands are defined in [participation.ts](../../packages/participation.ts).
+Participation is keyed by platform, broadcaster, broadcast session and platform user ID. Ordinary new viewers enter `WAITING_CONSENT`; one fresh exact consent command after confirmed guidance makes them `ACTIVE`. Withdrawal changes them to `WITHDRAWN`. Names do not identify consent. Broadcast accounts and configured bot accounts are excluded.
 
-The first exact consent command begins guidance. Self-declared age 14+, collection/use, live/recorded/VOD/edited-video publication, overseas processing and any third-party provision are separate stages. Each must be delivered before a fresh consent command advances it. Current operation targets self-declared 14+ users, recorded as `self_declared_14_plus`. Neither a chat command nor platform membership is age verification. Known under-14 users or contradictory declarations are blocked. There is no guardian-consent verification workflow, so those users cannot participate or remove the block through their own commands, withdrawal or profile changes. This is an operating procedure, not a claim of universal legal age-verification requirements.
+A short, single-message notice links the full public notice and identifies collection, AI/overseas processing, broadcast publication, age self-declaration and withdrawal. There is one consent step, with no preliminary opt-in command. Delivery alone never grants consent. A fresh command after delivery records `self_declared_14_plus`; this is not age verification. Known under-14 users remain blocked. The app has no guardian verification workflow.
 
 Quoted commands are ordinary text, not consent. Uncertain event timestamps/IDs never automatically grant consent; administrators can confirm only the exact newly observed command within 60 seconds. Old/duplicate events cannot reactivate users. Participation accepted through manual ordering assistance must be renewed after that platform connection is lost.
 
-Unconsented ordinary text is discarded after command/notice classification. Only notice-needed state remains in memory. SOOP sends the fixed non-display/participation introduction through the official SDK `sendMessage(message)` and automatically sends each stage after the viewer starts participation. Confirmed introductions do not repeat for later ordinary chat or admin reconnection within the same session. Failed/unconfirmed delivery may retry within limits. A new session or server restart clears notice history. SOOP, YouTube and CHZZK have no operator delivery-completion button; actual-command ordering assistance is a separate function.
+Unconsented ordinary text is discarded after classification. Minimal participation and delivery metadata is stored for this broadcast. Confirmed room guidance covers its target and waiting viewers observed in the same platform/channel within the preceding five minutes. This is evidence of an opportunity to read, not a read receipt. It never covers unknown future arrivals or other rooms/platforms, and never grants consent. Delivered guidance is not repeated for later ordinary chat or server/admin reconnects. New arrivals can trigger a fresh shared notice. Failed or unconfirmed delivery may retry within limits.
 
 Account intervals and global per-minute limits reserve attempts before sending and include failures. Defaults of 30 seconds/two attempts per minute are app settings, not platform-guaranteed quotas. Confirm actual permitted limits. SOOP admin tabs share a 15-second dispatch lease, preventing concurrent duplicates, and poll pending work every second. Unconfirmed delivery does not advance consent. Own/configured bot accounts and withdrawn participants do not trigger unsolicited guidance.
 
@@ -26,7 +26,7 @@ Official contracts: [SOOP send-message](https://developers.sooplive.com/docs/cha
 
 ## Raw text, summaries and races
 
-Command classification and consent checks run before storage, display or summarization. Raw text exists only in memory SQLite. Public DTOs recheck current consent generations. Actual platform nicknames and synthetic persona names are visible from the start: no temporary display-name generation or end-of-session name restoration. Disclosure changes origin/AI labels only. Duplicate nicknames remain distinct by platform user ID. Model author metadata contains opaque session speaker keys, not original account IDs, nicknames or consent records. This does not guarantee removal of personal information within message text itself.
+Command classification and consent checks run before storage, display or summarization. Consented chat is stored in the private broadcast SQLite database. Public DTOs recheck consent generations. Actual platform nicknames and synthetic persona names are visible from the start; disclosure changes origin labels only. Model author metadata uses opaque session speaker keys. This does not remove personal details from message text.
 
 Withdrawal synchronously invalidates consent, removes old raw text, identifiable derived context, mappings, pending drafts and caches, and cancels requests. Late responses are discarded. Profile/generation/message permission is rechecked before token counting and transmission. Already transmitted provider requests are not described as remotely canceled or erased. AI output with recorded direct or indirect dependencies is removed conservatively.
 
@@ -34,7 +34,7 @@ The anonymous area permits only fixed local topic/mood labels. Each label requir
 
 ## Storage lifetime and rights requests
 
-The live Store uses only `:memory:`. Chat, participation, mappings, cast, reactions, summaries, budgets and pending work do not recover after end/restart. When audio is explicitly enabled, authenticated session transcript export is available; downloaded copies are outside automatic session deletion. Legacy chat databases are not opened; operators identify and clean old databases/exports/backups during [migration](../../README.md#storage-and-deletion).
+The live Store uses `config.database`, with owner-only file permissions. Chat, transcripts, participation, notice delivery, connector checkpoints, persona cast, usage counters and AI execution intent survive process restarts, including abrupt exits after committed writes. Mutations persist as they occur. Restart cancels unfinished model attempts and restores AI when inputs and authentication are ready; stale drafts are not published. Raw audio and frames remain transient. Broadcast end deletes the session contents, checkpoints/truncates the SQLite WAL and compacts the database. A closed-session marker prevents restart from silently opening a new broadcast. Retention timers do not erase an active broadcast. Transcript exports are separate operator-managed copies.
 
 The separate `privacy.rightsDatabase` contains only minimal account/session/video scope, relevant provider request IDs, optional contact and handling status. It excludes raw chat/general participant lists and is never model input. File access is owner-only. Withdrawal creates follow-up work after local raw deletion when publication or external requests occurred. Failed persistence retries from session memory with an unsaved-task warning. Forced shutdown during persistent disk failure can lose unsaved work; resolve that warning before shutdown.
 
@@ -61,12 +61,12 @@ Automated scope is in [privacy requirements tests](../../tests/privacy-requireme
 
 | Acceptance IDs | Implementation/fixture scope                                                                                  | Separate operational review                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| T01–04         | Default denial, exact commands, failed/staged delivery, post-consent messages                                 | Actual notice delivery/event ordering           |
+| T01–04         | Default denial, exact commands, failed delivery and individual consent, post-consent messages                 | Actual notice delivery/event ordering           |
 | T05–08         | Account/platform/broadcast/session isolation, stale commands, renewed generations                             | SDK reconnect contracts                         |
 | T09–12         | Withdrawal cancellation, late responses, derived output/snapshots, between-request checks                     | Already transmitted provider requests           |
 | T13–15         | Fixed categories without provenance, retained approved summaries, raw removal, no external summarization      | Identification risk in actual broadcast context |
-| T16            | Forced memory Store, end/new-session clearing, no recovery                                                    | Host shutdown/deployment                        |
-| T17            | Logging disabled, browser storage checks, synthetic artifacts, no session recovery                            | Host swap/dumps/backups and SDK logs            |
+| T16            | Durable broadcast Store, restart recovery and end/new-session clearing                                        | Host shutdown/deployment                        |
+| T17            | Logging disabled, browser storage checks, synthetic artifacts, broadcast-lifetime persistence                 | Host swap/dumps/backups and SDK logs            |
 | T18–20         | Alternative-input/service restrictions, pinned endpoint/model, incomplete-profile denial                      | Actual account region/model/retention           |
 | T21–22         | Automatic fixed notices and acknowledgements, bot exclusion, attempt limits/failures, age declarations/blocks | Platform quotas and child-handling procedure    |
 | T23–24         | Minimal durable follow-up, independent app/external/video/copy completion, optional content list              | Actual editing/provider requests/notification   |
@@ -78,20 +78,20 @@ Actual platform approval/quotas, final notices with countries/periods, the basis
 
 The previous API-key-only scope was extended to explicit API-key or **Sign in with ChatGPT** authentication for the **Responses API**. Match `ai.provider` and `privacy.processing.provider`. For `chatgpt_subscription`, retain the exact configuration value `contract: ChatGPT subscription`, endpoint `https://api.openai.com/v1` and the selected model slug. `OPENAI_API_KEY` / `OPENAI_MODEL` are not prerequisites for this mode. Use the app's account connection and model selector; no Codex CLI token import or execution is involved.
 
-Review actual ChatGPT plan usage countries, retention, sharing settings and notices independently of API-key billing conditions. Raw-text/withdrawal/memory/media guards apply to both modes. Authorization is rechecked after asynchronous token refresh immediately before transmission. See the [official integration](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
+Review actual ChatGPT plan usage countries, retention, sharing settings and notices independently of API-key billing conditions. Raw-text/withdrawal/session/media guards apply to both modes. Authorization is rechecked after asynchronous token refresh immediately before transmission. See the [official integration](https://developers.openai.com/siwc/token-sharing-open-source/models-and-inference).
 
 ## Requirements delta scope
 
-- Publication review covers actual YouTube/CHZZK/SOOP live, recording, VOD and edited-copy scope/periods. An unconfirmed Google table B or assumed API-equivalent legal relationship is not a blanket video blocker. Required provision/overseas notices and actual channel approvals remain. Screen input requires its explicit reviewed scope. Audio scope must be reviewed separately because speech is not automatically matched to viewer consent.
+- Publication review covers actual YouTube/CHZZK/SOOP live, recording, VOD and edited-copy scope/periods. An unconfirmed Google table B or assumed API-equivalent legal relationship is not a blanket video blocker. Required provision/overseas notices and actual channel approvals remain. Screen input follows actual capture configuration. Audio scope must be reviewed separately because speech is not automatically matched to viewer consent.
 - Automatic video editing, per-viewer indexes and exhaustive causal tracking are not mandatory. Existing content inventory is optional operational support. Rights intake and app/external/video distinctions remain, as do internal cancellation/generation guards against raw-text reuse.
-- Public policy wording need not disclose internal queues, generation numbers, cancellation algorithms or every editing method. This is an internal implementation document; final public policy copy was not supplied. Acceptance checks non-persistence, no redisplay/retransmission after deletion and no session recovery. Forensic removal of every hardware remnant is neither a public guarantee nor a success criterion. Host protections remain internal operational review.
+- Public policy wording need not disclose internal queues, generation numbers, cancellation algorithms or every editing method. This is an internal implementation document; final public policy copy was not supplied. Acceptance checks broadcast-end deletion, no redisplay/retransmission after deletion and broadcast-lifetime persistence. Forensic removal of every hardware remnant is neither a public guarantee nor a success criterion. Host protections remain internal operational review.
 - Country, retention and processing-item changes require updated notice text/version and renewed consent. Runtime scope changes with an unchanged `noticeVersion` are rejected. Updating an external document link never automatically expands consent.
 
 ## YouTube automatic notices
 
-YouTube uses server OAuth to connect the broadcaster's channel and the official YouTube Live Streaming API `liveChatMessages.insert` for fixed participation guidance. It never sends unconsented bodies, nicknames or AI replies. Validate returned message ID, chat, author and exact text; split long notices and require all parts before opening the consent stage. Each part/failure consumes account/global limits. Confirmed introductions do not repeat for ordinary chat in the same session. The server receiver must run, but the admin tab need not stay open.
+YouTube uses broadcaster OAuth and the YouTube Live Streaming API `liveChatMessages.insert` for one fixed notice. It validates the returned message ID, chat, author and exact text. An overlong notice is rejected rather than split or truncated. Each attempt consumes the configured rate budget. The server receiver must run; the admin tab need not remain open.
 
-After token refresh and before sending, recheck consent generation, profile, target and connected channel. Account mismatch, withdrawal, stop and failed/unconfirmed responses do not advance consent. YouTube manual delivery completion is blocked in API/UI. Only operator OAuth credentials are encrypted on disk; viewer participation remains memory-only. See [YouTube setup and acceptance](../operations/setup.md#youtube-oauth-and-automatic-notices).
+After token refresh and before sending, the app rechecks consent generation, profile, target and account. Withdrawal, account mismatch, stop and failed/unconfirmed responses do not record delivery. Manual completion is blocked. Participation and confirmed delivery survive server restarts in the broadcast database. See [YouTube setup](../operations/setup.md#youtube-oauth-and-automatic-notices).
 
 ## CHZZK automatic fixed notices
 
@@ -105,7 +105,7 @@ treated as duplicates. Missing or invalid timestamps are not replaced with local
 receive time. Tests pass raw CHAT payloads through normalization, consent and the
 public store snapshot used by the overlay.
 
-The server sends fixed participation introductions and stage notices through the official Chat API while its own-channel receiver is subscribed. It checks the authenticated channel through the User API, applies the same participation/profile/attempt limits, and splits notices into messages of at most 100 characters without truncating URLs. Every part must return a successful response with a nonempty message ID before delivery is recorded. Viewer commands before completion cannot advance consent. Own-channel messages are excluded from viewer input. Confirmed introductions remain suppressed for later ordinary chat in the same session, including receiver reconnects.
+CHZZK sends one fixed notice through the official Chat API while its receiver is subscribed. It verifies the authenticated channel through the User API and requires a nonempty returned message ID. The notice must fit 100 characters including its prefix; excessive length fails visibly without truncating the URL. Own-channel messages are excluded. Confirmed guidance is not repeated for later ordinary chat or reconnects.
 
 Token refresh, identity lookup and response parsing are asynchronous boundaries: cancellation, credentials, target and consent validity are checked before sending and acknowledging. Missing acknowledgement can cause a delayed retry; remote exactly-once sending is not promised. Authentication/permission failures pause retries, and stopping receipt stops sending. No arbitrary-message API or native-platform AI publication is added.
 
@@ -139,44 +139,13 @@ Without this explicit review, the ordinary complete-profile checks still apply.
 Operator/contact information, HTTPS policy/notice URLs, notice versions and stage
 texts, model/endpoint/provider compatibility and exact broadcaster approvals remain
 required. Authentication and API permissions are unchanged. Every viewer still
-needs each delivered consent stage followed by a fresh consent command. Withdrawal,
+needs one delivered notice followed by a fresh consent command. Withdrawal,
 raw-text exclusion and actual account/global notice-rate limits remain enforced.
 Changing or removing the review requires a new notice version, invalidating old
 participation through the usual profile-update handling. YAML changes require a
-server restart and a fresh session. This exception is for explicitly reviewed
+server restart; changed processing profiles require the previous broadcast to end first. This exception is for explicitly reviewed
 testing; completing the descriptive profile remains an operational task.
-
-## Temporary broadcaster participation
-
-YouTube normally excludes the authenticated sender account to avoid responding to
-its own notices. The opt-in `youtube.allowBroadcasterTesting` option admits its
-ordinary text and consent/withdrawal commands for testing, using the same staged
-participation rules. Numbered automatic-notice parts from that account remain
-excluded in both REST and gRPC paths, including after restart. Explicit configured
-bot exclusions still apply. See the [temporary testing runbook](../operations/setup.md#temporary-youtube-broadcaster-account-testing).
 
 ## YouTube notice acknowledgements during receive continuation
 
-Normal REST polling and gRPC stream continuation preserve the receiver's subscribed
-state. A receive-state change does not invalidate an exact successful YouTube
-insertion response. Connectivity is required before sending, while response
-acceptance checks the unchanged session, target, account, consent generation and
-pending notice. Confirmed multipart progress survives a disconnect during token
-refresh; sending resumes with the next unsent part. Withdrawal, target changes and
-explicit cancellation still reject late responses. All parts must be confirmed
-before a fresh consent command advances a stage; a confirmed introduction is not
-sent again merely because the receiver reconnects or the timer ticks.
-
-## Single-step test exception
-
-The explicitly requested temporary `privacy.singleStepTest` mode requires operator
-review evidence and a new notice version. It replaces the ordinary stage list with
-one combined test declaration. A first message schedules its fixed short notice;
-a fresh consent command after confirmed delivery records age self-declaration and
-activates participation. No automatic or administrator-granted consent is added.
-Repeated ordinary chat does not resend a delivered notice. Withdrawal, known child
-restrictions, exact-channel permissions and notice quotas remain enforced. YouTube
-and CHZZK enforce a one-message size bound; an overlong notice fails without a
-partial send. This is an abbreviated testing exception, not a claim that a short
-combined declaration satisfies every production consent requirement. See the
-[test runbook](../operations/setup.md#temporary-single-step-consent-test).
+Normal REST polling and gRPC continuation retain subscription status. A receive-state change does not invalidate a confirmed insertion response. Before sending and acknowledging, the target, account, session, consent generation and pending job must still match. A confirmed notice is not sent again merely because a timer fires or the connection restarts.

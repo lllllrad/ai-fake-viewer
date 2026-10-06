@@ -55,17 +55,12 @@ export function normalizeYoutube(item: any, chat: string): Incoming | null {
     publishedAt: Number.isFinite(stamp) ? stamp : null,
   };
 }
-// Broadcaster test messages may participate; reserved automatic-notice parts never do.
-// Match the sender format even after reconnect/restart, when sent IDs are unavailable.
+// Broadcast account messages (including automatic notices) are not viewer participation.
 export function ignoreYoutubeOwnMessage(
   message: Incoming,
   ownChannel: string | undefined,
-  allowBroadcasterTesting = false,
 ) {
-  return (
-    message.author === ownChannel &&
-    (!allowBroadcasterTesting || /^\[안내 \d+\/\d+\] /u.test(message.text))
-  );
+  return message.author === ownChannel;
 }
 
 export class UpstreamError extends Error {
@@ -152,7 +147,6 @@ export async function runYoutube(
     channelId?: string;
     transport: "grpc" | "rest";
     restFallback: boolean;
-    allowBroadcasterTesting?: boolean;
   },
   store: Store,
   signal: AbortSignal,
@@ -261,14 +255,7 @@ export async function runYoutube(
           (b.items ?? [])
             .map((i: any) => {
               const m = normalizeYoutube(i, chat);
-              if (
-                m &&
-                ignoreYoutubeOwnMessage(
-                  m,
-                  options?.ownChannel?.(),
-                  config.allowBroadcasterTesting,
-                )
-              )
+              if (m && ignoreYoutubeOwnMessage(m, options?.ownChannel?.()))
                 return null;
               return m && broadcaster ? { ...m, channel: broadcaster } : m;
             })
@@ -314,14 +301,7 @@ export async function runYoutube(
               (b.items ?? [])
                 .map((i: any) => {
                   const m = normalizeYoutube(i, chat);
-                  if (
-                    m &&
-                    ignoreYoutubeOwnMessage(
-                      m,
-                      options?.ownChannel?.(),
-                      config.allowBroadcasterTesting,
-                    )
-                  )
+                  if (m && ignoreYoutubeOwnMessage(m, options?.ownChannel?.()))
                     return null;
                   return m && broadcaster ? { ...m, channel: broadcaster } : m;
                 })

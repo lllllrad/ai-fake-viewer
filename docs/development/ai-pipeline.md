@@ -4,7 +4,7 @@ The live profile is consent-gated chat and optional broadcast-transcript and OBS
 
 ## Runtime scope and startup
 
-`createApp` always constructs an in-memory Store. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI requires manual start after restart. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
+`createApp` uses the configured private SQLite database in live mode and an in-memory Store in demo mode. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI execution intent survives restart; the recovery loop waits for required inputs and authentication before resuming. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
 Jev, persistent Store and persona authoring libraries remain standalone paths. Live video and broadcast transcription use their configured sources by default. Demo uses artificial data and a mock model.
 
@@ -14,7 +14,7 @@ Jev, persistent Store and persona authoring libraries remain standalone paths. L
 - Withdrawal invalidates the generation synchronously, erases raw messages and orphan mappings, aborts work and clears queued drafts/cache/manifests. Tracked directly or indirectly dependent AI messages are removed conservatively. Late responses cannot publish. External processing already started is not described as undone.
 - Local summary creation considers currently permitted recent human chat only. It emits fixed topic/mood labels supported by at least three distinct accounts, without quotes, personal stories, links or provenance tables. Counts/regular expressions alone do not certify legal anonymity. No external summary request is made.
 - The strict live anonymous area retains categories approved before withdrawal for the rest of the current session; withdrawn text is never used to rebuild them. No account/message/source mapping is stored in that area. Session close/reset clears it. Admin **Reset chat summary** clears the aggregate with a sequence cutoff and invalidates current work.
-- Model request IDs are associated with participants only in memory. Withdrawal creates a separate minimal rights task if text was displayed or requests were associated. App deletion, provider handling and VOD/copy handling remain distinct.
+- Model request IDs are associated with participants in the broadcast session database. Withdrawal creates a separate minimal rights task if text was displayed or requests were associated. App deletion, provider handling and VOD/copy handling remain distinct.
 
 ## Runtime overview
 
@@ -84,7 +84,7 @@ Change prompts or scheduler behavior with synthetic fixtures. Run `sh run-comman
 
 ## Configuration and live visibility
 
-Use [config.example.yaml](../../config.example.yaml), [live setup](../operations/setup.md) and the admin operating-profile panel. `privacy` is public configuration, not a credential store. Default blank fields fail closed. A current-process profile PUT stops inputs/generation, invalidates consent and removes previous raw context; persistent changes belong in YAML. Budgets are current-session memory; provider account limits are separate.
+Use [config.example.yaml](../../config.example.yaml), [live setup](../operations/setup.md) and the admin operating-profile panel. `privacy` is public configuration, not a credential store. Default blank fields fail closed. A current-process profile PUT stops inputs/generation, invalidates consent and removes previous raw context; persistent changes belong in YAML. Budgets persist for the current broadcast; provider account limits are separate.
 
 ## Privacy and boundaries
 
@@ -113,21 +113,7 @@ cannot by itself establish whether a past stop was a timeout, invalid output or
 stale input. Current transcript evidence is still revalidated before each model
 request, including draft review.
 
-## Temporary reply testing
-
-`ai.forceReplyTest` defaults to false. When enabled, an additional developer prompt
-asks generation and review to produce a short grounded Korean reply even for
-ordinary new input, overriding voluntary silence and novelty preferences. The
-scheduler bypasses probabilistic participation suppression and the optional timing
-gate. It still selects one eligible persona, not the entire cast.
-
-Fresh permitted evidence, persona presence, cooldowns, configured pacing, volume
-caps, consent, withdrawal, output validation, review, and call budgets remain in
-force. There is no fabricated fallback response or retry loop to force publication.
-The model can still skip unusable or unsafe input, and provider errors can still
-prevent a reply. Status and the administrator dashboard identify this temporary
-mode. Disable `ai.forceReplyTest` and restart to restore ordinary participation;
-restore any separately adjusted pacing values as well.
+## Review and diagnostics
 
 Before draft review, expired background transcripts are removed from both the
 context and new-transcript lists. If a draft cites an expired transcript, that

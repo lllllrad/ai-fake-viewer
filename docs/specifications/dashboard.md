@@ -1,20 +1,20 @@
 # Admin dashboard functional specification
 
-Version 1.5. Operating controls remain the first priority. [Privacy implementation](participation.md) defines live participation, staged consent and memory lifetime. Implementation evidence does not establish platform or provider approval.
+Version 1.5. Operating controls remain the first priority. [Privacy implementation](participation.md) defines live participation, single-step consent and broadcast lifetime. Implementation evidence does not establish platform or provider approval.
 
 ## Implementation and requirement gaps
 
-| Requirement    | Current behavior                                                                                     | Remaining acceptance                            |
-| -------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                       | Full accessibility audit                        |
-| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings      | Actual contracts and account configuration      |
-| Inputs         | Approved official receivers; optional broadcast transcription; screen remains unused                 | Review before enabling alternative input        |
-| Emergency stop | Available even with stale status; independent of receiver stop                                       | Extended network failure                        |
-| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                     | Match the actual viewer notice                  |
-| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                            | Host/service rehearsal                          |
-| Guidance       | Automatic fixed notices, observed-command assistance, separate consent stages and child restrictions | Real delivery permissions and event ordering    |
-| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session    | Provider/VOD actions                            |
-| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks              | Target identification, editing and notification |
+| Requirement    | Current behavior                                                                                       | Remaining acceptance                            |
+| -------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| First screen   | Input status and AI controls precede privacy, summaries and automatic personas                         | Full accessibility audit                        |
+| Readiness      | Server checks processing profile and selected service/model; failures link to relevant settings        | Actual contracts and account configuration      |
+| Inputs         | Approved official receivers; optional broadcast transcription; screen remains unused                   | Review before enabling alternative input        |
+| Emergency stop | Available even with stale status; independent of receiver stop                                         | Extended network failure                        |
+| Disclosure     | Confirmation disarms AI and exposes platform/AI labels; nicknames stay unchanged                       | Match the actual viewer notice                  |
+| Restart        | New memory session, no consent/cast/raw-context recovery, manual AI start                              | Host/service rehearsal                          |
+| Guidance       | Automatic fixed notices, observed-command assistance, one combined consent step and child restrictions | Real delivery permissions and event ordering    |
+| Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session      | Provider/VOD actions                            |
+| Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks                | Target identification, editing and notification |
 
 Sources: [operations-dashboard.tsx](../../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx), [main.tsx](../../apps/web/src/main.tsx) and [server](../../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
 
@@ -60,13 +60,18 @@ Starting inputs does not start AI. Separate all-input stop from individual recei
 
 ### 4.3 Guidance and connection controls
 
-Legacy overlay notice switches are informational, not delivery or consent. Their runtime values are memory-only and restart from YAML defaults. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send fixed non-display introductions and stage notices. CHZZK uses the official Chat API from the server. These senders never send AI replies or viewer text.
+Legacy overlay notice switches are informational, not delivery or consent. Their runtime values survive restart for the current broadcast. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send a short fixed participation notice. CHZZK uses the official Chat API from the server. These senders never send AI replies or viewer text.
 
 CHZZK setup places its connect/reauthorize action directly next to its configuration status and callback. The action remains available when credentials are configured and authorization is already saved; disabled configuration explains the required correction. Saved authorization is not live permission verification. Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control. CHZZK also confirms every part through an API message ID, enforces attempt limits and disables manual delivery confirmation. Its server sender does not depend on an open admin tab. See the [platform behavior matrix](behavior.md#platform-execution-and-notice-delivery).
 
 ## 5. Participation and privacy
 
-The first exact consent command begins guidance. Age self-declaration, collection/use, video publication, overseas processing and any third-party provision are separate delivered stages, each requiring a fresh command. The participant list shows only minimal account, stage, age status and observed commands; unconsented ordinary text is absent. Administrators cannot set ACTIVE directly. SDK events with uncertain ordering require verification of the specific newly observed command, not old retransmissions.
+An ordinary first chat schedules a single short notice. After confirmed delivery,
+one fresh exact consent command activates participation. Recently observed viewers
+in the same room share delivery, not consent. The participant list shows minimal
+account, notice, age and observed-command state; unconsented text is absent.
+Administrators cannot invent consent. All participation and AI execution intent
+survives restart until broadcast end.
 
 Withdrawal invalidates consent, removes raw/derived context and cancels AI. Previously approved anonymous categories may remain until session end. A status command lets the operator inspect current participation. Age is shown as self-declared 14+, not verified. Known under-14 or contradictory declarations are blocked. There is no guardian-consent verification workflow, and self-issued commands cannot override the restriction.
 

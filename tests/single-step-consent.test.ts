@@ -5,22 +5,14 @@ import { Store } from "../packages/storage.ts";
 import { YoutubeNotices } from "../packages/youtube-notices.ts";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";
 import { normalizeChzzk } from "../packages/chzzk.ts";
-import {
-  assertProfileUpdate,
-  profileIssues,
-} from "../packages/privacy-profile.ts";
+import { profileIssues } from "../packages/privacy-profile.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 
 for (const platform of ["youtube", "chzzk"] as const) {
-  test(`${platform} single-step test sends one message and requires one fresh post-delivery consent`, async (t) => {
+  test(`${platform} single-step consent sends one message and requires one fresh post-delivery consent`, async (t) => {
     let now = Date.now();
     t.mock.method(Date, "now", () => now);
     const profile = approvedProfile();
-    profile.singleStepTest = true;
-    profile.testReview = {
-      reference: "Explicit temporary test",
-      checkedAt: "2026-10-05T00:00:00Z",
-    };
     profile.noticeUrl = "https://cafe.naver.com/lllllrad/staff/2";
     const p = new Participation(profile, "session"),
       store = new Store(":memory:", p);
@@ -52,13 +44,11 @@ for (const platform of ["youtube", "chzzk"] as const) {
               access: async () => "token",
             } as any,
             request,
-            true,
           )
         : new ChzzkNotices(
             p,
             { token: {}, access: async () => "token" } as any,
             request,
-            true,
           );
     sender.resolve("chat", "fixture");
     sender.connected = true;
@@ -68,17 +58,17 @@ for (const platform of ["youtube", "chzzk"] as const) {
         platform === "chzzk"
           ? normalizeChzzk({
               channelId: "fixture",
-              senderChannelId: "fixture",
+              senderChannelId: "viewer",
               profile: { nickname: "Synthetic broadcaster" },
               content: text,
               messageTime: at,
             })
-          : privacyMessage("fixture", text, at, { platform });
+          : privacyMessage("viewer", text, at, { platform });
       store.ingestBatch([message]);
       return message;
     };
     send("hello");
-    const person = p.get(platform, "fixture", "fixture")!;
+    const person = p.get(platform, "fixture", "viewer")!;
     const earlyConsent = send("!동의");
     assert.equal(person.state, "WAITING_CONSENT");
     await sender.tick(new AbortController().signal);
@@ -108,20 +98,10 @@ for (const platform of ["youtube", "chzzk"] as const) {
     assert.equal(sent.length, 1);
   });
 }
-test("single-step testing is explicit, versioned and keeps known age restrictions", () => {
-  const before = approvedProfile(),
-    after = approvedProfile();
-  after.singleStepTest = true;
-  assert(profileIssues(after).length > 0);
-  after.testReview = {
-    reference: "Test review",
-    checkedAt: "2026-10-05T00:00:00Z",
-  };
-  assert.deepEqual(profileIssues(after), []);
-  assert.throws(() => assertProfileUpdate(before, after));
-  after.noticeVersion = "single-test-2";
-  assert.doesNotThrow(() => assertProfileUpdate(before, after));
-  const p = new Participation(after, "session"),
+test("single-step consent keeps known age restrictions", () => {
+  const profile = approvedProfile();
+  assert.deepEqual(profileIssues(profile), []);
+  const p = new Participation(profile, "session"),
     store = new Store(":memory:", p);
   try {
     store.ingestBatch([privacyMessage("u", "hello", Date.now() + 1)]);

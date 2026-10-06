@@ -700,7 +700,9 @@ function Admin() {
             onRefresh={() => void refresh()}
             onToggle={() =>
               void action(
-                status.ai.state === "running" ? "ai/stop" : "ai/start",
+                status.aiDesiredRunning || status.ai.state === "running"
+                  ? "ai/stop"
+                  : "ai/start",
               )
             }
             onReveal={revealOrigins}
@@ -1032,7 +1034,7 @@ function Admin() {
                 <p className="hint">
                   설정된 방송 음성을 Groq로 전사하고 최근 10청크를 AI 입력에
                   사용합니다. 음성 주소와 GROQ_API_KEY가 필요합니다. 기록은 세션
-                  종료·재시작·동의 철회 시 삭제합니다.
+                  종료·동의 철회 시 삭제하고 서버 재시작 후에는 복구합니다.
                 </p>
                 {status.audio.history.length > 0 && (
                   <ol>
@@ -1270,9 +1272,9 @@ function Admin() {
                   )}
                 </div>
                 <p className="hint">
-                  AI는 직접 켜야 생성됩니다. 서버 재시작 후 이전 참여·실행
-                  상태를 복구하지 않습니다. 방송 종료 시 세션 정보를 삭제합니다.
-                  운영 프로필과 모델 준비 상태를 확인한 뒤 시작하세요.
+                  AI 실행 상태와 참여 상태는 서버 재시작 후 복구합니다. 방송
+                  종료 시 세션 정보를 삭제합니다. 운영 프로필과 모델 준비 상태를
+                  확인한 뒤 시작하세요.
                 </p>
                 <p className="hint">
                   {status.ai.manualApproval
@@ -1409,9 +1411,10 @@ function Admin() {
               </button>
             </div>
             <p className="hint">
-              메모리 전용: 세션 종료·재시작 시 채팅과 전사문을 삭제합니다.
-              Frames, raw audio and prompts are not written to disk. SOOP에는
-              고정 참여 안내만 자동 발송하며 AI 채팅은 발송하지 않습니다.
+              방송 세션 저장: 채팅과 전사문은 재시작 후 복구하고 방송 종료 시
+              삭제합니다. Frames, raw audio and prompts are not written to disk.
+              SOOP에는 고정 참여 안내만 자동 발송하며 AI 채팅은 발송하지
+              않습니다.
             </p>
           </section>
         </>

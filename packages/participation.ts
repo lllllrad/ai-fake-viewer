@@ -1,4 +1,7 @@
-import { PrivacyActionError } from "./privacy-profile.ts";
+import {
+  PrivacyActionError,
+  SessionProfileMismatchError,
+} from "./privacy-profile.ts";
 import { randomUUID } from "node:crypto";
 import type { Incoming } from "./contracts.ts";
 import {
@@ -9,8 +12,7 @@ import {
 } from "./privacy-profile.ts";
 export type ParticipationState =
   "UNCONSENTED" | "WAITING_CONSENT" | "ACTIVE" | "WITHDRAWN" | "ENDED";
-export type ConsentStage =
-  "age" | "collection" | "publication" | "overseas" | "thirdParty" | "combined";
+export type ConsentStage = "combined";
 export type Participant = {
   id: string;
   platform: string;
@@ -24,6 +26,7 @@ export type Participant = {
   accepted: string[];
   activeAfter: number;
   lastEventAt: number;
+  lastSeenAt: number;
   lastNoticeAt: number;
   deliveredAt: number | null;
   observed?: { id: string; receivedAt: number; command: string };
@@ -51,14 +54,7 @@ export class Participation {
     return JSON.stringify([platform, broadcaster, this.sessionId, author]);
   }
   stages(): ConsentStage[] {
-    if (this.profile.singleStepTest) return ["combined"];
-    return [
-      "age",
-      "collection",
-      "publication",
-      "overseas",
-      ...(this.profile.thirdPartyNotice ? ["thirdParty" as const] : []),
-    ];
+    return ["combined"];
   }
   approval(platform: string, broadcaster: string) {
     return this.profile.approvals.find(
@@ -89,7 +85,7 @@ export class Participation {
         platform: m.platform,
         broadcaster: m.channel,
         author: m.author,
-        state: this.profile.singleStepTest ? "WAITING_CONSENT" : "UNCONSENTED",
+        state: "WAITING_CONSENT",
         epoch: 0,
         stage: 0,
         age: "unknown",
@@ -97,6 +93,7 @@ export class Participation {
         accepted: [],
         activeAfter: 0,
         lastEventAt: this.startedAt,
+        lastSeenAt: 0,
         lastNoticeAt: 0,
         deliveredAt: null,
         eventIds: new Set(),
@@ -124,11 +121,32 @@ export class Participation {
       p.age === "self_declared_14_plus"
     );
   }
-  handle(m: Incoming): { allow: boolean; withdraw: boolean; epoch: number } {
-    if (this.ended || this.profile.notices.botUserIds.includes(m.author))
+  handle(m: Incoming) {
+    try {
+      return this.handleMessage(m);
+    } finally {
+      this.changed();
+    }
+  }
+  private handleMessage(m: Incoming): {
+    allow: boolean;
+    withdraw: boolean;
+    epoch: number;
+  } {
+    if (
+      this.ended ||
+      m.author === m.channel ||
+      this.profile.notices.botUserIds.includes(m.author)
+    )
       return { allow: false, withdraw: false, epoch: 0 };
     const command = m.text.trim();
     const p = this.obtain(m);
+    if (
+      m.publishedAt != null &&
+      m.publishedAt >= this.startedAt &&
+      m.publishedAt <= Date.now() + 5000
+    )
+      p.lastSeenAt = Math.max(p.lastSeenAt, m.publishedAt);
     if (command === "!철회") {
       if (p.state !== "WITHDRAWN") {
         p.epoch++;
@@ -207,8 +225,7 @@ export class Participation {
     if (p.deliveredAt === null || at <= p.deliveredAt) return;
     const stage = this.stages()[p.stage];
     p.accepted.push(stage);
-    if (stage === "age" || stage === "combined")
-      p.age = "self_declared_14_plus";
+    p.age = "self_declared_14_plus";
     p.stage++;
     p.deliveredAt = null;
     p.observed = undefined;
@@ -234,6 +251,7 @@ export class Participation {
     p.observed = undefined;
     this.acceptCommand(p, at);
     if (p.state === "ACTIVE") p.accepted.push("manual_live_order");
+    this.changed();
     return p;
   }
   byId(id: string) {
@@ -245,26 +263,12 @@ export class Participation {
     const p = this.byId(id);
     const stage = this.stages()[p.stage];
     const profile = this.profile;
-    if (profile.singleStepTest)
-      return {
-        stage,
-        text: `테스트: 14세 이상·수집이용·방송공개·국외처리·음성·화면${profile.thirdPartyNotice ? "·제3자제공" : ""} 동의 !동의 / 철회 !철회 ${profile.noticeUrl}`,
-      };
-    const text =
-      stage === "age"
-        ? "이 앱은 만 14세 이상이라고 자기신고한 이용자를 대상으로 운영합니다. 본인이 만 14세 이상이면 새로운 !동의를 입력해 주세요. 이 명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로 확인되면 참여를 중단하며, 법정대리인 동의 확인 절차가 마련되기 전에는 참여할 수 없습니다."
-        : stage === "collection"
-          ? profile.collectionNotice
-          : stage === "publication"
-            ? profile.publicationNotice
-            : stage === "overseas"
-              ? profile.overseasNotice
-              : profile.thirdPartyNotice;
     return {
       stage,
-      text: `[참여 안내 ${stage}] ${text} 이 단계에 동의하면 새로운 !동의를 입력해 주세요. 동의하지 않으면 이 앱에 참여하지 않습니다. 철회: !철회 / 상태 확인: !참여상태. 방침: ${profile.policyUrl} 안내(${profile.noticeVersion}): ${profile.noticeUrl}`,
+      text: `14세 이상 수집·AI·국외처리·방송공개${profile.thirdPartyNotice ? "·제3자제공" : ""} !동의/철회 !철회. 미동의 제외 ${profile.noticeUrl}`,
     };
   }
+
   reserveNotice(id: string) {
     const p = this.byId(id),
       a = this.approval(p.platform, p.broadcaster),
@@ -283,6 +287,7 @@ export class Participation {
       throw new PrivacyActionError("안내 권한·단계·발송 제한을 확인해 주세요.");
     p.lastNoticeAt = now;
     this.sent.push(now);
+    this.changed();
     return p;
   }
   delivered(id: string) {
@@ -290,7 +295,7 @@ export class Participation {
     if (p.state !== "WAITING_CONSENT")
       throw new PrivacyActionError("안내 단계를 확인해 주세요.");
     this.reserveNotice(id);
-    p.deliveredAt = Date.now();
+    this.noticeDelivered(p.platform, p.broadcaster, Date.now(), p.id);
     return p;
   }
   blockAge(id: string) {
@@ -301,6 +306,7 @@ export class Participation {
     this.revision++;
     p.deliveredAt = null;
     this.onWithdraw?.(structuredClone(p));
+    this.changed();
     return p;
   }
   connectionLost(platform: string) {
@@ -312,6 +318,7 @@ export class Participation {
         this.revision++;
         this.onWithdraw?.(structuredClone(p));
       }
+    this.changed();
   }
   invalidateAll() {
     for (const p of this.participants.values()) {
@@ -323,6 +330,7 @@ export class Participation {
       this.onWithdraw?.(structuredClone(p));
     }
     this.revision++;
+    this.changed();
   }
   replaceProfile(profile: PrivacyProfile) {
     if (profileFingerprint(profile) === this.fingerprint) return;
@@ -331,11 +339,71 @@ export class Participation {
     this.profile = profile;
     this.fingerprint = profileFingerprint(profile);
     this.revision++;
+    this.changed();
+  }
+  // Delivery covers recently observed viewers in this room, never unknown future arrivals.
+  noticeDelivered(
+    platform: string,
+    broadcaster: string,
+    at: number,
+    target: string,
+  ) {
+    for (const p of this.participants.values()) {
+      if (
+        p.platform !== platform ||
+        p.broadcaster !== broadcaster ||
+        p.age === "blocked" ||
+        p.state !== "WAITING_CONSENT" ||
+        p.deliveredAt !== null
+      )
+        continue;
+      if (
+        p.id !== target &&
+        (p.lastSeenAt < at - 5 * 60_000 || p.lastSeenAt > at)
+      )
+        continue;
+      p.deliveredAt = at;
+      p.introPending = false;
+      p.introDelivered = true;
+    }
+    this.changed();
+  }
+  onChange?: () => void;
+  changed() {
+    this.onChange?.();
+  }
+  snapshot() {
+    return {
+      fingerprint: this.fingerprint,
+      startedAt: this.startedAt,
+      revision: this.revision,
+      ended: this.ended,
+      sent: this.sent,
+      participants: [...this.participants.values()].map((p) => ({
+        ...p,
+        eventIds: [...p.eventIds],
+      })),
+    };
+  }
+  restore(snapshot: ReturnType<Participation["snapshot"]>) {
+    if (!snapshot.ended && snapshot.fingerprint !== this.fingerprint)
+      throw new SessionProfileMismatchError();
+    this.startedAt = snapshot.startedAt;
+    this.revision = snapshot.revision;
+    this.ended = snapshot.ended;
+    this.sent = snapshot.sent;
+    this.participants = new Map(
+      snapshot.participants.map((p) => [
+        this.key(p.platform, p.broadcaster, p.author),
+        { ...p, observed: undefined, eventIds: new Set(p.eventIds) },
+      ]),
+    );
   }
   end() {
     this.ended = true;
     this.revision++;
     this.participants.clear();
     this.sent = [];
+    this.changed();
   }
 }

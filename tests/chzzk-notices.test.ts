@@ -62,7 +62,7 @@ test("CHZZK sends only fixed intro, confirms insert resource and never repeats o
     await f.sender.tick(f.signal);
     assert(f.sent.length < 10);
   }
-  assert.equal(person.state, "UNCONSENTED");
+  assert.equal(person.state, "WAITING_CONSENT");
   assert(!JSON.stringify(f.sent).includes("PRIVATE_VIEWER_TEXT"));
   const count = f.sent.length;
   f.tick(600001);
@@ -76,20 +76,16 @@ test("CHZZK sends only fixed intro, confirms insert resource and never repeats o
   await f.sender.tick(f.signal);
   assert.equal(f.sent.length, count);
 });
-test("CHZZK multi-part stages require every confirmed part and a later command", async (t) => {
+test("CHZZK single notice requires confirmed delivery and a later command", async (t) => {
   const f = fixture(t);
   f.message("!동의");
   const person = f.p.get("chzzk", "fixture", "viewer")!;
-  await f.sender.tick(f.signal);
   assert.equal(person.deliveredAt, null);
   f.message("!동의");
   assert.equal(person.stage, 0);
-  for (let i = 0; person.deliveredAt === null && i < 20; i++) {
-    f.tick();
-    await f.sender.tick(f.signal);
-  }
+  await f.sender.tick(f.signal);
   assert.notEqual(person.deliveredAt, null);
-  assert(f.sent.length > 1);
+  assert.equal(f.sent.length, 1);
   assert(f.sent.every((b) => b.message.length <= 100));
   f.message("!동의");
   assert.equal(person.stage, 1);
@@ -279,7 +275,7 @@ test("CHZZK supervisor wires subscription to automatic notices and excludes own-
     )
       await new Promise((r) => setTimeout(r, 10));
     assert.equal(p.get("chzzk", "fixture", "viewer")?.introDelivered, true);
-    assert(writes >= 2);
+    assert.equal(writes, 1);
     assert.equal(p.get("chzzk", "fixture", "fixture"), undefined);
     assert.equal(store.snapshot().messages.length, 0);
     await supervisor.stopPlatform("chzzk");

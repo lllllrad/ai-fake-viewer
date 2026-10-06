@@ -15,10 +15,6 @@ import { ModelRequestError } from "./model-errors.ts";
 const promptPath = (name: string) => resolve(process.cwd(), "prompts", name);
 const answerPrompt = readFileSync(promptPath("answer.md"), "utf8").trim();
 const reviewPrompt = readFileSync(promptPath("review.md"), "utf8").trim();
-const forceReplyTestPrompt = readFileSync(
-  promptPath("force-reply-test.md"),
-  "utf8",
-).trim();
 
 export interface ModelInput {
   frames: Frame[];
@@ -29,7 +25,6 @@ export interface ModelInput {
   privacyRevision?: number;
   chatSummary?: ChatSummary;
   reviewDraft?: string;
-  forceReplyTest?: boolean;
   persona: { name: string; style: string };
   description: string;
 }
@@ -42,19 +37,62 @@ export type Model = (
   input: ModelInput,
   signal: AbortSignal,
 ) => Promise<ModelResult>;
-export function limitModelConcurrency(model:Model, maximum=2):Model {
-  let active=0;const queue:Array<{resolve:(release:()=>void)=>void;reject:(reason:unknown)=>void;signal:AbortSignal;abort:()=>void}> = [];
-  const releaseOne=()=>{
-    while(queue.length){const next=queue.shift()!;next.signal.removeEventListener('abort',next.abort);if(next.signal.aborted)continue;next.resolve(makeRelease());return;}
-    active=Math.max(0,active-1);
+export function limitModelConcurrency(model: Model, maximum = 2): Model {
+  let active = 0;
+  const queue: Array<{
+    resolve: (release: () => void) => void;
+    reject: (reason: unknown) => void;
+    signal: AbortSignal;
+    abort: () => void;
+  }> = [];
+  const releaseOne = () => {
+    while (queue.length) {
+      const next = queue.shift()!;
+      next.signal.removeEventListener("abort", next.abort);
+      if (next.signal.aborted) continue;
+      next.resolve(makeRelease());
+      return;
+    }
+    active = Math.max(0, active - 1);
   };
-  const makeRelease=()=>{let released=false;return()=>{if(released)return;released=true;releaseOne();};};
-  const acquire=(signal:AbortSignal)=>{
+  const makeRelease = () => {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      releaseOne();
+    };
+  };
+  const acquire = (signal: AbortSignal) => {
     signal.throwIfAborted();
-    if(active<maximum){active++;return Promise.resolve(makeRelease());}
-    return new Promise<()=>void>((resolve,reject)=>{const waiter={resolve,reject,signal,abort:()=>{const i=queue.indexOf(waiter);if(i>=0)queue.splice(i,1);reject(signal.reason);}};queue.push(waiter);signal.addEventListener('abort',waiter.abort,{once:true});});
+    if (active < maximum) {
+      active++;
+      return Promise.resolve(makeRelease());
+    }
+    return new Promise<() => void>((resolve, reject) => {
+      const waiter = {
+        resolve,
+        reject,
+        signal,
+        abort: () => {
+          const i = queue.indexOf(waiter);
+          if (i >= 0) queue.splice(i, 1);
+          reject(signal.reason);
+        },
+      };
+      queue.push(waiter);
+      signal.addEventListener("abort", waiter.abort, { once: true });
+    });
   };
-  return async(input,signal)=>{const release=await acquire(signal);try{signal.throwIfAborted();return await model(input,signal);}finally{release();}};
+  return async (input, signal) => {
+    const release = await acquire(signal);
+    try {
+      signal.throwIfAborted();
+      return await model(input, signal);
+    } finally {
+      release();
+    }
+  };
 }
 export function validateDecision(raw: unknown, input: ModelInput) {
   const d = decisionSchema.parse(raw);
@@ -119,9 +157,6 @@ export function modelMessages(input: ModelInput) {
                 : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
             ),
     },
-    ...(input.forceReplyTest
-      ? [{ role: "developer", content: forceReplyTestPrompt }]
-      : []),
     {
       role: "user",
       content: [
@@ -288,7 +323,13 @@ export function chatgptModel(
     });
     const requestId = r.headers.get("x-request-id");
     if (requestId) options?.requestId?.(requestId, input);
-    if (!r.ok || !r.body) throw new ModelRequestError(`provider_http_${r.status}`, "ChatGPT inference unavailable", {status:r.status}, r.status === 408 || r.status === 429 || r.status >= 500);
+    if (!r.ok || !r.body)
+      throw new ModelRequestError(
+        `provider_http_${r.status}`,
+        "ChatGPT inference unavailable",
+        { status: r.status },
+        r.status === 408 || r.status === 429 || r.status >= 500,
+      );
     let completed: any;
     let buffer = "";
     let streamedText = "";
@@ -345,9 +386,17 @@ export function chatgptModel(
       throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
     const usage = completed.usage;
     if (usage?.input_tokens > config.maxInputTokens)
-      throw new ModelRequestError("input_token_limit", "ChatGPT token budget exceeded", {actual:usage.input_tokens,limit:config.maxInputTokens});
+      throw new ModelRequestError(
+        "input_token_limit",
+        "ChatGPT token budget exceeded",
+        { actual: usage.input_tokens, limit: config.maxInputTokens },
+      );
     if (usage?.output_tokens > config.maxOutputTokens)
-      throw new ModelRequestError("output_token_limit", "ChatGPT token budget exceeded", {actual:usage.output_tokens,limit:config.maxOutputTokens});
+      throw new ModelRequestError(
+        "output_token_limit",
+        "ChatGPT token budget exceeded",
+        { actual: usage.output_tokens, limit: config.maxOutputTokens },
+      );
     let decision: unknown;
     try {
       decision = JSON.parse(output);

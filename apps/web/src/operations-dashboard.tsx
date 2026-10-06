@@ -52,7 +52,7 @@ export function OperationsDashboard({
   onReveal: () => void;
   onNotice: (platform: string, enabled: boolean) => void;
 }) {
-  const running = status.ai.state === "running";
+  const running = status.aiDesiredRunning || status.ai.state === "running";
   const checks = status.ai.readiness.checks as Array<{
     id: string;
     label: string;
@@ -118,6 +118,12 @@ export function OperationsDashboard({
           {status.closed ? "세션 종료" : "세션 열림"}
         </span>
       </div>
+      {status.ai.state === "waiting_restart_inputs" && (
+        <p role="status">
+          AI 사용 설정을 복구했습니다. 입력·모델 연결이 준비되면 생성을
+          재개합니다.
+        </p>
+      )}
       <div className="operations-controls">
         <button
           role="switch"
@@ -158,11 +164,6 @@ export function OperationsDashboard({
         표시를 붙이며, 참여자의 이름과 출처도 공개합니다. 이 세션에서는 다시
         숨길 수 없습니다.
       </p>
-      {status.ai.forceReplyTest && (
-        <p role="status">
-          응답 테스트 모드: 새 입력에 대한 답변을 우선 생성합니다.
-        </p>
-      )}
       {!stale && status.apiIssues?.length > 0 && (
         <ul aria-label="API 사용 한도 및 권한 문제">
           {status.apiIssues.map((issue: any) => (

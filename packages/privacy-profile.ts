@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { createHash } from "node:crypto";
 export class PrivacyActionError extends Error {}
+export class SessionProfileMismatchError extends Error {
+  constructor() {
+    super(
+      "Saved broadcast consent does not match config.yaml privacy settings. Restore the previous profile, end that broadcast, then apply the new profile.",
+    );
+  }
+}
 const text = z.string().trim().max(2000).default("");
 export const privacyProfileSchema = z
   .object({
@@ -13,7 +20,6 @@ export const privacyProfileSchema = z
       })
       .strict()
       .optional(),
-    singleStepTest: z.boolean().default(false),
     operator: text,
     officer: text,
     contact: text,
@@ -112,8 +118,6 @@ export function profileFingerprint(p: PrivacyProfile) {
 }
 export function profileIssues(p: PrivacyProfile): string[] {
   const issues: string[] = [];
-  if (p.singleStepTest && !p.testReview)
-    issues.push("간소화 테스트에는 운영자 확인 기록이 필요합니다.");
   for (const key of [
     "operator",
     "officer",
@@ -178,7 +182,6 @@ export function assertProfileUpdate(
   const scope = (p: PrivacyProfile) =>
     JSON.stringify({
       testReview: p.testReview,
-      singleStepTest: p.singleStepTest,
       operator: p.operator,
       collection: p.collectionNotice,
       publication: p.publicationNotice,

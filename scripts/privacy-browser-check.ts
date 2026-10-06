@@ -11,6 +11,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     token = "p".repeat(64);
   const { app, store } = await createApp(
     configSchema.parse({
+      database: ":memory:",
       port,
       youtube: {
         enabled: true,
@@ -148,7 +149,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       .toBe(1);
     assert(
       (await page.evaluate(() => (window as any).__fixedNotices[0])).includes(
-        "방송 화면에 표시되거나 AI 입력으로 사용되지 않습니다",
+        "미동의 제외",
       ),
     );
 
@@ -168,31 +169,18 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await expect(confirm).toBeVisible({ timeout: 10000 });
     page.once("dialog", (d) => void d.accept());
     await confirm.click();
-    await expect(panel.getByText(/단계별 동의 대기/)).toBeVisible();
+    await expect(panel.getByText(/동의 완료/)).toBeVisible();
     await expect(
       panel.getByRole("button", { name: "안내 전달 완료 확인" }),
     ).toHaveCount(0);
-    // Advance only the fixture account's send allowance, without sleeping through a real 30s limit.
-    store.participation!.get(
-      "soop",
-      "fixture",
-      "browser-viewer",
-    )!.lastNoticeAt = 0;
-    await expect
-      .poll(
-        () =>
-          store.participation!.get("soop", "fixture", "browser-viewer")!
-            .deliveredAt,
-      )
-      .not.toBeNull();
     assert.equal(
       store.participation!.get("soop", "fixture", "browser-viewer")!.state,
-      "WAITING_CONSENT",
+      "ACTIVE",
     );
     await panel
       .getByRole("button", { name: "14세 미만·신고 모순으로 참여 차단" })
       .click();
-    await expect(panel.getByText(/철회됨 · 단계/)).toBeVisible();
+    await expect(panel.getByText(/철회됨 · 안내 대기/)).toBeVisible();
     await panel.getByText(/권리행사·영상 후속 조치 \(/).click();
     await panel.getByLabel("대상 계정", { exact: true }).fill("browser-viewer");
     await panel

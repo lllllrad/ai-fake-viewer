@@ -44,6 +44,7 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
   authFixture(join(dir, "chatgpt"));
   const env = await createApp(
     configSchema.parse({
+      database: ":memory:",
       privacy: profile(),
       ai: { provider: "chatgpt_subscription", visualMode: "on_request" },
     }),
@@ -146,7 +147,10 @@ test("subscription rechecks consent after asynchronous token refresh and records
     );
   }) as typeof fetch;
   const run = chatgptModel(
-    configSchema.parse({ ai: { provider: "chatgpt_subscription" } }).ai,
+    configSchema.parse({
+      database: ":memory:",
+      ai: { provider: "chatgpt_subscription" },
+    }).ai,
     auth,
     request,
     {

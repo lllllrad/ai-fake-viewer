@@ -20,7 +20,6 @@ export class Store extends EventEmitter {
     public participation?: Participation,
   ) {
     super();
-    if (this.participation) path = ":memory:";
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
@@ -169,7 +168,7 @@ export class Store extends EventEmitter {
       WHERE p.public_message_id IS NOT NULL AND p.model_manifest IS NOT NULL AND j.type='text'`);
     const active = this.db
       .prepare(
-        "SELECT id FROM sessions WHERE closed IS NULL ORDER BY started DESC LIMIT 1",
+        "SELECT id FROM sessions ORDER BY started DESC, rowid DESC LIMIT 1",
       )
       .get() as any;
     this.sessionId = active?.id ?? randomUUID();
@@ -177,13 +176,35 @@ export class Store extends EventEmitter {
       this.db
         .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
         .run(this.sessionId, Date.now());
-    if (this.participation) this.participation.sessionId = this.sessionId;
+    if (this.participation) {
+      this.participation.sessionId = this.sessionId;
+      const saved = this.db
+        .prepare("SELECT value FROM runtime_flags WHERE key='participation'")
+        .get() as { value: string } | undefined;
+      if (saved) {
+        try {
+          this.participation.restore(JSON.parse(saved.value));
+        } catch (error) {
+          this.db.close();
+          throw error;
+        }
+      }
+      this.participation.onChange = () => this.saveParticipation();
+      this.saveParticipation();
+    }
     if (this.originsRevealed())
       this.readerCollisionNames = this.collisionNameSet();
   }
+  saveParticipation() {
+    if (!this.participation) return;
+    this.db
+      .prepare(
+        "INSERT INTO runtime_flags(key,value) VALUES('participation',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      )
+      .run(JSON.stringify(this.participation.snapshot()));
+  }
   grantConsent(platform: string, channel: string, author: string) {
-    if (this.participation)
-      throw Error("참여자의 단계별 의사표시가 필요합니다.");
+    if (this.participation) throw Error("참여자의 직접 동의가 필요합니다.");
     if (platform === "experiment") return;
     this.db
       .prepare(
@@ -854,11 +875,7 @@ export class Store extends EventEmitter {
   }
   closeSession() {
     if (this.participation) {
-      this.participation.end();
-      this.deleteAll();
-      this.db
-        .prepare("UPDATE sessions SET closed=? WHERE id=?")
-        .run(Date.now(), this.sessionId);
+      this.deleteAll(true);
       this.emit("reset");
       return;
     }
@@ -891,9 +908,12 @@ export class Store extends EventEmitter {
       this.participation.ended = false;
       this.participation.startedAt = Date.now();
     }
+    this.saveParticipation();
     this.emit("reset");
   }
   purge(before: number) {
+    // An active broadcast owns its history until explicit broadcast end.
+    if (this.participation && !this.closed()) return;
     if (!this.participation)
       this.db
         .prepare(
@@ -1033,22 +1053,29 @@ export class Store extends EventEmitter {
     this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
     this.emit("reset");
   }
-  deleteAll() {
-    this.readerCollisionNames.clear();
-    this.participation?.participants.clear();
-    if (this.participation) this.participation.revision++;
+  deleteAll(closed = false) {
+    this.transaction(() => {
+      if (closed) this.participation?.end();
+      this.readerCollisionNames.clear();
+      this.participation?.participants.clear();
+      if (this.participation) this.participation.revision++;
+      this.db.exec(
+        "DELETE FROM chat_context_summaries; DELETE FROM ai_message_context; DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
+      );
+      this.sessionId = randomUUID();
+      if (this.participation) {
+        this.participation.sessionId = this.sessionId;
+        this.participation.startedAt = Date.now();
+        this.participation.ended = closed;
+      }
+      this.db
+        .prepare("INSERT INTO sessions VALUES(?,?,?)")
+        .run(this.sessionId, Date.now(), closed ? Date.now() : null);
+      this.saveParticipation();
+    });
     this.db.exec(
-      "DELETE FROM chat_context_summaries; DELETE FROM ai_message_context; DELETE FROM messages; DELETE FROM actors_private; DELETE FROM viewer_consents; DELETE FROM consent_notice_targets; DELETE FROM consent_notice_state; DELETE FROM events; DELETE FROM connector_checkpoints; DELETE FROM model_usage; DELETE FROM transcripts; DELETE FROM audit_events; DELETE FROM persona_model_runs; DELETE FROM persona_reviews; DELETE FROM persona_evaluations; DELETE FROM persona_jobs; DELETE FROM persona_publication_outbox; DELETE FROM persona_reaction_attempts; DELETE FROM persona_presence; DELETE FROM persona_cast; DELETE FROM persona_name_denylist; DELETE FROM persona_audit; DELETE FROM persona_operator_commands; DELETE FROM persona_sessions; DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL; DELETE FROM sessions; DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';",
+      "PRAGMA wal_checkpoint(TRUNCATE); VACUUM; PRAGMA wal_checkpoint(TRUNCATE);",
     );
-    this.sessionId = randomUUID();
-    if (this.participation) {
-      this.participation.sessionId = this.sessionId;
-      this.participation.startedAt = Date.now();
-    }
-    this.db
-      .prepare("INSERT INTO sessions VALUES(?,?,NULL)")
-      .run(this.sessionId, Date.now());
-    this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
     this.emit("reset");
   }
   recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
@@ -1065,6 +1092,14 @@ export class Store extends EventEmitter {
       )
       .run(entry.id, this.sessionId, entry.capturedAt, entry.text);
     return true;
+  }
+  recentTranscripts() {
+    return this.db
+      .prepare(
+        "SELECT id,captured AS capturedAt,text FROM transcripts WHERE session=? AND captured>? ORDER BY captured DESC LIMIT 12",
+      )
+      .all(this.sessionId, Date.now() - 120000)
+      .reverse() as { id: string; capturedAt: number; text: string }[];
   }
   clearTranscripts() {
     this.db.exec("DELETE FROM transcripts");
@@ -1139,7 +1174,8 @@ export class Store extends EventEmitter {
     };
   }
   close() {
-    this.participation?.end();
+    this.saveParticipation();
+    if (this.participation) this.participation.onChange = undefined;
     this.db.close();
   }
   personaRuntime() {

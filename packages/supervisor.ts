@@ -40,12 +40,7 @@ export class Supervisor {
     public youtubeAuth?: YoutubeAuth,
   ) {
     if (!demo && store.participation) {
-      this.chzzkNotices = new ChzzkNotices(
-        store.participation,
-        auth,
-        fetch,
-        config.chzzk.allowBroadcasterTesting,
-      );
+      this.chzzkNotices = new ChzzkNotices(store.participation, auth, fetch);
       store.on("reset", () => this.chzzkNotices?.reset());
     }
     if (!demo && store.participation && youtubeAuth) {
@@ -53,7 +48,6 @@ export class Supervisor {
         store.participation,
         youtubeAuth,
         fetch,
-        config.youtube.allowBroadcasterTesting,
       );
       store.on("reset", () => this.youtubeNotices?.reset());
     }
@@ -339,11 +333,7 @@ export class Supervisor {
                 const parsed = normalizeChzzk(m.data);
                 if (
                   parsed.channel !== subscribedChannel ||
-                  ignoreOwnNoticeMessage(
-                    parsed,
-                    subscribedChannel,
-                    this.config.chzzk.allowBroadcasterTesting,
-                  )
+                  ignoreOwnNoticeMessage(parsed, subscribedChannel)
                 )
                   return;
                 this.receive("chzzk", parsed);

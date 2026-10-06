@@ -25,17 +25,15 @@ test("unconsented ordinary chat automatically schedules only fixed text; echoed 
   const { p, store, bot, message } = fixture(t);
   message("u", "PRIVATE_TEXT_AND_NICK");
   const job = bot.next(true)!;
-  assert(
-    job.text.includes("방송 화면에 표시되거나 AI 입력으로 사용되지 않습니다"),
-  );
+  assert(job.text.includes("미동의 제외"));
   assert(!job.text.includes("PRIVATE"));
   assert.equal(store.snapshot().messages.length, 0);
   assert.equal(bot.next(true), null); // lease shared across tabs
   assert.equal(bot.echo("another-user", job.text), false);
   assert.equal(bot.echo("fixture", "wrong text"), false);
   assert.equal(bot.echo("fixture", job.text), true);
-  assert.equal(p.get("soop", "fixture", "u")!.state, "UNCONSENTED");
-  assert.equal(p.get("soop", "fixture", "u")!.deliveredAt, null);
+  assert.equal(p.get("soop", "fixture", "u")!.state, "WAITING_CONSENT");
+  assert.notEqual(p.get("soop", "fixture", "u")!.deliveredAt, null);
   assert.equal(bot.next(true), null);
 });
 test("per-account and global limits reserve attempts before sending, including failures", (t) => {
@@ -168,13 +166,11 @@ test("confirmed intro is not repeated for later chat, but explicit consent and n
   message("u", "after reconnect");
   assert.equal(bot.next(true), null);
   message("u", "!동의");
-  const stage = bot.next(true)!;
-  assert(stage);
-  assert(bot.echo("fixture", stage.text));
+  assert.equal(bot.next(true), null);
   tick(600001);
   message("u", "waiting for consent");
   assert.equal(bot.next(true), null);
-  assert.equal(p.get("soop", "fixture", "u")!.stage, 0);
+  assert.equal(p.get("soop", "fixture", "u")!.state, "ACTIVE");
   store.newSession();
   bot.reset();
   tick(600001);

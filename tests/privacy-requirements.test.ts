@@ -31,7 +31,7 @@ function fixture(t: any) {
   return { p, store, advance: (ms = 1) => (now += ms) };
 }
 
-test("T01–T04, T22: first command starts guidance; separate delivered stages and age declaration precede participation", (t) => {
+test("T01–T04, T22: first command starts guidance; a single delivered notice and age declaration precede participation", (t) => {
   const { p, store, advance } = fixture(t);
   try {
     for (const text of [
@@ -120,7 +120,7 @@ test("T03, T06, T07: unordered SDK commands need specific live observation confi
       }),
     ]);
     const person = p.get("youtube", "fixture", "u")!;
-    assert.equal(person.state, "UNCONSENTED");
+    assert.equal(person.state, "WAITING_CONSENT");
     assert.throws(() => p.confirmLiveCommand(person.id, "nonexistent"));
     p.confirmLiveCommand(person.id, person.observed!.id);
     assert.equal(person.state, "WAITING_CONSENT");
@@ -144,7 +144,7 @@ test("T03, T06, T07: unordered SDK commands need specific live observation confi
   }
 });
 
-test("T13–T16: validated anonymous categories survive withdrawal but never survive session end or restart", (t) => {
+test("T13–T16: validated anonymous categories survive withdrawal but are erased at session end", (t) => {
   const { p, store, advance } = fixture(t);
   const dir = mkdtempSync(join(tmpdir(), "strict-memory-")),
     path = join(dir, "must-not-exist.sqlite");
@@ -183,7 +183,7 @@ test("T13–T16: validated anonymous categories survive withdrawal but never sur
     assert.equal(store.snapshot().messages.length, 0);
     assert.equal(store.chatSummary().state, "insufficient_data");
     const next = new Store(path, new Participation(approvedProfile(), ""));
-    assert.equal(existsSync(path), false);
+    assert.equal(existsSync(path), true);
     assert.equal(next.snapshot().messages.length, 0);
     next.close();
   } finally {
@@ -367,7 +367,7 @@ test("T16–T19, T23: live app blocks alternative inputs/export and creates auto
   try {
     activateFixture(env.store, "u", (ms) => (now += ms));
     env.store.ingestBatch([privacyMessage("u", "PRIVATE_RAW", ++now)]);
-    assert.equal(existsSync(join(dir, "raw.sqlite")), false);
+    assert.equal(existsSync(join(dir, "raw.sqlite")), true);
     for (const path of ["chatgpt/authorize"]) {
       const response = await env.app.inject({
         method: "POST",

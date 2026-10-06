@@ -23,7 +23,6 @@ export class ChzzkNotices {
     private participation: Participation,
     private auth: ChzzkAuth,
     private request: typeof fetch = fetch,
-    private allowBroadcasterTesting = false,
   ) {}
   resolve(chat: string, broadcaster: string) {
     this.reset();
@@ -52,12 +51,7 @@ export class ChzzkNotices {
     try {
       let bot = this.bots.get(target.broadcaster);
       if (!bot) {
-        bot = new NoticeBot(
-          this.participation,
-          target.broadcaster,
-          "chzzk",
-          this.allowBroadcasterTesting,
-        );
+        bot = new NoticeBot(this.participation, target.broadcaster, "chzzk");
         this.bots.set(target.broadcaster, bot);
       }
       if (this.job && !bot.valid(this.job.id)) {
@@ -74,12 +68,8 @@ export class ChzzkNotices {
         first = true;
         let parts: string[];
         try {
-          parts = noticeParts(
-            next.text,
-            this.participation.profile.singleStepTest ? 88 : 70,
-          );
-          if (this.participation.profile.singleStepTest && parts.length !== 1)
-            throw Error("notice_too_long");
+          parts = noticeParts(next.text, 88);
+          if (parts.length !== 1) throw Error("notice_too_long");
         } catch (error) {
           bot.failed(next.id);
           throw error;

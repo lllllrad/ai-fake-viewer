@@ -38,6 +38,7 @@ export class Transcriber {
   contextRevision = 0;
   failures = 0;
   requests = 0;
+  onRequest?: (count: number) => void;
   busy = false;
   transcripts: Transcript[] = [];
   constructor(
@@ -114,6 +115,13 @@ export class Transcriber {
     if (!key) return;
     this.busy = true;
     this.requests++;
+    try {
+      this.onRequest?.(this.requests);
+    } catch {
+      this.state = "storage_error";
+      this.busy = false;
+      return;
+    }
     const generation = this.generation;
     const contextRevision = this.contextRevision;
     this.controller = new AbortController();

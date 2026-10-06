@@ -448,7 +448,7 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
     else process.env.GROQ_API_KEY = oldKey;
   });
   const directory = mkdtempSync(join(tmpdir(), "live-audio-optin-"));
-  const config = configSchema.parse({ privacy: profile });
+  const config = configSchema.parse({ database: ":memory:", privacy: profile });
   const instance = await createApp(config, {
     adminToken: "a".repeat(32),
     readerToken: "b".repeat(32),

@@ -96,7 +96,7 @@ test("reviewed tests retain channel approval, delivery, consent, withdrawal and 
   send("u", "!동의");
   const person = p.get("youtube", "fixture", "u")!;
   send("u", "!동의");
-  assert.equal(person.stage, 0);
+  assert.equal(person.state, "ACTIVE");
   now += 60001;
   const stage = bot.next(true)!;
   assert(stage);

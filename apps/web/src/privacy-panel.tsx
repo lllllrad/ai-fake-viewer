@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 const states: Record<string, string> = {
   UNCONSENTED: "미참여",
-  WAITING_CONSENT: "단계별 동의 대기",
+  WAITING_CONSENT: "동의 대기",
   ACTIVE: "참여 중",
   WITHDRAWN: "철회됨",
   ENDED: "종료",
@@ -76,8 +76,8 @@ export function PrivacyPanel() {
     >
       <h2>개인정보·참여 관리</h2>
       <p>
-        채팅·동의·AI 문맥은 현재 방송의 메모리에서만 처리하고 종료·재시작 시
-        삭제합니다. 영상과 권리행사 후속 작업은 별도로 관리합니다.
+        채팅·동의·AI 문맥은 서버 재시작 후 복구하고 방송 종료 시 삭제합니다.
+        영상과 권리행사 후속 작업은 별도로 관리합니다.
       </p>
       {!!data.issues.length && (
         <p role="status">운영 프로필 확인 필요: {data.issues.join(" · ")}</p>
@@ -89,11 +89,6 @@ export function PrivacyPanel() {
         </p>
       )}
       {error && <p role="alert">{error}</p>}
-      {data.profile.singleStepTest && (
-        <p role="status">
-          간소화 테스트: 안내 1회 후 !동의 한 번으로 참여합니다.
-        </p>
-      )}
       {data.profile.testReview && (
         <p role="status" className="hint">
           운영자 확인 테스트 설정입니다. 국가·보존·영상 공개의 상세 문구는 정리
@@ -197,12 +192,12 @@ export function PrivacyPanel() {
         <summary>참여 안내·현재 동의 상태 ({data.participants.length})</summary>
         <p className="hint">
           SOOP·YouTube·치지직 미동의 채팅에는 고정 안내가 자동 발송됩니다. 동의
-          단계 안내도 자동 발송하고 플랫폼 응답으로 전달을 확인합니다. 관리자
-          탭의 SOOP 연결을 유지하세요. 실제 수신 명령 확인은 동의를 대신하는
-          기능이 아닙니다. 현재 운영 대상은 만 14세 이상 자기신고 이용자입니다.
-          채팅 명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로 확인되거나
-          자기신고와 모순되는 정보가 있으면 차단하세요. 법정대리인 동의 확인
-          기능은 제공하지 않습니다.
+          짧은 동의 안내를 자동 발송하고 플랫폼 응답으로 전달을 확인합니다.
+          관리자 탭의 SOOP 연결을 유지하세요. 실제 수신 명령 확인은 동의를
+          대신하는 기능이 아닙니다. 현재 운영 대상은 만 14세 이상 자기신고
+          이용자입니다. 채팅 명령은 실제 연령 검증이 아닙니다. 만 14세 미만으로
+          확인되거나 자기신고와 모순되는 정보가 있으면 차단하세요. 법정대리인
+          동의 확인 기능은 제공하지 않습니다.
         </p>
         {data.participants.map((p: any) => (
           <article key={p.id} className="persona-candidate">
@@ -210,7 +205,13 @@ export function PrivacyPanel() {
               {p.platform} · {p.account}
             </h3>
             <p>
-              {states[p.state]} · 단계 {p.stage + 1} · 연령{" "}
+              {states[p.state]} ·{" "}
+              {p.state === "ACTIVE"
+                ? "동의 완료"
+                : p.deliveredAt
+                  ? "안내 전달됨"
+                  : "안내 대기"}{" "}
+              · 연령{" "}
               {p.age === "self_declared_14_plus"
                 ? "14세 이상 자기신고 (검증 아님)"
                 : p.age === "blocked"
@@ -262,7 +263,7 @@ export function PrivacyPanel() {
                     onClick={() => {
                       if (
                         window.confirm(
-                          "현재 단계의 안내문을 승인된 경로에서 실제 전달했고 실패하지 않았습니까?",
+                          "동의 안내문을 승인된 경로에서 실제 전달했고 실패하지 않았습니까?",
                         )
                       )
                         void action(`participants/${p.id}/notice-delivered`, {
@@ -276,7 +277,7 @@ export function PrivacyPanel() {
                 {["soop", "youtube", "chzzk"].includes(p.platform) && (
                   <p className="hint">
                     안내는 자동 발송됩니다. 발송 제한 또는 응답 미확인 중에는
-                    다음 동의 단계로 진행하지 않습니다.
+                    동의가 완료되지 않습니다.
                   </p>
                 )}
               </>

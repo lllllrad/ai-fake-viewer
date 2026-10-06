@@ -90,7 +90,7 @@ Record validation scope in commit descriptions. Follow [operating setup](../oper
 
 ## Memory-only operation and host review
 
-Live chat, consent and personas are memory-only. The wrapper uses `ulimit -c 0` to disable ordinary core dumps, but this does not control OS crash capture, service-manager dumps, container snapshots or swap. Review actual host crash reporting, swap/encryption, memory snapshots and backup paths, and restrict raw-data persistence according to the operating policy. This review has not been claimed complete for the deployment host.
+Live chat, consent and personas use an owner-only SQLite broadcast file. Keep it off public paths and exclude it from ordinary backups; broadcast end deletes session contents. The wrapper uses `ulimit -c 0` to disable ordinary core dumps, but this does not control OS crash capture, service-manager dumps, container snapshots or swap. Review actual host crash reporting, swap/encryption, memory snapshots and backup paths, and restrict raw-data persistence according to the operating policy. This review has not been claimed complete for the deployment host.
 
 Fastify body logging is disabled. The UI does not persist chat in localStorage/IndexedDB. Do not add real chat to SDK debug logs, browser network exports, prompt traces, external error collection, fixtures or screenshots. Test artifacts use synthetic data only.
 

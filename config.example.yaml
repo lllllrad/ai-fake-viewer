@@ -2,19 +2,17 @@ port: 3210
 network:
   bindHost: 127.0.0.1 # set 0.0.0.0 to allow reader and overlay from another PC
   publicBaseUrl: "" # LAN mode: http://APP_PC_LAN_IP:3210
-database: data/chat.sqlite # legacy compatibility only; the app always uses session memory
+database: data/broadcast.sqlite # private broadcast state; retained across restart, erased at broadcast end
 retentionDays: 7 # legacy utility bound, not persistent live chat retention
 youtube:
   redirectUri: http://127.0.0.1:3210/oauth/youtube/callback
   enabled: false
   consentNoticeEnabled: false
-  allowBroadcasterTesting: false # temporary own-channel consent testing; automatic notice parts stay excluded
   channelId: "" # optional UC channel ID for active-live discovery
   video: ""
   transport: grpc
   restFallback: true
 chzzk:
-  allowBroadcasterTesting: false # temporary own-channel participation testing
   enabled: false
   consentNoticeEnabled: false
   # Register this exact URL in the CHZZK developer console. For a public HTTPS callback, replace only the origin.
@@ -46,7 +44,6 @@ ai:
   provider: openai_api # or chatgpt_subscription (ChatGPT plan, no API key)
   manualApproval: false # publish locally without human review
   reviewDraft: true # run a second model pass over each proposed reply
-  forceReplyTest: false # temporary reply test; bypass voluntary silence, not safety or budgets
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
   gate:
     enabled: false # legacy/demo only; must remain false for live privacy profile
@@ -71,7 +68,6 @@ ai:
 # Fill only from this operator's actual approvals, public notices and API settings.
 # Empty/unconfirmed defaults intentionally block live collection/AI.
 privacy:
-  singleStepTest: false # temporary combined notice/consent; requires testReview
   # Optional only after an actual operator review for live testing; see docs/operations/setup.md.
   # testReview:
   #   reference: <actual review record>
