@@ -86,7 +86,7 @@ The Linux x86_64 bundle is not tracked and may disappear after reboot or tempora
 
 If only downloaded `.deb` files remain in the bundle, the same host can extract each with `dpkg-deb -x` into its `root/`. This does not download or install OS packages; fonts and `fonts.conf` must also exist. If the whole bundle is absent, use the dependency setup above; the wrapper does not rebuild it.
 
-Record command scope in [VERIFICATION_REPORT](../specifications/behavior.md). Follow [LIVE_SETUP](../operations/setup.md) and `justfile` for service management. The wrapper itself does not load `.env` or start services; it runs only the supplied command.
+Record validation scope in commit descriptions. Follow [operating setup](../operations/setup.md) and `justfile` for service management. The wrapper itself does not load `.env` or start services; it runs only the supplied command.
 
 ## Memory-only operation and host review
 

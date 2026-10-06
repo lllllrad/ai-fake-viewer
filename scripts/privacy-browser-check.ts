@@ -18,7 +18,6 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       },
       privacy: {
         ...approvedProfile(),
-        audioEnabled: true,
         processing: {
           ...approvedProfile().processing,
           provider: "chatgpt_subscription",

@@ -4,7 +4,7 @@ Reconciled with the 2026-10-06 local requirements delta, which takes precedence 
 
 ## Current operating boundary
 
-Live processing sends consented chat and explicitly enabled broadcast transcripts to the **OpenAI Responses API**, using either an API key or **Sign in with ChatGPT** for eligible ChatGPT plan usage. Authentication/contract selection is explicit. No automatic fallback to another service, Groq, Jev or unofficial SOOP is allowed. Screen input is separately enabled with `privacy.videoEnabled` for reviewed OBS Program output. Broadcast audio is separately opt-in; it is not automatically matched to individual viewer consent. Demo and legacy standalone libraries are separate from live operation.
+Live processing sends consented chat and configured broadcast inputs to the **OpenAI Responses API**, using either an API key or **Sign in with ChatGPT** for eligible ChatGPT plan usage. Authentication/contract selection is explicit. No automatic fallback to another service, Groq, Jev or unofficial SOOP is allowed. Screen input follows OBS Program capture configuration. Broadcast audio follows its source configuration; it is not automatically matched to individual viewer consent. Demo and legacy standalone libraries are separate from live operation.
 
 Operators populate `privacy` with actual public information, notice versions, overseas-processing basis A/B, provider model/countries/retention/subprocessors/evidence, video channels/periods and platform receipt/notice/publication/external-AI approvals. Software does not infer approval from configured booleans. Defaults are unconfirmed; the [example configuration](../../config.example.yaml) is not an approved deployment profile.
 
@@ -44,12 +44,12 @@ HTTP body logging is disabled; browser localStorage/IndexedDB does not retain or
 
 ## APIs and ownership
 
-| Boundary                           | Code / admin API                                                                                                                                                                     |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Boundary                           | Code / admin API                                                                                                                                                                        |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Profile and invalidation           | [privacy-profile.ts](../../packages/privacy-profile.ts), `GET /api/admin/privacy`, `PUT /api/admin/privacy/profile`                                                                     |
 | Commands, age and delivery         | [participation.ts](../../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`; manual delivery only where supported |
 | Projection, raw text and summaries | [storage.ts](../../packages/storage.ts), summary reset/hide/session-close APIs                                                                                                          |
-| Pre-send authorization             | [app.ts](../../apps/server/app.ts), [model.ts](../../packages/model.ts), [scheduler.ts](../../packages/scheduler.ts)                                                                          |
+| Pre-send authorization             | [app.ts](../../apps/server/app.ts), [model.ts](../../packages/model.ts), [scheduler.ts](../../packages/scheduler.ts)                                                                    |
 | Minimal follow-up                  | [rights.ts](../../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`                                 |
 | Admin UI                           | [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx)                                                                                                                               |
 
@@ -57,7 +57,7 @@ Profile PUT applies only to the current process; persistent changes belong in YA
 
 ## Acceptance and operational checks
 
-Automated scope is in [privacy requirements tests](../../tests/privacy-requirements.test.ts), consent/persona/scheduler tests and [browser checks](../../scripts/privacy-browser-check.ts). Dated results belong in [VERIFICATION_REPORT](behavior.md).
+Automated scope is in [privacy requirements tests](../../tests/privacy-requirements.test.ts), consent/persona/scheduler tests and [browser checks](../../scripts/privacy-browser-check.ts). Record validation scope in commit descriptions; the tests are the executable checks.
 
 | Acceptance IDs | Implementation/fixture scope                                                                                  | Separate operational review                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |

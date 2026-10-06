@@ -1001,17 +1001,12 @@ function Admin() {
                   </p>
                 )}
                 <p className="hint">
-                  {status.privacy?.videoEnabled
-                    ? status.capture.backend === "rtmp"
-                      ? "OBS에서 송출을 시작하면 연결된 방송 화면을 받습니다. AI가 켜져 있으면 설정된 방식으로 화면을 참고합니다."
-                      : "OBS 가상 카메라를 Program 출력으로 시작한 뒤 화면 수신을 시작하세요."
-                    : "현재 운영 설정에서 영상 입력을 사용하지 않습니다."}
+                  {status.capture.backend === "rtmp"
+                    ? "OBS에서 송출을 시작하면 연결된 방송 화면을 받습니다. AI가 켜져 있으면 설정된 방식으로 화면을 참고합니다."
+                    : "OBS 가상 카메라를 Program 출력으로 시작한 뒤 화면 수신을 시작하세요."}
                 </p>
                 <div className="toolbar">
-                  <button
-                    disabled={!status.privacy?.videoEnabled}
-                    onClick={() => void action("capture/start")}
-                  >
+                  <button onClick={() => void action("capture/start")}>
                     Start capture
                   </button>
                   <button
@@ -1035,9 +1030,9 @@ function Admin() {
                   {status.audio.latestText || "No recent speech transcript"}
                 </p>
                 <p className="hint">
-                  {status.privacy?.audioEnabled || status.demo
-                    ? "설정된 방송 음성을 Groq로 전사하고 최근 전사문을 AI 입력에 사용합니다. 기록은 현재 세션의 메모리에 보관하며 종료·재시작·동의 철회 시 삭제합니다."
-                    : "음성 입력을 사용하지 않습니다. config.yaml의 privacy.audioEnabled에서 켤 수 있습니다."}
+                  설정된 방송 음성을 Groq로 전사하고 최근 10청크를 AI 입력에
+                  사용합니다. 음성 주소와 GROQ_API_KEY가 필요합니다. 기록은 세션
+                  종료·재시작·동의 철회 시 삭제합니다.
                 </p>
                 {status.audio.history.length > 0 && (
                   <ol>
@@ -1054,10 +1049,7 @@ function Admin() {
                   </ol>
                 )}
                 <div className="toolbar">
-                  <button
-                    disabled={!status.demo && !status.privacy?.audioEnabled}
-                    onClick={() => void action("audio/start")}
-                  >
+                  <button onClick={() => void action("audio/start")}>
                     Start audio
                   </button>
                   <button
@@ -1066,14 +1058,14 @@ function Admin() {
                   >
                     Stop audio
                   </button>
-                  {(status.demo || status.privacy?.audioEnabled) && (
+                  {
                     <a
                       href="/api/admin/transcripts/export"
                       download="transcripts.jsonl"
                     >
                       전사문 내보내기
                     </a>
-                  )}
+                  }
                 </div>
               </section>
               <section className="card" id="ai-details">

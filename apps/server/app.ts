@@ -1,3 +1,4 @@
+import { apiIssues } from "../../packages/api-health.ts";
 import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
@@ -108,8 +109,6 @@ export async function createApp(
         pendingRights.set(key, { ...p, session: store.sessionId });
     };
   store.on("context_invalidated", flushRights);
-  if (!opts.demo && !config.privacy.videoEnabled)
-    config.ai.visualMode = "on_request";
   const privacyReady = () =>
     !participation ||
     (!profileIssues(config.privacy).length &&
@@ -120,27 +119,16 @@ export async function createApp(
           ? chatgpt.active?.model
           : process.env.OPENAI_MODEL));
 
-  const audioAllowed = () =>
-    !!opts.demo ||
-    (config.privacy.audioEnabled &&
-      !profileIssues(config.privacy).length &&
-      !store.closed() &&
-      !participation?.ended);
+  const inputSessionOpen = () => !store.closed() && !participation?.ended;
   const capture = new Capture(config.capture, !!opts.demo);
-  const videoAllowed = () =>
-    !!opts.demo ||
-    (config.privacy.videoEnabled &&
-      !profileIssues(config.privacy).length &&
-      !store.closed() &&
-      !participation?.ended);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.recordTranscript(entry),
   );
   if (!opts.demo) {
-    capture.allowProcessing = videoAllowed;
-    transcriber.allowProcessing = audioAllowed;
-    capture.state = videoAllowed() ? "stopped" : "privacy_blocked";
-    transcriber.state = audioAllowed() ? "stopped" : "privacy_blocked";
+    capture.allowProcessing = inputSessionOpen;
+    transcriber.allowProcessing = inputSessionOpen;
+    capture.state = "stopped";
+    transcriber.state = "stopped";
   }
   const clearSpeechContext = () => {
     capture.clearContext();
@@ -158,8 +146,8 @@ export async function createApp(
     authorize: (input: ModelInput) => {
       if (
         !privacyReady() ||
-        (input.frames.length > 0 && !videoAllowed()) ||
-        ((input.transcripts?.length ?? 0) > 0 && !audioAllowed())
+        (input.frames.length > 0 && !inputSessionOpen()) ||
+        ((input.transcripts?.length ?? 0) > 0 && !inputSessionOpen())
       )
         throw Error(
           "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
@@ -327,16 +315,14 @@ export async function createApp(
       },
       {
         id: "capture",
-        label: videoAllowed() ? "송출 화면" : "영상 입력 사용 안 함",
-        ready: !videoAllowed() || !!capture.recent().length,
+        label: "송출 화면",
+        ready: !!capture.recent().length,
         optional: true,
       },
       {
         id: "audio",
-        label: audioAllowed()
-          ? "음성 인식 입력 (선택)"
-          : "음성 입력 사용 안 함",
-        ready: true,
+        label: "음성 인식 입력",
+        ready: ["receiving", "listening"].includes(transcriber.state),
         optional: true,
       },
       {
@@ -1210,12 +1196,6 @@ export async function createApp(
     chatSummary: store.chatSummary(),
     privacy: {
       memoryOnly: true,
-      textOnly:
-        !opts.demo &&
-        !config.privacy.audioEnabled &&
-        !config.privacy.videoEnabled,
-      videoEnabled: videoAllowed(),
-      audioEnabled: audioAllowed(),
       ready: privacyReady(),
       issues: profileIssues(config.privacy),
       pendingRights: rights
@@ -1224,8 +1204,19 @@ export async function createApp(
     },
     retentionDays: config.retentionDays,
     connectors: supervisor.states,
+    apiIssues: apiIssues({
+      youtubeRead: supervisor.states.youtube,
+      chzzkRead: supervisor.states.chzzk,
+      youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
+      chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
+      audioState: transcriber.state,
+      modelState: scheduler.state,
+      modelIssue: scheduler.lastIssue,
+    }),
     audio: {
       state: transcriber.state,
+      configured: !!config.audio.url,
+      credentialsReady: !!process.env.GROQ_API_KEY,
       requests: transcriber.requests,
       maxRequests: config.audio.maxRequests,
       language: config.audio.language || "auto",
@@ -1237,6 +1228,10 @@ export async function createApp(
     },
     capture: {
       state: capture.state,
+      configured:
+        config.capture.backend === "rtmp"
+          ? !!config.capture.url
+          : !!config.capture.device,
       lastFrameAt: capture.latest()?.capturedAt ?? null,
       dimensions: capture.dimensions,
       lastError: capture.lastError,
@@ -1890,11 +1885,6 @@ export async function createApp(
       !opts.demo &&
       ((config.ai.provider !== "chatgpt_subscription" &&
         /^\/api\/admin\/chatgpt(?:\/|$)/.test(req.url)) ||
-        (!videoAllowed() && /^\/api\/admin\/capture\/start/.test(req.url)) ||
-        (!audioAllowed() &&
-          /^\/api\/admin\/(?:audio\/start|transcripts\/export)/.test(
-            req.url,
-          )) ||
         (req.method !== "GET" && req.url.startsWith("/api/admin/persona/")))
     )
       return reply.code(409).send({

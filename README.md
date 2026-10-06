@@ -59,11 +59,11 @@ The current live profile disables capture at the processing boundary: other on-s
 
 ### OBS on a separate Linux PC: legacy RTMP input (disabled live)
 
-Use the app's OBS Browser Source overlay for publication. Enable reviewed OBS Program input with `privacy.videoEnabled`; broadcast audio has a separate `privacy.audioEnabled` option. See [live setup](docs/operations/setup.md) for LAN reader/overlay access.
+Use the app's OBS Browser Source overlay for publication. OBS Program capture and broadcast transcription run from their configured sources without separate privacy enable switches. See [live setup](docs/operations/setup.md) for LAN reader/overlay access.
 
 ## Groq speech and AI model data review
 
-Set `privacy.audioEnabled: true` to enable the configured broadcast audio source, Groq transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
+Configure `audio.url` and `GROQ_API_KEY` for broadcast transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
 
 ### Legacy Jev filter (disabled live)
 
@@ -71,7 +71,7 @@ Jev is a legacy/demo component, not an optional live provider. Enabling `ai.gate
 
 ## Image model and data review
 
-Live requests contain current permitted text, explicitly enabled recent broadcast inputs, synthetic persona style and approved anonymous categories. Each API stage rechecks consent revision/profile and current messages immediately before sending. Requests use `store:false`, no provider tools, no persistent conversation/file upload and no response chaining. Image inspection can use recent captured frames only when `privacy.videoEnabled` is enabled.
+Live requests contain current permitted text, configured recent broadcast inputs, synthetic persona style and approved anonymous categories. Each API stage rechecks consent revision/profile and current messages immediately before sending. Requests use `store:false`, no provider tools, no persistent conversation/file upload and no response chaining. Image inspection uses current frames from the configured capture source.
 
 `store:false` does not mean every provider log is deleted; regional and retention options require actual account eligibility and matching notices. See [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data). In API-key mode, token counting and generation use the same configured endpoint with no global fallback. Sign in with ChatGPT uses its supported Responses API endpoint without that token-counting preflight. Optional draft review uses the same approved API provider. Manual approval can be enabled with `ai.manualApproval`.
 
@@ -95,7 +95,7 @@ Every app instance uses SQLite **in memory** for chat, identities, consent, pers
 
 ## Troubleshooting and verification
 
-Check the admin operating-profile issues first, then actual platform authorization, model/environment match and API budgets. Video and audio are disabled unless separately enabled in the privacy profile. After profile changes, start a new consent flow. Temporary disconnection is not proof of broadcast end; manual-live consent is invalidated on reconnect because event freshness is uncertain.
+Check the admin operating-profile issues first, then actual platform authorization, model/environment match and API budgets. Video and audio follow `capture` and `audio` configuration; missing sources or credentials are shown as configuration problems. After profile changes, start a new consent flow. Temporary disconnection is not proof of broadcast end; manual-live consent is invalidated on reconnect because event freshness is uncertain.
 
 ```sh
 sh run-command.sh npm run check

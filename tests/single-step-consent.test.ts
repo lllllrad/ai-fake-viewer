@@ -21,8 +21,6 @@ for (const platform of ["youtube", "chzzk"] as const) {
       reference: "Explicit temporary test",
       checkedAt: "2026-10-05T00:00:00Z",
     };
-    profile.audioEnabled = true;
-    profile.videoEnabled = true;
     profile.noticeUrl = "https://cafe.naver.com/lllllrad/staff/2";
     const p = new Participation(profile, "session"),
       store = new Store(":memory:", p);

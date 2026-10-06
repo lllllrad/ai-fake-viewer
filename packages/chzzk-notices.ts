@@ -1,9 +1,11 @@
+import { limitState, type ApiFailure } from "./api-health.ts";
 import { NoticeBot } from "./notice-bot.ts";
 import type { Participation } from "./participation.ts";
 import type { ChzzkAuth } from "./chzzk.ts";
 import { noticeParts } from "./youtube-notices.ts";
 export class ChzzkNotices {
   state = "waiting_connection";
+  failure?: ApiFailure;
   private target?: { chat: string; broadcaster: string };
   private bots = new Map<string, NoticeBot>();
   private job?: {
@@ -28,6 +30,7 @@ export class ChzzkNotices {
     this.target = { chat, broadcaster };
   }
   reset() {
+    this.failure = undefined;
     this.target = undefined;
     this.connected = false;
     this.job = undefined;
@@ -114,12 +117,15 @@ export class ChzzkNotices {
           signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
         },
       );
-      if (!identity.ok)
-        throw Error(
-          identity.status === 401
-            ? "auth_required"
-            : "permission_or_quota_blocked",
-        );
+      if (!identity.ok) {
+        const state = limitState(identity.status);
+        this.failure = {
+          api: "CHZZK User API / users/me",
+          operation: "identity",
+          state,
+        };
+        throw Error(state);
+      }
       const user = (await identity.json()) as any;
       if (user.code !== 200 || user.content?.channelId !== target.broadcaster)
         throw Error("channel_mismatch");
@@ -148,12 +154,16 @@ export class ChzzkNotices {
         return;
       }
       if (!r.ok) {
-        this.state =
-          r.status === 401
-            ? "auth_required"
-            : r.status === 403
-              ? "permission_or_quota_blocked"
-              : "delivery_unconfirmed";
+        const errorBody = (await r.json().catch(() => ({}))) as any;
+        this.state = limitState(
+          r.status,
+          String(errorBody.error?.errors?.[0]?.reason ?? ""),
+        );
+        this.failure = {
+          api: "CHZZK Chat API / chats/send",
+          operation: "send",
+          state: this.state,
+        };
         // No immediate retry of ambiguous writes; count failures against the same limits.
         this.blockedUntil =
           Date.now() + (r.status === 401 || r.status === 403 ? 300000 : 60000);
@@ -173,6 +183,7 @@ export class ChzzkNotices {
         !b.content.messageId
       )
         throw Error("delivery_unconfirmed");
+      this.failure = undefined;
       if (++job.index === job.parts.length) {
         bot.echo(target.broadcaster, job.text);
         this.job = undefined;
@@ -187,6 +198,8 @@ export class ChzzkNotices {
           "notice_too_long",
           "auth_required",
           "permission_or_quota_blocked",
+          "permission_blocked",
+          "quota_blocked",
           "channel_mismatch",
         ].includes(e.message)
           ? e.message
@@ -196,6 +209,8 @@ export class ChzzkNotices {
         ([
           "auth_required",
           "permission_or_quota_blocked",
+          "permission_blocked",
+          "quota_blocked",
           "channel_mismatch",
         ].includes(this.state)
           ? 300000

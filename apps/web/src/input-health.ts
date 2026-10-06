@@ -4,7 +4,10 @@ export type Health = {
   hint?: string;
 };
 
-export function inputHealth(state?: string): Health {
+export function inputHealth(
+  state?: string,
+  scope?: "chat_read" | "transcription",
+): Health {
   const kind = state?.split(":", 1)[0];
   if (
     [
@@ -43,8 +46,16 @@ export function inputHealth(state?: string): Health {
     awaiting_browser: "상세 설정에서 채팅 연결을 시작해 주세요.",
     waiting_live: "방송이 시작되었는지 확인해 주세요.",
     ended: "방송이 종료되었습니다.",
-    budget_exhausted: "사용 한도에 도달했습니다. 한도를 확인해 주세요.",
-    quota_blocked: "사용 한도에 도달했습니다. 한도를 확인해 주세요.",
+    budget_exhausted:
+      scope === "transcription"
+        ? "Groq 음성 인식의 앱 호출 횟수 한도에 도달했습니다."
+        : "앱에 설정한 호출 횟수 한도에 도달했습니다.",
+    quota_blocked:
+      scope === "chat_read"
+        ? "채팅 조회·수신 API 한도에 도달했습니다."
+        : scope === "transcription"
+          ? "Groq 음성 인식 API 한도에 도달했습니다."
+          : "해당 API 사용 한도에 도달했습니다.",
   };
   return {
     label: "확인 필요",
@@ -57,7 +68,7 @@ export function chatHealth(states: Array<string | undefined>): Health {
   if (!states.length)
     return { label: "확인 불가", hint: "채팅 상태를 다시 확인하세요." };
   const active = states
-    .map(inputHealth)
+    .map((state) => inputHealth(state))
     .filter((health) => health.label !== "사용 안 함");
   if (!active.length) return { label: "사용 안 함" };
   for (const label of [

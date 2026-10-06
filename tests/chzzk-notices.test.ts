@@ -322,3 +322,16 @@ test("CHZZK rejects credentials replaced while channel identity lookup is pendin
   assert.equal(writes, 0);
   assert.equal(p.get("chzzk", "fixture", "viewer")!.introDelivered, false);
 });
+
+test("CHZZK send throttling identifies the Chat API instead of identity lookup", async (t) => {
+  const f = fixture(
+    t,
+    undefined,
+    async () => new Response("", { status: 429 }),
+  );
+  f.message("hello");
+  await f.sender.tick(f.signal);
+  assert.equal(f.sender.state, "quota_blocked");
+  assert.equal(f.sender.failure?.operation, "send");
+  assert.equal(f.p.get("chzzk", "fixture", "viewer")!.introDelivered, false);
+});

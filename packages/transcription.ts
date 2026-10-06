@@ -140,7 +140,14 @@ export class Transcriber {
           signal,
         },
       );
-      if (!result.ok) throw Error("Groq transcription request failed");
+      if (!result.ok)
+        throw Error(
+          result.status === 429
+            ? "quota_blocked"
+            : result.status === 401 || result.status === 403
+              ? "auth_required"
+              : "provider_error",
+        );
       const raw = await result.text();
       if (raw.length > 8192) throw Error("Groq transcription too large");
       const text = response.parse(JSON.parse(raw)).text.trim().slice(0, 1000);
@@ -162,8 +169,13 @@ export class Transcriber {
         this.state = "receiving";
         this.failures = 0;
       }
-    } catch {
-      if (generation === this.generation) this.state = "provider_error";
+    } catch (error) {
+      if (generation === this.generation)
+        this.state =
+          error instanceof Error &&
+          ["quota_blocked", "auth_required"].includes(error.message)
+            ? error.message
+            : "provider_error";
     } finally {
       this.busy = false;
       if (

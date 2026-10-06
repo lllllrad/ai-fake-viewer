@@ -70,25 +70,28 @@ export function OperationsDashboard({
   };
   const captureHealth: Health = stale
     ? unknown
-    : status.privacy?.videoEnabled === false
-      ? {
-          label: "사용 안 함",
-          hint: "현재 운영 프로필은 영상 입력을 사용하지 않습니다.",
-        }
-      : freshFrame
-        ? { label: "정상" }
-        : {
-            label: "확인 필요",
-            hint: "송출 화면이 들어오는지 확인해 주세요.",
-          };
-  const audioHealth = stale ? unknown : inputHealth(status.audio.state);
+    : freshFrame
+      ? { label: "정상" }
+      : {
+          label: "확인 필요",
+          hint:
+            status.capture.configured === false
+              ? "송출 화면 연결 설정이 없습니다. capture 설정을 확인해 주세요."
+              : "설정된 송출 화면이 들어오지 않습니다. OBS 송출과 연결 설정을 확인해 주세요.",
+        };
+  const audioHealth = stale
+    ? unknown
+    : inputHealth(status.audio.state, "transcription");
   const platforms = ["youtube", "chzzk", "soop"] as const;
   const platformNames = { youtube: "유튜브", chzzk: "치지직", soop: "SOOP" };
   const chat = stale
     ? unknown
     : chatHealth(platforms.map((p) => status.connectors[p]?.state));
   const chatProblems = platforms
-    .map((p) => ({ platform: p, ...inputHealth(status.connectors[p]?.state) }))
+    .map((p) => ({
+      platform: p,
+      ...inputHealth(status.connectors[p]?.state, "chat_read"),
+    }))
     .filter(
       (health) => health.label === "확인 필요" || health.label === "확인 불가",
     );
@@ -160,6 +163,18 @@ export function OperationsDashboard({
           응답 테스트 모드: 새 입력에 대한 답변을 우선 생성합니다.
         </p>
       )}
+      {!stale && status.apiIssues?.length > 0 && (
+        <ul aria-label="API 사용 한도 및 권한 문제">
+          {status.apiIssues.map((issue: any) => (
+            <li key={`${issue.api}:${issue.operation}`}>
+              <strong>
+                {issue.api} · {issue.operation}
+              </strong>
+              : {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
       {status.ai.lastIssue && (
         <p role="status">{status.ai.lastIssue.message}</p>
       )}
@@ -206,9 +221,7 @@ export function OperationsDashboard({
               <p>
                 {stale
                   ? "최신 상태를 확인할 수 없습니다"
-                  : status.privacy?.videoEnabled === false
-                    ? "영상 입력을 사용하지 않습니다"
-                    : "송출 화면을 기다리고 있습니다"}
+                  : "송출 화면을 기다리고 있습니다"}
               </p>
             )}
           </div>
@@ -248,9 +261,7 @@ export function OperationsDashboard({
           <p className="transcript-excerpt">
             {stale
               ? "최신 자막 상태를 확인할 수 없습니다"
-              : status.privacy?.audioEnabled === false
-                ? "음성 입력을 사용하지 않습니다"
-                : status.audio.latestText || "아직 인식된 음성이 없습니다"}
+              : status.audio.latestText || "아직 인식된 음성이 없습니다"}
           </p>
           {audioHealth.hint && <p>{audioHealth.hint}</p>}
           <a href="#audio-details">음성 입력 및 자막 기록</a>
@@ -300,7 +311,7 @@ export function OperationsDashboard({
       <p className="hint">
         {status.demo
           ? "입력 시작은 인공 영상·채팅을 준비합니다."
-          : "입력 시작은 승인된 채팅 수신기를 준비합니다. 현재 프로필에서는 영상·음성을 사용하지 않습니다."}{" "}
+          : "입력 시작은 설정된 송출 화면·음성 인식과 선택한 플랫폼의 채팅 수신을 시작합니다."}{" "}
         준비 상태를 확인한 뒤 AI 생성을 켜세요. AI만 끄면 채팅 수신은
         계속됩니다.
       </p>

@@ -135,10 +135,9 @@ export function PrivacyPanel() {
             .join(" · ") || "미확정"}
         </p>
         <p className="hint">
-          운영 프로필은 config.yaml의 privacy에서 설정합니다. 실제 계약·안내
-          내용을 확인한 뒤 적용하세요. 영상 입력:{" "}
-          {data.profile.videoEnabled ? "사용" : "사용 안 함"}. 음성·전사 입력:{" "}
-          {data.profile.audioEnabled ? "사용" : "사용 안 함"}.
+          동의 안내와 운영자 정보는 config.yaml의 privacy에서 관리합니다.
+          영상·음성은 capture·audio 설정에 따라 동작하며, 수신 상태는 상단에서
+          확인할 수 있습니다.
         </p>
       </details>
       <p role="status">
@@ -165,7 +164,10 @@ export function PrivacyPanel() {
             sending: "안내 전달 중",
             ready: "사용 중",
             delivery_unconfirmed: "전달 미확인 · 제한 간격 이후 재시도",
-            permission_or_quota_blocked: "발송 권한·할당량 확인 필요",
+            permission_or_quota_blocked:
+              "API 요청 거절 · 권한/한도 구분 불가 (상단 상세 확인)",
+            permission_blocked: "API 접근 권한 확인 필요",
+            quota_blocked: "API 한도 도달 (상단에서 조회·전송 구분 확인)",
             notice_too_long: "안내의 긴 주소·문구를 줄여 주세요",
             disabled: "사용 안 함",
           } as Record<string, string>
@@ -182,7 +184,10 @@ export function PrivacyPanel() {
             sending: "안내 전달 중",
             ready: "사용 중",
             delivery_unconfirmed: "전달 미확인 · 제한 간격 이후 재시도",
-            permission_or_quota_blocked: "발송 권한·할당량 확인 필요",
+            permission_or_quota_blocked:
+              "API 요청 거절 · 권한/한도 구분 불가 (상단 상세 확인)",
+            permission_blocked: "API 접근 권한 확인 필요",
+            quota_blocked: "API 한도 도달 (상단에서 조회·전송 구분 확인)",
             notice_too_long: "안내의 긴 주소·문구를 줄여 주세요",
             disabled: "사용 안 함",
           } as Record<string, string>

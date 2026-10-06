@@ -1,4 +1,5 @@
 import { ChzzkNotices } from "./chzzk-notices.ts";
+import { ApiQuotaError } from "./api-health.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
 import { YoutubeNotices } from "./youtube-notices.ts";
 import { fork, type ChildProcess } from "node:child_process";
@@ -21,6 +22,7 @@ export class Supervisor {
     string,
     {
       state: string;
+      api?: string;
       recoveries: number;
       received: number;
       lastReceived: number | null;
@@ -169,7 +171,10 @@ export class Supervisor {
             this.config.youtube,
             this.store,
             signal,
-            (s) => this.status("youtube", s),
+            (s, api) => {
+              this.status("youtube", s);
+              this.states.youtube.api = api;
+            },
             {
               access: this.youtubeAuth?.connected
                 ? () => this.youtubeAuth!.access()
@@ -343,21 +348,31 @@ export class Supervisor {
                   return;
                 this.receive("chzzk", parsed);
               }
-            })().catch(() => {
+            })().catch((error) => {
               terminal = true;
-              this.status("chzzk", "permission_blocked");
+              this.status(
+                "chzzk",
+                error instanceof ApiQuotaError
+                  ? "quota_blocked"
+                  : "permission_blocked",
+              );
+              if (error instanceof ApiQuotaError)
+                this.states.chzzk.api = error.api;
               child?.kill();
             });
           });
           child!.send({ type: "connect", url: session.url });
         });
       } catch (e: any) {
-        const state = ["auth_required", "permission_blocked"].includes(
-          e.message,
-        )
+        const state = [
+          "auth_required",
+          "permission_blocked",
+          "quota_blocked",
+        ].includes(e.message)
           ? e.message
           : "reconnecting";
         this.status("chzzk", state);
+        if (e instanceof ApiQuotaError) this.states.chzzk.api = e.api;
         terminal = state !== "reconnecting";
       } finally {
         this.chzzkNotices?.reset();

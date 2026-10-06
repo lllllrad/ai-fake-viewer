@@ -248,7 +248,7 @@ export class Participation {
     if (profile.singleStepTest)
       return {
         stage,
-        text: `테스트: 14세 이상·수집이용·방송공개·국외처리${profile.audioEnabled ? "·음성" : ""}${profile.videoEnabled ? "·화면" : ""}${profile.thirdPartyNotice ? "·제3자제공" : ""} 동의 !동의 / 철회 !철회 ${profile.noticeUrl}`,
+        text: `테스트: 14세 이상·수집이용·방송공개·국외처리·음성·화면${profile.thirdPartyNotice ? "·제3자제공" : ""} 동의 !동의 / 철회 !철회 ${profile.noticeUrl}`,
       };
     const text =
       stage === "age"

@@ -141,8 +141,10 @@ test("live privacy profile blocks unconfigured AI and never restores running int
     assert.equal(env.resumeAiIfRequested(), false);
     env.capture.start();
     env.transcriber.start();
-    assert.equal(env.capture.state, "privacy_blocked");
-    assert.equal(env.transcriber.state, "privacy_blocked");
+    assert.equal(env.capture.allowProcessing(), true);
+    assert.notEqual(env.capture.state, "privacy_blocked");
+    assert.equal(env.transcriber.allowProcessing(), true);
+    assert.equal(env.transcriber.state, "config_required");
   } finally {
     await env.app.close();
     rmSync(directory, { recursive: true, force: true });

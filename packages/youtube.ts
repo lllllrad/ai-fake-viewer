@@ -72,6 +72,7 @@ export class UpstreamError extends Error {
   constructor(
     public state: string,
     public retryMs = 0,
+    public api = "YouTube Data API",
   ) {
     super(state);
   }
@@ -108,14 +109,19 @@ export async function googleJson(
           ? "config_required"
           : r.status === 401
             ? "auth_required"
-            : r.status === 403
-              ? String(reason).includes("quota")
-                ? "quota_blocked"
-                : "permission_blocked"
-              : "reconnecting";
+            : r.status === 429
+              ? "quota_blocked"
+              : r.status === 403
+                ? /quota|rateLimit/i.test(String(reason))
+                  ? "quota_blocked"
+                  : "permission_blocked"
+                : "reconnecting";
     throw new UpstreamError(
       state,
       Number(r.headers.get("retry-after") ?? 0) * 1000,
+      path === "liveChat/messages"
+        ? "YouTube liveChatMessages.list"
+        : `YouTube ${path}.list`,
     );
   }
   return b;
@@ -150,7 +156,7 @@ export async function runYoutube(
   },
   store: Store,
   signal: AbortSignal,
-  status: (s: string) => void,
+  status: (s: string, api?: string) => void,
   options?: {
     access?: () => Promise<string>;
     resolve?: (chat: string, broadcaster: string) => void;
@@ -223,7 +229,10 @@ export async function runYoutube(
       return;
     }
   } catch (e) {
-    status(e instanceof UpstreamError ? e.state : "config_required");
+    status(
+      e instanceof UpstreamError ? e.state : "config_required",
+      e instanceof UpstreamError ? e.api : undefined,
+    );
     return;
   }
   let transport = config.transport;
@@ -347,7 +356,12 @@ export async function runYoutube(
                 : e.code === 3 && token
                   ? "invalid_cursor"
                   : "reconnecting";
-      status(state);
+      status(
+        state,
+        e instanceof UpstreamError
+          ? e.api
+          : "YouTube liveChatMessages.streamList",
+      );
       if (
         [
           "auth_required",

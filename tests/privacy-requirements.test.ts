@@ -368,7 +368,7 @@ test("T16–T19, T23: live app blocks alternative inputs/export and creates auto
     activateFixture(env.store, "u", (ms) => (now += ms));
     env.store.ingestBatch([privacyMessage("u", "PRIVATE_RAW", ++now)]);
     assert.equal(existsSync(join(dir, "raw.sqlite")), false);
-    for (const path of ["capture/start", "audio/start", "chatgpt/authorize"]) {
+    for (const path of ["chatgpt/authorize"]) {
       const response = await env.app.inject({
         method: "POST",
         url: `/api/admin/${path}`,
@@ -379,7 +379,7 @@ test("T16–T19, T23: live app blocks alternative inputs/export and creates auto
     assert.equal(
       (await env.app.inject({ url: "/api/admin/transcripts/export", headers }))
         .statusCode,
-      409,
+      200,
     );
     env.store.ingestBatch([privacyMessage("u", "!철회", ++now)]);
     assert.equal(env.rights.list().length, 1);

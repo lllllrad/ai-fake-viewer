@@ -14,6 +14,7 @@ import {
 } from "node:fs";
 import { z } from "zod";
 import { dirname } from "node:path";
+import { ApiQuotaError } from "./api-health.ts";
 const root = "https://openapi.chzzk.naver.com";
 const tokenSchema = z.object({
   accessToken: z.string().min(1),
@@ -186,6 +187,8 @@ export class ChzzkAuth {
       if (this.token) this.token.expiresAt = 0;
       throw Error("auth_required");
     }
+    if (r.status === 429)
+      throw new ApiQuotaError(`CHZZK Session API ${path.split("?")[0]}`);
     if (!r.ok)
       throw Error(r.status === 403 ? "permission_blocked" : "reconnecting");
     if (r.status === 204) return {};

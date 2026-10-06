@@ -339,7 +339,7 @@ test("transcript log persists across restart and follows retention and deletion"
   }
 });
 
-test("live privacy profile blocks transcript storage and export even for administrators", async () => {
+test("transcripts work without privacy enable flags and export still requires administrator authentication", async () => {
   const config = configSchema.parse({
     database: ":memory:",
     privacy: { rightsDatabase: ":memory:" },
@@ -377,8 +377,8 @@ test("live privacy profile blocks transcript storage and export even for adminis
         authorization: `Bearer ${adminToken}`,
       },
     });
-    assert.equal(allowed.statusCode, 409);
-    assert.equal(store.transcriptCount(), 0);
+    assert.equal(allowed.statusCode, 200);
+    assert.equal(store.transcriptCount(), 1);
     assert.equal(store.snapshot().messages.length, 0);
     const blocked = await app.inject({
       method: "POST",
@@ -400,7 +400,6 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
   const { approvedProfile, privacyMessage } =
     await import("./privacy-fixtures.ts");
   const profile = approvedProfile();
-  profile.audioEnabled = true;
   for (const [key, value] of Object.entries({
     OPENAI_API_KEY: "fixture",
     OPENAI_MODEL: "fixture-model",
@@ -487,9 +486,7 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
     const status = (
       await app.inject({ url: "/api/admin/status", headers })
     ).json();
-    assert.equal(status.privacy.audioEnabled, true);
-    assert.equal(status.privacy.videoEnabled, false);
-    assert.equal(status.privacy.textOnly, false);
+    assert.equal(transcriber.allowProcessing(), true);
     assert.equal(
       (
         await app.inject({
@@ -529,36 +526,12 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
     await pending;
     assert.equal(store.transcriptCount(), 0);
     assert.equal(transcriber.recent().length, 0);
-    const disabled = { ...profile, audioEnabled: false };
-    assert.equal(
-      (
-        await app.inject({
-          method: "PUT",
-          url: "/api/admin/privacy/profile",
-          headers,
-          payload: disabled,
-        })
-      ).statusCode,
-      400,
-    );
-    disabled.noticeVersion = "audio-disabled-2";
-    assert.equal(
-      (
-        await app.inject({
-          method: "PUT",
-          url: "/api/admin/privacy/profile",
-          headers,
-          payload: disabled,
-        })
-      ).statusCode,
-      200,
-    );
     assert.equal(
       (await app.inject({ url: "/api/admin/transcripts/export", headers }))
         .statusCode,
-      409,
+      200,
     );
-    assert.equal(transcriber.allowProcessing(), false);
+    assert.equal(transcriber.allowProcessing(), true);
   } finally {
     await app.close();
     rmSync(directory, { recursive: true, force: true });

@@ -24,7 +24,7 @@ The operator must immediately understand whether AI is running and which inputs 
 
 ## 2. First-screen layout
 
-The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Video is unused; broadcast audio is optional via `privacy.audioEnabled`. Neither requires a preview-confirmation prerequisite. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
+The first section contains broadcast status, screen/real-chat/transcript cards, AI enablement, emergency stop and disclosure. Video and audio use their configured sources by default; missing configuration and missing data must be visible. Neither requires a preview-confirmation prerequisite. Privacy/participation management, anonymous topic/mood summary and automatic cast overview follow. Connection/model details start collapsed.
 
 There is no mask-confirmation control or `capture.confirmed` / `programConfirmed` start gate. Input restrictions prevent unconsented information from bypassing text filtering; a manual mask acknowledgement does not lift them.
 

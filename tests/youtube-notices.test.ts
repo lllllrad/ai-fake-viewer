@@ -680,3 +680,21 @@ test("configured three-second spacing sends all stage parts without additional v
   f.message("!동의");
   assert.equal(person.stage, 1);
 });
+
+test("YouTube explicit quota errors identify insertion independently from receipt", async (t) => {
+  const f = fixture(t, undefined, async () =>
+    Response.json(
+      { error: { errors: [{ reason: "quotaExceeded" }] } },
+      { status: 403 },
+    ),
+  );
+  f.message("hello");
+  await f.sender.tick(f.signal);
+  assert.equal(f.sender.state, "quota_blocked");
+  assert.deepEqual(f.sender.failure, {
+    api: "YouTube liveChatMessages.insert",
+    operation: "send",
+    state: "quota_blocked",
+  });
+  assert.equal(f.p.get("youtube", "fixture", "viewer")!.introDelivered, false);
+});

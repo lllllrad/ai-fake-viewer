@@ -12,8 +12,6 @@ test("reviewed live video reaches model and is invalidated by withdrawal, includ
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
   const profile = approvedProfile();
-  profile.videoEnabled = true;
-  assert.throws(() => assertProfileUpdate(approvedProfile(), profile));
   profile.noticeVersion = "video-2";
   assert.doesNotThrow(() => assertProfileUpdate(approvedProfile(), profile));
   for (const [key, value] of Object.entries({
@@ -96,7 +94,7 @@ test("reviewed live video reaches model and is invalidated by withdrawal, includ
     const status = (
       await i.app.inject({ url: "/api/admin/status", headers })
     ).json();
-    assert.equal(status.privacy.videoEnabled, true);
+    assert.equal(status.capture.configured, true);
     assert.equal(status.ai.visualMode, "continuous");
     now += 11000;
     assert.equal(i.capture.recent().length, 0);

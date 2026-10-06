@@ -1,3 +1,4 @@
+import { limitState, type ApiFailure } from "./api-health.ts";
 import { NoticeBot } from "./notice-bot.ts";
 import type { Participation } from "./participation.ts";
 import type { YoutubeAuth } from "./youtube-auth.ts";
@@ -18,6 +19,7 @@ export function noticeParts(text: string, budget = 170) {
 }
 export class YoutubeNotices {
   state = "waiting_connection";
+  failure?: ApiFailure;
   private target?: { chat: string; broadcaster: string };
   private bots = new Map<string, NoticeBot>();
   private job?: {
@@ -42,6 +44,7 @@ export class YoutubeNotices {
     this.target = { chat, broadcaster };
   }
   reset() {
+    this.failure = undefined;
     this.target = undefined;
     this.connected = false;
     this.job = undefined;
@@ -151,12 +154,16 @@ export class YoutubeNotices {
         return;
       }
       if (!r.ok) {
-        this.state =
-          r.status === 401
-            ? "auth_required"
-            : r.status === 403
-              ? "permission_or_quota_blocked"
-              : "delivery_unconfirmed";
+        const errorBody = (await r.json().catch(() => ({}))) as any;
+        this.state = limitState(
+          r.status,
+          String(errorBody.error?.errors?.[0]?.reason ?? ""),
+        );
+        this.failure = {
+          api: "YouTube liveChatMessages.insert",
+          operation: "send",
+          state: this.state,
+        };
         // No immediate retry of ambiguous writes; count failures against the same limits.
         this.blockedUntil =
           Date.now() + (r.status === 401 || r.status === 403 ? 300000 : 60000);
@@ -179,6 +186,7 @@ export class YoutubeNotices {
         b.snippet?.textMessageDetails?.messageText !== text
       )
         throw Error("delivery_unconfirmed");
+      this.failure = undefined;
       if (++job.index === job.parts.length) {
         bot.echo(target.broadcaster, job.text);
         this.job = undefined;

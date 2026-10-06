@@ -53,6 +53,14 @@ export class Capture {
       this.state = "privacy_blocked";
       return;
     }
+    if (
+      !this.demo &&
+      !(this.config.backend === "rtmp" ? this.config.url : this.config.device)
+    ) {
+      this.state = "config_required";
+      this.lastError = "Configure a capture source in config.yaml.";
+      return;
+    }
     if (this.child || this.timer) return;
     clearTimeout(this.retryTimer);
     this.frames = [];

@@ -6,7 +6,7 @@ The live profile is consent-gated chat and optional broadcast-transcript and OBS
 
 `createApp` always constructs an in-memory Store. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI requires manual start after restart. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
-Jev, persistent Store and persona authoring libraries remain standalone paths. Live video and broadcast transcription have separate explicit profile options. Demo uses artificial data and a mock model.
+Jev, persistent Store and persona authoring libraries remain standalone paths. Live video and broadcast transcription use their configured sources by default. Demo uses artificial data and a mock model.
 
 ## Withdrawal and anonymous chat summaries
 
@@ -39,7 +39,7 @@ flowchart TD
 
 ### 1. Audio capture and transcription
 
-Opt-in through `privacy.audioEnabled`. The configured audio source is transcribed by Groq; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](../operations/setup.md#broadcast-audio-and-transcription).
+The configured audio source is transcribed by Groq; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](../operations/setup.md#broadcast-audio-and-transcription).
 
 ### 2. Video capture and masking
 

@@ -1052,11 +1052,7 @@ export class Store extends EventEmitter {
     this.emit("reset");
   }
   recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
-    if (
-      (this.participation && !this.participation.profile.audioEnabled) ||
-      this.closed()
-    )
-      return false;
+    if (this.closed()) return false;
     if (
       !Number.isSafeInteger(entry.capturedAt) ||
       !entry.text.trim() ||

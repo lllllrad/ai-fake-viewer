@@ -45,7 +45,7 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
   const env = await createApp(
     configSchema.parse({
       privacy: profile(),
-      ai: { provider: "chatgpt_subscription" },
+      ai: { provider: "chatgpt_subscription", visualMode: "on_request" },
     }),
     {
       startInputs: false,

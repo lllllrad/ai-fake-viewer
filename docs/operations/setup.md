@@ -36,7 +36,7 @@ Choose `ai.provider: chatgpt_subscription` to use the Responses API through Sign
 
 Alternatively select `openai_api`, supply the API key/environment model and use an API contract profile with matching model/endpoint. Keep `ai.gate.enabled: false` for either service. There is no automatic fallback between the two contracts. A provider/model mismatch blocks transmission rather than requiring an API key for subscription users.
 
-Screen ingestion and Jev remain disabled. OBS can still show the reader overlay. Broadcast audio, Groq transcription and authenticated transcript export are opt-in through `privacy.audioEnabled`; see the audio setup below. No screen confirmation or `programConfirmed` gate is needed.
+Screen ingestion, broadcast audio, Groq transcription and authenticated transcript export use their configured sources. OBS can show the reader overlay. See input setup below. No screen confirmation or `programConfirmed` gate is needed.
 
 ## 4. Connect real chat sources
 
@@ -116,7 +116,7 @@ configuration keeps it disabled.
 
 ## Broadcast audio and transcription
 
-Set `privacy.audioEnabled: true`, configure `audio.url` and provide `GROQ_API_KEY`.
+Configure `audio.url` and provide `GROQ_API_KEY`. No additional privacy enable flag is needed.
 Restart with `sh run-command.sh just server-restart`; the configured input starts
 automatically, and admin audio controls can stop/start it. Speech chunks use the
 existing Groq transcription adapter; recent transcripts can supply AI evidence
@@ -129,8 +129,7 @@ There is no automatic speaker identification or filtering of chat read aloud.
 Withdrawal/context invalidation conservatively erases all session transcripts and
 aborts in-flight transcription; further captured speech is new input. Session
 end/restart also erases records. Downloaded JSONL files and provider-side records
-remain separate operator-managed copies. Video has a separate `privacy.videoEnabled` switch. Set
-`privacy.audioEnabled: false` to disable this path again.
+remain separate operator-managed copies. Use the audio stop control to stop transcription; missing configuration is reported rather than silently disabling it.
 
 When testing YouTube staged consent, wait for all numbered notice parts before
 sending the next consent command. A complete stage must not restart at part one
@@ -176,17 +175,34 @@ still prevent actual delivery and cannot be removed by the simplified flow.
 
 ## OBS Program video input
 
-Set `privacy.videoEnabled: true` and update `privacy.noticeVersion` when enabling
-reviewed broadcast video. For the existing remote stream, keep `capture.backend:
+Configure the intended OBS Program source directly under `capture`. For the existing remote stream, keep `capture.backend:
 rtmp`, its private reader URL and the configured FFmpeg wrapper. Start OBS streaming
 and check the administrator preview. For a local virtual camera, configure the
 platform capture backend/device and select OBS Program output.
 
 `ai.visualMode: continuous` includes recent frames automatically; `on_request`
-provides them only when the model requests inspection. This setting does not itself
-enable capture permission. New frame selection requires frames under ten seconds
+provides them only when the model requests inspection. Capture starts from its configured source, independently of this inference mode. New frame selection requires frames under ten seconds
 old; already selected evidence remains valid for at most thirty seconds while
 generation/review completes. Frames stay in memory. Withdrawal/context reset clears
 them and rejects pre-reset frames arriving late. The application cannot remove
 unconsented content embedded in an upstream video; the reviewed Program source
 must provide the intended content. No mask-confirmation step is required.
+
+## Effective configuration and API limits
+
+There are no privacy enable switches for video or transcription. `capture` selects
+the actual source and FFmpeg path; `audio` selects its source, chunking and request
+budget. Missing sources, missing credentials, missing frames and missing transcripts
+must be visible in status. The configured `ai.visualMode` is honored rather than
+silently changed by the participation profile. Platform connection switches remain
+optional, and viewer consent/withdrawal remains separate from input configuration.
+
+The dashboard reports API failures by provider and operation. YouTube lookup/chat
+receipt is separate from `liveChatMessages.insert` notice transmission. If receipt
+hits a limit and notice sending waits for that connection, the UI says so without
+claiming that the send API itself reached a limit. CHZZK User API identity lookup
+is distinguished from Chat API sending. Groq transcription and OpenAI Responses API
+limits are separate from platform chat. App-configured call/token budgets are
+identified as local limits, not provider quota. An ambiguous permission/quota
+response remains explicitly ambiguous; the app does not infer that other methods
+are usable merely because their quota failure has not been observed.

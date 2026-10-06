@@ -37,7 +37,6 @@ capture:
   # Empty is supported; no mask confirmation is required.
   masks: []
 audio:
-  # Set privacy.audioEnabled to use live broadcast transcription.
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
   url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
   language: ko # input language (ISO-639-1); "" for automatic detection
@@ -73,8 +72,6 @@ ai:
 # Empty/unconfirmed defaults intentionally block live collection/AI.
 privacy:
   singleStepTest: false # temporary combined notice/consent; requires testReview
-  audioEnabled: false # enable reviewed broadcast audio transcription and authenticated export
-  videoEnabled: false # enable reviewed OBS Program capture and AI image input
   # Optional only after an actual operator review for live testing; see docs/operations/setup.md.
   # testReview:
   #   reference: <actual review record>
