@@ -122,12 +122,39 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await expect(
       page.getByRole("button", { name: "Sign in with ChatGPT" }),
     ).toBeVisible();
+    const aiAccount = page.getByRole("region", { name: "AI 계정과 모델" });
+    await page.route("**/api/admin/chatgpt/models", (route) =>
+      route.fulfill({
+        status: 502,
+        contentType: "text/plain",
+        body: "Synthetic upstream failure",
+      }),
+    );
+    await aiAccount.getByRole("button", { name: "모델 목록 불러오기" }).click();
+    await expect(aiAccount.getByRole("alert")).toContainText("502");
+    await expect(
+      page.getByRole("button", { name: "YouTube 계정 연결", exact: true }),
+    ).toBeEnabled();
+    await page.unroute("**/api/admin/chatgpt/models");
+    await page.route("**/api/admin/chatgpt/models", (route) =>
+      route.fulfill({
+        json: { models: [{ slug: "fixture-model", name: "Synthetic model" }] },
+      }),
+    );
+    let selectedModel = "";
+    await page.route("**/api/admin/chatgpt/select-model", (route) => {
+      selectedModel = route.request().postDataJSON().slug;
+      return route.fulfill({ json: { ok: true } });
+    });
+    await aiAccount.getByRole("button", { name: "모델 목록 불러오기" }).click();
+    await aiAccount
+      .getByLabel("AI 모델", { exact: true })
+      .selectOption("fixture-model");
+    await expect.poll(() => selectedModel).toBe("fixture-model");
     await page
       .getByRole("button", { name: "SOOP 채팅 연결", exact: true })
       .click();
-    const setupCard = page.locator("section.card").filter({
-      has: page.getByRole("heading", { name: "플랫폼 연결 준비", exact: true }),
-    });
+    const setupCard = page.getByRole("region", { name: "플랫폼 연결 준비" });
     const chzzkConnect = setupCard.getByRole("button", {
       name: "치지직 계정 연결 / 다시 인증",
       exact: true,

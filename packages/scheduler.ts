@@ -91,6 +91,7 @@ export class Scheduler {
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     public transcriber?: Transcriber,
     public gate = new DecisionGate(config.ai.gate),
+    public random: () => number = () => Math.random(),
   ) {
     store.on("context_invalidated", () => this.invalidateChatContext());
     store.on("reset", () => this.invalidateChatContext());
@@ -442,7 +443,7 @@ export class Scheduler {
             (0.5 + Math.min(1, m.attention)) *
             (mention ? 1.5 : 1) *
             recencyPenalty *
-            (0.8 + Math.random() * 0.4);
+            (0.8 + this.random() * 0.4);
           return {
             m,
             i,
@@ -462,14 +463,14 @@ export class Scheduler {
           ...eligible.map((x) => x.m.snapshot.participation.base_propensity),
         ),
       );
-      if (!eligible.length || Math.random() > chance) {
+      if (!eligible.length || this.random() > chance) {
         this.lastHash = hash;
         this.lastExternal = externalSeq;
         this.skips++;
         return;
       }
       const total = eligible.reduce((a, b) => a + b.score, 0);
-      let choice = Math.random() * total;
+      let choice = this.random() * total;
       const selected =
         eligible.find((x) => (choice -= x.score) <= 0) ?? eligible.at(-1)!;
       activeMember = selected.m;
@@ -712,7 +713,7 @@ export class Scheduler {
       const triggerAt = triggerTimes.length ? Math.max(...triggerTimes) : now;
       const responseDelay = personaRuntime
         ? Math.floor(
-            Math.random() *
+            this.random() *
               ((personaRuntime.policy.response_delay_max_ms ?? 2500) -
                 (personaRuntime.policy.response_delay_min_ms ?? 500) +
                 1),
@@ -794,7 +795,7 @@ export class Scheduler {
         const { minSeconds, maxSeconds } = c.pacing;
         const intervalSeconds =
           minSeconds +
-          Math.floor(Math.random() * (maxSeconds - minSeconds + 1));
+          Math.floor(this.random() * (maxSeconds - minSeconds + 1));
         this.lastAttempt = Date.now() + intervalSeconds * 1000;
       }
     }

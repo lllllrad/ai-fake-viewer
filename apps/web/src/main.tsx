@@ -1,3 +1,5 @@
+import { inputHealth } from "./input-health";
+import { ConnectionsPage } from "./features/connections/ConnectionsPage";
 import type { AdminStatus } from "../../../packages/contracts/admin-status.ts";
 import "./style.css";
 import { BroadcastConversation } from "./features/workspace/BroadcastConversation";
@@ -56,11 +58,16 @@ function SoopConnector({
   setup,
   state,
   refresh,
+  stale,
 }: {
   setup: AdminStatus["setup"]["soop"];
   state: string;
   refresh: () => Promise<void>;
+  stale: boolean;
 }) {
+  const health = stale
+    ? { label: "확인 불가", hint: "상태를 다시 확인해 주세요." }
+    : inputHealth(state, "chat_read");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const sdk = useRef<any>(undefined);
@@ -228,11 +235,11 @@ function SoopConnector({
   };
   return (
     <section className="card">
-      <div className="eyebrow">SOOP CHAT / OFFICIAL SDK</div>
-      <h2>
-        <span className="dot" />
-        {state}
-      </h2>
+      <div className="section-title">
+        <h3>SOOP</h3>
+        <span className="status">{health.label}</span>
+      </div>
+      {health.hint && <p>{health.hint}</p>}
       <p>
         {setup.mode === "disabled"
           ? "config.yaml에서 soop.mode를 official로 설정하세요."
@@ -250,7 +257,10 @@ function SoopConnector({
       <div className="toolbar">
         <button
           disabled={
-            busy || setup.mode !== "official" || !setup.credentialsConfigured
+            stale ||
+            busy ||
+            setup.mode !== "official" ||
+            !setup.credentialsConfigured
           }
           onClick={() => void authorize()}
         >
@@ -259,6 +269,7 @@ function SoopConnector({
         <button
           className="secondary"
           disabled={
+            stale ||
             busy ||
             !setup.tokenConfigured ||
             !setup.streamerConfigured ||
@@ -298,11 +309,7 @@ function Admin() {
   }, []);
   const [error, setError] = useState("");
   const [preview, setPreview] = useState("");
-  const [links, setLinks] = useState<any>();
   const [busy, setBusy] = useState(false);
-  const [chatgptModels, setChatgptModels] = useState<
-    { slug: string; name: string }[]
-  >([]);
   const api = (path: string, method = "GET") =>
     adminClient.request(path, { method });
   const post = async (path: string, body: unknown) =>
@@ -317,24 +324,6 @@ function Admin() {
       setError(e.message);
     } finally {
       setBusy(false);
-    }
-  };
-  const loadChatgptModels = async () => {
-    try {
-      setChatgptModels((await (await api("chatgpt/models")).json()).models);
-    } catch (e: any) {
-      setError(e.message);
-    }
-  };
-  const authorizeChatgpt = async (clientId?: string) => {
-    try {
-      const { url } = await post(
-        "chatgpt/authorize",
-        clientId ? { clientId } : {},
-      );
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      setError(e.message);
     }
   };
   useEffect(() => {
@@ -517,547 +506,20 @@ function Admin() {
             className="workspace-screen"
             id="connections"
           >
-            <h2 className="workspace-page-title">연결 및 입력 설정</h2>
-            {status.demo && (
-              <aside className="demo">
-                데모 · 인공 채팅·테스트 화면·모의 AI를 사용합니다. 실제
-                서비스에는 연결하지 않습니다.
-              </aside>
-            )}
-            {!status.demo && (
-              <section className="card">
-                <div className="section-title">
-                  <h2>플랫폼 연결 준비</h2>
-                </div>
-                <p>
-                  YouTube:{" "}
-                  {status.setup?.youtube?.enabled
-                    ? status.setup.youtube.credentialsConfigured &&
-                      (status.setup.youtube.videoConfigured ||
-                        status.setup.youtube.channelConfigured)
-                      ? "연결 준비 완료"
-                      : "API 키 또는 계정 인증과 방송·채널 ID 설정 필요"
-                    : "config.yaml에서 사용하지 않도록 설정됨"}
-                </p>
-                <p>
-                  CHZZK:{" "}
-                  {status.setup?.chzzk?.enabled
-                    ? status.setup.chzzk.credentialsConfigured
-                      ? status.setup.chzzk.tokenConfigured
-                        ? "인증 저장됨 · 키 변경 시 다시 인증"
-                        : "키 설정 완료 · 아래 버튼으로 계정 연결"
-                      : ".env에 Client ID와 Client Secret 설정 필요"
-                    : "config.yaml에서 치지직 사용 설정 필요"}
-                </p>
-                <p className="hint">
-                  인증 콜백: {status.setup?.chzzk?.redirectUri ?? "미설정"}
-                </p>
-                <button
-                  className="secondary"
-                  disabled={
-                    busy ||
-                    !status.setup?.chzzk?.enabled ||
-                    !status.setup?.chzzk?.credentialsConfigured
-                  }
-                  onClick={() => {
-                    setError("");
-                    setBusy(true);
-                    void api("chzzk/authorize", "POST")
-                      .then((r) => r.json())
-                      .then((b) => {
-                        location.href = b.url;
-                      })
-                      .catch((e) => setError(e.message))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  치지직 계정 연결 / 다시 인증
-                </button>
-                <p className="hint">
-                  Client ID·Secret 또는 권한을 바꿨다면 서버 재시작 후 위
-                  버튼으로 방송 계정을 다시 인증하세요. 기존 연결이 있어도
-                  재인증할 수 있습니다.
-                </p>
-                <p>설정된 음성과 송출 화면을 AI 입력으로 사용합니다.</p>
-                <p>
-                  AI:{" "}
-                  {status.setup?.ai?.connected && status.setup.ai.modelSelected
-                    ? "모델 연결됨"
-                    : status.setup?.ai?.provider === "chatgpt_subscription"
-                      ? "Sign in with ChatGPT로 연결하고 모델을 선택하세요"
-                      : "OPENAI_API_KEY와 OPENAI_MODEL 설정 필요"}
-                </p>
-                <p className="hint">
-                  config.yaml과 .env를 로컬에서 저장한 뒤 서버를 재시작하세요.
-                </p>
-              </section>
-            )}
-            {status.setup?.soop && status.connectors?.soop && (
-              <SoopConnector
-                setup={status.setup.soop}
-                state={status.connectors.soop.state}
-                refresh={refresh}
-              />
-            )}
-            {!status.demo && (
-              <section className="card">
-                <h2>YouTube 자동 안내 연결</h2>
-                <p>
-                  {status.setup?.youtube?.connected
-                    ? `계정 연결됨 · ${status.setup.youtube.channelId}`
-                    : "방송 채널 계정으로 연결해 주세요."}
-                </p>
-                <p className="hint">
-                  발송하려는 방송의 채널을 선택하세요. 연결 후 수신기를 시작하면
-                  승인된 고정 동의 안내만 자동 발송합니다.
-                </p>
-                <button
-                  disabled={
-                    busy ||
-                    !status.setup?.youtube?.enabled ||
-                    !status.setup?.youtube?.oauthConfigured
-                  }
-                  onClick={() => {
-                    setBusy(true);
-                    setError("");
-                    void api("youtube/authorize", "POST")
-                      .then((r) => r.json())
-                      .then((b) => {
-                        location.href = b.url;
-                      })
-                      .catch((e) => setError(e.message))
-                      .finally(() => setBusy(false));
-                  }}
-                >
-                  YouTube 계정 연결
-                </button>
-                {status.setup?.youtube?.connected && (
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => void action("youtube/disconnect")}
-                  >
-                    YouTube 연결 해제
-                  </button>
-                )}
-                {!status.setup?.youtube?.oauthConfigured && (
-                  <p className="hint">
-                    .env에 YOUTUBE_CLIENT_ID와 YOUTUBE_CLIENT_SECRET을 설정하고
-                    서버를 재시작하세요.
-                  </p>
-                )}
-              </section>
-            )}
-            <div className="grid connections" id="connection-details">
-              {Object.entries(status.connectors).map(([p, s]) => (
-                <section className="card" key={p}>
-                  <div className="eyebrow">{p.toUpperCase()}</div>
-                  <h2>
-                    <span className="dot" />
-                    {s.state}
-                  </h2>
-                  <p>
-                    {s.received} received · {s.recoveries} recoveries
-                  </p>
-                </section>
-              ))}
-            </div>
-            <div className="toolbar">
-              <button
-                disabled={busy}
-                onClick={() => void action("connectors/start")}
-              >
-                채팅 수신 시작
-              </button>
-              <button
-                className="secondary"
-                onClick={() => void action("connectors/stop")}
-              >
-                채팅 수신 중지
-              </button>
-
-              <button
-                className="secondary"
-                onClick={() =>
-                  void api("links")
-                    .then((r) => r.json())
-                    .then(setLinks)
-                    .catch((e) => setError(e.message))
-                }
-              >
-                리더·OBS 링크 보기
-              </button>
-            </div>
-            {links && (
-              <section className="card">
-                <h2>리더·OBS 접속 링크</h2>
-                <p>
-                  Anyone with these links can read the chat. OBS Browser 입력:
-                  600 × 900, transparent background.
-                </p>
-                <button
-                  className="secondary"
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "현재 리더·OBS 링크를 모두 무효화하고 새 접속 토큰을 발급할까요?",
-                      )
-                    )
-                      void action("reader-token/rotate").then(() =>
-                        setLinks(undefined),
-                      );
-                  }}
-                >
-                  리더·OBS 링크 재발급
-                </button>
-                {["reader", "overlay"].map((k) => (
-                  <label key={k}>
-                    {k}
-                    <input
-                      readOnly
-                      value={links[k]}
-                      onFocus={(e) => e.target.select()}
-                    />
-                    <a href={links[k]} target="_blank" rel="noreferrer">
-                      {k === "reader" ? "리더 열기" : "오버레이 열기"} ↗
-                    </a>
-                  </label>
-                ))}
-              </section>
-            )}
-            <div className="grid workspace">
-              <section className="card" id="program-details">
-                <div className="section-title">
-                  <h2>송출 화면 입력</h2>
-                  <span className="status">{status.capture.state}</span>
-                </div>
-                <div className="preview">
-                  {preview &&
-                  status.capture.lastFrameAgeMs !== null &&
-                  status.capture.lastFrameAgeMs <= 10000 ? (
-                    <img alt="현재 송출 화면" src={preview} />
-                  ) : (
-                    <p>
-                      {status.capture.state === "config_required"
-                        ? status.capture.lastError ||
-                          "송출 화면 연결 설정이 필요합니다."
-                        : status.capture.state === "connecting" ||
-                            status.capture.state === "reconnecting"
-                          ? "송출 화면에 연결하고 있습니다."
-                          : status.capture.lastError ||
-                            "최근 송출 화면이 없습니다. 입력 연결을 확인해 주세요."}
-                    </p>
-                  )}
-                </div>
-                <p>
-                  입력: {status.capture.backend}
-                  {status.capture.device
-                    ? ` · ${status.capture.device}`
-                    : ""} · {status.capture.dimensions || "해상도 확인 중"} ·{" "}
-                  {status.capture.lastFrameAgeMs === null
-                    ? "수신한 화면 없음"
-                    : `마지막 화면 ${Math.floor(status.capture.lastFrameAgeMs / 1000)}초 전`}{" "}
-                  · {status.capture.framesInLastMinute} 프레임 / 최근 1분
-                </p>
-                {status.capture.lastError && (
-                  <p className="error" role="status">
-                    {status.capture.lastError}
-                  </p>
-                )}
-                <p className="hint">
-                  {status.capture.backend === "rtmp"
-                    ? "OBS에서 송출을 시작하면 연결된 방송 화면을 받습니다. AI가 켜져 있으면 설정된 방식으로 화면을 참고합니다."
-                    : "OBS 가상 카메라를 Program 출력으로 시작한 뒤 화면 수신을 시작하세요."}
-                </p>
-                <div className="toolbar">
-                  <button onClick={() => void action("capture/start")}>
-                    화면 수신 시작
-                  </button>
-                  <button
-                    className="secondary"
-                    onClick={() => void action("capture/stop")}
-                  >
-                    화면 수신 중지
-                  </button>
-                </div>
-              </section>
-              <section className="card" id="audio-details">
-                <div className="section-title">
-                  <h2>음성 전사 · Groq</h2>
-                  <span className="status">{status.audio.state}</span>
-                </div>
-                <p>
-                  {status.audio.requests} / {status.audio.maxRequests} 회 / 현재
-                  방송
-                </p>
-                <p>{status.audio.latestText || "최근 음성 자막이 없습니다."}</p>
-                <p className="hint">
-                  설정된 방송 음성을 Groq로 전사하고 최근 10청크를 AI 입력에
-                  사용합니다. 음성 주소와 GROQ_API_KEY가 필요합니다. 기록은 세션
-                  종료·동의 철회 시 삭제하고 서버 재시작 후에는 복구합니다.
-                </p>
-                {status.audio.history.length > 0 && (
-                  <ol>
-                    {status.audio.history.map((entry) => (
-                      <li key={entry.id}>
-                        <time
-                          dateTime={new Date(entry.capturedAt).toISOString()}
-                        >
-                          {new Date(entry.capturedAt).toLocaleString()}
-                        </time>{" "}
-                        {entry.text}
-                      </li>
-                    ))}
-                  </ol>
-                )}
-                <div className="toolbar">
-                  <button onClick={() => void action("audio/start")}>
-                    음성 전사 시작
-                  </button>
-                  <button
-                    className="secondary"
-                    onClick={() => void action("audio/stop")}
-                  >
-                    음성 전사 중지
-                  </button>
-                  {
-                    <a
-                      href="/api/admin/transcripts/export"
-                      download="transcripts.jsonl"
-                    >
-                      전사문 내보내기
-                    </a>
-                  }
-                </div>
-              </section>
-              <section className="card" id="ai-details">
-                <div className="section-title">
-                  <h2>AI pipeline · 전체 상태 및 제어</h2>
-                  <span className="status">
-                    {status.ai.state === "running" ? "생성 중" : "생성 중지"} ·{" "}
-                    {status.ai.phase}
-                  </span>
-                </div>
-                <ul className="readiness-list">
-                  {status.ai.readiness.checks.map((check) => (
-                    <li
-                      key={check.id}
-                      className={check.ready ? "ready" : "not-ready"}
-                    >
-                      {check.ready ? "●" : "○"} {check.label}
-                      {check.optional ? " (선택)" : ""}
-                    </li>
-                  ))}
-                </ul>
-                <div className="toolbar">
-                  <button
-                    disabled={
-                      busy || status.closed || status.ai.state === "running"
-                    }
-                    onClick={() => void action("pipeline/start")}
-                  >
-                    입력 시작
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={busy}
-                    onClick={() => void action("pipeline/stop")}
-                  >
-                    전체 중지 (AI·영상·오디오·수신기)
-                  </button>
-                </div>
-                <p>
-                  {status.ai.state === "running"
-                    ? status.ai.phase === "waiting_for_input"
-                      ? "새 음성 자막이나 동의한 채팅을 기다리고 있습니다."
-                      : status.ai.phase === "random_wait"
-                        ? "다음 반응 간격을 기다리고 있습니다."
-                        : status.ai.phase === "jev_timing_filter"
-                          ? "현재 반응하기 적절한 시점인지 확인하고 있습니다."
-                          : status.ai.phase === "generating_draft" ||
-                              status.ai.phase === "generating_draft_with_frame"
-                            ? "AI가 반응을 작성하고 있습니다."
-                            : status.ai.phase === "ai_review"
-                              ? "AI가 작성한 반응을 검토하고 있습니다."
-                              : status.ai.phase === "awaiting_human_review"
-                                ? "방송 화면에서 게시 전 검토를 기다리고 있습니다."
-                                : status.ai.phase === "published_local"
-                                  ? "이 앱의 채팅에 반응을 게시했습니다."
-                                  : `AI 처리 단계: ${status.ai.phase}`
-                    : `AI 생성이 꺼져 있습니다. (${status.ai.phase})`}
-                </p>
-                <div className="metric">
-                  {status.ai.usage.calls}
-                  <small> / {status.ai.maxCalls} calls</small>
-                </div>
-                <p>
-                  {status.ai.costEstimate === "unavailable"
-                    ? "비용 추정 미지원 · 호출 한도 적용 중"
-                    : `사용·예약 비용 추정: $${status.ai.usage.reservedUsd.toFixed(4)}`}
-                </p>
-                <p>
-                  {status.ai.model} ·{" "}
-                  {status.ai.visualMode === "on_request"
-                    ? "필요할 때 화면 확인"
-                    : "항상 화면 참고"}{" "}
-                  · {status.ai.skips} skipped · {status.ai.rejects} rejected
-                </p>
-                <p className="hint">
-                  Replies wait a random {status.ai.pacing.minSeconds}–
-                  {status.ai.pacing.maxSeconds}s after each decision; context
-                  covers the previous {status.ai.contextWindowSeconds}s.
-                </p>
-                {status.ai.gate.enabled && (
-                  <p>
-                    Jev filter: {status.ai.gate.state} ·{" "}
-                    {status.ai.gate.requests} / {status.ai.gate.maxRequests}{" "}
-                    checks · {status.ai.gate.filtered} bad-timing vetoes ·{" "}
-                    {status.ai.gate.errors} errors
-                    {status.ai.gate.probability !== null &&
-                      ` · bad-timing probability ${Math.round(status.ai.gate.probability * 100)}% (veto at ${Math.round(status.ai.gate.suppressThreshold * 100)}%)`}
-                  </p>
-                )}
-                {status.ai.provider === "chatgpt_subscription" &&
-                  !status.demo && (
-                    <div className="pending">
-                      <strong>Sign in with ChatGPT</strong>
-                      <p>
-                        {status.chatgpt.accounts.find(
-                          (a) => a.clientId === status.chatgpt.active,
-                        )?.email || "선택한 계정 없음"}
-                      </p>
-                      <div className="toolbar">
-                        <button onClick={() => void authorizeChatgpt()}>
-                          Sign in with ChatGPT
-                        </button>
-                        <button
-                          className="secondary"
-                          onClick={() => void loadChatgptModels()}
-                        >
-                          모델 목록 불러오기
-                        </button>
-                      </div>
-                      {status.chatgpt.accounts.map((a) => (
-                        <div key={a.clientId} className="toolbar">
-                          <span>
-                            {a.email || a.clientId}{" "}
-                            {a.connected ? "· 연결됨" : "· 로그아웃됨"}
-                          </span>
-                          <button
-                            className="secondary"
-                            onClick={() =>
-                              void post("chatgpt/select-account", {
-                                clientId: a.clientId,
-                              })
-                                .then(refresh)
-                                .catch((e: any) => setError(e.message))
-                            }
-                          >
-                            선택
-                          </button>
-                          <button
-                            className="secondary"
-                            onClick={() => void authorizeChatgpt(a.clientId)}
-                          >
-                            다시 인증
-                          </button>
-                        </div>
-                      ))}
-                      {chatgptModels.length > 0 && (
-                        <label>
-                          모델
-                          <select
-                            value={
-                              status.ai.model === "not selected"
-                                ? ""
-                                : status.ai.model
-                            }
-                            onChange={(e) =>
-                              void post("chatgpt/select-model", {
-                                slug: e.target.value,
-                              })
-                                .then(refresh)
-                                .catch((err: any) => setError(err.message))
-                            }
-                          >
-                            <option value="">모델 선택</option>
-                            {chatgptModels.map((m) => (
-                              <option key={m.slug} value={m.slug}>
-                                {m.name}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      )}
-                      <p>
-                        <a
-                          href="https://chatgpt.com/settings/usage"
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Review ChatGPT plan usage and app access
-                        </a>
-                      </p>
-                      <button
-                        className="secondary"
-                        onClick={() => void action("chatgpt/disconnect")}
-                      >
-                        현재 AI 계정 연결 해제
-                      </button>
-                    </div>
-                  )}
-                <p className="hint">
-                  AI 실행 상태와 참여 상태는 서버 재시작 후 복구합니다. 방송
-                  종료 시 세션 정보를 삭제합니다. 운영 프로필과 모델 준비 상태를
-                  확인한 뒤 시작하세요.
-                </p>
-                <p className="hint">
-                  {status.ai.manualApproval
-                    ? "방송 화면에서 승인한 AI 반응만 게시합니다."
-                    : "검토를 통과한 AI 반응을 자동 게시합니다. 공개하기 전까지 리더와 오버레이에는 출처를 표시하지 않습니다."}
-                </p>
-                <details>
-                  <summary>AI 입력·검토 상세</summary>
-                  <p>
-                    현재 동의가 유효한 채팅, 공개 방송 설명, 자동 페르소나
-                    정의와 승인된 익명 범주를 사용합니다. 라이브에서는 설정된
-                    화면과 최근 음성 전사문을 사용합니다. 철회 시 원문·식별
-                    가능한 파생 문맥을 지우고 진행 중 응답도 취소합니다.
-                  </p>
-                  <p>
-                    Available model tools: none. The model cannot call tools,
-                    access files, control capture, or post to a platform. The
-                    application validates each decision and publishes approved
-                    messages only to this app's local conversation.
-                  </p>
-                  <p>
-                    Draft review:{" "}
-                    {status.ai.reviewDraft
-                      ? `enabled · ${status.ai.reviewCount} review calls`
-                      : "disabled"}
-                    . The selected answer model gets a second call to reject or
-                    refine each proposed message. Each pass counts toward
-                    ai.maxCalls.{" "}
-                    {status.ai.manualApproval
-                      ? "이후 운영자가 게시를 승인해야 합니다."
-                      : "운영자 승인은 사용하지 않습니다."}
-                  </p>
-                </details>
-                <details>
-                  <summary>입력 및 보존 안내</summary>
-                  <p>
-                    현재 운영 프로필은 동의가 완료된 채팅과 승인된 익명 요약,
-                    설정된 영상과 음성 전사문을 선택한 AI 서비스의 입력으로
-                    사용합니다.
-                  </p>
-                  <p>
-                    응답 저장은 요청하지 않지만 제공자 측 모든 로그가 삭제된다는
-                    의미는 아닙니다. 실제 보존 조건은 운영 프로필의 확인 내용을
-                    따릅니다.
-                  </p>
-                </details>
-              </section>
-            </div>
+            <ConnectionsPage
+              status={status}
+              stale={stale}
+              preview={preview}
+              refresh={refresh}
+              soop={
+                <SoopConnector
+                  stale={stale}
+                  setup={status.setup.soop}
+                  state={status.connectors.soop?.state ?? "unknown"}
+                  refresh={refresh}
+                />
+              }
+            />
           </div>
         </>
       )}
@@ -1070,7 +532,6 @@ function Admin() {
               .then(() => {
                 signOut();
                 setPreview("");
-                setLinks(undefined);
               })
               .catch((e) => setError(e.message))
           }

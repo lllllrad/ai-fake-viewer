@@ -10,7 +10,7 @@ const port = 33219;
 const chatgptDir = mkdtempSync(join(tmpdir(), "mixed-chat-browser-"));
 const admin = "a".repeat(64),
   reader = "r".repeat(64);
-const { app, store, capture } = await createApp(
+const { app, store, capture, scheduler } = await createApp(
   configSchema.parse({
     port,
     youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
@@ -30,6 +30,8 @@ const { app, store, capture } = await createApp(
     startInputs: false,
   },
 );
+// The browser fixture exercises publication, not probabilistic participation.
+scheduler.random = () => 0;
 await app.listen({ port, host: "127.0.0.1" });
 const browser = await chromium.launch({ headless: true });
 const errors: string[] = [];
@@ -423,6 +425,16 @@ try {
   ).toBeVisible();
   await accessPage.close();
   await navigation.getByRole("link", { name: "연결", exact: true }).click();
+  const readerLinks = adminPage.getByRole("region", {
+    name: "리더와 OBS 연결",
+  });
+  await readerLinks.getByRole("button", { name: "리더·OBS 링크 보기" }).click();
+  await expect(
+    readerLinks.getByLabel("리더 링크", { exact: true }),
+  ).toHaveValue(`${origin}/reader#${reader}`);
+  await expect(
+    readerLinks.getByLabel("OBS 오버레이 링크", { exact: true }),
+  ).toHaveValue(`${origin}/overlay#${reader}`);
   await adminPage.screenshot({
     path: "test-results/admin-connections.png",
     fullPage: true,

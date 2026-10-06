@@ -1,8 +1,9 @@
 # Operator workspace and conversation surfaces
 
 This defines the replacement UI for the current live feature set. The broadcast,
-connections and participation destinations are implemented. Connection and rights
-components still require replacement as part of the ongoing reconstruction. Behavior is
+connections and participation destinations are implemented. The connection screen uses separate platform, media, AI account and reader-link
+components. The SOOP protocol adapter and rights components still require
+replacement as part of the ongoing reconstruction. Behavior is
 owned by [requirements](behavior.md), [participation](participation.md) and
 [personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
 
@@ -77,6 +78,14 @@ YouTube and CHZZK receive and send fixed notices on the server. SOOP uses its
 supported browser SDK and requires the connected administrator tab to stay open.
 Account connect/reauthorize actions remain visible when saved authorization exists.
 Show the registered callback where it helps configuration, not on the dashboard.
+
+[ConnectionsPage](../../apps/web/src/features/connections/ConnectionsPage.tsx)
+composes independent platform, media, AI-account and reader-link views. Each view
+owns its command progress and error presentation; duplicate commands in that view
+are suppressed and requests are aborted on unmount. Authorization links, reader
+links and model choices use a shared validated [connection contract](../../packages/contracts/connections.ts).
+The screen hides routine transport details behind expandable settings and never
+adds a second AI enable control.
 
 Authentication uses **Sign in with ChatGPT** or an explicitly selected API key.
 Inference uses the **Responses API**. Account/model selection and sign-out are
