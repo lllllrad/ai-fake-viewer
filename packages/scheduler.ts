@@ -23,7 +23,8 @@ import {
   publicationProblem,
   type CurrentEvidence,
 } from "./domain/reactions/publication.ts";
-import { DecisionGate } from "./gate.ts";
+import { TimingGate } from "./application/reactions/timing-gate.ts";
+import { TypeSafeTimingGate } from "./infrastructure/reactions/typesafe-gate.ts";
 import { type Decision } from "./contracts.ts";
 export class AiStartError extends Error {
   statusCode = 409;
@@ -132,7 +133,7 @@ export class Scheduler {
     public providerReady: () => boolean = () =>
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     public transcriber?: Transcriber,
-    public gate = new DecisionGate(config.ai.gate),
+    public gate = new TimingGate(config.ai.gate, new TypeSafeTimingGate()),
     public random: () => number = () => Math.random(),
   ) {
     store.on("context_invalidated", () => this.invalidateChatContext());

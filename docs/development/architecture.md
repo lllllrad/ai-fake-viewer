@@ -375,6 +375,14 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The optional [timing gate use case](../../packages/application/reactions/timing-gate.ts)
+owns its separate request cap, probability threshold and evaluation status.
+Its [TypeSafe adapter](../../packages/infrastructure/reactions/typesafe-gate.ts)
+owns prompt loading, credentials, the text-only HTTP payload, bounded response
+validation and timeout. Each evaluation snapshots its configuration and has a
+revision; a superseded response cannot overwrite the newest status or allow a
+canceled generation. Every outgoing evaluation still counts toward the cap.
+
 The [generation work owner](../../packages/application/reactions/generation-work.ts)
 tracks the current asynchronous request with an identity-bound lease. Cancellation
 advances the generation, detaches the busy slot, clears retained chat context
