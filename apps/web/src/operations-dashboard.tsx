@@ -12,14 +12,23 @@ export function normalizeAdminStatus(raw: any) {
       lastFrameAgeMs: null,
       ...raw.capture,
     },
-    audio: { state: "unknown", latestAt: null, history: [], ...raw.audio },
+    audio: {
+      state: "unknown",
+      latestAt: null,
+      history: [],
+      ...raw.audio,
+      ...(raw.closed ? { history: [], latestText: "" } : {}),
+    },
     connectors: raw.connectors ?? {},
-    messages: raw.messages ?? [],
+    messages: raw.closed ? [] : (raw.messages ?? []),
+    personas: raw.closed ? [] : (raw.personas ?? []),
+    chatSummary: raw.closed ? undefined : raw.chatSummary,
     chatgpt: { accounts: [], ...raw.chatgpt },
     ai: {
       state: "unknown",
       phase: "unknown",
       ...raw.ai,
+      ...(raw.closed ? { pending: null } : {}),
       readiness: { ready: false, checks: [], ...raw.ai?.readiness },
       usage: { calls: 0, reservedUsd: 0, ...raw.ai?.usage },
       pacing: { ...raw.ai?.pacing },
@@ -274,7 +283,7 @@ export function OperationsDashboard({
         </span>
         {!stale && !modelReady && <span>모델 연결을 확인해 주세요.</span>}
         {!stale && status.ai.pending && (
-          <a href="#ai-details">생성된 메시지 승인하기</a>
+          <a href="#review-candidate">생성된 메시지 승인하기</a>
         )}
         {!stale &&
           status.ai.maxCalls &&

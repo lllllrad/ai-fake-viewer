@@ -56,13 +56,15 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         errors.push(message.text());
     });
     await page.goto(`http://127.0.0.1:${port}/admin`);
-    await page.getByLabel("Access token").fill(token);
-    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await page.getByLabel("관리자 접속 토큰").fill(token);
+    await page.getByRole("button", { name: "연결하기", exact: true }).click();
+    const navigation = page.getByRole("navigation", { name: "운영 화면" });
+    await navigation.getByRole("link", { name: "참여", exact: true }).click();
     const panel = page.getByRole("region", { name: "개인정보 및 참여 관리" });
     await expect(panel).toBeVisible();
     await expect(
       page.getByRole("button", {
-        name: "Start audio",
+        name: "음성 전사 시작",
         exact: true,
         includeHidden: true,
       }),
@@ -72,7 +74,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     ).toHaveAttribute("href", "/api/admin/transcripts/export");
     await expect(
       page.getByRole("button", {
-        name: "Continue with ChatGPT",
+        name: "Sign in with ChatGPT",
         includeHidden: true,
       }),
     ).toHaveCount(1);
@@ -93,6 +95,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       data.setup.soop.credentialsConfigured = true;
       await route.fulfill({ json: data });
     });
+    await navigation.getByRole("link", { name: "방송", exact: true }).click();
     await page.getByRole("button", { name: "상태 다시 확인" }).click();
     await page.route(
       "https://static.sooplive.com/asset/app/chat-sdk/sooplive-chat-sdk.js",
@@ -100,32 +103,30 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         route.fulfill({
           contentType: "application/javascript",
           body: `
-      window.__fixedNotices = [];
+      window.__fixedNotices = []; window.__soopConnections = 0; window.__soopDisconnects = 0;
       window.SOOP = {ChatSDK: class {
         setAuth() {} handleReady(fn) {this.ready=fn;}
         handleMessageReceived(fn) {this.message=fn;}
-        handleChatClosed() {} handleError() {} disconnect() {}
-        async connect(){this.ready?.();} async getRoomInfo(){return {bjId:"fixture"};}
+        handleChatClosed() {} handleError() {} disconnect() {window.__soopDisconnects++;}
+        async connect(){window.__soopConnections++;this.ready?.();} async getRoomInfo(){return {bjId:"fixture"};}
         sendMessage(text){window.__fixedNotices.push(text);this.message?.("MESSAGE",{userId:"fixture",userNickname:"Synthetic broadcaster",message:text});}
       }};
     `,
         }),
     );
-    await page.locator("#advanced-settings > summary").click();
+    await navigation.getByRole("link", { name: "연결", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "YouTube 계정 연결", exact: true }),
     ).toBeEnabled();
+
     await expect(
-      panel.getByText("YouTube 자동 안내: 수신 연결 대기", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Continue with ChatGPT" }),
+      page.getByRole("button", { name: "Sign in with ChatGPT" }),
     ).toBeVisible();
     await page
-      .getByRole("button", { name: "Connect SOOP chat", exact: true })
+      .getByRole("button", { name: "SOOP 채팅 연결", exact: true })
       .click();
     const setupCard = page.locator("section.card").filter({
-      has: page.getByRole("heading", { name: "Live setup", exact: true }),
+      has: page.getByRole("heading", { name: "플랫폼 연결 준비", exact: true }),
     });
     const chzzkConnect = setupCard.getByRole("button", {
       name: "치지직 계정 연결 / 다시 인증",
@@ -134,7 +135,14 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await expect(chzzkConnect).toBeVisible();
     // This fixture has CHZZK disabled; configuration status and its action stay together.
     await expect(chzzkConnect).toBeDisabled();
-    await page.locator("#advanced-settings > summary").click();
+    await navigation.getByRole("link", { name: "참여", exact: true }).click();
+    assert.deepEqual(
+      await page.evaluate(() => ({
+        connections: (window as any).__soopConnections,
+        disconnects: (window as any).__soopDisconnects,
+      })),
+      { connections: 1, disconnects: 0 },
+    );
     store.ingestBatch([
       privacyMessage(
         "browser-viewer",
@@ -241,6 +249,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       }
       assert.equal(person.state, "ACTIVE");
     };
+    await navigation.getByRole("link", { name: "방송", exact: true }).click();
     message("unconsented-browser", "PC_UNCONSENTED_BODY");
     participate("withdraw-browser");
     message("withdraw-browser", "PC_WITHDRAW_VISIBLE_BODY");
@@ -316,9 +325,9 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
-    await page.locator("#advanced-settings > summary").click();
+    await navigation.getByRole("link", { name: "연결", exact: true }).click();
     await page
-      .getByRole("button", { name: "Disconnect SOOP", exact: true })
+      .getByRole("button", { name: "SOOP 연결 해제", exact: true })
       .click();
     await expect
       .poll(() =>

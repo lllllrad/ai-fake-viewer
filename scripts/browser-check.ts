@@ -57,14 +57,16 @@ try {
   await expect(
     adminPage.getByRole("button", { name: "연결 다시 확인" }),
   ).toBeVisible();
-  await expect(adminPage.getByLabel("Access token")).toHaveCount(0);
+  await expect(adminPage.getByLabel("관리자 접속 토큰")).toHaveCount(0);
   await adminPage.unroute("**/api/admin/status");
   await adminPage.getByRole("button", { name: "연결 다시 확인" }).click();
-  await adminPage.getByLabel("Access token").fill(admin);
-  await adminPage.getByRole("button", { name: "Connect", exact: true }).click();
-  await adminPage.getByRole("heading", { name: "Broadcast studio" }).waitFor();
+  await adminPage.getByLabel("관리자 접속 토큰").fill(admin);
+  await adminPage
+    .getByRole("button", { name: "연결하기", exact: true })
+    .click();
+  await adminPage.getByRole("heading", { name: "방송 운영" }).waitFor();
   await adminPage.reload();
-  await adminPage.getByRole("heading", { name: "Broadcast studio" }).waitFor();
+  await adminPage.getByRole("heading", { name: "방송 운영" }).waitFor();
   assert(
     (
       await adminPage.evaluate(async () =>
@@ -92,8 +94,10 @@ try {
   const chatSummary = dashboard.locator("article").filter({
     has: adminPage.getByRole("heading", { name: "실제 채팅 정보" }),
   });
-  const advanced = adminPage.locator("#advanced-settings");
-  await expect(advanced).not.toHaveAttribute("open", "");
+  const navigation = adminPage.getByRole("navigation", { name: "운영 화면" });
+  await expect(
+    navigation.getByRole("link", { name: "방송", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(adminPage.locator("#connection-details")).not.toBeVisible();
   await adminPage.route("**/api/admin/status", async (route) => {
     const response = await route.fetch();
@@ -133,9 +137,11 @@ try {
   await chatSummary
     .getByRole("link", { name: "채팅 연결 및 수신 제어" })
     .click();
-  await expect(advanced).toHaveAttribute("open", "");
+  await expect(
+    navigation.getByRole("link", { name: "연결", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   await expect(adminPage.locator("#connection-details")).toBeVisible();
-  await advanced.locator(":scope > summary").click();
+  await navigation.getByRole("link", { name: "방송", exact: true }).click();
   await adminPage.unroute("**/api/admin/status");
   // Missing optional and nested status fields must not crash the admin page.
   await adminPage.route("**/api/admin/status", async (route) => {
@@ -170,6 +176,31 @@ try {
   await adminPage.unroute("**/api/admin/status");
   await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
   await expect(aiToggle).toBeEnabled();
+  // Pending drafts are operated from the broadcast screen, independently of connection details.
+  let rejected = false;
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.ai.pending = rejected ? null : { text: "Synthetic pending draft" };
+    await route.fulfill({ json: body });
+  });
+  await adminPage.route("**/api/admin/ai/reject", (route) => {
+    rejected = true;
+    return route.fulfill({ json: { ok: true } });
+  });
+  await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await expect(
+    adminPage.getByRole("region", { name: "AI 메시지 검토" }),
+  ).toBeVisible();
+  await adminPage
+    .getByRole("button", { name: "초안 버리기", exact: true })
+    .click();
+  await expect(
+    adminPage.getByRole("region", { name: "AI 메시지 검토" }),
+  ).toHaveCount(0);
+  assert(rejected);
+  await adminPage.unroute("**/api/admin/status");
+  await adminPage.unroute("**/api/admin/ai/reject");
   const readerPage = await context.newPage(),
     overlay = await context.newPage();
   await readerPage.goto(`${origin}/reader#${reader}`);
@@ -385,6 +416,12 @@ try {
     accessPage.getByText("[DEMO] Receiver continues after AI stop"),
   ).toBeVisible();
   await accessPage.close();
+  await navigation.getByRole("link", { name: "연결", exact: true }).click();
+  await adminPage.screenshot({
+    path: "test-results/admin-connections.png",
+    fullPage: true,
+  });
+  await navigation.getByRole("link", { name: "방송", exact: true }).click();
   await adminPage.setViewportSize({ width: 390, height: 844 });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await expect(aiToggle).toBeInViewport();
@@ -400,6 +437,37 @@ try {
     path: "test-results/admin-mobile.png",
     fullPage: true,
   });
+  adminPage.once("dialog", (dialog) => void dialog.dismiss());
+  await adminPage
+    .getByRole("button", { name: "방송 종료", exact: true })
+    .click();
+  assert.equal(store.closed(), false);
+  adminPage.once("dialog", (dialog) => void dialog.accept());
+  await adminPage
+    .getByRole("button", { name: "방송 종료", exact: true })
+    .click();
+  await expect(
+    adminPage
+      .getByRole("region", { name: "최근 방송 대화" })
+      .getByText("방송이 종료되어 대화 기록을 비웠습니다."),
+  ).toBeVisible();
+  await expect(readerPage.locator("[data-message-id]")).toHaveCount(0);
+  await expect(overlay.locator("[data-message-id]")).toHaveCount(0);
+  await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  const endedSessionId = store.sessionId;
+  await dashboard
+    .getByRole("button", { name: "새 방송 세션", exact: true })
+    .click();
+  await expect(aiToggle).toHaveAttribute("aria-checked", "false");
+  await expect(
+    dashboard.getByRole("button", { name: "새 방송 세션", exact: true }),
+  ).toHaveCount(0);
+  assert.notEqual(store.sessionId, endedSessionId);
+  await expect(
+    adminPage.getByText("[DEMO] Receiver continues after AI stop", {
+      exact: true,
+    }),
+  ).toHaveCount(0);
   await checkPrivacyUI(browser, chatgptDir);
   assert.deepEqual(errors, []);
   const sorted = timing.sort((a, b) => a - b);

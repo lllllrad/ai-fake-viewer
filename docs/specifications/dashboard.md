@@ -1,7 +1,8 @@
 # Operator workspace and conversation surfaces
 
-This defines the replacement UI for the current live feature set. The rewrite is
-in progress; the old single-page layout is not the design contract. Behavior is
+This defines the replacement UI for the current live feature set. The broadcast,
+connections and participation destinations are implemented. Connection and rights
+components still require replacement as part of the ongoing reconstruction. Behavior is
 owned by [requirements](behavior.md), [participation](participation.md) and
 [personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
 
@@ -20,6 +21,13 @@ The broadcast screen is the landing page. The operator must not have to expand a
 large technical settings panel to turn AI on/off or diagnose missing input.
 Navigation must retain the single SOOP browser connection and its notice loop.
 Reader and overlay remain separate routes with separate reader authorization.
+
+Workspace navigation uses fragment links (`#broadcast`, `#connections`,
+`#participation`). Existing input-detail links select their owning screen. Screens
+retain their component lifetime while hidden: navigating must not reconnect SOOP
+or discard unfinished participation forms. The broadcast conversation, transcripts,
+cast, pending draft review and lifecycle controls are owned by
+[BroadcastConversation](../../apps/web/src/features/workspace/BroadcastConversation.tsx).
 
 ## Broadcast screen
 
