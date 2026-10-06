@@ -1,3 +1,4 @@
+import { ConversationPage } from "./features/conversation/ConversationPage";
 import { dispatchFixedNotice } from "./soop-notice-sender";
 import { PrivacyPanel } from "./privacy-panel";
 import React, { useEffect, useRef, useState } from "react";
@@ -8,7 +9,6 @@ import {
   OperationsDashboard,
   normalizeAdminStatus,
 } from "./operations-dashboard";
-const disclosure = "실시간 채팅과 합성 참여자 반응이 함께 표시됩니다.";
 function TokenForm({
   title,
   onSubmit,
@@ -46,173 +46,6 @@ function TokenForm({
         <p role="alert" className="error">
           {error}
         </p>
-      )}
-    </main>
-  );
-}
-function PublicChat() {
-  const overlay = location.pathname === "/overlay";
-  const [token, setToken] = useState(() =>
-    decodeURIComponent(location.hash.slice(1)),
-  );
-  const [messages, setMessages] = useState<PublicMessage[]>([]);
-  const [state, setState] = useState("Connecting");
-  const [demo, setDemo] = useState(false);
-  const [consentNoticeAt, setConsentNoticeAt] = useState<number | null>(null);
-  const [follow, setFollow] = useState(true);
-  const end = useRef<HTMLDivElement>(null);
-  const seq = useRef(0);
-  useEffect(() => {
-    document.body.classList.toggle("overlay", overlay);
-    document.documentElement.classList.toggle("overlay", overlay);
-    return () => {
-      document.body.classList.remove("overlay");
-      document.documentElement.classList.remove("overlay");
-    };
-  }, [overlay]);
-  useEffect(() => {
-    if (!token) return;
-    let disposed = false,
-      timer: ReturnType<typeof setTimeout>,
-      ws: WebSocket;
-    const connect = () => {
-      ws = new WebSocket(
-        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/stream`,
-      );
-      ws.onopen = () =>
-        ws.send(JSON.stringify({ type: "auth", token, afterSeq: seq.current }));
-      ws.onmessage = (e) => {
-        const m = JSON.parse(e.data);
-        if (m.type === "snapshot") {
-          seq.current = m.lastSeq;
-          setMessages(m.messages);
-          setDemo(m.demo);
-          setConsentNoticeAt(null);
-          setState(m.closed ? "Session closed" : "Connected");
-        } else if (m.type === "event") {
-          const v = m.event;
-          if (v.seq <= seq.current) return;
-          seq.current = v.seq;
-          if (v.type === "message.hidden")
-            setMessages((a) => a.filter((x) => x.id !== v.payload.id));
-          else if (v.type === "message.added" || v.type === "message.updated")
-            setMessages((a) =>
-              [...a.filter((x) => x.id !== v.payload.id), v.payload]
-                .sort((x, y) => x.seq - y.seq)
-                .slice(-300),
-            );
-          else if (v.type === "session.closed") setState("Session closed");
-        }
-        if (m.type === "consent_notice") setConsentNoticeAt(m.occurredAt);
-      };
-      ws.onclose = (e) => {
-        if (disposed) return;
-        setState(
-          e.code === 1008
-            ? "Access denied — update the reader token"
-            : "Reconnecting",
-        );
-        if (e.code !== 1008) timer = setTimeout(connect, 2000);
-      };
-    };
-    connect();
-    return () => {
-      disposed = true;
-      clearTimeout(timer);
-      ws?.close();
-    };
-  }, [token]);
-  useEffect(() => {
-    if (consentNoticeAt === null) return;
-    const timer = setTimeout(() => setConsentNoticeAt(null), 12000);
-    return () => clearTimeout(timer);
-  }, [consentNoticeAt]);
-  useEffect(() => {
-    if (follow && !overlay) end.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, follow, overlay]);
-  if (!token)
-    return (
-      <TokenForm
-        title="Open the shared conversation"
-        onSubmit={(t) => {
-          location.hash = t;
-          setToken(t);
-        }}
-      />
-    );
-  return (
-    <main className={overlay ? "chat-overlay" : "reader"}>
-      {!overlay && (
-        <header>
-          <div>
-            <div className="eyebrow">MIXED CHAT</div>
-            <h1>The conversation</h1>
-          </div>
-          <span className="status">● {state}</span>
-        </header>
-      )}
-      <aside className="disclosure">
-        {demo && <strong>DEMO · ARTIFICIAL INPUTS — </strong>}
-        {disclosure}
-      </aside>
-      <section className="messages" aria-live="polite">
-        {consentNoticeAt !== null && (
-          <aside className="disclosure consent-notice" role="status">
-            개인정보 처리에 동의한 시청자의 채팅만 화면에 표시됩니다. 참여하려면
-            채팅에 <strong>!동의</strong>를 입력하고 안내된 각 동의 단계를
-            완료해 주세요. 동의는 현재 방송 세션에서 유효하며, 철회하려면{" "}
-            <strong>!철회</strong>를 입력하세요.
-          </aside>
-        )}
-        {messages.length === 0 && (
-          <p className="empty">Waiting for messages…</p>
-        )}
-        {(overlay ? messages.slice(-12) : messages).map((m) => (
-          <article className="message" key={m.id} data-message-id={m.id}>
-            <div className="avatar">{m.displayName.slice(0, 1)}</div>
-            <div className="message-main">
-              <div className="message-meta">
-                <strong>{m.displayName}</strong>
-                {m.attribution !== "mixed" && (
-                  <span className={`badge ${m.attribution}`}>
-                    {m.attribution === "experiment"
-                      ? "AI 생성"
-                      : m.attribution.toUpperCase()}
-                  </span>
-                )}
-                <time>
-                  {new Date(m.displayTime).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                </time>
-              </div>
-              <p>{m.text}</p>
-            </div>
-          </article>
-        ))}
-        <div ref={end} />
-      </section>
-      {!overlay && (
-        <footer>
-          <label>
-            <input
-              type="checkbox"
-              checked={follow}
-              onChange={(e) => setFollow(e.target.checked)}
-            />{" "}
-            Follow new messages
-          </label>
-          <button
-            className="secondary"
-            onClick={() => {
-              setFollow(true);
-              end.current?.scrollIntoView();
-            }}
-          >
-            Jump to latest ↓
-          </button>
-        </footer>
       )}
     </main>
   );
@@ -1442,7 +1275,7 @@ function Admin() {
 }
 createRoot(document.getElementById("root")!).render(
   location.pathname === "/reader" || location.pathname === "/overlay" ? (
-    <PublicChat />
+    <ConversationPage />
   ) : (
     <Admin />
   ),

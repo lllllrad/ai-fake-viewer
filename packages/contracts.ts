@@ -19,17 +19,7 @@ export const incomingSchema = z
   })
   .strict();
 export type Incoming = z.input<typeof incomingSchema>;
-export interface PublicMessage {
-  id: string;
-  sessionId: string;
-  actorId: string;
-  displayName: string;
-  text: string;
-  replyToId: string | null;
-  displayTime: number;
-  attribution: string;
-  seq: number;
-}
+export type { ConversationMessage as PublicMessage } from "./contracts/conversation.ts";
 export interface PublicEvent {
   seq: number;
   sessionId: string;

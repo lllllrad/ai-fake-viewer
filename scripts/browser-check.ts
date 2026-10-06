@@ -161,7 +161,7 @@ try {
     overlay = await context.newPage();
   await readerPage.goto(`${origin}/reader#${reader}`);
   await overlay.goto(`${origin}/overlay#${reader}`);
-  await readerPage.getByText("Connected", { exact: false }).waitFor();
+  await readerPage.getByText("연결됨", { exact: true }).waitFor();
   const timing: number[] = [];
   for (let i = 0; i < 12; i++) {
     const start = performance.now();
@@ -183,8 +183,8 @@ try {
             : `[DEMO] Shared message ${i + 1} · 코드 오류? 안녕 🎨`,
       },
     ]);
-    await readerPage.locator(".message").nth(i).waitFor();
-    await overlay.locator(".message").nth(i).waitFor();
+    await readerPage.locator("[data-message-id]").nth(i).waitFor();
+    await overlay.locator("[data-message-id]").nth(i).waitFor();
     timing.push(performance.now() - start);
   }
   const summaryCard = adminPage.getByRole("region", { name: "익명 채팅 요약" });
@@ -211,11 +211,11 @@ try {
     }),
   ).toBeVisible();
   const readerText = await readerPage
-    .locator(".message-main p")
+    .locator(".conversation-content p")
     .allTextContents();
   assert.deepEqual(
     readerText,
-    await overlay.locator(".message-main p").allTextContents(),
+    await overlay.locator(".conversation-content p").allTextContents(),
   );
   assert.equal(
     await readerPage.evaluate(() => Object.hasOwn(window, "untrusted")),
@@ -237,7 +237,9 @@ try {
     ),
     "rgba(0, 0, 0, 0)",
   );
-  const notice = await overlay.locator(".disclosure").boundingBox();
+  const notice = await overlay
+    .locator(".conversation-disclosure")
+    .boundingBox();
   assert(notice && notice.y >= 0 && notice.y + notice.height < 1000);
   const hidden = store.snapshot().messages[4]!.id;
   store.hide(hidden);
@@ -245,7 +247,7 @@ try {
     .locator(`[data-message-id="${hidden}"]`)
     .waitFor({ state: "detached" });
   await overlay.reload();
-  await overlay.locator(".message").nth(10).waitFor();
+  await overlay.locator("[data-message-id]").nth(10).waitFor();
   assert.equal(
     await overlay.locator(`[data-message-id="${hidden}"]`).count(),
     0,
@@ -281,9 +283,9 @@ try {
     .waitFor();
   await expect(adminPage.getByText("AWAITING REVIEW")).toHaveCount(0);
   for (const page of [readerPage, overlay]) {
-    assert.equal(await page.locator(".message .badge").count(), 0);
+    assert.equal(await page.locator(".conversation-origin").count(), 0);
     for (const name of await page
-      .locator(".message-meta strong")
+      .locator(".conversation-meta strong")
       .allTextContents())
       assert(name.length > 0 && !/^시청자-[0-9a-f]{8}$/.test(name));
   }
@@ -291,7 +293,7 @@ try {
   await overlay
     .getByText("[DEMO] 도형이 움직이는 인공 화면이에요.", { exact: true })
     .waitFor();
-  assert.equal(await overlay.locator(".message .badge").count(), 0);
+  assert.equal(await overlay.locator(".conversation-origin").count(), 0);
   await aiToggle.click();
   await expect(aiToggle).toHaveAttribute("aria-checked", "false");
   store.grantConsent("youtube", "fixture", "viewer");
@@ -324,7 +326,7 @@ try {
   ).toHaveCount(0);
   await readerPage.getByText("AI 생성", { exact: true }).waitFor();
   await overlay.getByText("AI 생성", { exact: true }).waitFor();
-  assert((await readerPage.locator(".message .badge.experiment").count()) > 0);
+  assert((await readerPage.locator(".conversation-origin").count()) > 0);
   mkdirSync("test-results", { recursive: true });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await adminPage.screenshot({ path: "test-results/admin-dashboard.png" });
@@ -340,6 +342,36 @@ try {
     path: "test-results/overlay.png",
     omitBackground: true,
   });
+  // The latest entry must stay on the OBS canvas even when older rows overflow.
+  await expect(
+    overlay.getByText("[DEMO] Receiver continues after AI stop"),
+  ).toBeInViewport();
+  await overlay.setViewportSize({ width: 390, height: 600 });
+  await expect(
+    overlay.getByText("[DEMO] Receiver continues after AI stop"),
+  ).toBeInViewport();
+  await readerPage.setViewportSize({ width: 390, height: 844 });
+  assert(
+    await readerPage.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  );
+  await readerPage.screenshot({
+    path: "test-results/reader-mobile.png",
+    fullPage: true,
+  });
+  const accessPage = await context.newPage();
+  await accessPage.goto(`${origin}/reader`);
+  await accessPage.getByLabel("리더 접속 토큰").fill("invalid-fixture-token");
+  await accessPage.getByRole("button", { name: "채팅 열기" }).click();
+  await expect(accessPage.getByRole("alert")).toContainText("접속 권한");
+  await accessPage.getByLabel("리더 접속 토큰").fill(reader);
+  await accessPage.getByRole("button", { name: "채팅 열기" }).click();
+  await expect(accessPage.getByText("연결됨", { exact: true })).toBeVisible();
+  await expect(
+    accessPage.getByText("[DEMO] Receiver continues after AI stop"),
+  ).toBeVisible();
+  await accessPage.close();
   await adminPage.setViewportSize({ width: 390, height: 844 });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await expect(aiToggle).toBeInViewport();

@@ -119,6 +119,15 @@ chat, transcripts or consent in localStorage, sessionStorage or IndexedDB. Recon
 replaces the window with a current permitted snapshot; removed messages cannot
 reappear through event replay. Broadcast end clears every conversation surface.
 
+The conversation implementation lives in
+[`features/conversation`](../../apps/web/src/features/conversation/ConversationPage.tsx).
+A single subscription owns authorization, reconnects and cleanup; the pure state
+reducer rejects foreign-session and replayed events. The shared public
+[contract](../../packages/contracts/conversation.ts) validates inbound packets
+before rendering. A disconnected surface clears its cached conversation until a
+current snapshot arrives. The reader retains at most 300 messages; the overlay
+keeps the latest 12 and clips older rows to keep the newest entry on the canvas.
+
 ## Presentation and accessibility
 
 Use one visual system: typography, spacing, surfaces, control states and semantic
