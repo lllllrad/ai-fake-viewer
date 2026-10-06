@@ -215,6 +215,16 @@ review and before publication. Invalid candidates are discarded before another
 publication-delay timer is scheduled. Rejection diagnostics contain fixed reasons,
 not input text.
 
+The [metered model-call use case](../../packages/application/reactions/model-call.ts)
+owns pre-request budget reservation, bounded diagnostic metadata and post-response
+usage settlement. The [SQLite usage adapter](../../packages/infrastructure/reactions/usage-sqlite.ts)
+atomically reserves call and monetary capacity within the current broadcast.
+Already-aborted requests consume no capacity. Ambiguous provider failures retain
+the reservation; missing or invalid token counts cannot reduce its monetary bound.
+Sign in with ChatGPT records token usage without applying Responses API monetary
+rates. Late settlement is scoped to the broadcast that is still current. Provider
+transport and scheduling remain separate reconstruction work.
+
 The [local publication service](../../packages/application/reactions/publication-service.ts)
 commits the response, full source-message provenance and cast attempt outcome in
 one transaction through its [SQLite adapter](../../packages/infrastructure/conversation/publication-sqlite.ts).

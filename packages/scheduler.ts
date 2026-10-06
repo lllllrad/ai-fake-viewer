@@ -1,3 +1,4 @@
+import { callMeteredModel } from "./application/reactions/model-call.ts";
 import {
   selectEvidenceWindow,
   baselinePacingBlocked,
@@ -26,7 +27,7 @@ import {
   type CurrentEvidence,
 } from "./domain/reactions/publication.ts";
 import { DecisionGate } from "./gate.ts";
-import { decisionSchema, type Decision } from "./contracts.ts";
+import { type Decision } from "./contracts.ts";
 export class AiStartError extends Error {
   statusCode = 409;
 }
@@ -645,49 +646,15 @@ export class Scheduler {
     }
   }
   async callModel(input: ModelInput, signal: AbortSignal) {
-    const started = Date.now();
-    this.trace("model_request", {
-      stage: input.reviewDraft ? "review" : "generation",
-      newMessages: input.newMessages?.length ?? 0,
-      newTranscripts: input.newTranscripts?.length ?? 0,
-      frames: input.frames.length,
-      latestSpeechAt: Math.max(
-        0,
-        ...(input.newTranscripts ?? []).map((t) => t.capturedAt),
-      ),
+    return callMeteredModel({
+      input,
+      signal,
+      policy: this.config.ai,
+      model: this.model,
+      usage: this.store,
+      now: () => Date.now(),
+      trace: (event, details) => this.trace(event, details),
     });
-    const c = this.config.ai;
-    const priced =
-      c.provider === "openai_api" &&
-      c.inputUsdPerMillion !== null &&
-      c.outputUsdPerMillion !== null &&
-      !!c.priceCheckedAt;
-    const reserve = priced
-      ? (c.maxInputTokens * c.inputUsdPerMillion! +
-          c.maxOutputTokens * c.outputUsdPerMillion!) /
-        1e6
-      : null;
-    const usageId = this.store.reserve(c.maxCalls, c.maxUsd, reserve);
-    if (!usageId) throw Error("budget_exhausted");
-    const result = await this.model(input, signal);
-    const parsedDecision = decisionSchema.safeParse(result.decision);
-    this.trace("model_result", {
-      stage: input.reviewDraft ? "review" : "generation",
-      action: parsedDecision.success ? parsedDecision.data.action : "invalid",
-      elapsedMs: Date.now() - started,
-    });
-    let cost: number | null = null;
-    if (
-      priced &&
-      Number.isFinite(result.inputTokens) &&
-      Number.isFinite(result.outputTokens)
-    )
-      cost =
-        (result.inputTokens! * c.inputUsdPerMillion! +
-          result.outputTokens! * c.outputUsdPerMillion!) /
-        1e6;
-    this.store.settle(usageId, result.inputTokens, result.outputTokens, cost);
-    return result;
   }
   private currentEvidence(
     input: ModelInput,

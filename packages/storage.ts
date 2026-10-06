@@ -1,3 +1,4 @@
+import { SqliteModelUsage } from "./infrastructure/reactions/usage-sqlite.ts";
 import {
   LocalPublicationService,
   type LocalPublication,
@@ -28,6 +29,7 @@ export class Store extends EventEmitter {
   private readonly participationSnapshots: SqliteParticipationSnapshots;
   private readonly conversationContext: ConversationContext;
   private readonly conversationProjection: ConversationProjection;
+  private readonly modelUsage: SqliteModelUsage;
   private readonly publication: LocalPublicationService;
   sessionId: string;
   readerCollisionNames = new Set<string>();
@@ -50,6 +52,15 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.modelUsage = new SqliteModelUsage(
+      this.db,
+      {
+        sessionId: () => this.sessionId,
+        id: randomUUID,
+        now: () => Date.now(),
+      },
+      this.transactions,
+    );
     this.publication = new LocalPublicationService(
       new SqliteLocalPublication(this.db, {
         sessionId: () => this.sessionId,
@@ -939,21 +950,7 @@ export class Store extends EventEmitter {
     for (const row of rows) yield JSON.stringify(row) + "\n";
   }
   reserve(maxCalls: number, maxUsd: number | null, reserved: number | null) {
-    return this.transaction(() => {
-      const usage = this.usage();
-      if (
-        usage.calls >= maxCalls ||
-        (maxUsd !== null && usage.reservedUsd + (reserved ?? 0) > maxUsd)
-      )
-        return null;
-      const id = randomUUID();
-      this.db
-        .prepare(
-          "INSERT INTO model_usage(id,session,at,reserved,status) VALUES(?,?,?,?,?)",
-        )
-        .run(id, this.sessionId, Date.now(), reserved, "reserved");
-      return id;
-    });
+    return this.modelUsage.reserve(maxCalls, maxUsd, reserved);
   }
   settle(
     id: string,
@@ -961,24 +958,10 @@ export class Store extends EventEmitter {
     output: number | undefined,
     cost: number | null,
   ) {
-    this.db
-      .prepare(
-        "UPDATE model_usage SET input=?,output=?,reserved=COALESCE(?,reserved),status=? WHERE id=?",
-      )
-      .run(input ?? null, output ?? null, cost, "completed", id);
+    this.modelUsage.settle(id, input, output, cost);
   }
   usage() {
-    const r = this.db
-      .prepare(
-        "SELECT COUNT(*) calls,COALESCE(SUM(reserved),0) reservedUsd,SUM(input) inputTokens,SUM(output) outputTokens FROM model_usage WHERE session=?",
-      )
-      .get(this.sessionId) as any;
-    return r as {
-      calls: number;
-      reservedUsd: number;
-      inputTokens: number | null;
-      outputTokens: number | null;
-    };
+    return this.modelUsage.usage();
   }
   close() {
     this.saveParticipation();
