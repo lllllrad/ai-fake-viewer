@@ -684,13 +684,13 @@ export class Scheduler {
       p.sessionEpoch !== undefined &&
       p.memberEpoch !== undefined
     ) {
-      const canPublish = this.store.personaCanPublish(
-        p.personaSessionId,
-        p.memberId,
-        p.sessionEpoch,
-        p.memberEpoch,
-        p.attemptId,
-      );
+      const canPublish = this.store.dispatch.claim({
+        sessionId: p.personaSessionId,
+        memberId: p.memberId,
+        sessionEpoch: p.sessionEpoch,
+        memberEpoch: p.memberEpoch,
+        attemptId: p.attemptId,
+      });
       if (!canPublish) {
         this.trace("publication_discarded", { reason: "stale_epoch_or_state" });
         this.store.attempts.finish(

@@ -1,3 +1,5 @@
+import { SqliteCastDispatch } from "./infrastructure/reactions/dispatch-sqlite.ts";
+import type { CastDispatch } from "./application/reactions/dispatch.ts";
 import { SqliteCastRuntime } from "./infrastructure/cast/runtime-query.ts";
 import { SqliteReactionAttempts } from "./infrastructure/reactions/attempts-sqlite.ts";
 import type {
@@ -38,6 +40,7 @@ import {
 export class Store extends EventEmitter {
   db: DatabaseSync;
   private readonly castRuntime: SqliteCastRuntime;
+  readonly dispatch: CastDispatch;
   readonly attempts: ReactionAttempts;
   readonly transcripts: TranscriptJournal;
   readonly rightsFollowups: SqliteFollowupQueue;
@@ -58,6 +61,12 @@ export class Store extends EventEmitter {
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
     this.castRuntime = new SqliteCastRuntime(this.db, () => this.sessionId);
+    this.dispatch = new SqliteCastDispatch(this.db, {
+      sessionId: () => this.sessionId,
+      closed: () => this.closed(),
+      now: () => Date.now(),
+      transaction: (work) => this.transaction(work),
+    });
     this.attempts = new SqliteReactionAttempts(this.db, {
       sessionId: () => this.sessionId,
       now: () => Date.now(),
@@ -986,167 +995,13 @@ export class Store extends EventEmitter {
     memberEpoch: number,
     attemptId: string,
   ) {
-    try {
-      return this.transaction(() => {
-        const s = this.db
-          .prepare("SELECT * FROM persona_sessions WHERE id=?")
-          .get(sessionId) as any;
-        const m = this.db
-          .prepare(
-            "SELECT * FROM persona_cast WHERE session_id=? AND member_id=?",
-          )
-          .get(sessionId, memberId) as any;
-        const a = this.db
-          .prepare("SELECT * FROM persona_reaction_attempts WHERE id=?")
-          .get(attemptId) as any;
-        if (
-          !s ||
-          !m ||
-          !a ||
-          s.source_session !== this.sessionId ||
-          s.state !== "live" ||
-          !s.armed ||
-          s.control_epoch !== sessionEpoch ||
-          m.status !== "present" ||
-          m.muted ||
-          m.epoch !== memberEpoch ||
-          a.state !== "candidate"
-        )
-          return false;
-        const policy = JSON.parse(s.policy),
-          now = Date.now(),
-          windowMs = policy.rolling_window_ms ?? 60000;
-        const upstream = Number(
-          (
-            this.db
-              .prepare(
-                "SELECT COUNT(*) n FROM messages WHERE session=? AND platform<>'experiment' AND hidden=0 AND received>=?",
-              )
-              .get(this.sessionId, now - windowMs) as any
-          ).n,
-        );
-        const synthetic = Number(
-          (
-            this.db
-              .prepare(
-                "SELECT COUNT(*) n FROM messages WHERE session=? AND platform='experiment' AND hidden=0 AND received>=?",
-              )
-              .get(this.sessionId, now - windowMs) as any
-          ).n,
-        );
-        const band = (policy.upstream_activity_bands ?? []).find(
-          (b: any) =>
-            upstream >= b.min_messages &&
-            (b.max_messages === null || upstream <= b.max_messages),
-        );
-        const cap = Math.min(
-          policy.global_hard_cap_messages_per_window ?? 6,
-          band?.ai_cap_messages_per_window ?? 6,
-        );
-        const reservations = Number(
-          (
-            this.db
-              .prepare(
-                "SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND state IN ('generating','candidate','dispatching') AND started_at>=?",
-              )
-              .get(sessionId, now - windowMs) as any
-          ).n,
-        );
-        if (synthetic + reservations > cap) return false;
-        const gap = policy.minimum_global_gap_ms ?? 5000;
-        if (
-          Number(
-            (
-              this.db
-                .prepare(
-                  "SELECT COUNT(*) n FROM messages WHERE session=? AND platform='experiment' AND received>=?",
-                )
-                .get(this.sessionId, now - gap) as any
-            ).n,
-          ) > 0
-        )
-          return false;
-        const memberCooldown = policy.persona_cooldown_ms ?? 30000;
-        if (
-          Number(
-            (
-              this.db
-                .prepare(
-                  "SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND member_id=? AND state='published' AND finished_at>=?",
-                )
-                .get(sessionId, memberId, now - memberCooldown) as any
-            ).n,
-          ) > 0
-        )
-          return false;
-        const inflight = Number(
-          (
-            this.db
-              .prepare(
-                "SELECT COUNT(*) n FROM persona_reaction_attempts WHERE session_id=? AND state IN ('generating','candidate','dispatching')",
-              )
-              .get(sessionId) as any
-          ).n,
-        );
-        if (inflight > (policy.max_inflight_per_session ?? 2)) return false;
-        const consecutiveLimit =
-          policy.max_consecutive_messages_from_one_persona ?? 2;
-        const latest = this.db
-          .prepare(
-            "SELECT a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform='experiment' AND m.hidden=0 ORDER BY m.seq DESC LIMIT ?",
-          )
-          .all(this.sessionId, consecutiveLimit) as any[];
-        if (
-          latest.length >= consecutiveLimit &&
-          latest.every((x) => x.author === `persona-${memberId}`)
-        )
-          return false;
-        for (const sourceId of JSON.parse(a.event_ids) as string[]) {
-          const message = this.db
-            .prepare(
-              "SELECT 1 FROM messages WHERE id=? AND session=? AND hidden=0",
-            )
-            .get(sourceId, this.sessionId);
-          const transcript = this.db
-            .prepare("SELECT 1 FROM transcripts WHERE id=? AND session=?")
-            .get(sourceId, this.sessionId);
-          if (!message && !transcript) return false;
-        }
-        const proposed = JSON.parse(a.result ?? "null")?.text as
-          string | undefined;
-        if (proposed) {
-          const normalized = proposed
-            .normalize("NFKC")
-            .toLocaleLowerCase()
-            .replace(/[\s\p{Cf}\p{P}]/gu, "");
-          if ([...normalized].length >= 12) {
-            const prior = this.db
-              .prepare(
-                "SELECT m.text FROM messages m JOIN actors_private p ON p.id=m.actor WHERE m.session=? AND p.author LIKE 'persona-%' AND m.hidden=0 AND m.received>=?",
-              )
-              .all(this.sessionId, now - 120000) as any[];
-            if (
-              prior.some(
-                (x) =>
-                  x.text
-                    .normalize("NFKC")
-                    .toLocaleLowerCase()
-                    .replace(/[\s\p{Cf}\p{P}]/gu, "") === normalized,
-              )
-            )
-              return false;
-          }
-        }
-        this.db
-          .prepare(
-            "UPDATE persona_reaction_attempts SET state='dispatching' WHERE id=? AND state='candidate'",
-          )
-          .run(attemptId);
-        return true;
-      });
-    } catch {
-      return false;
-    }
+    return this.dispatch.claim({
+      sessionId,
+      memberId,
+      sessionEpoch,
+      memberEpoch,
+      attemptId,
+    });
   }
   beginPersonaAttempt(input: BeginReactionAttempt) {
     return this.attempts.begin(input);

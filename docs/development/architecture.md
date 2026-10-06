@@ -363,6 +363,18 @@ the scheduler receives them. Invalid persisted definitions or policies fail
 the read rather than entering model context. Legacy authoring imports re-export
 the same configuration schemas; they do not own a second definition of them.
 
+The [cast dispatch port](../../packages/application/reactions/dispatch.ts)
+claims a candidate immediately before local publication. Its
+[SQLite adapter](../../packages/infrastructure/reactions/dispatch-sqlite.ts)
+rechecks the candidate's cast/member ownership, current broadcast, epochs,
+definition hash and configuration revision inside the same transaction as the
+candidate-to-dispatching transition. Input references are checked together
+against visible messages and persisted speech in that broadcast.
+The [pure dispatch policy](../../packages/domain/reactions/dispatch.ts) evaluates
+reserved plus published activity, global/member cooldowns, inflight and
+consecutive limits, and normalized long-text duplication. Invalid records or a
+failed write leave the candidate unclaimed; a second claim cannot succeed.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate
