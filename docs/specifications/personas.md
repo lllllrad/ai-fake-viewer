@@ -1,6 +1,6 @@
 # AI viewer persona system implementation specification
 
-This document records implemented P0 behavior and limitations, including automatic composition and memory-only privacy controls. It does not claim to reconstruct a missing original specification. See the [dashboard specification](admin-dashboard-functional-spec.md) for UI goals and [AI_FLOW](../AI_FLOW.md) for the shared model pipeline.
+This document records implemented P0 behavior and limitations, including automatic composition and memory-only privacy controls. It does not claim to reconstruct a missing original specification. See the [dashboard specification](dashboard.md) for UI goals and [AI_FLOW](../development/ai-pipeline.md) for the shared model pipeline.
 
 ## Scope and implementation evidence
 
@@ -8,19 +8,19 @@ Personas are synthetic viewers inside the app, not platform accounts. Their resp
 
 | Responsibility                                | Source                                                                |
 | --------------------------------------------- | --------------------------------------------------------------------- |
-| Definition, brief and policy schemas          | [contracts.ts](../packages/persona/contracts.ts)                      |
-| Candidate model input/generation              | [generator.ts](../packages/persona/generator.ts)                      |
-| Versions, auditions, approval and sessions    | [service.ts](../packages/persona/service.ts)                          |
-| Observations, speech, review and cancellation | [scheduler.ts](../packages/scheduler.ts)                              |
-| Storage, publication guards and retention     | [storage.ts](../packages/storage.ts)                                  |
-| Authenticated APIs and UI                     | [app.ts](../apps/server/app.ts), [main.tsx](../apps/web/src/main.tsx) |
-| Regression coverage                           | [persona.test.ts](../tests/persona.test.ts)                           |
+| Definition, brief and policy schemas          | [contracts.ts](../../packages/persona/contracts.ts)                      |
+| Candidate model input/generation              | [generator.ts](../../packages/persona/generator.ts)                      |
+| Versions, auditions, approval and sessions    | [service.ts](../../packages/persona/service.ts)                          |
+| Observations, speech, review and cancellation | [scheduler.ts](../../packages/scheduler.ts)                              |
+| Storage, publication guards and retention     | [storage.ts](../../packages/storage.ts)                                  |
+| Authenticated APIs and UI                     | [app.ts](../../apps/server/app.ts), [main.tsx](../../apps/web/src/main.tsx) |
+| Regression coverage                           | [persona.test.ts](../../tests/persona.test.ts)                           |
 
 ## Default behavior: automatic composition
 
 Operators do not create or approve personas. Manual AI start invokes `ensureAutomaticCast()`. Without an active cast, the scheduler uses public context from the broadcast description, creates six definitions, checks schema/name collisions and records snapshots and presence intervals. No separate model call, brief, audition, rating or disclosure acknowledgement is required for composition. Normal input readiness still applies.
 
-[automatic.ts](../packages/persona/automatic.ts) reflects motivations from the user-supplied local research `./.local/docs/real_viewer_persona_research_v0.1.md`. The private research is not a deployment dependency. Evidence IDs below refer to that source's references.
+[automatic.ts](../../packages/persona/automatic.ts) reflects motivations from the user-supplied local research `./.local/docs/real_viewer_persona_research_v0.1.md`. The private research is not a deployment dependency. Evidence IDs below refer to that source's references.
 
 | Motivation                                      | Research evidence             | Participation behavior                                                      |
 | ----------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@ The primary AI switch controls the live cast too. Disclosure disarms generation 
 
 Legacy APIs can change presence, mute, attention and interest tags during live/paused sessions. Live server mutation restrictions still apply. Changes cancel affected reactions and increment epochs; policy updates invalidate pending candidates. The default UI remains read-only apart from shared AI/disclosure controls.
 
-Start requires the current operating profile and selected Responses API authentication/model readiness. Screen/audio are disabled and are not prerequisites. Human chat needs platform receipt/publication/external-AI approvals and current staged consent. See [privacy implementation](privacy-implementation.md). Restart starts a new memory session, without restoring execution intent or arming.
+Start requires the current operating profile and selected Responses API authentication/model readiness. Screen/audio are disabled and are not prerequisites. Human chat needs platform receipt/publication/external-AI approvals and current staged consent. See [privacy implementation](participation.md). Restart starts a new memory session, without restoring execution intent or arming.
 
 ## Observation and speech selection
 
@@ -96,7 +96,7 @@ Live output uses shared `say / skip / inspect`, not the persona contract's separ
 
 ## APIs and concurrent changes
 
-The following table describes legacy/demo contracts. Live mutation is restricted to shared AI controls. Paths are under `/api/admin/persona`, with administrator authentication and same-origin protections. Mutations require an 8–128-character `Idempotency-Key`. Different bodies under the same path/key conflict; in-progress and completed retries are distinguished. Use `expected_revision` for sessions, `expected_member_epoch` for members and `expected_control_epoch` for arming. Exact bodies are in [server routes](../apps/server/app.ts).
+The following table describes legacy/demo contracts. Live mutation is restricted to shared AI controls. Paths are under `/api/admin/persona`, with administrator authentication and same-origin protections. Mutations require an 8–128-character `Idempotency-Key`. Different bodies under the same path/key conflict; in-progress and completed retries are distinguished. Use `expected_revision` for sessions, `expected_member_epoch` for members and `expected_control_epoch` for arming. Exact bodies are in [server routes](../../apps/server/app.ts).
 
 | Operation                 | Method/path                                                                         |
 | ------------------------- | ----------------------------------------------------------------------------------- |
@@ -130,4 +130,4 @@ Reports aggregate member publication counts/reactions. `usage` is shared stream 
 
 Withdrawal/hiding removes raw text and invalidates ongoing reactions. Scheduler caches/drafts and session reaction results/model manifests are cleared; recorded input dependencies conservatively remove directly and indirectly dependent published AI output. Persona definitions remain because they are not generated from participant raw text.
 
-`anonymousChatSummary` contains only fixed topic/mood categories from recent two-minute permitted human chat, with at least three distinct accounts supporting each category. Preapproved categories without provenance may remain for the session; withdrawn text never creates a new summary. End clears all categories. These are not personal memories or evidence of past statements. See [AI_FLOW](../AI_FLOW.md#withdrawal-and-anonymous-chat-summaries).
+`anonymousChatSummary` contains only fixed topic/mood categories from recent two-minute permitted human chat, with at least three distinct accounts supporting each category. Preapproved categories without provenance may remain for the session; withdrawn text never creates a new summary. End clears all categories. These are not personal memories or evidence of past statements. See [AI_FLOW](../development/ai-pipeline.md#withdrawal-and-anonymous-chat-summaries).

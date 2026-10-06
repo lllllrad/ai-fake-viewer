@@ -2,11 +2,11 @@
 
 A local broadcast chat reader and OBS overlay with automatically generated AI viewers. AI replies appear only in this app. Live mode uses **session memory, staged viewer consent and a reviewed OpenAI service profile with optional broadcast transcription**. An incomplete operating profile blocks collection and external AI processing.
 
-Start with [live setup](LIVE_SETUP.md), [privacy implementation](docs/privacy-implementation.md), [AI flow](AI_FLOW.md) or the [documentation index](docs/README.md). Historical integration experiments are not current deployment approval.
+Start with [live setup](docs/operations/setup.md), [privacy implementation](docs/specifications/participation.md), [AI flow](docs/development/ai-pipeline.md) or the [documentation index](docs/README.md). Historical integration experiments are not current deployment approval.
 
 ## Quick start
 
-Use Node from `mise.toml` and the [development command wrapper](docs/development.md):
+Use Node from `mise.toml` and the [development command wrapper](docs/development/guide.md):
 
 ```sh
 sh run-command.sh npm ci
@@ -19,7 +19,7 @@ Setup creates private credentials/configuration. Open the local address printed 
 
 ## Automatic personas and viewer consent
 
-Starting AI composes six synthetic personas from research-informed participation patterns, with no operator authoring requirement and no real-viewer profiling. The current session's cast disappears on restart. See the [persona specification](docs/ai-viewer-persona-system-spec.md).
+Starting AI composes six synthetic personas from research-informed participation patterns, with no operator authoring requirement and no real-viewer profiling. The current session's cast disappears on restart. See the [persona specification](docs/specifications/personas.md).
 
 UI controls and viewer commands are described in English here; the app retains localized labels. Exact commands are defined in [participation.ts](packages/participation.ts).
 
@@ -39,11 +39,11 @@ For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `
 
 ### YouTube: official OAuth, gRPC/REST and fixed notices
 
-Set private `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`, enable `youtube`, and register the exact `youtube.redirectUri` (default `http://127.0.0.1:3210/oauth/youtube/callback`). Use **Connect YouTube account** in the admin connection details, select the broadcasting channel, then start receivers. Saved OAuth authorizes receipt and fixed notice sending without an API key. Existing API-key/access-token receipt still works, but automatic sending requires the app OAuth account. Configure the enabled receiver, broadcast/channel and required credentials. The receiver must also match a `privacy.approvals` entry for the actual broadcaster. Platform permission, viewer consent and API credentials are independent prerequisites. Automatic fixed introductions are sent once per confirmed recipient/session; each consent stage is sent and confirmed before accepting its next command. Only fixed server-generated notices are sent, never AI replies or copied viewer text. Long notices are split under a conservative 200-character cap and all parts must succeed; each attempt obeys the configured account/global limit. Unlike SOOP, the YouTube sender runs on the server and does not need the admin tab to remain open. See [YouTube setup](LIVE_SETUP.md#youtube-oauth-and-automatic-notices) and historical [contract research](research/platform-contracts.md).
+Set private `YOUTUBE_CLIENT_ID` and `YOUTUBE_CLIENT_SECRET`, enable `youtube`, and register the exact `youtube.redirectUri` (default `http://127.0.0.1:3210/oauth/youtube/callback`). Use **Connect YouTube account** in the admin connection details, select the broadcasting channel, then start receivers. Saved OAuth authorizes receipt and fixed notice sending without an API key. Existing API-key/access-token receipt still works, but automatic sending requires the app OAuth account. Configure the enabled receiver, broadcast/channel and required credentials. The receiver must also match a `privacy.approvals` entry for the actual broadcaster. Platform permission, viewer consent and API credentials are independent prerequisites. Automatic fixed introductions are sent once per confirmed recipient/session; each consent stage is sent and confirmed before accepting its next command. Only fixed server-generated notices are sent, never AI replies or copied viewer text. Long notices are split under a conservative 200-character cap and all parts must succeed; each attempt obeys the configured account/global limit. Unlike SOOP, the YouTube sender runs on the server and does not need the admin tab to remain open. See [YouTube setup](docs/operations/setup.md#youtube-oauth-and-automatic-notices) and historical [contract research](docs/reference/platform-contracts.md).
 
 ### CHZZK: official OAuth and user session
 
-Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. The server automatically sends fixed participation introductions and stage notices using the official Chat API. Enable chat-message sending and user-info lookup permissions as well as chat receipt, then reauthorize the broadcaster account. Notices are split into messages of at most 100 characters; all parts must return a message ID before a fresh consent command can advance participation. No open administrator tab or manual delivery confirmation is required. See the [platform behavior matrix](docs/behavior-requirements.md#platform-execution-and-notice-delivery).
+Configure `chzzk.enabled`, the exact registered `redirectUri` and private client credentials. Authorize the broadcaster's own channel. Receiver startup additionally requires matching reviewed permissions. OAuth alone is not viewer consent or permission for external AI. The server automatically sends fixed participation introductions and stage notices using the official Chat API. Enable chat-message sending and user-info lookup permissions as well as chat receipt, then reauthorize the broadcaster account. Notices are split into messages of at most 100 characters; all parts must return a message ID before a fresh consent command can advance participation. No open administrator tab or manual delivery confirmation is required. See the [platform behavior matrix](docs/specifications/behavior.md#platform-execution-and-notice-delivery).
 
 ### SOOP: separate official and experimental paths
 
@@ -59,11 +59,11 @@ The current live profile disables capture at the processing boundary: other on-s
 
 ### OBS on a separate Linux PC: legacy RTMP input (disabled live)
 
-Use the app's OBS Browser Source overlay for publication. Enable reviewed OBS Program input with `privacy.videoEnabled`; broadcast audio has a separate `privacy.audioEnabled` option. See [live setup](LIVE_SETUP.md) for LAN reader/overlay access.
+Use the app's OBS Browser Source overlay for publication. Enable reviewed OBS Program input with `privacy.videoEnabled`; broadcast audio has a separate `privacy.audioEnabled` option. See [live setup](docs/operations/setup.md) for LAN reader/overlay access.
 
 ## Groq speech and AI model data review
 
-Set `privacy.audioEnabled: true` to enable the configured broadcast audio source, Groq transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](LIVE_SETUP.md#broadcast-audio-and-transcription).
+Set `privacy.audioEnabled: true` to enable the configured broadcast audio source, Groq transcription, recent speech as AI context and authenticated transcript export. Transcripts stay in session memory and are cleared on withdrawal, context invalidation, session reset/end and restart. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
 
 ### Legacy Jev filter (disabled live)
 
@@ -91,7 +91,7 @@ Every app instance uses SQLite **in memory** for chat, identities, consent, pers
 
 `privacy.rightsDatabase` is a separate owner-only file for exceptional rights requests and video inventory. It contains minimum account/session/video/request identifiers and handling status, not ordinary chat, consent lists or AI context. App data reset does not erase unresolved requests. After each external/video/copy action and result notice, remove unnecessary resolved request records from admin. Credentials remain separate.
 
-**Migration:** the new runtime never opens old chat databases. Stop the old server and remove its old `data/chat.sqlite`, `data/demo.sqlite`, associated `-wal`/`-shm`, exports and backups under your control after identifying them; custom old `database` paths need the same review. The app does not silently delete arbitrary pre-existing files. Review OS dump/swap/backup behavior using the [development guide](docs/development.md). Memory reference removal is not a forensic-erasure guarantee. Platform VODs, provider records and third-party captures require separate handling.
+**Migration:** the new runtime never opens old chat databases. Stop the old server and remove its old `data/chat.sqlite`, `data/demo.sqlite`, associated `-wal`/`-shm`, exports and backups under your control after identifying them; custom old `database` paths need the same review. The app does not silently delete arbitrary pre-existing files. Review OS dump/swap/backup behavior using the [development guide](docs/development/guide.md). Memory reference removal is not a forensic-erasure guarantee. Platform VODs, provider records and third-party captures require separate handling.
 
 ## Troubleshooting and verification
 
@@ -102,4 +102,4 @@ sh run-command.sh npm run check
 sh run-command.sh npm run test:browser
 ```
 
-Browser tests use synthetic fixtures on ports 33219/33220 and ignored `test-results/`. See [verification](VERIFICATION_REPORT.md) and [remaining acceptance](TASKS.md). Code lives in `apps/server`, `apps/web`, `packages` and `workers`; build after web changes.
+Browser tests use synthetic fixtures on ports 33219/33220 and ignored `test-results/`. See [verification](docs/specifications/behavior.md) and [remaining acceptance](docs/specifications/behavior.md). Code lives in `apps/server`, `apps/web`, `packages` and `workers`; build after web changes.

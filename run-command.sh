@@ -17,7 +17,7 @@ Runs from the repository root using mise.toml.
 On Linux, reuses /tmp/mixed-chat-browser-libs when present.
 Override with MIXED_CHAT_BROWSER_LIBS_DIR=/path/to/bundle, or set it to
 an empty string to use system libraries. Existing FONTCONFIG_FILE wins.
-See docs/development.md for setup and troubleshooting.
+See docs/development/guide.md for setup and troubleshooting.
 USAGE
   if [ "$#" -eq 0 ]; then exit 2; fi
   exit 0
@@ -31,7 +31,7 @@ if command -v mise >/dev/null 2>&1; then
 elif [ -x "${HOME}/.local/bin/mise" ]; then
   mixed_chat_mise="${HOME}/.local/bin/mise"
 else
-  echo "mise not found. Install mise and run 'mise trust' and 'mise install'; see docs/development.md." >&2
+  echo "mise not found. Install mise and run 'mise trust' and 'mise install'; see docs/development/guide.md." >&2
   exit 127
 fi
 

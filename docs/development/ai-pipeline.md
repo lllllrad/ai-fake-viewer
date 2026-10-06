@@ -1,6 +1,6 @@
 # AI chat pipeline and improvement guide
 
-The live profile is consent-gated chat and optional broadcast-transcript and OBS Program image processing through the OpenAI Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
+The live profile is consent-gated chat and optional broadcast-transcript and OBS Program image processing through the OpenAI Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](../specifications/participation.md) owns the data-boundary requirements; [development](guide.md) owns fixture commands.
 
 ## Runtime scope and startup
 
@@ -39,7 +39,7 @@ flowchart TD
 
 ### 1. Audio capture and transcription
 
-Opt-in through `privacy.audioEnabled`. The configured audio source is transcribed by Groq; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](LIVE_SETUP.md#broadcast-audio-and-transcription).
+Opt-in through `privacy.audioEnabled`. The configured audio source is transcribed by Groq; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](../operations/setup.md#broadcast-audio-and-transcription).
 
 ### 2. Video capture and masking
 
@@ -84,7 +84,7 @@ Change prompts or scheduler behavior with synthetic fixtures. Run `sh run-comman
 
 ## Configuration and live visibility
 
-Use [config.example.yaml](config.example.yaml), [live setup](LIVE_SETUP.md) and the admin operating-profile panel. `privacy` is public configuration, not a credential store. Default blank fields fail closed. A current-process profile PUT stops inputs/generation, invalidates consent and removes previous raw context; persistent changes belong in YAML. Budgets are current-session memory; provider account limits are separate.
+Use [config.example.yaml](../../config.example.yaml), [live setup](../operations/setup.md) and the admin operating-profile panel. `privacy` is public configuration, not a credential store. Default blank fields fail closed. A current-process profile PUT stops inputs/generation, invalidates consent and removes previous raw context; persistent changes belong in YAML. Budgets are current-session memory; provider account limits are separate.
 
 ## Privacy and boundaries
 
@@ -94,7 +94,7 @@ Use [config.example.yaml](config.example.yaml), [live setup](LIVE_SETUP.md) and 
 
 `chatgpt_subscription` uses the app's Sign in with ChatGPT account and selected model, with no API-key/environment-model requirement. The OpenAI Responses API HTTP request uses `store:false`, `stream:true` and explicit required history in `input`, with no tools/chaining. Inference succeeds only after `response.completed`; deltas alone, interrupted streams and failed/incomplete terminal events do not qualify. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.
 
-The explicit [operator-reviewed test configuration](docs/privacy-implementation.md#operator-reviewed-test-configuration) can defer descriptive profile metadata during reviewed testing. Viewer consent, withdrawal, channel approval, model compatibility and actual notice limits remain required.
+The explicit [operator-reviewed test configuration](../specifications/participation.md#operator-reviewed-test-configuration) can defer descriptive profile metadata during reviewed testing. Viewer consent, withdrawal, channel approval, model compatibility and actual notice limits remain required.
 
 ## Per-attempt failures and AI enablement
 

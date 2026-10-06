@@ -6,11 +6,11 @@ Reconciled with the 2026-10-06 local requirements delta, which takes precedence 
 
 Live processing sends consented chat and explicitly enabled broadcast transcripts to the **OpenAI Responses API**, using either an API key or **Sign in with ChatGPT** for eligible ChatGPT plan usage. Authentication/contract selection is explicit. No automatic fallback to another service, Groq, Jev or unofficial SOOP is allowed. Screen input is separately enabled with `privacy.videoEnabled` for reviewed OBS Program output. Broadcast audio is separately opt-in; it is not automatically matched to individual viewer consent. Demo and legacy standalone libraries are separate from live operation.
 
-Operators populate `privacy` with actual public information, notice versions, overseas-processing basis A/B, provider model/countries/retention/subprocessors/evidence, video channels/periods and platform receipt/notice/publication/external-AI approvals. Software does not infer approval from configured booleans. Defaults are unconfirmed; the [example configuration](../config.example.yaml) is not an approved deployment profile.
+Operators populate `privacy` with actual public information, notice versions, overseas-processing basis A/B, provider model/countries/retention/subprocessors/evidence, video channels/periods and platform receipt/notice/publication/external-AI approvals. Software does not infer approval from configured booleans. Defaults are unconfirmed; the [example configuration](../../config.example.yaml) is not an approved deployment profile.
 
 ## Participation and guidance
 
-Participation is keyed by platform, broadcaster, app stream session and original platform user ID. States are `UNCONSENTED → WAITING_CONSENT → ACTIVE`, with `WITHDRAWN` from any stage and full clearing on session end. Nicknames do not identify consent, and consent is not shared across platforms or sessions. Exact localized consent, withdrawal and status commands are defined in [participation.ts](../packages/participation.ts).
+Participation is keyed by platform, broadcaster, app stream session and original platform user ID. States are `UNCONSENTED → WAITING_CONSENT → ACTIVE`, with `WITHDRAWN` from any stage and full clearing on session end. Nicknames do not identify consent, and consent is not shared across platforms or sessions. Exact localized consent, withdrawal and status commands are defined in [participation.ts](../../packages/participation.ts).
 
 The first exact consent command begins guidance. Self-declared age 14+, collection/use, live/recorded/VOD/edited-video publication, overseas processing and any third-party provision are separate stages. Each must be delivered before a fresh consent command advances it. Current operation targets self-declared 14+ users, recorded as `self_declared_14_plus`. Neither a chat command nor platform membership is age verification. Known under-14 users or contradictory declarations are blocked. There is no guardian-consent verification workflow, so those users cannot participate or remove the block through their own commands, withdrawal or profile changes. This is an operating procedure, not a claim of universal legal age-verification requirements.
 
@@ -22,7 +22,7 @@ Account intervals and global per-minute limits reserve attempts before sending a
 
 SOOP method return is not delivery proof. A nonidentifying random notice code and exact fixed text must return as a MESSAGE from the authenticated broadcaster. The app rechecks session, profile, consent generation and stage before recording delivery time. Copied text from another account, old responses and timeouts cannot open the next stage. Closing/disconnecting the admin tab stops SOOP sending. No endpoint can send arbitrary raw chat or AI replies.
 
-Official contracts: [SOOP send-message](https://developers.sooplive.com/docs/chatsdk/send-message), [get-message](https://developers.sooplive.com/docs/chatsdk/get-message). Scope is recorded in [SOOP research](../research/soop-official-verification.md). Actual app approval and live delivery require operational acceptance. Status commands expose state to the administrator; unsupported private-message capabilities are not assumed.
+Official contracts: [SOOP send-message](https://developers.sooplive.com/docs/chatsdk/send-message), [get-message](https://developers.sooplive.com/docs/chatsdk/get-message). Scope is recorded in [SOOP research](../reference/soop.md). Actual app approval and live delivery require operational acceptance. Status commands expose state to the administrator; unsupported private-message capabilities are not assumed.
 
 ## Raw text, summaries and races
 
@@ -34,30 +34,30 @@ The anonymous area permits only fixed local topic/mood labels. Each label requir
 
 ## Storage lifetime and rights requests
 
-The live Store uses only `:memory:`. Chat, participation, mappings, cast, reactions, summaries, budgets and pending work do not recover after end/restart. When audio is explicitly enabled, authenticated session transcript export is available; downloaded copies are outside automatic session deletion. Legacy chat databases are not opened; operators identify and clean old databases/exports/backups during [migration](../README.md#storage-and-deletion).
+The live Store uses only `:memory:`. Chat, participation, mappings, cast, reactions, summaries, budgets and pending work do not recover after end/restart. When audio is explicitly enabled, authenticated session transcript export is available; downloaded copies are outside automatic session deletion. Legacy chat databases are not opened; operators identify and clean old databases/exports/backups during [migration](../../README.md#storage-and-deletion).
 
 The separate `privacy.rightsDatabase` contains only minimal account/session/video scope, relevant provider request IDs, optional contact and handling status. It excludes raw chat/general participant lists and is never model input. File access is owner-only. Withdrawal creates follow-up work after local raw deletion when publication or external requests occurred. Failed persistence retries from session memory with an unsaved-task warning. Forced shutdown during persistent disk failure can lose unsaved work; resolve that warning before shutdown.
 
 States distinguish intake, identification, app completion, pending external/video work and completed/limited outcomes. App, provider, video and original/edited/reuploaded copies must be checked independently before closure. Operators perform actual actions, notify outcomes and remove unnecessary resolved records. Post-session intake remains available through public contact with minimal identifying information; no additional registration or ID-document field is required. Optional content inventory is not a permanent per-viewer statement index. Long-term VODs are not automatically deleted.
 
-HTTP body logging is disabled; browser localStorage/IndexedDB does not retain ordinary chat. Reports/screenshots use synthetic input. The wrapper disables ordinary core dumps; OS dumps, swap and backups require separate [host review](development.md). Memory release is not a forensic-erasure guarantee.
+HTTP body logging is disabled; browser localStorage/IndexedDB does not retain ordinary chat. Reports/screenshots use synthetic input. The wrapper disables ordinary core dumps; OS dumps, swap and backups require separate [host review](../development/guide.md). Memory release is not a forensic-erasure guarantee.
 
 ## APIs and ownership
 
 | Boundary                           | Code / admin API                                                                                                                                                                     |
 | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Profile and invalidation           | [privacy-profile.ts](../packages/privacy-profile.ts), `GET /api/admin/privacy`, `PUT /api/admin/privacy/profile`                                                                     |
-| Commands, age and delivery         | [participation.ts](../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`; manual delivery only where supported |
-| Projection, raw text and summaries | [storage.ts](../packages/storage.ts), summary reset/hide/session-close APIs                                                                                                          |
-| Pre-send authorization             | [app.ts](../apps/server/app.ts), [model.ts](../packages/model.ts), [scheduler.ts](../packages/scheduler.ts)                                                                          |
-| Minimal follow-up                  | [rights.ts](../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`                                 |
-| Admin UI                           | [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx)                                                                                                                               |
+| Profile and invalidation           | [privacy-profile.ts](../../packages/privacy-profile.ts), `GET /api/admin/privacy`, `PUT /api/admin/privacy/profile`                                                                     |
+| Commands, age and delivery         | [participation.ts](../../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`; manual delivery only where supported |
+| Projection, raw text and summaries | [storage.ts](../../packages/storage.ts), summary reset/hide/session-close APIs                                                                                                          |
+| Pre-send authorization             | [app.ts](../../apps/server/app.ts), [model.ts](../../packages/model.ts), [scheduler.ts](../../packages/scheduler.ts)                                                                          |
+| Minimal follow-up                  | [rights.ts](../../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`                                 |
+| Admin UI                           | [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx)                                                                                                                               |
 
 Profile PUT applies only to the current process; persistent changes belong in YAML. Important changes stop inputs/generation, invalidate old consent and remove raw context. Rights database path changes require restart. Administrator APIs enforce authentication and local/Origin boundaries.
 
 ## Acceptance and operational checks
 
-Automated scope is in [privacy requirements tests](../tests/privacy-requirements.test.ts), consent/persona/scheduler tests and [browser checks](../scripts/privacy-browser-check.ts). Dated results belong in [VERIFICATION_REPORT](../VERIFICATION_REPORT.md).
+Automated scope is in [privacy requirements tests](../../tests/privacy-requirements.test.ts), consent/persona/scheduler tests and [browser checks](../../scripts/privacy-browser-check.ts). Dated results belong in [VERIFICATION_REPORT](behavior.md).
 
 | Acceptance IDs | Implementation/fixture scope                                                                                  | Separate operational review                     |
 | -------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
@@ -91,7 +91,7 @@ Review actual ChatGPT plan usage countries, retention, sharing settings and noti
 
 YouTube uses server OAuth to connect the broadcaster's channel and the official YouTube Live Streaming API `liveChatMessages.insert` for fixed participation guidance. It never sends unconsented bodies, nicknames or AI replies. Validate returned message ID, chat, author and exact text; split long notices and require all parts before opening the consent stage. Each part/failure consumes account/global limits. Confirmed introductions do not repeat for ordinary chat in the same session. The server receiver must run, but the admin tab need not stay open.
 
-After token refresh and before sending, recheck consent generation, profile, target and connected channel. Account mismatch, withdrawal, stop and failed/unconfirmed responses do not advance consent. YouTube manual delivery completion is blocked in API/UI. Only operator OAuth credentials are encrypted on disk; viewer participation remains memory-only. See [YouTube setup and acceptance](../LIVE_SETUP.md#youtube-oauth-and-automatic-notices).
+After token refresh and before sending, recheck consent generation, profile, target and connected channel. Account mismatch, withdrawal, stop and failed/unconfirmed responses do not advance consent. YouTube manual delivery completion is blocked in API/UI. Only operator OAuth credentials are encrypted on disk; viewer participation remains memory-only. See [YouTube setup and acceptance](../operations/setup.md#youtube-oauth-and-automatic-notices).
 
 ## CHZZK automatic fixed notices
 
@@ -122,7 +122,7 @@ All credential and rights administration uses authenticated, local/Origin-restri
 | Sign in with ChatGPT                                    | Encrypted host ID, selected account, per-account client/subject/email, tokens, expiry/refresh timing, scopes and model. Registration/host metadata supports reuse of the authorized registration.                                                                                                                 | Sign-out immediately clears the selected account's access/refresh/ID tokens and selected model locally, then attempts remote revocation; failure to revoke remotely is reported separately. Late work cannot restore cleared credentials. Nonsecret registration metadata and other connected accounts remain. On retiring this integration, disconnect each account and remove the stopped app's token file and obsolete backups; the host ID is intentionally stable while the installation remains in use. |
 | API keys, client secrets and app access/encryption keys | Operator-managed environment/configuration outside ordinary chat storage.                                                                                                                                                                                                                                         | OAuth disconnect does not remove externally supplied API keys or `.env` secrets. Stop use, revoke obsolete keys at the provider and remove the protected local configuration/backup copies when no longer needed.                                                                                                                                                                                                                                                                                             |
 
-Deleting app data is not a promise of immediate provider-log deletion, remote grant revocation or forensic removal from RAM/storage. See the [PC01–PC12 evidence map](privacy-review-evidence.md) and [live operational record](../LIVE_SETUP.md#provider-settings-and-live-acceptance-record).
+Deleting app data is not a promise of immediate provider-log deletion, remote grant revocation or forensic removal from RAM/storage. See the [PC01–PC12 evidence map](behavior.md) and [live operational record](../operations/setup.md#provider-settings-and-live-acceptance-record).
 
 ## Operator-reviewed test configuration
 
@@ -153,7 +153,7 @@ its own notices. The opt-in `youtube.allowBroadcasterTesting` option admits its
 ordinary text and consent/withdrawal commands for testing, using the same staged
 participation rules. Numbered automatic-notice parts from that account remain
 excluded in both REST and gRPC paths, including after restart. Explicit configured
-bot exclusions still apply. See the [temporary testing runbook](../LIVE_SETUP.md#temporary-youtube-broadcaster-account-testing).
+bot exclusions still apply. See the [temporary testing runbook](../operations/setup.md#temporary-youtube-broadcaster-account-testing).
 
 ## YouTube notice acknowledgements during receive continuation
 
@@ -179,4 +179,4 @@ restrictions, exact-channel permissions and notice quotas remain enforced. YouTu
 and CHZZK enforce a one-message size bound; an overlong notice fails without a
 partial send. This is an abbreviated testing exception, not a claim that a short
 combined declaration satisfies every production consent requirement. See the
-[test runbook](../LIVE_SETUP.md#temporary-single-step-consent-test).
+[test runbook](../operations/setup.md#temporary-single-step-consent-test).

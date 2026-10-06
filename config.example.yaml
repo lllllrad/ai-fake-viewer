@@ -75,7 +75,7 @@ privacy:
   singleStepTest: false # temporary combined notice/consent; requires testReview
   audioEnabled: false # enable reviewed broadcast audio transcription and authenticated export
   videoEnabled: false # enable reviewed OBS Program capture and AI image input
-  # Optional only after an actual operator review for live testing; see LIVE_SETUP.md.
+  # Optional only after an actual operator review for live testing; see docs/operations/setup.md.
   # testReview:
   #   reference: <actual review record>
   #   checkedAt: <ISO UTC timestamp>

@@ -1,6 +1,6 @@
 # Admin dashboard functional specification
 
-Version 1.5. Operating controls remain the first priority. [Privacy implementation](privacy-implementation.md) defines live participation, staged consent and memory lifetime. Implementation evidence does not establish platform or provider approval.
+Version 1.5. Operating controls remain the first priority. [Privacy implementation](participation.md) defines live participation, staged consent and memory lifetime. Implementation evidence does not establish platform or provider approval.
 
 ## Implementation and requirement gaps
 
@@ -16,7 +16,7 @@ Version 1.5. Operating controls remain the first priority. [Privacy implementati
 | Withdrawal     | Raw/derived removal, cancellation, preapproved anonymous categories retained only for the session    | Provider/VOD actions                            |
 | Rights         | Minimal separate tasks, optional video list, independent app/provider/video/copy checks              | Target identification, editing and notification |
 
-Sources: [operations-dashboard.tsx](../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../apps/web/src/privacy-panel.tsx), [main.tsx](../apps/web/src/main.tsx) and [server](../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
+Sources: [operations-dashboard.tsx](../../apps/web/src/operations-dashboard.tsx), [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx), [main.tsx](../../apps/web/src/main.tsx) and [server](../../apps/server/app.ts). Demo uses synthetic input and a mock model, not live approval evidence.
 
 ## 1. Product principles
 
@@ -62,7 +62,7 @@ Starting inputs does not start AI. Separate all-input stop from individual recei
 
 Legacy overlay notice switches are informational, not delivery or consent. Their runtime values are memory-only and restart from YAML defaults. SOOP uses its official browser SDK; YouTube uses server OAuth and the YouTube Live Streaming API to send fixed non-display introductions and stage notices. CHZZK uses the official Chat API from the server. These senders never send AI replies or viewer text.
 
-CHZZK setup places its connect/reauthorize action directly next to its configuration status and callback. The action remains available when credentials are configured and authorization is already saved; disabled configuration explains the required correction. Saved authorization is not live permission verification. Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control. CHZZK also confirms every part through an API message ID, enforces attempt limits and disables manual delivery confirmation. Its server sender does not depend on an open admin tab. See the [platform behavior matrix](behavior-requirements.md#platform-execution-and-notice-delivery).
+CHZZK setup places its connect/reauthorize action directly next to its configuration status and callback. The action remains available when credentials are configured and authorization is already saved; disabled configuration explains the required correction. Saved authorization is not live permission verification. Connection details expose YouTube account connect/disconnect. The connected channel must match the broadcast. YouTube sending continues while the server receiver runs, without an open admin tab. SOOP requires the connected admin tab. Show waiting, approval, sending, unconfirmed and permission/quota states. YouTube confirms every part of a long notice before recording delivery; SOOP requires the matching authenticated broadcaster MESSAGE echo. Both enforce account/global attempt limits and have no manual delivery-completion control. CHZZK also confirms every part through an API message ID, enforces attempt limits and disables manual delivery confirmation. Its server sender does not depend on an open admin tab. See the [platform behavior matrix](behavior.md#platform-execution-and-notice-delivery).
 
 ## 5. Participation and privacy
 
@@ -70,7 +70,7 @@ The first exact consent command begins guidance. Age self-declaration, collectio
 
 Withdrawal invalidates consent, removes raw/derived context and cancels AI. Previously approved anonymous categories may remain until session end. A status command lets the operator inspect current participation. Age is shown as self-declared 14+, not verified. Known under-14 or contradictory declarations are blocked. There is no guardian-consent verification workflow, and self-issued commands cannot override the restriction.
 
-Profile changes invalidate old consent; processing-scope updates require a new notice version. New sessions begin without participation. Exact localized command strings and stage behavior are defined in [participation.ts](../packages/participation.ts); see [privacy implementation](privacy-implementation.md) for limits and APIs.
+Profile changes invalidate old consent; processing-scope updates require a new notice version. New sessions begin without participation. Exact localized command strings and stage behavior are defined in [participation.ts](../../packages/participation.ts); see [privacy implementation](participation.md) for limits and APIs.
 
 ## 6. Rights and video
 
@@ -86,4 +86,4 @@ Reader/overlay messages are projected from current permitted consent generations
 
 ## 8. Acceptance
 
-Use [browser checks](../scripts/browser-check.ts), [privacy UI checks](../scripts/privacy-browser-check.ts) and [privacy tests](../tests/privacy-requirements.test.ts). Verify first-screen placement, concise healthy status, stale-state blocking, keyboard/mobile controls, raw-text exclusion, observed-command handling, child restrictions, refusal to close app-only rights tasks and absence of browser/CSP errors. Platform contracts, real delivery and external/video actions remain operational acceptance, not synthetic PASS claims.
+Use [browser checks](../../scripts/browser-check.ts), [privacy UI checks](../../scripts/privacy-browser-check.ts) and [privacy tests](../../tests/privacy-requirements.test.ts). Verify first-screen placement, concise healthy status, stale-state blocking, keyboard/mobile controls, raw-text exclusion, observed-command handling, child restrictions, refusal to close app-only rights tasks and absence of browser/CSP errors. Platform contracts, real delivery and external/video actions remain operational acceptance, not synthetic PASS claims.

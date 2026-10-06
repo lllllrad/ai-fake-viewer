@@ -1,10 +1,10 @@
 # Live setup for the consent-based profile
 
-This runbook applies to the live application, including separately enabled broadcast inputs. Read the [privacy implementation and acceptance boundaries](docs/privacy-implementation.md) before enabling real input. Actual platform approval, published policy text and provider eligibility cannot be supplied by this repository.
+This runbook applies to the live application, including separately enabled broadcast inputs. Read the [privacy implementation and acceptance boundaries](../specifications/participation.md) before enabling real input. Actual platform approval, published policy text and provider eligibility cannot be supplied by this repository.
 
 ## 1. Prepare the app PC
 
-Use [run-command.sh](run-command.sh) and the [development guide](docs/development.md). Run setup to generate independent private tokens and an encryption key; keep `.env`, `config.yaml` and credential files out of Git. Build before starting. Stop any older server using a persistent chat DB; identify and remove old chat databases/exports/backups as described in [storage and deletion](README.md#storage-and-deletion).
+Use [run-command.sh](../../run-command.sh) and the [development guide](../development/guide.md). Run setup to generate independent private tokens and an encryption key; keep `.env`, `config.yaml` and credential files out of Git. Build before starting. Stop any older server using a persistent chat DB; identify and remove old chat databases/exports/backups as described in [storage and deletion](../../README.md#storage-and-deletion).
 
 Review host crash/core dumps, swap, service diagnostics and backup paths. The launcher disables ordinary core dumps; that does not control every OS/service memory capture. Never record live raw input as a test artifact.
 
@@ -22,7 +22,7 @@ Use `sh run-command.sh npm run setup:check` to list local configuration and auth
 
 If the operator has already confirmed the revised policy scope and explicitly
 requests testing before completing descriptive metadata, use the
-[operator-reviewed test configuration](docs/privacy-implementation.md#operator-reviewed-test-configuration).
+[operator-reviewed test configuration](../specifications/participation.md#operator-reviewed-test-configuration).
 Set `privacy.testReview.reference` to the actual review record and `checkedAt` to
 its ISO UTC timestamp; do not invent provider countries or retention values. Keep
 real stage notices, broadcaster approvals and credentials. `setup:check` reports
@@ -40,7 +40,7 @@ Screen ingestion and Jev remain disabled. OBS can still show the reader overlay.
 
 ## 4. Connect real chat sources
 
-Configure the official receiver credentials and exact registered OAuth callbacks. Set an approval entry for the actual broadcaster identity used by the adapter, not a display nickname. See [README](README.md#live-configuration). The SOOP browser SDK requires the signed-in admin page to remain open and the authenticated broadcaster's own live stream. Its runtime endpoint contract and real-account approval need a live rehearsal; do not substitute the unofficial adapter.
+Configure the official receiver credentials and exact registered OAuth callbacks. Set an approval entry for the actual broadcaster identity used by the adapter, not a display nickname. See [README](../../README.md#live-configuration). The SOOP browser SDK requires the signed-in admin page to remain open and the authenticated broadcaster's own live stream. Its runtime endpoint contract and real-account approval need a live rehearsal; do not substitute the unofficial adapter.
 
 The official SOOP SDK automatically sends fixed participation notices for unconsented ordinary chat and subsequent consent stages. Configure the actual fixed-notice approval and allowed rates, and keep the connected administrator tab open. **Privacy and participation** shows automatic delivery status; SOOP has no manual delivery-confirmation button. A matching MESSAGE echo from the authenticated broadcaster confirms sending, followed by a fresh viewer consent command; merely calling sendMessage or a timeout does not confirm delivery. For SDK events without trustworthy ordering, verify the exact newly received command within its 60-second window; do not approve old retransmissions. No operator-only activation API exists.
 
@@ -67,7 +67,7 @@ Register the actual destination channel, recording/VOD and edited-copy retention
 ## 6. Rehearse participation and withdrawal
 
 1. Confirm unconsented ordinary text does not reach admin conversation, reader, overlay or AI.
-2. The first consent command starts guidance; exact localized commands are defined in [participation.ts](packages/participation.ts). Deliver each stage and receive a fresh confirmation; age unknown/under 14 stays blocked. Only messages after all stages may appear.
+2. The first consent command starts guidance; exact localized commands are defined in [participation.ts](../../packages/participation.ts). Deliver each stage and receive a fresh confirmation; age unknown/under 14 stays blocked. Only messages after all stages may appear.
 3. Start AI manually. Six synthetic personas are generated automatically. Verify local reader/overlay publication; no native-platform AI sending exists.
 4. Send the withdrawal command. Verify local disappearance, cancelled pending replies and a separate external/video follow-up task where relevant. No email resubmission is required for this live request.
 5. Verify the participation-status command, reconnection snapshots and a new session requiring new consent. Do not infer SDK event-order guarantees from synthetic tests.
@@ -97,7 +97,7 @@ Record the reviewer/date, selected API-key authentication or Sign in with ChatGP
 
 For each enabled platform, record the actual broadcaster identity, application permissions, notice-send permissions and limits, verified delivery/retry behavior and event ordering. Exercise a synthetic participation/withdrawal sequence in a permitted operational rehearsal and separately verify the published post-session contact reaches the responsible operator. Record app deletion, provider follow-up, public video and controlled copies as distinct outcomes or limitations. Leave an unchecked item explicitly pending; automated fixture results cannot complete it.
 
-Match the final published policy to the enabled profiles, transmitted fields, displayed real nicknames and declared countries/periods. The review addendum is not the revised public policy itself; no equality with unavailable public-policy text is claimed. Use the [evidence map](docs/privacy-review-evidence.md) for code/test ownership and the [exception inventory](docs/privacy-implementation.md#durable-exception-inventory-and-deletion) for retention/deletion procedures.
+Match the final published policy to the enabled profiles, transmitted fields, displayed real nicknames and declared countries/periods. The review addendum is not the revised public policy itself; no equality with unavailable public-policy text is claimed. Use the [evidence map](../specifications/behavior.md) for code/test ownership and the [exception inventory](../specifications/participation.md#durable-exception-inventory-and-deletion) for retention/deletion procedures.
 
 ## Temporary YouTube broadcaster-account testing
 
@@ -136,7 +136,7 @@ When testing YouTube staged consent, wait for all numbered notice parts before
 sending the next consent command. A complete stage must not restart at part one
 without a new stage/session or a delivery failure. Ordinary receive continuation
 must not erase confirmed delivery. See the
-[YouTube acknowledgement rules](docs/privacy-implementation.md#youtube-notice-acknowledgements-during-receive-continuation).
+[YouTube acknowledgement rules](../specifications/participation.md#youtube-notice-acknowledgements-during-receive-continuation).
 
 ## Notice delivery speed
 

@@ -1,6 +1,6 @@
 # Development environment and verification
 
-The root [run-command.sh](../run-command.sh) applies `mise exec --` and the available Linux browser library/font environment. [AGENTS.md](../AGENTS.md) is the agent entry point. Do not rediscover temporary libraries or repeat long environment-variable prefixes.
+The root [run-command.sh](../../run-command.sh) applies `mise exec --` and the available Linux browser library/font environment. [AGENTS.md](../../AGENTS.md) is the agent entry point. Do not rediscover temporary libraries or repeat long environment-variable prefixes.
 
 ## Routine commands
 
@@ -25,7 +25,7 @@ The wrapper changes to the repository root regardless of its invocation director
 
 ## Initial setup
 
-Use Node 24.21.0 pinned in [mise.toml](../mise.toml). The current host may not expose npm on the ordinary PATH. The wrapper looks for mise on PATH, then at `$HOME/.local/bin/mise`.
+Use Node 24.21.0 pinned in [mise.toml](../../mise.toml). The current host may not expose npm on the ordinary PATH. The wrapper looks for mise on PATH, then at `$HOME/.local/bin/mise`.
 
 ```sh
 mise trust
@@ -34,7 +34,7 @@ sh run-command.sh npm ci
 sh run-command.sh npx playwright install chromium
 ```
 
-The wrapper does not install packages. Linux CI uses `npx playwright install --with-deps chromium`, including OS dependencies; see [the workflow](../.github/workflows/check.yml). The current host instead uses extracted libraries below. On Windows PowerShell, prepare Node and run npm scripts directly; the wrapper requires a POSIX shell.
+The wrapper does not install packages. Linux CI uses `npx playwright install --with-deps chromium`, including OS dependencies; see [the workflow](../../.github/workflows/check.yml). The current host instead uses extracted libraries below. On Windows PowerShell, prepare Node and run npm scripts directly; the wrapper requires a POSIX shell.
 
 ## Current host browser environment
 
@@ -86,7 +86,7 @@ The Linux x86_64 bundle is not tracked and may disappear after reboot or tempora
 
 If only downloaded `.deb` files remain in the bundle, the same host can extract each with `dpkg-deb -x` into its `root/`. This does not download or install OS packages; fonts and `fonts.conf` must also exist. If the whole bundle is absent, use the dependency setup above; the wrapper does not rebuild it.
 
-Record command scope in [VERIFICATION_REPORT](../VERIFICATION_REPORT.md). Follow [LIVE_SETUP](../LIVE_SETUP.md) and `justfile` for service management. The wrapper itself does not load `.env` or start services; it runs only the supplied command.
+Record command scope in [VERIFICATION_REPORT](../specifications/behavior.md). Follow [LIVE_SETUP](../operations/setup.md) and `justfile` for service management. The wrapper itself does not load `.env` or start services; it runs only the supplied command.
 
 ## Memory-only operation and host review
 
@@ -100,6 +100,6 @@ The live app does not open legacy chat databases. Before migration, stop the old
 
 Run `sh run-command.sh npm run setup:check` after editing `.env` or `config.yaml`. This reads local configuration and saved authorization metadata without refreshing tokens, contacting providers, starting receivers or sending notices/model requests. It prints missing fields and credential presence, never token values, account identifiers or raw configuration. Exit code 1 means configuration/authorization metadata is incomplete; even exit code 0 is not proof of actual permissions or privacy approval. Existing environment variables have the same precedence as app startup.
 
-`npm run setup` creates missing local files and includes YouTube/SOOP OAuth fields for new installations. It does not overwrite existing files. Consult [.env.example](../.env.example) for additions to an existing `.env`; keep existing API keys and encryption/access keys. YouTube automatic sending requires both client ID and client secret plus broadcaster OAuth authorization; an API key alone supports receipt only. After changing CHZZK app credentials or scopes, reconnect the broadcaster account.
+`npm run setup` creates missing local files and includes YouTube/SOOP OAuth fields for new installations. It does not overwrite existing files. Consult [.env.example](../../.env.example) for additions to an existing `.env`; keep existing API keys and encryption/access keys. YouTube automatic sending requires both client ID and client secret plus broadcaster OAuth authorization; an API key alone supports receipt only. After changing CHZZK app credentials or scopes, reconnect the broadcaster account.
 
-Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../LIVE_SETUP.md). For synthetic UI/consent/pipeline testing without a live profile, `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.
+Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../operations/setup.md). For synthetic UI/consent/pipeline testing without a live profile, `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.
