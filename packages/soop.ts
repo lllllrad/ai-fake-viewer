@@ -52,6 +52,7 @@ export class SoopAuth {
   }
 
   authorizationUrl(clientId: string) {
+    this.generation++;
     return `${root}/auth/code?${new URLSearchParams({
       client_id: clientId,
       scope: "broad_access_chatinfo",

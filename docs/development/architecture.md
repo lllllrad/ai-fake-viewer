@@ -411,6 +411,25 @@ The [websocket adapter](../../apps/server/http/reader-stream.ts) owns socket and
 JSON framing and tracks both authenticated and waiting connections. Token rotation
 and server shutdown close both groups; late authentication cannot reattach them.
 
+## Platform account connections
+
+The [platform account service](../../packages/application/accounts/platform-accounts.ts)
+owns live configuration eligibility, authorization completion, disconnect ordering
+and SOOP's single pending five-minute approval window. Its explicit ports keep
+credentials, provider requests and receiver implementations out of application
+code. Disconnect drains only the selected platform before deleting its stored
+credentials; another platform's receiver remains running. New authorization for
+that account is rejected while disconnect is draining.
+
+The [account HTTP routes](../../apps/server/http/routes/platform-accounts.ts)
+validate callback inputs and render fixed UTF-8 responses while preserving existing
+administrator endpoints and OAuth callback URLs. Provider details are mapped to
+bounded diagnostic messages. SOOP consumes its pending approval before exchange;
+a superseding authorization invalidates both the old token write and its late
+status update. Existing token adapters still own provider protocol, refresh and
+encrypted persistence and remain candidates for the remaining adapter rewrite.
+SOOP browser chat operations and AI provider accounts have separate lifecycles.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.
