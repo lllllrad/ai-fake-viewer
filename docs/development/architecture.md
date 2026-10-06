@@ -315,6 +315,18 @@ distinct backoff, input validation and recent-window policies; this process
 adapter does not decide broadcast lifetime. Speech budget exhaustion stops the
 worker without scheduling another reconnect.
 
+The [screen context](../../packages/application/inputs/screen-context.ts) owns
+frame evidence independently of processes and image encoding: ten retained
+frames within thirty seconds, three preview candidates within ten seconds,
+source-resolution invalidation and the context-clear timestamp barrier. The
+capture adapter supplies IDs, hashing and a clock. Restarting an input cannot
+erase the context-clear barrier and admit an older in-flight sample.
+[Worker event contracts](../../packages/contracts/input-events.ts) and their
+[decoder](../../packages/infrastructure/inputs/worker-events.ts) validate
+timestamps, dimensions, bounded canonical base64 and exact configured PCM chunk
+length before events reach the input coordinators. Speech context selection
+continues to use the latest ten eligible chunks.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

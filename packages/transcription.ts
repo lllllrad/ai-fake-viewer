@@ -1,3 +1,4 @@
+import { readAudioEvent } from "./infrastructure/inputs/worker-events.ts";
 import { randomUUID } from "node:crypto";
 import type { Config } from "./config.ts";
 import { InputWorkerSession } from "./infrastructure/inputs/worker-session.ts";
@@ -56,21 +57,15 @@ export class Transcriber {
     this.worker.start(
       { type: "start", config: this.config },
       {
-        message: (message: any) => {
+        message: (value) => {
           if (generation !== this.generation) return;
-          if (message?.type === "activity") {
+          const message = readAudioEvent(value, this.config.chunkSeconds);
+          if (!message) return;
+          if (message.type === "activity") {
             if (this.state === "connecting") this.state = "listening";
             return;
           }
-          if (
-            message?.type !== "audio" ||
-            typeof message.pcm !== "string" ||
-            message.pcm.length > this.config.chunkSeconds * 16000 * 4
-          )
-            return;
-          const pcm = Buffer.from(message.pcm, "base64");
-          if (pcm.length !== this.config.chunkSeconds * 16000 * 2) return;
-          void this.transcribe(pcm, message.capturedAt);
+          void this.transcribe(message.pcm, message.capturedAt);
         },
         error: () => {
           this.state = "failed";
