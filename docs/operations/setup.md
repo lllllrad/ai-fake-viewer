@@ -175,6 +175,17 @@ them and rejects pre-reset frames arriving late. The application cannot remove
 unconsented content embedded in an upstream video; the reviewed Program source
 must provide the intended content. No mask-confirmation step is required.
 
+## Background maintenance errors
+
+Server logs use `server_maintenance` records for `retention` and `ai_recovery`
+failures. `failed` identifies a failed local cleanup or recovery attempt; repeated
+failures of the same task do not repeat the log. The server stays available and
+retries at the next normal interval (hourly retention, one-second AI recovery).
+`recovered` means that task completed without an exception, not that AI is now
+running or all input/provider connections are healthy. Check the dashboard for
+actual AI/input status. Persistent failures require checking local database access
+and storage health. Stopping the server cancels both tasks before closing storage.
+
 ## Automatic viewers and quiet periods
 
 Enabling AI prepares six synthetic viewers automatically. The broadcast page's

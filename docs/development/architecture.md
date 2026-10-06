@@ -107,6 +107,14 @@ failure. Once the normal shutdown hook is installed, it becomes the sole cleanup
 owner, including when starting inputs fails. Startup failure never ends or erases
 the recovered broadcast.
 
+The [maintenance owner](../../apps/server/maintenance.ts) owns the hourly retention
+and one-second AI recovery timers. These synchronous local tasks catch their own
+failures, retry at their normal interval and report only failure/recovery transitions.
+Reports contain fixed task/state fields, never exception bodies or broadcast text.
+A reporting failure cannot stop retries. Shutdown permanently stops the owner before
+storage closes. Initial retention during startup remains a required synchronous
+check: its failure aborts startup and invokes resource cleanup.
+
 The [server shutdown owner](../../apps/server/shutdown.ts) cancels periodic work
 and reference authoring, drains broadcast inputs, closes readers, flushes durable
 rights follow-ups, then closes both stores and clears transient follow-up state.

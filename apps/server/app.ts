@@ -1,5 +1,6 @@
 import { registerHttpAccess } from "./http/access.ts";
 import { ServerShutdown } from "./shutdown.ts";
+import { ServerMaintenance } from "./maintenance.ts";
 import { initializeServer, type StartupCleanup } from "./startup.ts";
 import { registerHttpErrors } from "./http/errors.ts";
 import {
@@ -538,11 +539,6 @@ async function assembleApp(
     for (const path of ["/", "/reader", "/overlay", "/admin"])
       app.get(path, async (req, reply) => reply.sendFile("index.html"));
   }
-  const retention = setInterval(() => {
-    store.retention.purge(Date.now() - config.retentionDays * 86400000);
-  }, 3600000);
-  startup.add(() => clearInterval(retention));
-  retention.unref();
   store.retention.purge(Date.now() - config.retentionDays * 86400000);
   app.addHook("onRequest", async (req, reply) => {
     if (
@@ -557,14 +553,17 @@ async function assembleApp(
       });
   });
   const resumeAiIfRequested = () => broadcast.recoverAi();
-  const restartRecovery = setInterval(resumeAiIfRequested, 1000);
-  startup.add(() => clearInterval(restartRecovery));
-  restartRecovery.unref();
+  const maintenance = new ServerMaintenance({
+    purge: () =>
+      store.retention.purge(Date.now() - config.retentionDays * 86400000),
+    recover: resumeAiIfRequested,
+    report: (event) =>
+      console.error(JSON.stringify({ type: "server_maintenance", ...event })),
+  });
+  startup.add(() => maintenance.stop());
+  maintenance.start();
   const shutdown = new ServerShutdown({
-    cancelTimers: () => {
-      clearInterval(retention);
-      clearInterval(restartRecovery);
-    },
+    cancelTimers: () => maintenance.stop(),
     cancelAuthoring: () => cancelAuthoringJobs(),
     shutdownBroadcast: () => broadcast.shutdown(),
     closeReaders: () => readers.closeAll(),
