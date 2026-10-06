@@ -375,6 +375,17 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+Provider HTTP composition belongs to the
+[Responses API adapter](../../packages/infrastructure/reactions/responses-api.ts)
+and the [Sign in with ChatGPT model adapter](../../packages/infrastructure/reactions/chatgpt-model.ts).
+Both implement the application model port. The API adapter accepts an injected
+transport for fixture verification; the subscription adapter only depends on
+current account/model identity and token access, not the account storage class.
+Input authorization and request-ID recording remain at every outgoing request
+boundary. Shared [response payload validation](../../packages/infrastructure/reactions/response-payload.ts)
+rejects negative/non-numeric token counts and malformed output text before usage
+accounting. The old model module only re-exports compatibility entry points.
+
 The [Responses API stream decoder](../../packages/infrastructure/reactions/responses-stream.ts)
 handles SSE framing, chunked UTF-8 text, completion validation and optional usage
 counts separately from authentication, HTTP requests and decision validation.

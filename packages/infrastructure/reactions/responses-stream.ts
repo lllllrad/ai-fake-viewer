@@ -1,27 +1,6 @@
 import { z } from "zod";
-const usageSchema = z.object({
-  input_tokens: z.number().int().nonnegative().optional(),
-  output_tokens: z.number().int().nonnegative().optional(),
-});
-const completedSchema = z.object({
-  status: z.literal("completed"),
-  output: z.array(z.unknown()).default([]),
-  usage: usageSchema.nullish(),
-});
+import { completedResponseSchema, responseText } from "./response-payload.ts";
 const eventSchema = z.object({ type: z.string() }).passthrough();
-function completedText(output: unknown[]) {
-  const texts: string[] = [];
-  for (const raw of output) {
-    const item = eventSchema.parse(raw);
-    if (item.type !== "message") continue;
-    const content = z.array(z.unknown()).parse(item.content ?? []);
-    for (const rawPart of content) {
-      const part = eventSchema.parse(rawPart);
-      if (part.type === "output_text") texts.push(z.string().parse(part.text));
-    }
-  }
-  return texts.join("");
-}
 /** Bounded Responses API SSE decoding; transport and decision validation remain separate. */
 export async function readResponsesStream(
   body: ReadableStream<Uint8Array>,
@@ -29,7 +8,7 @@ export async function readResponsesStream(
 ) {
   const reader = body.getReader(),
     decoder = new TextDecoder();
-  let completed: z.infer<typeof completedSchema> | undefined;
+  let completed: z.infer<typeof completedResponseSchema> | undefined;
   let buffer = "",
     streamedText = "",
     size = 0,
@@ -76,11 +55,11 @@ export async function readResponsesStream(
             throw Error("ChatGPT output too large");
         }
         if (event.type === "response.completed")
-          completed = completedSchema.parse(event.response);
+          completed = completedResponseSchema.parse(event.response);
       }
     }
     if (!completed) throw Error("ChatGPT stream ended before completion");
-    const output = completedText(completed.output) || streamedText;
+    const output = responseText(completed.output) || streamedText;
     if (!output || output.length > 10000)
       throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
     return {

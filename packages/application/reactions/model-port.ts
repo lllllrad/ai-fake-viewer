@@ -24,3 +24,8 @@ export type Model<Bytes extends Uint8Array = Uint8Array> = (
   input: ModelInput<Bytes>,
   signal: AbortSignal,
 ) => Promise<ModelResult>;
+
+export interface ModelLimits {
+  maxInputTokens: number;
+  maxOutputTokens: number;
+}
