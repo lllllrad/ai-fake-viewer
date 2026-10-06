@@ -179,6 +179,22 @@ the Responses API. Preserve working authentication, token-counting, streaming,
 storage settings and bounded concurrency. Do not replace tested wire protocols
 with assumptions. A provider cannot silently switch account or authentication.
 
+The [evidence policy](../../packages/domain/reactions/evidence.ts) selects the
+current chat window and latest ten transcript chunks by capture time, separates
+new triggers from background, and prunes consumed-input bookkeeping without
+consuming new evidence. Synthetic chat alone is not a speech-trigger substitute.
+Message revisions include both speaker and text; the scheduler hashes that
+revision into its duplicate key so edits to the same platform message remain
+eligible without retaining raw text in the key.
+
+The [cast selection policy](../../packages/domain/reactions/cast-selection.ts)
+owns presence boundaries, observation age, global and per-member pacing,
+activity-band caps, topic/mention weighting and probabilistic silence. It receives
+time and random draws explicitly and performs no storage, network or timer work.
+Zero propensity always stays silent. Observation age includes configured pacing
+and model delay but never exceeds the context window. The legacy scheduler still
+coordinates timers, provider requests, review and publication during replacement.
+
 Every attempt carries broadcast/context/consent and cast revisions. Review and
 publication validate those revisions, cited evidence, expiry, duplicate and
 frequency rules. Silence is a normal result. Failures distinguish authentication,

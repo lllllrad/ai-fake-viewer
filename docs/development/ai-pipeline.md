@@ -160,6 +160,21 @@ tokens as described in [Counting tokens](https://developers.openai.com/api/docs/
 An earlier generic `model_error` cannot be retroactively assigned a precise cause
 without the original detailed evidence.
 
+## Reaction policy ownership
+
+[Evidence selection](../../packages/domain/reactions/evidence.ts) and
+[cast eligibility/selection](../../packages/domain/reactions/cast-selection.ts)
+are pure domain policies. They accept the current time and injected random draws,
+keep new input separate from background, and do not consume evidence merely
+because pacing or a quota blocks an attempt. The latest ten transcript chunks are
+selected by capture time. Member presence restricts all selected message, speech
+and frame evidence; each member's new evidence remains a subset of that context.
+The scheduler's duplicate key includes a hash of an edited message's current
+version, so an unchanged platform identifier does not suppress updated text.
+It includes every unconsumed human message and transcript identifier, so a delayed
+older transcript chunk is not suppressed merely because a newer chunk was already
+processed. Existing generation/review/publication orchestration remains in the scheduler.
+
 ## Questions, transcript context and readable images
 
 Generation receives the latest ten available transcript chunks within the configured

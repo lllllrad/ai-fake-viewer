@@ -460,3 +460,100 @@ test("generation and review receive the latest ten transcript chunks", async (t)
     store.close();
   }
 });
+
+test("an edited platform message is new evidence even when its source identifier is unchanged", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const config = configSchema.parse({
+    ai: {
+      visualMode: "on_request",
+      reviewDraft: false,
+      pacing: { minSeconds: 20, maxSeconds: 20 },
+    },
+  });
+  const store = new Store(":memory:");
+  const inputs: string[] = [];
+  const scheduler = new Scheduler(
+    store,
+    new Capture(config.capture, false),
+    config,
+    async (input) => {
+      inputs.push(input.newMessages!.at(-1)!.text);
+      return { decision: skipped };
+    },
+    false,
+    () => true,
+  );
+  scheduler.state = "running";
+  const message = {
+    platform: "youtube" as const,
+    channel: "fixture",
+    author: "viewer",
+    name: "Viewer",
+    sourceId: "same-source",
+    text: "SYNTHETIC_FIRST",
+  };
+  try {
+    store.grantConsent(message.platform, message.channel, message.author);
+    store.ingestBatch([message]);
+    await scheduler.tick(now);
+    assert.deepEqual(inputs, ["SYNTHETIC_FIRST"]);
+    now += 21000;
+    store.ingestBatch([{ ...message, text: "SYNTHETIC_EDITED" }]);
+    await scheduler.tick(now);
+    assert.deepEqual(inputs, ["SYNTHETIC_FIRST", "SYNTHETIC_EDITED"]);
+    assert.match(scheduler.lastHash, /^[a-f0-9]{64}$/);
+    now += 21000;
+    await scheduler.tick(now);
+    assert.equal(inputs.length, 2);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});
+
+test("a late transcript chunk remains new even when a newer chunk was already processed", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const config = configSchema.parse({
+    ai: {
+      visualMode: "on_request",
+      reviewDraft: false,
+      pacing: { minSeconds: 20, maxSeconds: 20 },
+    },
+  });
+  const chunks = [{ id: "latest", text: "latest speech", capturedAt: now }];
+  const transcriber = {
+    recent: () => chunks,
+    has: (id: string) => chunks.some((chunk) => chunk.id === id),
+  } as Transcriber;
+  const store = new Store(":memory:");
+  const inputs: string[][] = [];
+  const scheduler = new Scheduler(
+    store,
+    new Capture(config.capture, false),
+    config,
+    async (input) => {
+      inputs.push(input.newTranscripts!.map((chunk) => chunk.id));
+      return { decision: skipped };
+    },
+    false,
+    () => true,
+    transcriber,
+  );
+  scheduler.state = "running";
+  try {
+    await scheduler.tick(now);
+    now += 21000;
+    chunks.push({
+      id: "late",
+      text: "delayed speech",
+      capturedAt: now - 22000,
+    });
+    await scheduler.tick(now);
+    assert.deepEqual(inputs, [["latest"], ["late"]]);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});

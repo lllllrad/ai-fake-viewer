@@ -1,4 +1,13 @@
 import {
+  selectEvidenceWindow,
+  baselinePacingBlocked,
+  messageVersion,
+} from "./domain/reactions/evidence.ts";
+import {
+  castPacingBlocked,
+  chooseCastMember,
+} from "./domain/reactions/cast-selection.ts";
+import {
   generationIssue,
   StaleModelContextError,
   ModelRequestError,
@@ -211,56 +220,26 @@ export class Scheduler {
       if (!this.busy) this.phase = "random_wait";
       return;
     }
-    const contextFloor = now - this.config.ai.contextWindowSeconds * 1000;
-    const recent = this.store
-      .snapshot()
-      .messages.filter(
-        (m) => m && m.displayTime >= contextFloor,
-      ) as NonNullable<ReturnType<Store["snapshot"]>["messages"][number]>[];
-    const recentIds = new Set(recent.map((m) => m.id));
-    let messages = this.store
-      .context(this.allowed())
-      .filter((m) => recentIds.has(m.id));
-    let transcripts = (this.transcriber?.recent() ?? [])
-      .filter((t) => t.capturedAt >= contextFloor)
-      .slice(-10);
-    const currentTranscriptIds = new Set(transcripts.map((t) => t.id));
-    const currentMessageIds = new Set(messages.map((m) => m.id));
-    this.processedTranscriptIds = new Set(
-      [...this.processedTranscriptIds].filter((id) =>
-        currentTranscriptIds.has(id),
-      ),
-    );
-    this.processedMessageVersions = new Map(
-      [...this.processedMessageVersions].filter(([id]) =>
-        currentMessageIds.has(id),
-      ),
-    );
-    let newTranscripts = transcripts.filter(
-      (t) => !this.processedTranscriptIds.has(t.id),
-    );
-    const messageVersion = (m: (typeof messages)[number]) =>
-      `${m.speaker}\n${m.text}`;
-    let newMessages = messages.filter(
-      (m) => this.processedMessageVersions.get(m.id) !== messageVersion(m),
-    );
-    const external = recent.filter((m) => m.attribution !== "experiment");
-    const externalSeq = external.at(-1)?.seq ?? 0;
-    const freshExternal = external.filter(
-      (m) => m.displayTime > now - 60000,
-    ).length;
+    const evidence = selectEvidenceWindow({
+      now,
+      windowMs: this.config.ai.contextWindowSeconds * 1000,
+      recent: this.store.snapshot().messages,
+      messages: this.store.context(this.allowed()),
+      transcripts: this.transcriber?.recent() ?? [],
+      allowedPlatforms: this.allowed(),
+      processedTranscriptIds: this.processedTranscriptIds,
+      processedMessageVersions: this.processedMessageVersions,
+    });
+    const recent = evidence.recent,
+      externalSeq = evidence.externalSequence;
+    let { messages, transcripts, newMessages, newTranscripts } = evidence;
+    this.processedTranscriptIds = evidence.processedTranscriptIds;
+    this.processedMessageVersions = evidence.processedMessageVersions;
     if (
-      freshExternal > 15 ||
-      this.speechTimes.filter((t) => t > now - 60000).length >= 3
+      baselinePacingBlocked(evidence.recentExternalCount, this.speechTimes, now)
     )
       return;
-    const allowedExternal = external.filter((m) =>
-      this.allowed().includes(m.attribution),
-    );
-    const triggerMessage =
-      allowedExternal.findLast((m) =>
-        newMessages.some((item) => item.id === m.id),
-      )?.id ?? "";
+    const triggerMessage = evidence.triggerMessage?.id ?? "";
     let frames =
       this.config.ai.visualMode === "continuous"
         ? this.capture.recent().slice(-1)
@@ -268,7 +247,17 @@ export class Scheduler {
     const hash =
       this.config.ai.visualMode === "continuous"
         ? frames.at(-1)!.hash
-        : `${transcripts.at(-1)?.id ?? ""}:${triggerMessage}`;
+        : createHash("sha256")
+            .update(
+              JSON.stringify({
+                transcripts: newTranscripts.map((transcript) => transcript.id),
+                messages: evidence.newExternalMessages.map((message) => ({
+                  id: message.id,
+                  version: messageVersion(message),
+                })),
+              }),
+            )
+            .digest("hex");
     if (
       this.config.ai.visualMode === "on_request" &&
       !newTranscripts.length &&
@@ -291,195 +280,49 @@ export class Scheduler {
       return;
     }
     if (personaRuntime && !personaRuntime.armed) return;
-    if (personaRuntime) {
-      const windowMs = personaRuntime.policy.rolling_window_ms ?? 60000;
-      const aiCount = recent.filter(
-        (m) =>
-          m?.attribution === "experiment" && m.displayTime >= now - windowMs,
-      ).length;
-      const upstreamCount = recent.filter(
-        (m) =>
-          m &&
-          m.attribution !== "experiment" &&
-          m.displayTime >= now - windowMs,
-      ).length;
-      const band = (personaRuntime.policy.upstream_activity_bands ?? []).find(
-        (b: any) =>
-          upstreamCount >= b.min_messages &&
-          (b.max_messages === null || upstreamCount <= b.max_messages),
-      );
-      const cap = Math.min(
-        personaRuntime.policy.global_hard_cap_messages_per_window ?? 6,
-        band?.ai_cap_messages_per_window ?? 6,
-      );
-      if (
-        aiCount >= cap ||
-        this.speechTimes.filter((t) => t > now - windowMs).length >= cap ||
-        now - this.lastSpoke <
-          (personaRuntime.policy.minimum_global_gap_ms ?? 5000)
-      )
-        return;
-    }
+    if (
+      personaRuntime &&
+      castPacingBlocked({
+        recent,
+        speechTimes: this.speechTimes,
+        now,
+        lastSpoke: this.lastSpoke,
+        policy: personaRuntime.policy,
+      })
+    )
+      return;
     let persona = -1;
     let activeMember:
       | NonNullable<ReturnType<Store["personaRuntime"]>>["members"][number]
       | undefined;
     if (personaRuntime) {
-      const messageById = new Map(
-        recent
-          .filter((m): m is NonNullable<typeof m> => !!m)
-          .map((m) => [m.id, m]),
-      );
-      const intervals = (m: (typeof personaRuntime.members)[number]) =>
-        m.presence as any[];
-      const eligible = personaRuntime.members
-        .map((m, i) => {
-          const intervalsForMember = intervals(m);
-          if (!intervalsForMember.length) return null;
-          const inInterval = (seq: number, at: number, p: any) =>
-            seq > p.joined_after_seq &&
-            (p.left_after_seq === null || seq <= p.left_after_seq) &&
-            at >= p.joined_at &&
-            (p.left_at === null || at <= p.left_at);
-          const memberMessages = messages.filter((x) => {
-            const event = messageById.get(x.id);
-            return (
-              !!event &&
-              intervalsForMember.some((p: any) =>
-                inInterval(event.seq, event.displayTime, p),
-              )
-            );
-          });
-          const memberTranscripts = transcripts.filter((t) =>
-            intervalsForMember.some(
-              (p: any) =>
-                t.capturedAt >= p.joined_at &&
-                (p.left_at === null || t.capturedAt <= p.left_at),
-            ),
-          );
-          const memberFrames = frames.filter((f) =>
-            intervalsForMember.some(
-              (p: any) =>
-                f.capturedAt >= p.joined_at &&
-                (p.left_at === null || f.capturedAt <= p.left_at),
-            ),
-          );
-          const observationAge = Math.min(
-            this.config.ai.contextWindowSeconds * 1000,
-            Math.max(
-              personaRuntime.policy.max_observation_age_ms ?? 12000,
-              this.config.ai.pacing.maxSeconds * 1000 +
-                (personaRuntime.policy.model_timeout_ms ?? 30000),
-            ),
-          );
-          const memberNewMessages = newMessages.filter((x) => {
-            const event = messageById.get(x.id);
-            return (
-              !!event &&
-              event.displayTime >= now - observationAge &&
-              memberMessages.some((m) => m.id === x.id)
-            );
-          });
-          const memberNewTranscripts = newTranscripts.filter(
-            (x) =>
-              x.capturedAt >= now - observationAge &&
-              memberTranscripts.some((t) => t.id === x.id),
-          );
-          const memberNewFrames = memberFrames.filter(
-            (f) => f.capturedAt >= now - observationAge,
-          );
-          if (
-            !memberNewMessages.length &&
-            !memberNewTranscripts.length &&
-            !memberNewFrames.length
-          )
-            return null;
-          if (
-            m.lastPublishedAt !== null &&
-            now - m.lastPublishedAt <
-              Math.max(
-                this.config.ai.pacing.minSeconds * 1000,
-                personaRuntime.policy.persona_cooldown_ms ?? 0,
-              )
-          )
-            return null;
-          if (
-            m.consecutiveMessages >=
-            (personaRuntime.policy.max_consecutive_messages_from_one_persona ??
-              2)
-          )
-            return null;
-          const d = m.snapshot;
-          const latest = [
-            ...memberMessages.map((x) => x.text),
-            ...memberTranscripts.map((x) => x.text),
-          ]
-            .slice(-5)
-            .join(" ")
-            .toLocaleLowerCase();
-          const tags = [
-            ...d.core.interests,
-            ...d.core.observation_focus,
-            ...m.focusTags,
-          ];
-          const tagHits = tags.filter(
-            (tag: string) =>
-              tag.length > 2 && latest.includes(tag.toLocaleLowerCase()),
-          ).length;
-          const mention = memberMessages.some((x) =>
-            x.text
-              .normalize("NFKC")
-              .toLocaleLowerCase()
-              .includes(m.displayName.normalize("NFKC").toLocaleLowerCase()),
-          );
-          const topical =
-            0.7 +
-            Math.min(1, tagHits * 0.2) * d.participation.topic_sensitivity;
-          const recencyPenalty =
-            m.lastPublishedAt && now - m.lastPublishedAt < 120000 ? 0.55 : 1;
-          const score =
-            Math.max(0.01, d.participation.base_propensity) *
-            topical *
-            (0.5 + Math.min(1, m.attention)) *
-            (mention ? 1.5 : 1) *
-            recencyPenalty *
-            (0.8 + this.random() * 0.4);
-          return {
-            m,
-            i,
-            memberMessages,
-            memberTranscripts,
-            memberFrames,
-            memberNewMessages,
-            memberNewTranscripts,
-            memberNewFrames,
-            score,
-          };
-        })
-        .filter((v): v is NonNullable<typeof v> => v !== null);
-      const chance = Math.max(
-        0,
-        Math.max(
-          ...eligible.map((x) => x.m.snapshot.participation.base_propensity),
-        ),
-      );
-      if (!eligible.length || this.random() > chance) {
+      const selected = chooseCastMember({
+        members: personaRuntime.members,
+        recent,
+        observation: {
+          messages,
+          transcripts,
+          frames,
+          newMessages,
+          newTranscripts,
+        },
+        now,
+        contextWindowMs: this.config.ai.contextWindowSeconds * 1000,
+        minimumPacingMs: this.config.ai.pacing.minSeconds * 1000,
+        maximumPacingMs: this.config.ai.pacing.maxSeconds * 1000,
+        policy: personaRuntime.policy,
+        random: this.random,
+      });
+      if (!selected) {
         this.lastHash = hash;
         this.lastExternal = externalSeq;
         this.skips++;
         return;
       }
-      const total = eligible.reduce((a, b) => a + b.score, 0);
-      let choice = this.random() * total;
-      const selected =
-        eligible.find((x) => (choice -= x.score) <= 0) ?? eligible.at(-1)!;
-      activeMember = selected.m;
-      persona = selected.i;
-      messages = selected.memberMessages;
-      transcripts = selected.memberTranscripts;
-      frames = selected.memberFrames;
-      newMessages = selected.memberNewMessages;
-      newTranscripts = selected.memberNewTranscripts;
+      activeMember = selected.member;
+      persona = selected.index;
+      ({ messages, transcripts, frames, newMessages, newTranscripts } =
+        selected.observation);
     } else {
       persona = this.config.ai.personas.findIndex(
         (_, i) =>
