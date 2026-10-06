@@ -375,6 +375,15 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [outgoing context projection](../../packages/application/reactions/model-context.ts)
+selects message IDs, pseudonymous speakers, text, transcript timestamps and frame
+references explicitly. Extra fields attached to internal objects never enter the
+model payload. Anonymous summaries are restricted to approved topic/mood labels.
+The [message renderer](../../packages/infrastructure/reactions/model-messages.ts)
+loads the answer/review prompts and encodes the selected frame bytes for the wire
+format. Application context projection does not read files or depend on a provider
+client, and image encoding handles Uint8Array views without exposing adjacent bytes.
+
 The [model port](../../packages/application/reactions/model-port.ts) defines
 provider-independent generation input and result types. Image bytes are generic
 Uint8Array data; the Node composition retains Buffer compatibility without

@@ -1,11 +1,11 @@
+import { modelMessages } from "./infrastructure/reactions/model-messages.ts";
+export { modelMessages } from "./infrastructure/reactions/model-messages.ts";
 import type {
   ModelInput as GenerationInput,
   Model as GenerationModel,
   ModelResult,
 } from "./application/reactions/model-port.ts";
 import { setTimeout as sleep } from "node:timers/promises";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import {
   decisionSchema,
   decisionJsonSchema,
@@ -14,9 +14,6 @@ import {
 import type { Config } from "./config.ts";
 import type { ChatgptAuth } from "./chatgpt-auth.ts";
 import { ModelRequestError } from "./model-errors.ts";
-const promptPath = (name: string) => resolve(process.cwd(), "prompts", name);
-const answerPrompt = readFileSync(promptPath("answer.md"), "utf8").trim();
-const reviewPrompt = readFileSync(promptPath("review.md"), "utf8").trim();
 
 export type ModelInput = GenerationInput<Buffer>;
 export type Model = GenerationModel<Buffer>;
@@ -38,57 +35,6 @@ export const mockModel: Model = async (input, signal) => {
     outputTokens: 0,
   };
 };
-export function modelMessages(input: ModelInput) {
-  return [
-    {
-      role: "developer",
-      content: input.reviewDraft
-        ? reviewPrompt
-        : answerPrompt
-            .replaceAll("{{persona_style}}", input.persona.style)
-            .replaceAll(
-              "{{visual_instruction}}",
-              input.frames.length
-                ? "A video frame is present; do not request inspect again."
-                : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
-            ),
-    },
-    {
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: JSON.stringify({
-            description: input.description,
-            reviewDraft: input.reviewDraft ?? null,
-            recentContext: input.messages,
-            anonymousChatSummary: input.chatSummary ?? null,
-            newMessages: input.newMessages ?? [],
-            newTranscripts: (input.newTranscripts ?? []).map((t) => ({
-              id: t.id,
-              capturedAt: t.capturedAt,
-              text: t.text,
-            })),
-            recentTranscripts: (input.transcripts ?? []).map((t) => ({
-              id: t.id,
-              capturedAt: t.capturedAt,
-              text: t.text,
-            })),
-            frames: input.frames.map((f) => ({
-              id: f.id,
-              capturedAt: f.capturedAt,
-            })),
-          }),
-        },
-        ...input.frames.map((f) => ({
-          type: "input_image",
-          image_url: `data:image/jpeg;base64,${f.bytes.toString("base64")}`,
-          detail: "high",
-        })),
-      ],
-    },
-  ];
-}
 export function openaiModel(
   config: Config["ai"],
   options?: {
