@@ -12,6 +12,9 @@ sh run-command.sh npm run check
 sh run-command.sh npm run build
 sh run-command.sh npm run test:browser
 
+# Linux managed-server lifecycle check (isolated fixture, requires just)
+sh run-command.sh npm run test:server
+
 # Documentation checks and formatting of changed files
 sh run-command.sh npm run docs:check
 sh run-command.sh npx prettier --write README.md
@@ -20,6 +23,14 @@ sh run-command.sh --help
 ```
 
 Browser tests serve `dist/web`, so build after web changes. Fixtures use ports `127.0.0.1:33219` and `127.0.0.1:33220`, memory databases, isolated credential paths and synthetic input. Do not run multiple browser checks on those ports simultaneously. JSON reports and screenshots go to ignored `test-results/`. These tests do not establish real broadcast compatibility or paid-model quality. Browser verification fails on page errors and CSP console diagnostics.
+
+The [managed-server check](../../scripts/server-control-check.ts) runs the real
+`just` recipes in a temporary directory with a synthetic HTTP server, isolated PID
+and log files, and a dynamically allocated loopback port. It verifies start,
+idempotent start, status, restart, stop and refusal to replace an independently
+owned healthy listener. It does not read local credentials or run the live app.
+This check requires Linux, `just`, `bash`, `curl` and `setsid`; the cross-platform
+unit suite remains separate.
 
 The wrapper changes to the repository root regardless of its invocation directory. Use its absolute path from elsewhere. It forwards arguments with `"$@"`, preserves spaces and returns the command exit code. Pass `sh -c '...'` explicitly when shell syntax is required.
 

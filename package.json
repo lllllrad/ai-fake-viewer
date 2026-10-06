@@ -18,7 +18,8 @@
     "format": "prettier --write apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md docs/**/*.md",
     "format:check": "prettier --check apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md docs/**/*.md",
     "docs:check": "tsx scripts/check-docs.ts",
-    "setup:check": "tsx scripts/check-local-setup.ts"
+    "setup:check": "tsx scripts/check-local-setup.ts",
+    "test:server": "tsx scripts/server-control-check.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",
