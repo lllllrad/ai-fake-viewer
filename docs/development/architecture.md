@@ -707,6 +707,19 @@ by status and AI-start validation, keeping required profile/model availability
 separate from visible optional input failures. Legacy input/provider adapters are
 still being replaced; this query adapter does not claim to replace their internals.
 
+The [HTTP access boundary](../../apps/server/http/access.ts) owns local-only
+administrator access, configured host/origin checks, response headers and login/
+logout routes. It returns the same configured origins to reader authentication
+and public-link composition. The
+[administrator session adapter](../../packages/infrastructure/accounts/administrator-sessions.ts)
+owns constant-time credential comparison and signed, seven-day, HTTP-only cookies.
+The cookie format survives process restart with the same administrator credential;
+expiry or credential rotation invalidates it. Logout clears the browser cookie in
+its original path; it does not revoke copies of the stateless signed cookie.
+The [HTTP error mapper](../../apps/server/http/errors.ts) exposes only reviewed
+application messages and sanitized validation/general failures. Server composition
+wires these adapters without implementing their parsing or signing rules.
+
 The [reader session](../../packages/application/conversation/reader-session.ts)
 owns authentication lifetime, heartbeat state, bounded output and source
 subscriptions through clock/transport ports. It always sends the current snapshot

@@ -1,17 +1,17 @@
+import { registerHttpAccess } from "./http/access.ts";
+import { registerHttpErrors } from "./http/errors.ts";
+import {
+  AdministratorSessions,
+  equal,
+} from "../../packages/infrastructure/accounts/administrator-sessions.ts";
 import { limitModelConcurrency } from "../../packages/application/reactions/model-concurrency.ts";
 import { ParticipationAdministration } from "../../packages/application/participation/administration.ts";
 import { registerParticipationRoutes } from "./http/routes/participation.ts";
 import { ProfileUpdate } from "../../packages/application/participation/profile-update.ts";
 import { registerProfileRoutes } from "./http/routes/profile.ts";
-import {
-  SoopBridge,
-  SoopBridgeError,
-} from "../../packages/application/inputs/soop-bridge.ts";
+import { SoopBridge } from "../../packages/application/inputs/soop-bridge.ts";
 import { registerSoopBridgeRoutes } from "./http/routes/soop-bridge.ts";
-import {
-  ModelAccount,
-  AccountChangedError,
-} from "../../packages/application/accounts/model-account.ts";
+import { ModelAccount } from "../../packages/application/accounts/model-account.ts";
 import { registerModelAccountRoutes } from "./http/routes/model-account.ts";
 import { PlatformAccounts } from "../../packages/application/accounts/platform-accounts.ts";
 import { registerPlatformAccountRoutes } from "./http/routes/platform-accounts.ts";
@@ -22,30 +22,18 @@ import { projectReadiness } from "../../packages/application/status/readiness.ts
 import { registerInputRoutes } from "./http/routes/inputs.ts";
 import { RuntimeStatusSource } from "../../packages/infrastructure/status/runtime.ts";
 import { projectAdminStatus } from "../../packages/application/status/projection.ts";
-import {
-  BroadcastService,
-  BroadcastCommandError,
-} from "../../packages/application/broadcast/service.ts";
+import { BroadcastService } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { FixedNoticeDelivery } from "../../packages/application/participation/fixed-notice-delivery.ts";
 import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
-import {
-  PrivacyActionError,
-  profileIssues,
-} from "../../packages/privacy-profile.ts";
+import { profileIssues } from "../../packages/privacy-profile.ts";
 import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
 import { registerRightsRoutes } from "./http/routes/rights.ts";
-import { RightsActionError } from "../../packages/application/rights/service.ts";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import {
-  timingSafeEqual,
-  randomBytes,
-  createHmac,
-  randomUUID,
-} from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
@@ -53,10 +41,7 @@ import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
-import {
-  AiStartError,
-  Scheduler,
-} from "../../packages/infrastructure/reactions/scheduler.ts";
+import { Scheduler } from "../../packages/infrastructure/reactions/scheduler.ts";
 import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts";
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";
@@ -65,14 +50,7 @@ import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
 import { Supervisor } from "../../packages/supervisor.ts";
 import { createBroadcastCast } from "../../packages/infrastructure/cast/runtime.ts";
-import { PersonaError } from "../../packages/application/cast/errors.ts";
-export function equal(a: unknown, b: string) {
-  return (
-    typeof a === "string" &&
-    Buffer.byteLength(a) === Buffer.byteLength(b) &&
-    timingSafeEqual(Buffer.from(a), Buffer.from(b))
-  );
-}
+export { equal } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
 export async function createApp(
   config: Config,
   opts: {
@@ -336,144 +314,22 @@ export async function createApp(
     now: () => Date.now(),
   });
   let readerToken = opts.readerToken;
-  const youtubeCallback = new URL(config.youtube.redirectUri);
-  const chzzkCallback = new URL(config.chzzk.redirectUri);
-  const soopCallback = new URL(config.soop.redirectUri);
-  const origins = [
-    `http://127.0.0.1:${config.port}`,
-    `http://localhost:${config.port}`,
-    ...(config.network.bindHost === "0.0.0.0"
-      ? [config.network.publicBaseUrl]
-      : []),
-    `${youtubeCallback.origin}`,
-    `${chzzkCallback.origin}`,
-    `${soopCallback.origin}`,
-  ];
-  const publicOrigin =
-    config.network.bindHost === "0.0.0.0"
-      ? config.network.publicBaseUrl
-      : origins[0];
-  const isLoopback = (ip: string) =>
-    ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(ip);
-  const hosts = origins.map((v) => new URL(v).host);
-  const sessionAgeSeconds = 7 * 24 * 60 * 60;
-  const sessionCookie = "mixed_chat_admin";
-  const signSession = (value: string) =>
-    createHmac("sha256", opts.adminToken).update(value).digest("base64url");
-  const newSession = () => {
-    const payload = `${Date.now() + sessionAgeSeconds * 1000}.${randomBytes(16).toString("base64url")}`;
-    return `${payload}.${signSession(payload)}`;
-  };
-  const validSession = (cookie: string | undefined) => {
-    const value = cookie
-      ?.split(";")
-      .map((v) => v.trim())
-      .find((v) => v.startsWith(`${sessionCookie}=`))
-      ?.slice(sessionCookie.length + 1);
-    if (!value || !/^\d+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value))
-      return false;
-    const dot = value.lastIndexOf(".");
-    const payload = value.slice(0, dot);
-    const expires = Number(payload.slice(0, payload.indexOf(".")));
-    return (
-      Number.isSafeInteger(expires) &&
-      expires > Date.now() &&
-      equal(value.slice(dot + 1), signSession(payload))
-    );
-  };
   await app.register(websocket, { options: { maxPayload: 4096 } });
-  app.addHook("onRequest", async (req, reply) => {
-    reply
-      .header("Cache-Control", "no-store")
-      .header("Referrer-Policy", "no-referrer")
-      .header("X-Content-Type-Options", "nosniff")
-      .header(
-        "Content-Security-Policy",
-        "default-src 'self'; script-src 'self' https://static.sooplive.com; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://openapi.sooplive.com wss://*.sooplive.com:*; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
-      );
-    const requestPath = req.url.split("?", 1)[0];
-    const isYoutubeCallback = requestPath === "/oauth/youtube/callback";
-    const isChzzkCallback = requestPath === "/oauth/chzzk/callback";
-    const isSoopCallback = requestPath === "/oauth/soop/callback";
-    if (
-      (req.url.startsWith("/api/admin/") ||
-        (req.url.startsWith("/oauth/") &&
-          !isYoutubeCallback &&
-          !isChzzkCallback &&
-          !isSoopCallback) ||
-        ["/admin", "/"].includes(req.url)) &&
-      !isLoopback(req.ip)
-    )
-      return reply
-        .code(403)
-        .send({ error: "Administrator access is local only" });
-    const callbackHost = chzzkCallback.host;
-    const soopCallbackHost = soopCallback.host;
-    const hostAllowed =
-      hosts.includes(req.headers.host ?? "") ||
-      (isYoutubeCallback && req.headers.host === youtubeCallback.host) ||
-      (isChzzkCallback && req.headers.host === callbackHost) ||
-      (isSoopCallback && req.headers.host === soopCallbackHost);
-    if (!hostAllowed) return reply.code(403).send({ error: "Host rejected" });
-    if (
-      req.headers.origin &&
-      !origins.includes(req.headers.origin) &&
-      !(isYoutubeCallback && req.headers.origin === youtubeCallback.origin) &&
-      !(isChzzkCallback && req.headers.origin === chzzkCallback.origin) &&
-      !(isSoopCallback && req.headers.origin === soopCallback.origin)
-    )
-      return reply.code(403).send({ error: "Origin rejected" });
-    if (req.url.startsWith("/api/admin/") && req.url !== "/api/admin/login") {
-      const token = req.headers.authorization?.replace(/^Bearer /, "");
-      if (!equal(token, opts.adminToken) && !validSession(req.headers.cookie))
-        return reply.code(401).send({ error: "Administrator token required" });
-      if (
-        req.method !== "GET" &&
-        req.headers.origin &&
-        !origins.includes(req.headers.origin)
-      )
-        return reply.code(403).send({ error: "Origin rejected" });
-    }
-  });
-  app.setErrorHandler((e, req, reply) => {
-    const validation = e instanceof z.ZodError;
-    if (e instanceof PersonaError)
-      return reply.code(e.statusCode).send({
-        error: { code: e.code, message: e.message, retryable: e.retryable },
-      });
-    reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
-      error: validation
-        ? "Invalid request fields"
-        : e instanceof AiStartError ||
-            e instanceof PrivacyActionError ||
-            e instanceof RightsActionError ||
-            e instanceof BroadcastCommandError ||
-            e instanceof AccountChangedError ||
-            e instanceof SoopBridgeError
-          ? e.message
-          : req.url.startsWith("/api/admin/")
-            ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
-            : "Request failed",
-    });
-  });
+  const { origins, publicOrigin } = registerHttpAccess(
+    app,
+    {
+      port: config.port,
+      network: config.network,
+      redirects: {
+        youtube: config.youtube.redirectUri,
+        chzzk: config.chzzk.redirectUri,
+        soop: config.soop.redirectUri,
+      },
+    },
+    new AdministratorSessions(opts.adminToken),
+  );
+  registerHttpErrors(app);
   app.get("/health", async () => ({ ok: true }));
-  app.post("/api/admin/login", async (req, reply) => {
-    const body = z.object({ token: z.string() }).parse(req.body);
-    if (!equal(body.token, opts.adminToken))
-      return reply.code(401).send({ error: "Invalid administrator token" });
-    reply.header(
-      "Set-Cookie",
-      `${sessionCookie}=${newSession()}; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=${sessionAgeSeconds}`,
-    );
-    return { ok: true };
-  });
-  app.post("/api/admin/logout", async (_req, reply) => {
-    reply.header(
-      "Set-Cookie",
-      `${sessionCookie}=; HttpOnly; SameSite=Strict; Path=/api/admin; Max-Age=0`,
-    );
-    return { ok: true };
-  });
 
   if (opts.demo) {
     const { registerDemoPersonaRoutes } =
