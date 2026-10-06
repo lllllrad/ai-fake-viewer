@@ -6,7 +6,14 @@ The live profile is consent-gated chat and optional broadcast-transcript and OBS
 
 `createApp` uses the configured private SQLite database in live mode and an in-memory Store in demo mode. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI execution intent survives restart; the recovery loop waits for required inputs and authentication before resuming. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
-Jev, persistent Store and persona authoring libraries remain standalone paths. Live video and broadcast transcription use their configured sources by default. Demo uses artificial data and a mock model.
+Jev and persona authoring libraries remain standalone paths. Live video and broadcast transcription use their configured sources by default. Demo uses artificial data and a mock model.
+
+Broadcast control now belongs to [BroadcastService](../../packages/application/broadcast/service.ts),
+with [ports](../../packages/application/broadcast/ports.ts) and thin
+[HTTP routes](../../apps/server/http/routes/broadcast.ts). It distinguishes AI stop,
+all-input stop, broadcast end and process shutdown. Superseding stop/end commands
+cancel a delayed new-broadcast action. The root temporarily adapts the existing
+input, scheduler and storage modules until their replacements are complete.
 
 ## Withdrawal and anonymous chat summaries
 
@@ -22,7 +29,7 @@ Jev, persistent Store and persona authoring libraries remain standalone paths. L
 flowchart TD
   A[Official receiver] --> B[Exact command and current consent check]
   B -->|Not permitted| C[Discard ordinary body]
-  B -->|Current ACTIVE generation| D[Session memory]
+  B -->|Current ACTIVE generation| D[Broadcast database]
   D --> E[Filtered reader and overlay]
   D --> F[Fixed anonymous categories]
   D --> G[Persona selection and context]
@@ -43,7 +50,7 @@ The configured audio source is transcribed by Groq; recent transcript text can e
 
 ### 2. Video capture and masking
 
-Disabled live because screen chat cannot be reliably consent-filtered. No frame upload, preview-confirmation gate or implicit image fallback. Synthetic demo capture remains available.
+Configured OBS Program frames are available in live mode. Continuous mode supplies fresh visual evidence; on-request mode adds a frame after a supported inspection decision. Frames remain bounded in memory and are invalidated on context reset. There is no mask-confirmation or preview-acknowledgement gate.
 
 ### 3. Event selection and scheduler
 
@@ -64,7 +71,7 @@ Legacy utility only. Enabling it blocks live readiness rather than transmitting 
 
 ### 5. Answer generation and inspection
 
-Both adapters check profile/model/revision, explicit video/audio permission and freshness/content of transcript evidence and current permission for every input message during preparation and immediately before the Responses API request. Only API-key mode performs token counting, with a permission check before that request too; token counting and inference use the configured endpoint. Sign in with ChatGPT uses its supported public Responses API endpoint without the API-key token-counting preflight. Neither mode silently falls back to another region/provider. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. Image inspection requires enabled video and current frames.
+Both adapters check profile/model/revision, configured input availability and freshness/content of transcript evidence and current permission for every input message during preparation and immediately before the Responses API request. Only API-key mode performs token counting, with a permission check before that request too; token counting and inference use the configured endpoint. Sign in with ChatGPT uses its supported public Responses API endpoint without the API-key token-counting preflight. Neither mode silently falls back to another region/provider. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. Image inspection requires enabled video and current frames.
 
 ### 6. AI draft review (default enabled)
 
@@ -72,11 +79,11 @@ The same approved model may reject or lightly edit a proposed response; it is no
 
 ### 7. Human review and local publication
 
-Optional manual approval adds an expiring queue. Stopping, withdrawal, removed evidence or stale generation prevents publication. Approved AI messages enter only the local memory stream and its reader/overlay. There is no AI native-platform sender.
+Optional manual approval adds an expiring queue. Stopping, withdrawal, removed evidence or stale generation prevents publication. Approved AI messages enter only the local broadcast conversation and its reader/overlay. There is no AI native-platform sender.
 
 ## Prompt and tool inventory
 
-Live response/review prompts live under `prompts/`; model serialization is in `packages/model.ts`, consent in `packages/participation.ts`, projection/summary/deletion in `packages/storage.ts`, and authorization wiring in `apps/server/app.ts`. The model receives no tools or rights-queue data. For SOOP, the connected admin SDK automatically sends server-issued fixed notices after unconsented chat and at each consent stage, with pre-send account/global limits and matching broadcaster MESSAGE confirmation. YouTube and CHZZK run their fixed-notice senders on the server while receivers are active; every notice part requires a successful platform response. AI replies never use those senders. Fixed platform guidance is rendered from the reviewed public profile, never generated by AI or interpolated with viewer text/nicknames.
+Live response/review prompts live under `prompts/`; model serialization is in `packages/model.ts`, consent in `packages/participation.ts`, projection/summary/deletion in `packages/storage.ts`, and authorization wiring in `apps/server/app.ts`. The model receives no tools or rights-queue data. For SOOP, the connected admin SDK automatically sends server-issued fixed notices after unconsented chat when guidance is needed, with pre-send account/global limits and matching broadcaster MESSAGE confirmation. YouTube and CHZZK run their fixed-notice senders on the server while receivers are active; the single notice requires a confirmed platform response. AI replies never use those senders. Fixed platform guidance is rendered from the reviewed public profile, never generated by AI or interpolated with viewer text/nicknames.
 
 ## Fast improvement workflow
 

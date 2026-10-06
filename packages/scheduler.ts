@@ -118,7 +118,7 @@ export class Scheduler {
     const missing = this.readyCheck?.() ?? [];
     if (missing.length)
       throw new AiStartError(
-        "AI is unavailable until all required inputs are ready: " +
+        "AI 시작에 필요한 필수 입력을 확인해 주세요: " +
           missing.join(", ") +
           ".",
       );

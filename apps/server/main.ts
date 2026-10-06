@@ -11,27 +11,26 @@ try {
     config.database = "data/demo.sqlite";
     config.ai.visualMode = "continuous";
   }
-  const { app, store, supervisor, capture, transcriber, scheduler } =
-    await createApp(config, {
-      startInputs: false,
-      demo,
-      adminToken: process.env.ADMIN_TOKEN ?? "",
-      readerToken: process.env.READER_TOKEN ?? "",
-      encryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
-      persistReaderToken: (token) => {
-        const text = readFileSync(".env", "utf8");
-        const lines = text
-          .split("\n")
-          .filter((line) => !line.startsWith("READER_TOKEN="));
-        writeFileSync(
-          ".env.tmp",
-          lines.join("\n") + "\nREADER_TOKEN=" + token + "\n",
-          { mode: 0o600 },
-        );
-        renameSync(".env.tmp", ".env");
-        process.env.READER_TOKEN = token;
-      },
-    });
+  const { app, store, broadcast, scheduler } = await createApp(config, {
+    startInputs: false,
+    demo,
+    adminToken: process.env.ADMIN_TOKEN ?? "",
+    readerToken: process.env.READER_TOKEN ?? "",
+    encryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
+    persistReaderToken: (token) => {
+      const text = readFileSync(".env", "utf8");
+      const lines = text
+        .split("\n")
+        .filter((line) => !line.startsWith("READER_TOKEN="));
+      writeFileSync(
+        ".env.tmp",
+        lines.join("\n") + "\nREADER_TOKEN=" + token + "\n",
+        { mode: 0o600 },
+      );
+      renameSync(".env.tmp", ".env");
+      process.env.READER_TOKEN = token;
+    },
+  });
   scheduler.onDiagnostic = (entry) =>
     console.log(JSON.stringify({ type: "ai_diagnostic", ...entry }));
   await app
@@ -41,9 +40,7 @@ try {
       throw error;
     });
   if (!store.closed()) {
-    supervisor.start();
-    capture.start();
-    transcriber.start();
+    broadcast.startInputs();
   }
   console.log(
     `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — reviewed privacy profile and viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,

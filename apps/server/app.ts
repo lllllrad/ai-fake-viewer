@@ -1,3 +1,8 @@
+import {
+  BroadcastService,
+  BroadcastCommandError,
+} from "../../packages/application/broadcast/service.ts";
+import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
 import { apiIssues } from "../../packages/api-health.ts";
 import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
@@ -356,13 +361,59 @@ export async function createApp(
     ];
     return { ready: checks.every((c) => c.ready || c.optional), checks };
   };
+  const broadcast = new BroadcastService({
+    repository: {
+      closed: () => store.closed(),
+      aiRequested: () => store.aiDesiredRunning(),
+      end: () => store.closeSession(),
+      createNext: () => store.newSession(),
+      erase: () => store.deleteAll(),
+      disclose: () => {
+        store.reveal();
+      },
+    },
+    ai: {
+      running: () => scheduler.state === "running",
+      start: () => scheduler.start(),
+      stop: (reason, preserve) => scheduler.stop(reason, preserve),
+      waitForRecovery: () => {
+        scheduler.state = "waiting_restart_inputs";
+        scheduler.phase = "waiting_restart_inputs";
+      },
+    },
+    cast: {
+      disarm: (reason) => {
+        personas.stopActive(reason);
+      },
+      cancelJobs: () => personas.cancelAll(),
+    },
+    inputs: {
+      start: () => {
+        capture.start();
+        transcriber.start();
+        if (opts.demo || receiverConfigured()) supervisor.start();
+      },
+      prepareForAi: () => {
+        if (opts.demo) return;
+        if (["stopped", "config_required"].includes(capture.state))
+          capture.start();
+        if (
+          ["stopped", "disabled", "config_required"].includes(transcriber.state)
+        )
+          transcriber.start();
+        if (receiverConfigured()) supervisor.start();
+      },
+      stopScreen: () => capture.stop(),
+      stopSpeech: () => transcriber.stop(),
+      stopChat: () => supervisor.stop(),
+    },
+  });
   supervisor.onBroadcastEnded = () => {
-    scheduler.stop("broadcast_ended");
-    personas.stopActive("broadcast_ended");
-    capture.stop();
-    transcriber.stop();
-    void supervisor.stop();
-    store.closeSession();
+    void broadcast.endBroadcast().catch(() => {
+      console.error(
+        "Broadcast ended; an input adapter failed to stop cleanly.",
+      );
+    });
   };
   let soopAuthorizationPendingUntil = 0;
   let readerToken = opts.readerToken;
@@ -475,7 +526,9 @@ export async function createApp(
     reply.code(validation ? 400 : ((e as any).statusCode ?? 400)).send({
       error: validation
         ? "Invalid request fields"
-        : e instanceof AiStartError || e instanceof PrivacyActionError
+        : e instanceof AiStartError ||
+            e instanceof PrivacyActionError ||
+            e instanceof BroadcastCommandError
           ? e.message
           : req.url.startsWith("/api/admin/")
             ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
@@ -1419,47 +1472,7 @@ export async function createApp(
     capture.stop();
     return { ok: true };
   });
-  app.post("/api/admin/ai/start", async (_req, reply) => {
-    if (!opts.demo) {
-      if (["stopped", "config_required"].includes(capture.state))
-        capture.start();
-      if (
-        ["stopped", "disabled", "config_required"].includes(transcriber.state)
-      )
-        transcriber.start();
-      if (receiverConfigured()) supervisor.start();
-      if (!readyComponents().ready)
-        return reply.code(409).send({
-          error: "필수 입력을 모두 준비한 뒤 AI를 시작하세요.",
-          readiness: readyComponents(),
-        });
-    }
-    scheduler.start();
-    return { ok: true, started: true, readiness: readyComponents() };
-  });
-  app.post("/api/admin/pipeline/start", async () => {
-    if (store.closed()) throw Error("Session closed");
-    capture.start();
-    transcriber.start();
-    if (receiverConfigured()) supervisor.start();
-    return { ok: true, readiness: readyComponents() };
-  });
-  app.post("/api/admin/pipeline/stop", async () => {
-    scheduler.stop();
-    personas.stopActive("operator_stop");
-    capture.stop();
-    transcriber.stop();
-    await supervisor.stop();
-    return { ok: true };
-  });
-  app.post("/api/admin/ai/stop", async () => {
-    scheduler.stop();
-    personas.stopActive("operator_stop");
-    capture.stop();
-    transcriber.stop();
-    await supervisor.stop();
-    return { ok: true };
-  });
+  registerBroadcastRoutes(app, broadcast, readyComponents);
   app.post("/api/admin/chat-summary/clear", async () => ({
     summary: store.clearChatSummary(),
   }));
@@ -1477,38 +1490,6 @@ export async function createApp(
       .uuid()
       .parse((req.params as any).id);
     store.hide(id);
-    return { ok: true };
-  });
-  app.post("/api/admin/reveal", async () => {
-    scheduler.stop();
-    personas.stopActive("identity_revealed");
-    store.reveal();
-    return { ok: true };
-  });
-  app.post("/api/admin/session/close", async () => {
-    scheduler.stop();
-    capture.stop();
-    await supervisor.stop();
-    store.closeSession();
-    transcriber.stop();
-    return { ok: true };
-  });
-  app.post("/api/admin/session/new", async () => {
-    scheduler.stop();
-    await supervisor.stop();
-    transcriber.stop();
-    store.newSession();
-    supervisor.start();
-    transcriber.start();
-    return { ok: true };
-  });
-  app.post("/api/admin/data/delete", async () => {
-    scheduler.stop();
-    await supervisor.stop();
-    personas.cancelAll();
-    store.deleteAll();
-    capture.stop();
-    transcriber.stop();
     return { ok: true };
   });
   app.post("/api/admin/audio/start", async () => {
@@ -1907,38 +1888,24 @@ export async function createApp(
   app.addHook("onClose", async () => {
     clearInterval(retention);
     clearInterval(restartRecovery);
-    scheduler.stop("server_shutdown", true);
-    await supervisor.stop();
-    capture.stop();
-    transcriber.stop();
-    for (const s of sockets) s.close();
-    flushRights();
-    store.close();
-    rights.close();
-    withdrawalTasks.clear();
-    pendingRights.clear();
-  });
-  if (opts.startInputs !== false && !store.closed()) {
-    supervisor.start();
-    capture.start();
-    transcriber.start();
-  }
-  const resumeAiIfRequested = () => {
-    if (store.closed() || !store.aiDesiredRunning()) return false;
-    if (scheduler.state === "running") return true;
     try {
-      scheduler.start();
-      return true;
-    } catch {
-      scheduler.state = "waiting_restart_inputs";
-      scheduler.phase = "waiting_restart_inputs";
-      return false;
+      await broadcast.shutdown();
+    } finally {
+      for (const s of sockets) s.close();
+      flushRights();
+      store.close();
+      rights.close();
+      withdrawalTasks.clear();
+      pendingRights.clear();
     }
-  };
+  });
+  if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
+  const resumeAiIfRequested = () => broadcast.recoverAi();
   const restartRecovery = setInterval(resumeAiIfRequested, 1000);
   restartRecovery.unref();
   return {
     app,
+    broadcast,
     store,
     capture,
     scheduler,

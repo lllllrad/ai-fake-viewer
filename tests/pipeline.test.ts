@@ -38,26 +38,27 @@ test("broadcast end turns off AI and clears its restart intent", async () => {
   }
 });
 
-test("global AI toggle arms the live persona and reveal disarms it with persisted status", async () => {
+test("global AI toggle arms the live persona and reveal disarms it with persisted status", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "pipeline-controls-"));
-  const { app, store, scheduler, personas } = await createApp(
-    configSchema.parse({
-      database: ":memory:",
-      privacy: { rightsDatabase: ":memory:" },
-      ai: { visualMode: "on_request" },
-    }),
-    {
-      demo: true,
-      startInputs: false,
-      adminToken: "a".repeat(64),
-      readerToken: "r".repeat(64),
-      encryptionKey: "e".repeat(64),
-      chatgptTokenPath: join(directory, "chatgpt.tokens"),
-      youtubeTokenPath: join(directory, "youtube.tokens"),
-      chzzkTokenPath: join(directory, "chzzk.tokens"),
-      soopTokenPath: join(directory, "soop.tokens"),
-    },
-  );
+  const { app, store, scheduler, personas, capture, transcriber, supervisor } =
+    await createApp(
+      configSchema.parse({
+        database: ":memory:",
+        privacy: { rightsDatabase: ":memory:" },
+        ai: { visualMode: "on_request" },
+      }),
+      {
+        demo: true,
+        startInputs: false,
+        adminToken: "a".repeat(64),
+        readerToken: "r".repeat(64),
+        encryptionKey: "e".repeat(64),
+        chatgptTokenPath: join(directory, "chatgpt.tokens"),
+        youtubeTokenPath: join(directory, "youtube.tokens"),
+        chzzkTokenPath: join(directory, "chzzk.tokens"),
+        soopTokenPath: join(directory, "soop.tokens"),
+      },
+    );
   const headers = {
     host: "127.0.0.1:3210",
     authorization: `Bearer ${"a".repeat(64)}`,
@@ -85,6 +86,26 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
     assert.equal(response.statusCode, 200);
     assert.equal(store.personaRuntime()?.armed, true);
     assert.equal(store.aiDesiredRunning(), true);
+    const videoStop = t.mock.method(capture, "stop", () => {});
+    const audioStop = t.mock.method(transcriber, "stop", () => {});
+    const chatStop = t.mock.method(supervisor, "stop", async () => {});
+    response = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/stop",
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(store.aiDesiredRunning(), false);
+    assert.equal(store.personaRuntime()?.armed, false);
+    assert.equal(videoStop.mock.callCount(), 0);
+    assert.equal(audioStop.mock.callCount(), 0);
+    assert.equal(chatStop.mock.callCount(), 0);
+    response = await app.inject({
+      method: "POST",
+      url: "/api/admin/ai/start",
+      headers,
+    });
+    assert.equal(response.statusCode, 200);
     response = await app.inject({
       method: "POST",
       url: "/api/admin/reveal",
