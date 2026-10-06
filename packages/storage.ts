@@ -1,3 +1,4 @@
+import { SqliteCastRuntime } from "./infrastructure/cast/runtime-query.ts";
 import { SqliteReactionAttempts } from "./infrastructure/reactions/attempts-sqlite.ts";
 import type {
   BeginReactionAttempt,
@@ -36,6 +37,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  private readonly castRuntime: SqliteCastRuntime;
   readonly attempts: ReactionAttempts;
   readonly transcripts: TranscriptJournal;
   readonly rightsFollowups: SqliteFollowupQueue;
@@ -55,6 +57,7 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    this.castRuntime = new SqliteCastRuntime(this.db, () => this.sessionId);
     this.attempts = new SqliteReactionAttempts(this.db, {
       sessionId: () => this.sessionId,
       now: () => Date.now(),
@@ -974,62 +977,7 @@ export class Store extends EventEmitter {
     this.db.close();
   }
   personaRuntime() {
-    const s = this.db
-      .prepare(
-        "SELECT * FROM persona_sessions WHERE source_session=? AND state='live' ORDER BY created DESC LIMIT 1",
-      )
-      .get(this.sessionId) as any;
-    if (!s) return null;
-    const members = this.db
-      .prepare(
-        "SELECT * FROM persona_cast WHERE session_id=? AND status='present' AND muted=0 ORDER BY rowid",
-      )
-      .all(s.id) as any[];
-    return {
-      id: s.id,
-      revision: s.revision,
-      armed: !!s.armed,
-      controlEpoch: s.control_epoch,
-      configRevision: s.revision,
-      policy: JSON.parse(s.policy),
-      brief: JSON.parse(s.brief),
-      members: members.map((m) => {
-        const last = this.db
-          .prepare(
-            "SELECT MAX(m.received) at FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND a.author=? AND m.hidden=0",
-          )
-          .get(this.sessionId, `persona-${m.member_id}`) as any;
-        const recent = this.db
-          .prepare(
-            "SELECT a.author FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform='experiment' AND m.hidden=0 ORDER BY m.seq DESC LIMIT 5",
-          )
-          .all(this.sessionId) as any[];
-        let consecutive = 0;
-        for (const x of recent) {
-          if (x.author !== `persona-${m.member_id}`) break;
-          consecutive++;
-        }
-        return {
-          id: m.member_id,
-          personaId: m.persona_id,
-          versionId: m.version_id,
-          snapshot: JSON.parse(m.definition_snapshot),
-          hash: m.definition_hash,
-          displayName: m.display_name,
-          epoch: m.epoch,
-          attention: m.attention,
-          focusTags: JSON.parse(m.focus_tags),
-          guessingEligible: !!m.guessing_eligible,
-          lastPublishedAt: last.at ?? null,
-          consecutiveMessages: consecutive,
-          presence: this.db
-            .prepare(
-              "SELECT * FROM persona_presence WHERE session_id=? AND member_id=? ORDER BY interval_no",
-            )
-            .all(s.id, m.member_id) as any[],
-        };
-      }),
-    };
+    return this.castRuntime.read();
   }
   personaCanPublish(
     sessionId: string,

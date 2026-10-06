@@ -352,6 +352,17 @@ attempts cannot be revived, dispatching cannot regress to candidate, and outcome
 updates cannot cross the current broadcast boundary. Atomic public message
 publication remains the separate publication repository's responsibility.
 
+The [cast runtime query](../../packages/infrastructure/cast/runtime-query.ts)
+loads the current open broadcast's active cast in five queries regardless of
+member count. Last visible speech, the leading consecutive speaker and ordered
+presence intervals are computed from batched reads. Muted and absent members
+are excluded. The [runtime contract](../../packages/contracts/cast-runtime.ts)
+validates definition snapshots, presence and the shared
+[cast configuration](../../packages/contracts/cast-configuration.ts) before
+the scheduler receives them. Invalid persisted definitions or policies fail
+the read rather than entering model context. Legacy authoring imports re-export
+the same configuration schemas; they do not own a second definition of them.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate
