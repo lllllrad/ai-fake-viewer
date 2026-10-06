@@ -1,4 +1,5 @@
 import { registerHttpAccess } from "./http/access.ts";
+import { ServerShutdown } from "./shutdown.ts";
 import { registerHttpErrors } from "./http/errors.ts";
 import {
   AdministratorSessions,
@@ -539,24 +540,24 @@ export async function createApp(
           "현재 설정에서 허용하지 않는 입력 또는 제공자입니다. 선택한 AI 서비스와 운영 프로필을 확인해 주세요.",
       });
   });
-  app.addHook("onClose", async () => {
-    cancelAuthoringJobs();
-    clearInterval(retention);
-    clearInterval(restartRecovery);
-    try {
-      await broadcast.shutdown();
-    } finally {
-      readers.closeAll();
-      followups.flush();
-      store.close();
-      rights.close();
-      followups.clear();
-    }
-  });
-  if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
   const resumeAiIfRequested = () => broadcast.recoverAi();
   const restartRecovery = setInterval(resumeAiIfRequested, 1000);
   restartRecovery.unref();
+  const shutdown = new ServerShutdown({
+    cancelTimers: () => {
+      clearInterval(retention);
+      clearInterval(restartRecovery);
+    },
+    cancelAuthoring: () => cancelAuthoringJobs(),
+    shutdownBroadcast: () => broadcast.shutdown(),
+    closeReaders: () => readers.closeAll(),
+    flushFollowups: () => followups.flush(),
+    closeBroadcastStorage: () => store.close(),
+    closeRightsStorage: () => rights.close(),
+    clearFollowups: () => followups.clear(),
+  });
+  app.addHook("onClose", () => shutdown.close());
+  if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
   return {
     app,
     broadcast,

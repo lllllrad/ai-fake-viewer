@@ -49,8 +49,13 @@ try {
   const stop = async () => {
     if (stopping) return;
     stopping = true;
-    await app.close();
-    process.exit(0);
+    try {
+      await app.close();
+      process.exit(0);
+    } catch {
+      console.error("Server shutdown finished with resource cleanup errors.");
+      process.exit(1);
+    }
   };
   process.on("SIGINT", () => void stop());
   process.on("SIGTERM", () => void stop());

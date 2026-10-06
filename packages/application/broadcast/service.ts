@@ -222,8 +222,30 @@ export class BroadcastService {
     if (this.shutdownResult) return this.shutdownResult;
     this.shuttingDown = true;
     this.commandRevision++;
-    this.dependencies.ai.stop("server_shutdown", true);
-    this.shutdownResult = this.stopInputAdapters();
+    let resolve!: () => void;
+    let reject!: (error: unknown) => void;
+    this.shutdownResult = new Promise<void>((done, failed) => {
+      resolve = done;
+      reject = failed;
+    });
+    // Own shutdown before callbacks can reenter; always stop inputs after an AI failure.
+    void this.drainShutdown().then(resolve, reject);
     return this.shutdownResult;
+  }
+
+  private async drainShutdown() {
+    const failures: unknown[] = [];
+    try {
+      this.dependencies.ai.stop("server_shutdown", true);
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await this.stopInputAdapters();
+    } catch (error) {
+      failures.push(error);
+    }
+    if (failures.length)
+      throw new AggregateError(failures, "Broadcast shutdown failed");
   }
 }

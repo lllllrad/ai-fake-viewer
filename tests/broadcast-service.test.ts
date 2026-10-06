@@ -110,6 +110,42 @@ function deferred() {
   return { promise, resolve };
 }
 
+test("shutdown owns reentrant cancellation and drains all inputs even if AI stop fails", async () => {
+  const f = fixture(),
+    chat = deferred();
+  f.service.enableAi();
+  let reentrant: Promise<void> | undefined;
+  f.dependencies.ai.stop = (reason, preserve) => {
+    assert.equal(reason, "server_shutdown");
+    assert.equal(preserve, true);
+    reentrant = f.service.shutdown();
+    throw new Error("Fixture AI stop failure");
+  };
+  f.dependencies.inputs.stopChat = () => {
+    f.events.push("chat.stop");
+    return chat.promise;
+  };
+  const closing = f.service.shutdown();
+  const rejected = assert.rejects(closing, (error: unknown) => {
+    assert(error instanceof AggregateError);
+    assert.equal(error.errors[0].message, "Fixture AI stop failure");
+    return true;
+  });
+  assert.equal(reentrant, closing);
+  assert.equal(f.service.shutdown(), closing);
+  for (const input of ["screen", "speech", "chat"])
+    assert.equal(
+      f.events.filter((event) => event === `${input}.stop`).length,
+      1,
+    );
+  assert.throws(() => f.service.startInputs(), BroadcastCommandError);
+  assert.equal(f.state.requested, true);
+  assert.equal(f.state.closed, false);
+  chat.resolve();
+  await rejected;
+  assert.equal(f.service.shutdown(), closing);
+});
+
 test("AI enable/disable controls intent without stopping input collection", () => {
   const f = fixture();
   f.service.startInputs();

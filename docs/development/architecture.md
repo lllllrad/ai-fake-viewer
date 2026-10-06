@@ -100,6 +100,16 @@ before awaiting an adapter shutdown. No delayed start, model result or notice
 acknowledgement can reopen a closed broadcast. Shutdown and end must be separately
 testable operations, with resources closed exactly once.
 
+The [server shutdown owner](../../apps/server/shutdown.ts) cancels periodic work
+and reference authoring, drains broadcast inputs, closes readers, flushes durable
+rights follow-ups, then closes both stores and clears transient follow-up state.
+Every cleanup is attempted even if an earlier one fails; failures are aggregated
+afterward. Concurrent or reentrant closes share one result and cannot close a
+resource twice. Broadcast shutdown likewise drains inputs after a generation-stop
+failure, preserves enabled intent, and never invokes broadcast end/deletion.
+The process reports a failed cleanup with a nonzero exit status and a fixed message,
+without printing adapter error payloads.
+
 The [platform task owner](../../packages/application/inputs/platform-tasks.ts)
 registers each adapter before invoking it and permits one task per platform.
 Cancellation holds that platform's slot through request draining and stopped-state
