@@ -1,4 +1,4 @@
-import type { ChatSummary } from "./chat-summary.ts";
+import type { ChatSummary } from "./domain/conversation/summary.ts";
 import { setTimeout as sleep } from "node:timers/promises";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

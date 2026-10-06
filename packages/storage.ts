@@ -1,7 +1,9 @@
+import { ConversationContext } from "./application/conversation/context-service.ts";
+import { SqliteConversationContext } from "./infrastructure/conversation/context-sqlite.ts";
 import { SqliteTransactions } from "./infrastructure/storage/transactions.ts";
 import { SqliteParticipationSnapshots } from "./infrastructure/participation/snapshots.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
-import { summarizeChat, summaryWindowMs } from "./chat-summary.ts";
+import { summaryWindowMs } from "./domain/conversation/summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID, createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -17,6 +19,7 @@ export class Store extends EventEmitter {
   db: DatabaseSync;
   private readonly transactions: SqliteTransactions;
   private readonly participationSnapshots: SqliteParticipationSnapshots;
+  private readonly conversationContext: ConversationContext;
   sessionId: string;
   readerCollisionNames = new Set<string>();
   constructor(
@@ -38,6 +41,35 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.conversationContext = new ConversationContext(
+      new SqliteConversationContext(this.db),
+      {
+        sessionId: () => this.sessionId,
+        liveParticipation: () => !!this.participation,
+        now: () => Date.now(),
+        lastSequence: () => this.lastSeq(),
+        permittedRows: (now, cutoff) =>
+          (this.snapshot().messages.filter(Boolean) as PublicMessage[])
+            .filter(
+              (message) =>
+                message.attribution !== "experiment" &&
+                message.displayTime > now - summaryWindowMs &&
+                message.seq > cutoff,
+            )
+            .map((message) => ({ actor: message.actorId, text: message.text })),
+        refreshIdentityNames: () => {
+          this.readerCollisionNames = this.collisionNameSet();
+        },
+        publishRemoval: (sequences) => {
+          for (const seq of sequences)
+            this.emit("event", this.publicEvent(seq));
+        },
+        invalidate: () => {
+          this.emit("context_invalidated");
+        },
+      },
+      this.transactions,
+    );
     if (path !== ":memory:" && process.platform !== "win32")
       chmodSync(path, 0o600);
     this.db
@@ -600,178 +632,25 @@ export class Store extends EventEmitter {
     ).map((e) => this.publicEvent(e.seq));
   }
   chatSummary(now = Date.now()) {
-    const prior = this.db
-      .prepare("SELECT cutoff FROM chat_context_summaries WHERE session=?")
-      .get(this.sessionId) as any;
-    const rows = this.db
-      .prepare(
-        `SELECT m.actor,m.text FROM messages m JOIN actors_private a ON a.id=m.actor
-      JOIN viewer_consents c ON c.session=m.session AND c.platform=m.platform AND c.channel=m.channel AND c.author=a.author
-      WHERE m.session=? AND m.hidden=0 AND m.platform<>'experiment' AND c.granted=1 AND m.received>? AND m.seq>?
-      ORDER BY m.seq DESC LIMIT 300`,
-      )
-      .all(this.sessionId, now - summaryWindowMs, prior?.cutoff ?? 0) as Array<{
-      actor: string;
-      text: string;
-    }>;
-    let summary = summarizeChat(rows);
-    if (this.participation) {
-      const current = (
-        this.snapshot().messages.filter(Boolean) as PublicMessage[]
-      ).filter(
-        (m) =>
-          m.attribution !== "experiment" &&
-          m.displayTime > now - summaryWindowMs &&
-          m.seq > (prior?.cutoff ?? 0),
-      );
-      summary = summarizeChat(
-        current.map((m) => ({ actor: m.actorId, text: m.text })),
-      );
-      const old = this.db
-        .prepare("SELECT payload FROM chat_context_summaries WHERE session=?")
-        .get(this.sessionId) as any;
-      if (old) {
-        const approved = JSON.parse(old.payload);
-        if (approved.state === "available")
-          summary = {
-            ...approved,
-            topics: [...new Set([...approved.topics, ...summary.topics])],
-            atmosphere: [
-              ...new Set([...approved.atmosphere, ...summary.atmosphere]),
-            ],
-          };
-      }
-    }
-    this.db
-      .prepare(
-        "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires",
-      )
-      .run(
-        this.sessionId,
-        JSON.stringify(summary),
-        now + summaryWindowMs,
-        prior?.cutoff ?? 0,
-      );
-    return summary;
+    return this.conversationContext.summary(now);
   }
   clearChatSummary() {
-    this.db
-      .prepare(
-        "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires,cutoff=excluded.cutoff",
-      )
-      .run(
-        this.sessionId,
-        JSON.stringify(summarizeChat([])),
-        Date.now() + summaryWindowMs,
-        this.lastSeq(),
-      );
-    this.emit("context_invalidated");
-    this.audit("chat_summary.cleared");
-    return this.chatSummary();
+    return this.conversationContext.clearSummary();
   }
   cancelChatContextAttempts() {
-    this.db
-      .prepare(
-        `UPDATE persona_reaction_attempts SET state='canceled',reason='chat_context_removed',result=NULL,model_manifest=NULL,finished_at=?
-      WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND state IN ('generating','candidate','dispatching')`,
-      )
-      .run(Date.now(), this.sessionId);
+    this.conversationContext.cancelPendingAttempts();
   }
   recordAiContext(messageId: string, sourceIds: string[]) {
-    const insert = this.db.prepare(
-      "INSERT OR IGNORE INTO ai_message_context VALUES(?,?)",
-    );
-    for (const id of sourceIds) insert.run(messageId, id);
+    this.conversationContext.recordDependencies(messageId, sourceIds);
   }
-  // Called inside the removal transaction. Include indirect AI responses so that
-  // an earlier paraphrase cannot reintroduce withdrawn text into future inputs.
-  private eraseChatContext(ids: string[], seqs: number[]) {
-    const removed = new Set(ids);
-    for (const id of removed) {
-      const derived = this.db
-        .prepare(
-          `SELECT m.id FROM messages m WHERE m.session=? AND m.platform='experiment' AND
-        (m.reply=? OR m.id IN (SELECT message_id FROM ai_message_context WHERE source_message_id=?))`,
-        )
-        .all(this.sessionId, id, id) as any[];
-      for (const row of derived) removed.add(row.id);
-    }
-    for (const id of removed) {
-      this.db
-        .prepare("UPDATE messages SET hidden=1,text='' WHERE id=?")
-        .run(id);
-      seqs.push(this.event("message.hidden", id));
-      this.db
-        .prepare(
-          "DELETE FROM ai_message_context WHERE message_id=? OR source_message_id=?",
-        )
-        .run(id, id);
-    }
-    if (this.participation) {
-      this.db.exec(
-        "DELETE FROM actors_private WHERE id NOT IN (SELECT actor FROM messages WHERE hidden=0)",
-      );
-      const remaining = new Set(
-        (this.db.prepare("SELECT id FROM actors_private").all() as any[]).map(
-          (a) => a.id,
-        ),
-      );
-      for (const event of this.db
-        .prepare(
-          "SELECT seq,payload FROM events WHERE type='identity.revealed'",
-        )
-        .all() as any[]) {
-        const identities = JSON.parse(event.payload).filter((identity: any) =>
-          remaining.has(identity.actorId),
-        );
-        this.db
-          .prepare("UPDATE events SET payload=? WHERE seq=?")
-          .run(JSON.stringify(identities), event.seq);
-      }
-      this.readerCollisionNames = this.collisionNameSet();
-    }
-    // In-flight models may have used any earlier context, not just cited IDs.
-    this.db
-      .prepare(
-        `UPDATE persona_reaction_attempts SET result=NULL,model_manifest=NULL,event_ids='[]',
-      state=CASE WHEN state IN ('generating','candidate','dispatching') THEN 'canceled' ELSE state END,
-      reason='chat_context_removed' WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?)`,
-      )
-      .run(this.sessionId);
-    this.chatSummary();
+  private eraseChatContext(ids: string[], sequences: number[]) {
+    sequences.push(...this.conversationContext.erase(ids));
   }
   hide(id: string) {
-    const seqs: number[] = [];
-    this.transaction(() => {
-      const row = this.db
-        .prepare(
-          "SELECT id FROM messages WHERE id=? AND session=? AND hidden=0",
-        )
-        .get(id, this.sessionId);
-      if (!row) return;
-      this.eraseChatContext([id], seqs);
-      this.audit("message.hidden");
-    });
-    if (seqs.length) this.emit("context_invalidated");
-    for (const seq of seqs) this.emit("event", this.publicEvent(seq));
+    this.conversationContext.hide(id);
   }
   revokeParticipant(platform: string, channel: string, author: string) {
-    const seqs: number[] = [];
-    this.transaction(() => {
-      const rows = this.db
-        .prepare(
-          "SELECT m.id FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform=? AND m.channel=? AND a.author=?",
-        )
-        .all(this.sessionId, platform, channel, author) as any[];
-      this.eraseChatContext(
-        rows.map((r) => r.id),
-        seqs,
-      );
-      this.transactions.afterCommit(() => {
-        this.emit("context_invalidated");
-        for (const seq of seqs) this.emit("event", this.publicEvent(seq));
-      });
-    });
+    this.conversationContext.revoke(platform, channel, author);
   }
   context(allowed: string[]) {
     return (this.snapshot().messages.filter(Boolean) as PublicMessage[])

@@ -143,9 +143,23 @@ not roll back committed data or prevent the remaining queued notifications.
 The [snapshot adapter](../../packages/infrastructure/participation/snapshots.ts)
 retains the existing broadcast-database record. Restoring a process still drops
 unconfirmed manual observations; rolling back a transaction preserves them.
-The legacy conversation store currently implements context erasure behind the
-participation persistence port; its remaining SQL and projections still require
-replacement.
+The [conversation context service](../../packages/application/conversation/context-service.ts)
+owns removal, summary reset and retention behind the participation persistence
+port. Its [SQLite adapter](../../packages/infrastructure/conversation/context-sqlite.ts)
+owns context queries, event writes and attempt cleanup. A
+[pure dependency traversal](../../packages/domain/conversation/dependencies.ts)
+includes transitive replies/provenance and terminates on cycles. The legacy
+conversation store still supplies the permitted-message projection and composes
+these services; its remaining SQL and projections require replacement.
+
+The [summary policy](../../packages/domain/conversation/summary.ts) classifies
+recent permitted human messages into fixed labels with a three-account threshold
+per label. Retaining an earlier approved summary revalidates its categories and
+drops arbitrary stored fields or text. Live approved categories survive withdrawal
+until broadcast end or explicit summary reset. The synthetic legacy consent path
+retains its rolling-window behavior. Summary reset commits its sequence cutoff
+and audit together before invalidating model work. Message, provenance and
+identity cleanup are scoped to the current broadcast.
 
 External-request authorization is rechecked after asynchronous preparation and
 immediately before transmission. Late provider results must pass the same current

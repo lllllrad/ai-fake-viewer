@@ -53,3 +53,44 @@ export function summarizeChat(
             : "quiet",
   };
 }
+
+/** Durable summaries may retain approved labels, never arbitrary persisted text. */
+export function retainApprovedSummary(
+  previous: unknown,
+  current: ChatSummary,
+): ChatSummary {
+  if (!previous || typeof previous !== "object") return current;
+  const value = previous as Record<string, unknown>;
+  if (
+    value.version !== 1 ||
+    value.state !== "available" ||
+    !Array.isArray(value.topics) ||
+    !Array.isArray(value.atmosphere)
+  )
+    return current;
+  const approved = (input: unknown[], rules: Array<[string, RegExp]>) =>
+    input.filter(
+      (label): label is string =>
+        typeof label === "string" &&
+        rules.some(([allowed]) => allowed === label),
+    );
+  const activity = ["unknown", "quiet", "active", "busy"].includes(
+    String(value.activity),
+  )
+    ? (value.activity as ChatSummary["activity"])
+    : "unknown";
+  return {
+    version: 1,
+    state: "available",
+    activity,
+    topics: [
+      ...new Set([...approved(value.topics, topics), ...current.topics]),
+    ],
+    atmosphere: [
+      ...new Set([
+        ...approved(value.atmosphere, atmosphere),
+        ...current.atmosphere,
+      ]),
+    ],
+  };
+}
