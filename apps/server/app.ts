@@ -1,3 +1,4 @@
+import { registerInputRoutes } from "./http/routes/inputs.ts";
 import type { AdminStatus } from "../../packages/contracts/admin-status.ts";
 import { projectAdminStatus } from "../../packages/application/status/projection.ts";
 import {
@@ -26,7 +27,6 @@ import fastifyStatic from "@fastify/static";
 import { timingSafeEqual, randomBytes, createHmac } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { Readable } from "node:stream";
 import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
 import type { PublicEvent } from "../../packages/contracts.ts";
@@ -391,6 +391,9 @@ export async function createApp(
       cancelJobs: () => personas.cancelAll(),
     },
     inputs: {
+      startScreen: () => capture.start(),
+      startSpeech: () => transcriber.start(),
+      startChat: () => supervisor.start(),
       start: () => {
         capture.start();
         transcriber.start();
@@ -1140,15 +1143,6 @@ export async function createApp(
       store.off("consent_notice", consentNotice);
     });
   });
-  app.get("/api/admin/transcripts/export", async (_req, reply) => {
-    reply
-      .type("application/x-ndjson; charset=utf-8")
-      .header(
-        "Content-Disposition",
-        'attachment; filename="transcripts.jsonl"',
-      );
-    return reply.send(Readable.from(store.exportTranscripts()));
-  });
   app.get("/api/admin/privacy", async () => {
     flushRights();
     return participationStatusSchema.parse({
@@ -1451,19 +1445,9 @@ export async function createApp(
         : "Active until server restart.",
     };
   });
-  app.get("/api/admin/preview", async (req, reply) => {
-    const f = capture.latest();
-    if (!f) return reply.code(404).send({ error: "No frame available" });
-    return reply.type("image/jpeg").send(f.bytes);
-  });
-  app.post("/api/admin/capture/start", async () => {
-    capture.start();
-    return { ok: true };
-  });
-  app.post("/api/admin/capture/stop", async () => {
-    scheduler.stop("paused_input_stale");
-    capture.stop();
-    return { ok: true };
+  registerInputRoutes(app, broadcast, {
+    preview: () => capture.latest(),
+    transcripts: () => store.exportTranscripts(),
   });
   registerBroadcastRoutes(app, broadcast, readyComponents);
   app.post("/api/admin/chat-summary/clear", async () => ({
@@ -1483,24 +1467,6 @@ export async function createApp(
       .uuid()
       .parse((req.params as any).id);
     store.hide(id);
-    return { ok: true };
-  });
-  app.post("/api/admin/audio/start", async () => {
-    if (store.closed()) throw Error("Session closed");
-    transcriber.start();
-    return { ok: true };
-  });
-  app.post("/api/admin/audio/stop", async () => {
-    transcriber.stop();
-    return { ok: true };
-  });
-  app.post("/api/admin/connectors/start", async () => {
-    if (store.closed()) throw Error("Session closed");
-    supervisor.start();
-    return { ok: true };
-  });
-  app.post("/api/admin/connectors/stop", async () => {
-    await supervisor.stop();
     return { ok: true };
   });
   const invalidateChatgptContext = () => {

@@ -1,3 +1,5 @@
+import Fastify from "fastify";
+import { registerInputRoutes } from "../apps/server/http/routes/inputs.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -66,6 +68,15 @@ function fixture() {
       },
     },
     inputs: {
+      startScreen: () => {
+        events.push("screen.start");
+      },
+      startSpeech: () => {
+        events.push("speech.start");
+      },
+      startChat: () => {
+        events.push("chat.start");
+      },
       start: () => {
         events.push("inputs.start");
       },
@@ -227,4 +238,116 @@ test("a failed durable end still stops inputs and reports failure instead of cla
   assert.equal(f.state.closed, false);
   for (const event of ["screen.stop", "speech.stop", "chat.stop"])
     assert(f.events.includes(event));
+});
+
+for (const input of ["screen", "speech", "chat"] as const) {
+  test(`${input} start obeys closed, shutdown and adapter-draining boundaries`, async () => {
+    const f = fixture(),
+      chat = deferred();
+    f.service.startInput(input);
+    assert(f.events.includes(`${input}.start`));
+    f.dependencies.inputs.stopChat = () => chat.promise;
+    const stopping = f.service.stopInput("chat");
+    assert.throws(
+      () => f.service.startInput(input),
+      (error: unknown) =>
+        error instanceof BroadcastCommandError &&
+        error.code === "inputs_stopping",
+    );
+    chat.resolve();
+    await stopping;
+    await f.service.endBroadcast();
+    assert.throws(
+      () => f.service.startInput(input),
+      (error: unknown) =>
+        error instanceof BroadcastCommandError && error.code === "closed",
+    );
+    await f.service.newBroadcast();
+    await f.service.shutdown();
+    assert.throws(
+      () => f.service.startInput(input),
+      (error: unknown) =>
+        error instanceof BroadcastCommandError &&
+        error.code === "shutting_down",
+    );
+  });
+}
+test("individual and whole-pipeline stops share a pending adapter shutdown", async () => {
+  const f = fixture(),
+    chat = deferred();
+  let calls = 0;
+  f.dependencies.inputs.stopChat = () => {
+    calls++;
+    return chat.promise;
+  };
+  const individual = f.service.stopInput("chat");
+  const all = f.service.stopInputs();
+  assert.equal(calls, 1);
+  assert.throws(() => f.service.startInputs(), BroadcastCommandError);
+  chat.resolve();
+  await Promise.all([individual, all]);
+  f.service.startInput("chat");
+  assert(f.events.includes("chat.start"));
+});
+test("an individual stop supersedes a pending new-broadcast command", async () => {
+  const f = fixture(),
+    chat = deferred();
+  f.dependencies.inputs.stopChat = () => chat.promise;
+  const creating = f.service.newBroadcast();
+  const stopping = f.service.stopInput("speech");
+  chat.resolve();
+  await stopping;
+  assert.equal(await creating, false);
+  assert.equal(f.state.broadcast, 1);
+});
+test("screen stop disables AI and cast while speech stop preserves independent AI intent", async () => {
+  const f = fixture();
+  f.service.enableAi();
+  await f.service.stopInput("speech");
+  assert.equal(f.state.requested, true);
+  await f.service.stopInput("screen");
+  assert.equal(f.state.requested, false);
+  assert(f.events.includes("cast.disarm"));
+});
+test("input HTTP routes preserve media responses and enforce broadcast command conflicts", async (t) => {
+  const f = fixture();
+  const app = Fastify();
+  t.after(() => app.close());
+  registerInputRoutes(app, f.service, {
+    preview: () => undefined,
+    transcripts: () => ['{"id":"fixture","text":"SYNTHETIC"}\n'],
+  });
+  assert.equal(
+    (await app.inject({ method: "GET", url: "/api/admin/preview" })).statusCode,
+    404,
+  );
+  const transcript = await app.inject({
+    method: "GET",
+    url: "/api/admin/transcripts/export",
+  });
+  assert.equal(transcript.statusCode, 200);
+  assert.match(
+    String(transcript.headers["content-type"]),
+    /application\/x-ndjson/,
+  );
+  assert.equal(JSON.parse(transcript.body).text, "SYNTHETIC");
+  for (const path of ["capture", "audio", "connectors"]) {
+    assert.equal(
+      (await app.inject({ method: "POST", url: `/api/admin/${path}/start` }))
+        .statusCode,
+      200,
+    );
+    assert.equal(
+      (await app.inject({ method: "POST", url: `/api/admin/${path}/stop` }))
+        .statusCode,
+      200,
+    );
+  }
+  await f.service.endBroadcast();
+  for (const path of ["capture", "audio", "connectors"])
+    assert.equal(
+      (await app.inject({ method: "POST", url: `/api/admin/${path}/start` }))
+        .statusCode,
+      409,
+    );
 });

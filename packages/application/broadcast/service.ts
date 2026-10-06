@@ -3,7 +3,7 @@ import {
   unavailableReason,
   type BroadcastConflict,
 } from "../../domain/broadcast/lifecycle.ts";
-import type { BroadcastDependencies } from "./ports.ts";
+import type { BroadcastDependencies, BroadcastInput } from "./ports.ts";
 
 export class BroadcastCommandError extends Error {
   readonly statusCode = 409;
@@ -28,6 +28,7 @@ export class BroadcastService {
   private shuttingDown = false;
   private commandRevision = 0;
   private inputStop?: Promise<void>;
+  private readonly adapterStops = new Map<BroadcastInput, Promise<void>>();
   private shutdownResult?: Promise<void>;
 
   constructor(private readonly dependencies: BroadcastDependencies) {}
@@ -36,7 +37,7 @@ export class BroadcastService {
     return {
       closed: this.dependencies.repository.closed(),
       shuttingDown: this.shuttingDown,
-      stoppingInputs: !!this.inputStop,
+      stoppingInputs: !!this.inputStop || this.adapterStops.size > 0,
     };
   }
 
@@ -63,21 +64,51 @@ export class BroadcastService {
     this.dependencies.cast.disarm(reason);
   }
 
+  startInput(input: BroadcastInput) {
+    this.assertOpen();
+    const adapters = this.dependencies.inputs;
+    if (input === "screen") adapters.startScreen();
+    else if (input === "speech") adapters.startSpeech();
+    else adapters.startChat();
+  }
+
+  stopInput(input: BroadcastInput) {
+    this.commandRevision++;
+    if (input === "screen") this.disableAi("paused_input_stale");
+    return this.stopAdapter(input);
+  }
+
+  private stopAdapter(input: BroadcastInput): Promise<void> {
+    const existing = this.adapterStops.get(input);
+    if (existing) return existing;
+    const adapters = this.dependencies.inputs;
+    let stopping: Promise<void>;
+    try {
+      stopping = Promise.resolve(
+        input === "screen"
+          ? adapters.stopScreen()
+          : input === "speech"
+            ? adapters.stopSpeech()
+            : adapters.stopChat(),
+      );
+    } catch (error) {
+      stopping = Promise.reject(error);
+    }
+    const result = stopping.finally(() => {
+      if (this.adapterStops.get(input) === result)
+        this.adapterStops.delete(input);
+    });
+    this.adapterStops.set(input, result);
+    return result;
+  }
+
   private stopInputAdapters() {
     if (this.inputStop) return this.inputStop;
-    const inputs = this.dependencies.inputs;
-    const attempt = (stop: () => void | Promise<void>) => {
-      try {
-        return Promise.resolve(stop());
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    };
-    // Invoke all stops immediately, even if another adapter throws synchronously.
+    // Join individual stops and attempt every adapter even after a synchronous failure.
     const stopping = Promise.allSettled([
-      attempt(() => inputs.stopScreen()),
-      attempt(() => inputs.stopSpeech()),
-      attempt(() => inputs.stopChat()),
+      this.stopAdapter("screen"),
+      this.stopAdapter("speech"),
+      this.stopAdapter("chat"),
     ]).then((results) => {
       const failures = results.filter(
         (r): r is PromiseRejectedResult => r.status === "rejected",

@@ -21,8 +21,13 @@ export interface CastControl {
   cancelJobs(): void;
 }
 
+export type BroadcastInput = "screen" | "speech" | "chat";
+
 /** Adapter starts are idempotent; stopping chat resolves after callbacks have drained. */
 export interface BroadcastInputs {
+  startScreen(): void;
+  startSpeech(): void;
+  startChat(): void;
   start(): void;
   prepareForAi(): void;
   stopScreen(): void;

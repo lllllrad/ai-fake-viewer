@@ -100,6 +100,15 @@ before awaiting an adapter shutdown. No delayed start, model result or notice
 acknowledgement can reopen a closed broadcast. Shutdown and end must be separately
 testable operations, with resources closed exactly once.
 
+Individual screen, speech and chat controls use the same broadcast command owner
+as whole-pipeline controls. They cannot start during a closed broadcast, process
+shutdown or an adapter shutdown still draining. Individual and whole-pipeline
+stops share pending adapter work; an individual stop supersedes a delayed new
+broadcast command. Stopping screen input disables AI and disarms the cast;
+stopping speech or chat preserves independent AI intent. The
+[input HTTP routes](../../apps/server/http/routes/inputs.ts) only map commands and
+serve the configured preview/transcript queries; they do not own lifecycle rules.
+
 ## Ingestion, consent and withdrawal
 
 1. Normalize the external event at the adapter boundary; retain original event
