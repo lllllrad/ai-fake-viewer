@@ -1,3 +1,5 @@
+import { CastExecutionControl } from "../application/cast/control.ts";
+import { SqliteCastControl } from "../infrastructure/cast/control-sqlite.ts";
 import { AutomaticCast } from "../application/cast/automatic.ts";
 import { SqliteAutomaticCast } from "../infrastructure/cast/automatic-sqlite.ts";
 import { automaticDefinitions, researchBasis } from "./automatic.ts";
@@ -63,6 +65,7 @@ const defaults = [
 ] as const;
 
 export class PersonaService {
+  private readonly execution: CastExecutionControl;
   private readonly automatic: AutomaticCast;
   private jobs = new Map<string, AbortController>();
   private auditionModel?: Model;
@@ -75,6 +78,14 @@ export class PersonaService {
   ) {
     this.auditionModel = model ? limitModelConcurrency(model, 1) : undefined;
     this.seedTemplates();
+    this.execution = new CastExecutionControl(
+      new SqliteCastControl(store.db, {
+        sessionId: () => store.sessionId,
+        closed: () => store.closed(),
+        transaction: (work) => store.transaction(work),
+      }),
+      () => Date.now(),
+    );
     this.automatic = new AutomaticCast(
       new SqliteAutomaticCast(store.db, {
         sessionId: () => store.sessionId,
@@ -228,8 +239,8 @@ export class PersonaService {
     )?.id as string | undefined;
   }
   stopActive(reason = "emergency_stop") {
-    const id = this.activeSessionId();
-    return id ? this.stop(id, reason) : null;
+    const id = this.execution.stopActive(reason);
+    return id ? this.getSession(id) : null;
   }
   createCandidates(sessionId: string, count?: number) {
     const session = this.getSession(sessionId);
@@ -1215,18 +1226,7 @@ export class PersonaService {
     return this.getSession(id);
   }
   stop(id: string, reason = "emergency_stop") {
-    const s = this.getSession(id);
-    this.db
-      .prepare(
-        "UPDATE persona_sessions SET armed=0,control_epoch=control_epoch+1,updated=? WHERE id=?",
-      )
-      .run(Date.now(), id);
-    this.db
-      .prepare(
-        "UPDATE persona_reaction_attempts SET state='canceled',reason=?,finished_at=? WHERE session_id=? AND state IN ('generating','candidate','dispatching')",
-      )
-      .run(reason, Date.now(), id);
-    this.audit(id, "ai.stop", s.revision, s.revision, reason);
+    this.execution.stop(id, reason);
     return this.getSession(id);
   }
   pause(id: string, expected: number) {
@@ -1443,15 +1443,7 @@ export class PersonaService {
       }));
   }
   arm(id: string, epoch: number) {
-    const s = this.getSession(id);
-    ensure(
-      s.state === "live" && s.control_epoch === epoch,
-      "STALE_CONTROL_EPOCH",
-    );
-    this.db
-      .prepare("UPDATE persona_sessions SET armed=1,updated=? WHERE id=?")
-      .run(Date.now(), id);
-    this.audit(id, "ai.armed", s.revision, s.revision);
+    this.execution.arm(id, epoch);
     return this.getSession(id);
   }
 }

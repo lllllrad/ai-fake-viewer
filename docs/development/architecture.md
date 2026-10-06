@@ -264,6 +264,15 @@ operator review, audition or cast approval. A storage failure leaves no partial
 cast. The legacy persona facade delegates automatic preparation and summary to
 these owners; legacy authoring and cast-control methods still require cleanup.
 
+The [cast execution control](../../packages/application/cast/control.ts) owns
+arming and stopping independently of authoring. Its
+[SQLite adapter](../../packages/infrastructure/cast/control-sqlite.ts) scopes
+commands to the current broadcast. A stop commits the disabled flag, execution
+epoch advance, cancellation of unfinished attempts and audit record together.
+Arming checks the current epoch and an open broadcast, and commits its audit in
+the same transaction. Failure cannot leave a half-applied control transition;
+re-arming never revives canceled attempts.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate
