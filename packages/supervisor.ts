@@ -91,7 +91,7 @@ export class Supervisor {
     try {
       const parsed = incomingSchema.parse(m);
       if (this.store.closed()) return;
-      this.store.ingestBatch([parsed]);
+      this.store.ingestion.ingest([parsed]);
     } catch {
       this.status(p, "invalid_event_rejected");
     }

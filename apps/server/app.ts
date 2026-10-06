@@ -134,7 +134,7 @@ export async function createApp(
   transcriber.transcripts = store.transcripts.recent();
   transcriber.requests = Number(store.checkpoint("audio:requests") ?? 0);
   transcriber.onRequest = (count) =>
-    store.ingestBatch([], { key: "audio:requests", value: String(count) });
+    store.ingestion.ingest([], { key: "audio:requests", value: String(count) });
   if (!opts.demo) {
     capture.allowProcessing = inputSessionOpen;
     transcriber.allowProcessing = inputSessionOpen;

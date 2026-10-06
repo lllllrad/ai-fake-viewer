@@ -385,9 +385,14 @@ binding, actor creation, edits, message events and connector checkpoints. It run
 inside the ingestion transaction; summary updates share that transaction and
 reader notifications wait for its outermost commit. Failed batches leave no
 messages, actor records, summary or advanced cursor. A closed broadcast admits
-neither content nor post-ingestion summary writes. Ingestion admission still
-coordinates live participation and reference consent through Store while those
-remaining coordination responsibilities are being replaced.
+neither content nor post-ingestion summary writes. The [ingestion use case](../../packages/application/conversation/ingestion.ts)
+owns validation, admission, persistence, summary refresh and post-commit effects.
+Live admission delegates exclusively to ParticipationService; local demo consent
+and notice claims belong to the
+[reference adapter](../../packages/infrastructure/participation/reference-admission.ts).
+Reference notice claims share the ingestion transaction, so rollback never leaves
+a failed batch marked as announced. Platform input adapters call the use case
+directly; Store only composes its dependencies and retains compatibility methods.
 
 [Broadcast retention](../../packages/application/broadcast/retention.ts) keeps
 active live-broadcast history regardless of its age. For eligible historical

@@ -1,8 +1,9 @@
+import type { IncomingRepository } from "../../application/conversation/ingestion.ts";
 import type { DatabaseSync } from "node:sqlite";
 import type { ValidatedIncoming } from "../../contracts/incoming.ts";
 
 /** Writes only admitted input, inside the caller's broadcast transaction. */
-export class SqliteIncomingMessages {
+export class SqliteIncomingMessages implements IncomingRepository {
   constructor(
     private readonly database: DatabaseSync,
     private readonly runtime: {

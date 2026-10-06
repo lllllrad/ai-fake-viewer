@@ -251,7 +251,7 @@ export async function runYoutube(
           options?.access,
         );
         if (signal.aborted) break;
-        store.ingestBatch(
+        store.ingestion.ingest(
           (b.items ?? [])
             .map((i: any) => {
               const m = normalizeYoutube(i, chat);
@@ -297,7 +297,7 @@ export async function runYoutube(
         try {
           for await (const b of stream) {
             if (signal.aborted) break;
-            store.ingestBatch(
+            store.ingestion.ingest(
               (b.items ?? [])
                 .map((i: any) => {
                   const m = normalizeYoutube(i, chat);

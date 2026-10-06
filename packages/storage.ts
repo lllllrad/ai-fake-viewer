@@ -1,3 +1,5 @@
+import { ConversationIngestion } from "./application/conversation/ingestion.ts";
+import { ReferenceAdmission } from "./infrastructure/participation/reference-admission.ts";
 import { SqliteIncomingMessages } from "./infrastructure/conversation/incoming-sqlite.ts";
 import { BroadcastRetention } from "./application/broadcast/retention.ts";
 import { SqliteRetention } from "./infrastructure/storage/retention-sqlite.ts";
@@ -33,18 +35,19 @@ import { SqliteParticipationSnapshots } from "./infrastructure/participation/sna
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import { summaryWindowMs } from "./domain/conversation/summary.ts";
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import {
-  incomingSchema,
   type Incoming,
   type PublicMessage,
   type PublicEvent,
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly ingestion: ConversationIngestion;
+  private readonly referenceAdmission: ReferenceAdmission;
   private readonly incomingMessages: SqliteIncomingMessages;
   readonly retention: BroadcastRetention;
   readonly lifetime: BroadcastLifetime;
@@ -113,6 +116,48 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.referenceAdmission = new ReferenceAdmission(this.db, {
+      sessionId: () => this.sessionId,
+      now: () => Date.now(),
+      erase: (ids, sequences) => this.eraseChatContext(ids, sequences),
+    });
+    this.ingestion = new ConversationIngestion(
+      this.incomingMessages,
+      this.transactions,
+      {
+        closed: () => this.closed(),
+        admit: (message) =>
+          this.participation
+            ? this.participation.handle(message)
+            : this.referenceAdmission.handle(message),
+        summary: () => {
+          this.chatSummary();
+        },
+        claimNotices: () =>
+          this.participation ? [] : this.referenceAdmission.claimNotices(),
+        refreshCollisions: () => {
+          if (!this.originsRevealed()) return false;
+          const colliding = this.collisionNameSet();
+          const fresh = [...colliding].some(
+            (name) => !this.readerCollisionNames.has(name),
+          );
+          this.readerCollisionNames = colliding;
+          return fresh;
+        },
+        invalidate: () => {
+          this.emit("context_invalidated");
+        },
+        publish: (sequence) => {
+          this.emit("event", this.publicEvent(sequence));
+        },
+        notice: (notice) => {
+          this.emit("consent_notice", notice);
+        },
+        reset: () => {
+          this.emit("reset");
+        },
+      },
+    );
     this.retention = new BroadcastRetention(
       new SqliteRetention(this.db),
       this.transactions,
@@ -270,12 +315,7 @@ export class Store extends EventEmitter {
   }
   grantConsent(platform: string, channel: string, author: string) {
     if (this.participation) throw Error("참여자의 직접 동의가 필요합니다.");
-    if (platform === "experiment") return;
-    this.db
-      .prepare(
-        "INSERT INTO viewer_consents(session,platform,channel,author,granted,updated) VALUES(?,?,?,?,1,?) ON CONFLICT(session,platform,channel,author) DO UPDATE SET granted=1,updated=excluded.updated",
-      )
-      .run(this.sessionId, platform, channel, author, Date.now());
+    this.referenceAdmission.grant(platform, channel, author);
   }
   transaction<T>(fn: () => T): T {
     return this.transactions.run(fn);
@@ -294,164 +334,12 @@ export class Store extends EventEmitter {
     return Number(r.lastInsertRowid);
   }
   ingestBatch(items: Incoming[], checkpoint?: { key: string; value: string }) {
-    const seqs: number[] = [];
-    let invalidated = false;
-    this.transaction(() => {
-      if (this.closed()) return;
-      for (const raw of items) {
-        const m = incomingSchema.parse(raw);
-        let consentEpoch = 0;
-        if (this.participation && m.platform !== "experiment") {
-          const result = this.participation.handle(m);
-          consentEpoch = result.epoch;
-          if (!result.allow) continue;
-        }
-        const command = m.text.trim().toLocaleLowerCase();
-        if (
-          m.platform !== "experiment" &&
-          (command === "!동의" || command === "!철회")
-        ) {
-          const granted = command === "!동의";
-          this.db
-            .prepare(
-              "INSERT INTO viewer_consents(session,platform,channel,author,granted,updated) VALUES(?,?,?,?,?,?) ON CONFLICT(session,platform,channel,author) DO UPDATE SET granted=excluded.granted,updated=excluded.updated",
-            )
-            .run(
-              this.sessionId,
-              m.platform,
-              m.channel,
-              m.author,
-              granted ? 1 : 0,
-              Date.now(),
-            );
-          this.db
-            .prepare(
-              "INSERT INTO consent_notice_targets(session,platform,channel,author_hash,state,last_notice) VALUES(?,?,?,?,?,NULL) ON CONFLICT(session,platform,channel,author_hash) DO UPDATE SET state=excluded.state",
-            )
-            .run(
-              this.sessionId,
-              m.platform,
-              m.channel,
-              this.viewerHash(m.platform, m.channel, m.author),
-              granted ? "consented" : "withdrawn",
-            );
-          if (!granted) {
-            const oldMessages = this.db
-              .prepare(
-                "SELECT id FROM messages WHERE session=? AND platform=? AND channel=? AND actor IN (SELECT id FROM actors_private WHERE session=? AND source=? AND author=?) ",
-              )
-              .all(
-                this.sessionId,
-                m.platform,
-                m.channel,
-                this.sessionId,
-                m.platform,
-                m.author,
-              ) as any[];
-            this.eraseChatContext(
-              oldMessages.map((old) => old.id),
-              seqs,
-            );
-            invalidated = true;
-          }
-          this.audit(
-            granted ? "viewer.consent.granted" : "viewer.consent.withdrawn",
-          );
-          continue;
-        }
-        if (
-          !this.participation &&
-          m.platform !== "experiment" &&
-          !(
-            this.db
-              .prepare(
-                "SELECT granted FROM viewer_consents WHERE session=? AND platform=? AND channel=? AND author=?",
-              )
-              .get(this.sessionId, m.platform, m.channel, m.author) as any
-          )?.granted
-        ) {
-          this.recordConsentNoticeTarget(m);
-          continue;
-        }
-        const sequence = this.incomingMessages.write(m, consentEpoch);
-        if (sequence !== undefined) seqs.push(sequence);
-      }
-      if (checkpoint)
-        this.incomingMessages.checkpoint(checkpoint.key, checkpoint.value);
-      this.chatSummary();
-      // An enclosing transaction may still fail: publish only after its commit.
-      if (invalidated)
-        this.transactions.afterCommit(() => {
-          this.emit("context_invalidated");
-        });
-      for (const seq of seqs)
-        this.transactions.afterCommit(() => {
-          this.emit("event", this.publicEvent(seq));
-        });
-      this.transactions.afterCommit(() => this.emitConsentNoticeIfDue());
-      if (seqs.length && this.originsRevealed()) {
-        const colliding = this.collisionNameSet();
-        const fresh = [...colliding].some(
-          (name) => !this.readerCollisionNames.has(name),
-        );
-        this.readerCollisionNames = colliding;
-        if (fresh)
-          this.transactions.afterCommit(() => {
-            this.emit("reset");
-          });
-      }
-    });
-    return seqs;
-  }
-  private viewerHash(platform: string, channel: string, author: string) {
-    return createHash("sha256")
-      .update(`${platform}\0${channel}\0${author}`)
-      .digest("hex");
-  }
-  private recordConsentNoticeTarget(m: Incoming) {
-    const authorHash = this.viewerHash(m.platform, m.channel, m.author);
-    this.db
-      .prepare(
-        "INSERT INTO consent_notice_targets(session,platform,channel,author_hash,state,last_notice) VALUES(?,?,?,?, 'pending',NULL) ON CONFLICT(session,platform,channel,author_hash) DO NOTHING",
-      )
-      .run(this.sessionId, m.platform, m.channel, authorHash);
-  }
-  private emitConsentNoticeIfDue(now = Date.now()) {
-    const due = this.db
-      .prepare(
-        "SELECT platform,channel FROM consent_notice_targets WHERE session=? AND state='pending' GROUP BY platform,channel",
-      )
-      .all(this.sessionId) as any[];
-    for (const target of due) {
-      const state = this.db
-        .prepare(
-          "SELECT last_notice FROM consent_notice_state WHERE session=? AND platform=? AND channel=?",
-        )
-        .get(this.sessionId, target.platform, target.channel) as any;
-      if (state && now - state.last_notice < 30000) continue;
-      this.db
-        .prepare(
-          "INSERT INTO consent_notice_state(session,platform,channel,last_notice) VALUES(?,?,?,?) ON CONFLICT(session,platform,channel) DO UPDATE SET last_notice=excluded.last_notice",
-        )
-        .run(this.sessionId, target.platform, target.channel, now);
-      this.db
-        .prepare(
-          "UPDATE consent_notice_targets SET last_notice=? WHERE session=? AND platform=? AND channel=? AND state='pending'",
-        )
-        .run(now, this.sessionId, target.platform, target.channel);
-      this.emit("consent_notice", {
-        platform: target.platform,
-        channel: target.channel,
-        occurredAt: now,
-      });
-    }
+    return this.ingestion.ingest(items, checkpoint);
   }
   pendingConsentNotice(platform: string, channel: string) {
-    return !!this.db
-      .prepare(
-        "SELECT 1 FROM consent_notice_targets WHERE session=? AND platform=? AND channel=? AND state='pending' LIMIT 1",
-      )
-      .get(this.sessionId, platform, channel);
+    return (
+      !this.participation && this.referenceAdmission.pending(platform, channel)
+    );
   }
   publicMessage(id: string): PublicMessage | null {
     return this.conversationProjection.message(id);
