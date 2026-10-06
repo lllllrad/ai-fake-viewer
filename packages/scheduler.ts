@@ -1,3 +1,4 @@
+import { ReactionSchedule } from "./application/reactions/scheduling.ts";
 import { generateReviewedDraft } from "./application/reactions/draft-review.ts";
 import { callMeteredModel } from "./application/reactions/model-call.ts";
 import {
@@ -56,8 +57,21 @@ export class Scheduler {
   };
   private transientFailures = 0;
   controller?: AbortController;
-  timer?: NodeJS.Timeout;
-  dispatchTimer?: NodeJS.Timeout;
+  private readonly scheduling = new ReactionSchedule<NodeJS.Timeout>(
+    {
+      repeat: (callback, milliseconds) => setInterval(callback, milliseconds),
+      cancelRepeat: (handle) => clearInterval(handle),
+      delay: (callback, milliseconds) => setTimeout(callback, milliseconds),
+      cancelDelay: (handle) => clearTimeout(handle),
+    },
+    () => this.schedulerFailed(),
+  );
+  get timer() {
+    return this.scheduling.pollHandle;
+  }
+  get dispatchTimer() {
+    return this.scheduling.dispatchHandle;
+  }
   generation = 0;
   busy = false;
   lastAttempt = 0;
@@ -112,8 +126,7 @@ export class Scheduler {
   invalidateChatContext() {
     this.generation++;
     this.controller?.abort();
-    clearTimeout(this.dispatchTimer);
-    this.dispatchTimer = undefined;
+    this.scheduling.cancelDispatch();
     for (const input of [this.activeInput, this.pending?.input]) {
       if (!input) continue;
       input.messages = [];
@@ -156,16 +169,13 @@ export class Scheduler {
     this.state = "running";
     this.phase = "waiting_for_input";
     this.store.setAiDesiredRunning(true);
-    this.timer = setInterval(() => void this.tick(), 1000);
+    this.scheduling.start(() => void this.tick(), 1000);
     void this.tick();
   }
   stop(state = "stopped", preserveDesired = false) {
     this.generation++;
     this.controller?.abort();
-    clearInterval(this.timer);
-    clearTimeout(this.dispatchTimer);
-    this.dispatchTimer = undefined;
-    this.timer = undefined;
+    this.scheduling.stop();
     this.pending = undefined;
     this.lastAttempt = 0;
     this.state = state;
@@ -184,20 +194,23 @@ export class Scheduler {
     try {
       await this.tickOnce(now);
     } catch {
-      this.rejects++;
-      this.lastIssue = {
-        code: "scheduler_error",
-        message: "AI 생성 준비 중 오류가 발생해 중지했습니다.",
-        at: Date.now(),
-        continuing: false,
-      };
-      this.activeInput = undefined;
-      this.busy = false;
-      try {
-        this.stop("scheduler_error");
-      } catch {
-        /* The timer and local gate are already stopped. */
-      }
+      this.schedulerFailed();
+    }
+  }
+  private schedulerFailed() {
+    this.rejects++;
+    this.lastIssue = {
+      code: "scheduler_error",
+      message: "AI 생성 준비 또는 표시 중 오류가 발생해 중지했습니다.",
+      at: Date.now(),
+      continuing: false,
+    };
+    this.activeInput = undefined;
+    this.busy = false;
+    try {
+      this.stop("scheduler_error");
+    } catch {
+      /* The timer and local gate are already stopped. */
     }
   }
   private async tickOnce(now: number) {
@@ -554,7 +567,7 @@ export class Scheduler {
         const wait = Math.max(0, (this.pending?.notBefore ?? 0) - Date.now());
         if (wait) {
           this.phase = "delaying_publication";
-          this.dispatchTimer = setTimeout(() => this.approve(), wait);
+          this.scheduling.defer(() => this.approve(), wait);
         } else this.approve();
       }
     } catch (error) {
@@ -656,8 +669,7 @@ export class Scheduler {
     });
     if (problem) {
       this.pending = undefined;
-      clearTimeout(this.dispatchTimer);
-      this.dispatchTimer = undefined;
+      this.scheduling.cancelDispatch();
       this.trace("publication_discarded", { reason: problem });
       if (p.attemptId)
         this.store.attempts.finish(p.attemptId, "expired", problem);
@@ -665,14 +677,11 @@ export class Scheduler {
       return;
     }
     if (p.notBefore && p.notBefore > Date.now()) {
-      clearTimeout(this.dispatchTimer);
-      this.dispatchTimer = setTimeout(
-        () => this.approve(),
-        p.notBefore - Date.now(),
-      );
+      this.scheduling.defer(() => this.approve(), p.notBefore - Date.now());
       this.phase = "delaying_publication";
       return;
     }
+    this.scheduling.cancelDispatch();
     this.pending = undefined;
     const d = p.decision;
     const now = Date.now();
@@ -752,8 +761,7 @@ export class Scheduler {
     this.speechTimes.push(now);
   }
   reject() {
-    clearTimeout(this.dispatchTimer);
-    this.dispatchTimer = undefined;
+    this.scheduling.cancelDispatch();
     if (this.pending?.attemptId)
       this.store.attempts.finish(
         this.pending.attemptId,

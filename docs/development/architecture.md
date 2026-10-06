@@ -375,6 +375,15 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [reaction schedule](../../packages/application/reactions/scheduling.ts)
+owns polling and delayed-publication timers through an injected clock. Canceling,
+restarting or replacing a timer invalidates callbacks already queued by the host;
+an old callback cannot execute or clear its replacement. Publication callbacks
+are one-shot even when invoked again. A synchronous polling or publication error
+stops both timers before reaching the scheduler's error handler. Delayed storage
+failures therefore stop AI with a diagnostic instead of escaping the timer and
+terminating the process. Manual publication also cancels its queued callback.
+
 ## Persistence and external effects
 
 The [conversation identity service](../../packages/application/conversation/identity-service.ts)

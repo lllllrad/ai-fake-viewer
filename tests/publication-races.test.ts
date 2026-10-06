@@ -119,3 +119,29 @@ test("stop between draft completion and scheduler resumption cannot restore a ca
     store.close();
   }
 });
+
+test("delayed publication storage failure stops AI without an uncaught timer exception", async (t) => {
+  const { store, scheduler } = fixture(async (input) => result(input));
+  try {
+    await scheduler.tick();
+    assert(scheduler.pending);
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+    scheduler.pending.notBefore = Date.now() + 10;
+    scheduler.pending.expires = Date.now() + 1000;
+    scheduler.approve();
+    assert(scheduler.dispatchTimer);
+    t.mock.method(store, "publishSynthetic", () => {
+      throw Error("fixture storage failure");
+    });
+    assert.doesNotThrow(() => t.mock.timers.tick(10));
+    assert.equal(scheduler.state, "scheduler_error");
+    assert.equal(scheduler.lastIssue?.code, "scheduler_error");
+    assert.equal(scheduler.dispatchTimer, undefined);
+    assert.equal(scheduler.timer, undefined);
+    assert.equal(scheduler.pending, undefined);
+    assert.equal(store.snapshot().messages.length, 1);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});
