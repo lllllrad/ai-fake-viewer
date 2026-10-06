@@ -1,3 +1,7 @@
+import type {
+  NoticeTransport,
+  NoticeTarget,
+} from "../../application/participation/notice-transport.ts";
 import { z } from "zod";
 import { limitState, type ApiFailure } from "../../api-health.ts";
 
@@ -27,11 +31,18 @@ const errorSchema = z.object({
 });
 
 /** Transport for the application's fixed notice; receipt reconnects do not revoke successful writes. */
-export class YoutubeNoticeTransport {
+export class YoutubeNoticeTransport implements NoticeTransport {
   constructor(
     private readonly account: YoutubeNoticeAccount,
     private readonly request: typeof fetch = fetch,
   ) {}
+
+  availability(target: NoticeTarget) {
+    if (!this.account.connected) return "auth_required" as const;
+    return this.account.channelId === target.broadcaster
+      ? ("ready" as const)
+      : ("channel_mismatch" as const);
+  }
 
   async send(
     notice: { chat: string; broadcaster: string; text: string },

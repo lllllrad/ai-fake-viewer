@@ -1,8 +1,5 @@
-export type ApiFailure = {
-  api: string;
-  operation: "read" | "send" | "identity";
-  state: string;
-};
+import type { ApiFailure } from "./contracts/api-failure.ts";
+export type { ApiFailure } from "./contracts/api-failure.ts";
 export class ApiQuotaError extends Error {
   constructor(public api: string) {
     super("quota_blocked");

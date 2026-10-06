@@ -1,3 +1,4 @@
+import type { NoticeTransport } from "../../application/participation/notice-transport.ts";
 import { z } from "zod";
 import { limitState, type ApiFailure } from "../../api-health.ts";
 
@@ -39,21 +40,25 @@ const blocked = (state: string) =>
   ].includes(state);
 
 /** CHZZK identity lookup and fixed notice insertion, bound to refreshed credentials. */
-export class ChzzkNoticeTransport {
+export class ChzzkNoticeTransport implements NoticeTransport {
   constructor(
     private readonly account: ChzzkNoticeAccount,
     private readonly request: typeof fetch = fetch,
   ) {}
+  availability() {
+    return this.account.token ? ("ready" as const) : ("auth_required" as const);
+  }
   async send(
     notice: { broadcaster: string; text: string },
     signal: AbortSignal,
-    eligibility: { valid(): boolean; sending(): void },
+    eligibility: { valid(): boolean; connected?(): boolean; sending(): void },
   ): Promise<ChzzkNoticeResult> {
     let credentials = this.account.token;
     const current = () =>
       !signal.aborted &&
       !!credentials &&
       this.account.token === credentials &&
+      eligibility.connected?.() !== false &&
       eligibility.valid();
     const result = (outcome: Outcome): ChzzkNoticeResult => ({
       ...outcome,

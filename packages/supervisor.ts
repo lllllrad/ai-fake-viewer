@@ -1,9 +1,11 @@
 import { PlatformTasks } from "./application/inputs/platform-tasks.ts";
 import { NoticeDeliverySession } from "./application/participation/notice-delivery-session.ts";
-import { ChzzkNotices } from "./chzzk-notices.ts";
+import {
+  ChzzkNotices,
+  YoutubeNotices,
+} from "./infrastructure/participation/platform-notices.ts";
 import { runChzzk } from "./infrastructure/platforms/chzzk-connection.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
-import { YoutubeNotices } from "./youtube-notices.ts";
 import { fork, type ChildProcess } from "node:child_process";
 import { setTimeout as sleep } from "node:timers/promises";
 import type { Store } from "./storage.ts";

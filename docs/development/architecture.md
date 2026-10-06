@@ -201,8 +201,18 @@ message rather than a fragment array or progress index; the visible prefix has n
 multipart counter. Existing conservative body budgets remain 170 UTF-16 code
 units for YouTube and 88 for CHZZK. URLs and required text are never truncated.
 YouTube can reserve another attempt after pausing before insertion, while
-confirmed delivery completes the job immediately. Remaining provider loops and
-sender coordination still require reconstruction.
+confirmed delivery completes the job immediately.
+
+The [notice sender application service](../../packages/application/participation/notice-sender.ts)
+owns pending jobs, single-flight execution, account readiness, delivery confirmation
+and provider retry deadlines for both platforms. It depends on a small
+[transport port](../../packages/application/participation/notice-transport.ts), not
+HTTP clients or credential classes. It revalidates ownership before applying
+transport results and ignores late exceptions after reset. The
+[infrastructure composition](../../packages/infrastructure/participation/platform-notices.ts)
+provides transport, clock and identifiers; the old flat notice modules only
+re-export these constructors for reference callers. Remaining provider receive
+loops still require reconstruction.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
