@@ -1,3 +1,9 @@
+import { SqliteReactionAttempts } from "./infrastructure/reactions/attempts-sqlite.ts";
+import type {
+  BeginReactionAttempt,
+  AttemptOutcome,
+  ReactionAttempts,
+} from "./application/reactions/attempts.ts";
 import { TranscriptJournal } from "./application/inputs/transcript-journal.ts";
 import { SqliteTranscripts } from "./infrastructure/inputs/transcripts-sqlite.ts";
 import type { Transcript } from "./contracts/transcript.ts";
@@ -30,6 +36,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly attempts: ReactionAttempts;
   readonly transcripts: TranscriptJournal;
   readonly rightsFollowups: SqliteFollowupQueue;
   private readonly transactions: SqliteTransactions;
@@ -48,6 +55,10 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    this.attempts = new SqliteReactionAttempts(this.db, {
+      sessionId: () => this.sessionId,
+      now: () => Date.now(),
+    });
     this.transcripts = new TranscriptJournal(new SqliteTranscripts(this.db), {
       sessionId: () => this.sessionId,
       closed: () => this.closed(),
@@ -1189,67 +1200,17 @@ export class Store extends EventEmitter {
       return false;
     }
   }
-  beginPersonaAttempt(input: {
-    id: string;
-    sessionId: string;
-    memberId: string;
-    eventIds: string[];
-    cutoff: number;
-    contextKey?: string;
-    sessionEpoch: number;
-    memberEpoch: number;
-    definitionHash: string;
-    configRevision: number;
-  }) {
-    return (
-      this.db
-        .prepare(
-          "INSERT INTO persona_reaction_attempts(id,session_id,member_id,event_ids,context_cutoff,session_epoch,member_epoch,definition_hash,config_revision,state,started_at,context_key) VALUES(?,?,?,?,?,?,?,?,?,'generating',?,?) ON CONFLICT(session_id,member_id,context_key) DO NOTHING",
-        )
-        .run(
-          input.id,
-          input.sessionId,
-          input.memberId,
-          JSON.stringify(input.eventIds),
-          input.cutoff,
-          input.sessionEpoch,
-          input.memberEpoch,
-          input.definitionHash,
-          input.configRevision,
-          Date.now(),
-          input.contextKey ??
-            createHash("sha256")
-              .update(JSON.stringify([input.cutoff, input.eventIds]))
-              .digest("hex"),
-        ).changes > 0
-    );
+  beginPersonaAttempt(input: BeginReactionAttempt) {
+    return this.attempts.begin(input);
   }
   finishPersonaAttempt(
     id: string,
-    state:
-      | "skipped"
-      | "suppressed"
-      | "expired"
-      | "canceled"
-      | "failed"
-      | "candidate"
-      | "published",
+    state: AttemptOutcome,
     reason: string | null,
     result: unknown = null,
     manifest: unknown = null,
   ) {
-    this.db
-      .prepare(
-        "UPDATE persona_reaction_attempts SET state=?,reason=?,result=?,model_manifest=COALESCE(?,model_manifest),finished_at=? WHERE id=? AND state NOT IN ('published','skipped','suppressed','expired','canceled','failed')",
-      )
-      .run(
-        state,
-        reason,
-        result === null ? null : JSON.stringify(result),
-        manifest === null ? null : JSON.stringify(manifest),
-        Date.now(),
-        id,
-      );
+    return this.attempts.finish(id, state, reason, result, manifest);
   }
   publishSynthetic(input: LocalPublication) {
     try {

@@ -1,3 +1,4 @@
+import { createBroadcastCast } from "../packages/infrastructure/cast/runtime.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -111,16 +112,19 @@ test("attempt context reservations are idempotent and legacy sequence-only table
   const dir = mkdtempSync(join(tmpdir(), "attempt-context-")),
     path = join(dir, "fixture.sqlite");
   let store = new Store(path);
+  createBroadcastCast(store, () => "Synthetic fixture").prepare();
+  let runtime = store.personaRuntime()!;
+  const member = runtime.members[0];
   const attempt = {
     id: "a",
-    sessionId: "s",
-    memberId: "m",
+    sessionId: runtime.id,
+    memberId: member.id,
     eventIds: ["speech-1"],
     cutoff: 0,
-    sessionEpoch: 0,
-    memberEpoch: 0,
-    definitionHash: "fixture",
-    configRevision: 0,
+    sessionEpoch: runtime.controlEpoch,
+    memberEpoch: member.epoch,
+    definitionHash: member.hash,
+    configRevision: runtime.configRevision,
   };
   try {
     assert.equal(store.beginPersonaAttempt(attempt), true);
@@ -154,10 +158,12 @@ test("attempt context reservations are idempotent and legacy sequence-only table
     );
     store.close();
     store = new Store(path);
+    runtime = store.personaRuntime()!;
     assert.equal(
       store.beginPersonaAttempt({
         ...attempt,
         id: "b",
+        sessionEpoch: runtime.controlEpoch,
         eventIds: ["speech-2"],
       }),
       true,

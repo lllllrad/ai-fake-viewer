@@ -340,6 +340,18 @@ timestamps, dimensions, bounded canonical base64 and exact configured PCM chunk
 length before events reach the input coordinators. Speech context selection
 continues to use the latest ten eligible chunks.
 
+The [reaction attempt port](../../packages/application/reactions/attempts.ts)
+separates scheduling from durable context reservation and outcome recording.
+Its [SQLite adapter](../../packages/infrastructure/reactions/attempts-sqlite.ts)
+inserts only when the current broadcast is open and the live, armed cast and
+present, unmuted member still match the captured epochs, definition hash and
+configuration revision. The eligibility check and insertion are one SQL statement;
+duplicate member/context reservations remain idempotent. Candidate promotion
+rechecks those bindings and only advances a generating attempt. Terminal
+attempts cannot be revived, dispatching cannot regress to candidate, and outcome
+updates cannot cross the current broadcast boundary. Atomic public message
+publication remains the separate publication repository's responsibility.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

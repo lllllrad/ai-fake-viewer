@@ -212,7 +212,7 @@ export class Scheduler {
     if (this.pending) {
       if (this.pending.expires <= now) {
         if (this.pending.attemptId)
-          this.store.finishPersonaAttempt(
+          this.store.attempts.finish(
             this.pending.attemptId,
             "expired",
             "candidate_expired",
@@ -366,7 +366,7 @@ export class Scheduler {
     this.activeInput = input;
     const attemptId = activeMember && personaRuntime ? randomUUID() : undefined;
     if (attemptId && activeMember && personaRuntime) {
-      const created = this.store.beginPersonaAttempt({
+      const created = this.store.attempts.begin({
         id: attemptId,
         sessionId: personaRuntime.id,
         memberId: activeMember.id,
@@ -480,7 +480,7 @@ export class Scheduler {
           this.transientFailures = 0;
         }
         if (attemptId)
-          this.store.finishPersonaAttempt(
+          this.store.attempts.finish(
             attemptId,
             "skipped",
             outcome.reason,
@@ -499,7 +499,7 @@ export class Scheduler {
       if (problem) {
         this.trace("candidate_discarded", { reason: problem });
         if (attemptId)
-          this.store.finishPersonaAttempt(attemptId, "canceled", problem);
+          this.store.attempts.finish(attemptId, "canceled", problem);
         return;
       }
       const triggerTimes = [
@@ -543,7 +543,7 @@ export class Scheduler {
           : {}),
       };
       if (attemptId)
-        this.store.finishPersonaAttempt(attemptId, "candidate", null, d, {
+        this.store.attempts.finish(attemptId, "candidate", null, d, {
           inputMessages: messages.map((m) => m.id),
           inputTranscripts: transcripts.map((t) => t.id),
           inputFrames: frames.map((f) => f.id),
@@ -559,7 +559,7 @@ export class Scheduler {
       }
     } catch (error) {
       if (attemptId && generation === this.generation)
-        this.store.finishPersonaAttempt(
+        this.store.attempts.finish(
           attemptId,
           "failed",
           error instanceof Error ? error.message : "model_error",
@@ -660,7 +660,7 @@ export class Scheduler {
       this.dispatchTimer = undefined;
       this.trace("publication_discarded", { reason: problem });
       if (p.attemptId)
-        this.store.finishPersonaAttempt(p.attemptId, "expired", problem);
+        this.store.attempts.finish(p.attemptId, "expired", problem);
       this.phase = this.state === "running" ? "waiting_for_input" : this.state;
       return;
     }
@@ -693,7 +693,7 @@ export class Scheduler {
       );
       if (!canPublish) {
         this.trace("publication_discarded", { reason: "stale_epoch_or_state" });
-        this.store.finishPersonaAttempt(
+        this.store.attempts.finish(
           p.attemptId,
           "suppressed",
           "stale_epoch_or_state",
@@ -713,7 +713,7 @@ export class Scheduler {
       });
       if (!publicMessageId) {
         this.trace("publication_discarded", { reason: "publication_failed" });
-        this.store.finishPersonaAttempt(
+        this.store.attempts.finish(
           p.attemptId,
           "suppressed",
           "publication_failed",
@@ -755,7 +755,7 @@ export class Scheduler {
     clearTimeout(this.dispatchTimer);
     this.dispatchTimer = undefined;
     if (this.pending?.attemptId)
-      this.store.finishPersonaAttempt(
+      this.store.attempts.finish(
         this.pending.attemptId,
         "suppressed",
         "operator_rejected",
