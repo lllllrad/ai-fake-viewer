@@ -1,3 +1,4 @@
+import { NoticeDeliverySession } from "./application/participation/notice-delivery-session.ts";
 import { ChzzkNotices } from "./chzzk-notices.ts";
 import { runChzzk } from "./infrastructure/platforms/chzzk-connection.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
@@ -136,18 +137,9 @@ export class Supervisor {
       (!this.store.participation ||
         this.states.youtube.state !== "privacy_blocked")
     )
-      this.launch("youtube", async (signal) => {
-        let pending: Promise<void> | undefined;
-        const timer = setInterval(() => {
-          if (!pending)
-            pending = (
-              this.youtubeNotices?.tick(signal) ?? Promise.resolve()
-            ).finally(() => {
-              pending = undefined;
-            });
-        }, 1000);
-        try {
-          await runYoutube(
+      this.launch("youtube", (signal) =>
+        this.withNotices("youtube", signal, () =>
+          runYoutube(
             this.config.youtube,
             this.store,
             signal,
@@ -163,36 +155,17 @@ export class Supervisor {
                 this.youtubeNotices?.resolve(chat, broadcaster),
               ownChannel: () => this.youtubeAuth?.channelId,
             },
-          );
-        } finally {
-          clearInterval(timer);
-          this.youtubeNotices?.reset();
-          await pending;
-        }
-      });
+          ),
+        ),
+      );
     if (
       this.config.chzzk.enabled &&
       (!this.store.participation ||
         this.states.chzzk.state !== "privacy_blocked")
     )
-      this.launch("chzzk", async (signal) => {
-        let pending: Promise<void> | undefined;
-        const timer = setInterval(() => {
-          if (!pending)
-            pending = (
-              this.chzzkNotices?.tick(signal) ?? Promise.resolve()
-            ).finally(() => {
-              pending = undefined;
-            });
-        }, 1000);
-        try {
-          await this.chzzk(signal);
-        } finally {
-          clearInterval(timer);
-          this.chzzkNotices?.reset();
-          await pending;
-        }
-      });
+      this.launch("chzzk", (signal) =>
+        this.withNotices("chzzk", signal, () => this.chzzk(signal)),
+      );
     if (
       this.config.soop.mode === "official" &&
       (!this.store.participation ||
@@ -211,6 +184,34 @@ export class Supervisor {
       else if (!this.config.soop.streamerId)
         this.status("soop", "config_required");
       else this.launch("soop", (signal) => this.soop(signal));
+    }
+  }
+  private async withNotices(
+    platform: "youtube" | "chzzk",
+    signal: AbortSignal,
+    receive: () => Promise<void>,
+  ) {
+    const sender =
+      platform === "youtube" ? this.youtubeNotices : this.chzzkNotices;
+    const delivery =
+      sender &&
+      new NoticeDeliverySession(
+        sender,
+        signal,
+        {
+          repeat: (callback, milliseconds) =>
+            setInterval(callback, milliseconds),
+          cancel: (handle: ReturnType<typeof setInterval>) =>
+            clearInterval(handle),
+        },
+        () => {
+          sender.state = "delivery_unconfirmed";
+        },
+      );
+    try {
+      await receive();
+    } finally {
+      await delivery?.stop();
     }
   }
   launch(p: string, fn: (signal: AbortSignal) => Promise<void>) {

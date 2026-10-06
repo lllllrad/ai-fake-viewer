@@ -155,7 +155,16 @@ abort, worker exit or error, removes listeners and clears its subscription timeo
 Late subscription failures cannot change a replacement connection's state or
 admit messages. Repeated connected events issue only one subscription per worker.
 Broadcaster messages and messages outside the subscribed room remain excluded.
-Notice scheduling and the remaining provider loops still require reconstruction. Profile validation is
+The [notice delivery session](../../packages/application/participation/notice-delivery-session.ts)
+owns the common YouTube/CHZZK one-second polling lifecycle. It permits only one
+outstanding tick, cancels polling and resets the sender immediately on abort,
+and drains the request before shutdown finishes. Queued callbacks and late
+failures cannot restart sending. Unexpected exceptions retire this delivery
+session and expose unconfirmed delivery; reconnect the platform to resume.
+Expected provider failures retain their existing sender-specific backoff policy.
+Remaining provider loops and notice sender internals still require reconstruction.
+
+Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.
 
