@@ -1,3 +1,5 @@
+import type { AdminStatus } from "../../packages/contracts/admin-status.ts";
+import { projectAdminStatus } from "../../packages/application/status/projection.ts";
 import {
   BroadcastService,
   BroadcastCommandError,
@@ -1247,192 +1249,194 @@ export async function createApp(
     return { ok: true };
   });
   app.post("/api/admin/privacy/videos", async (req) => rights.video(req.body));
-  app.get("/api/admin/status", async () => ({
-    demo: !!opts.demo,
-    generatedAt: Date.now(),
-    originsRevealed: store.originsRevealed(),
-    sessionId: store.sessionId,
-    closed: store.closed(),
-    broadcastEnded: Object.values(supervisor.states).some(
-      (connector) => connector.state === "ended",
-    ),
-    aiDesiredRunning: store.aiDesiredRunning(),
-    personas: personas.automaticSummary(),
-    chatSummary: store.chatSummary(),
-    privacy: {
-      memoryOnly: !!opts.demo || config.database === ":memory:",
-      ready: privacyReady(),
-      issues: profileIssues(config.privacy),
-      pendingRights: rights
-        .list()
-        .filter((r) => !["completed", "limited"].includes(r.state)).length,
-    },
-    retentionDays: config.retentionDays,
-    connectors: supervisor.states,
-    apiIssues: apiIssues({
-      youtubeRead: supervisor.states.youtube,
-      chzzkRead: supervisor.states.chzzk,
-      youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
-      chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
-      audioState: transcriber.state,
-      modelState: scheduler.state,
-      modelIssue: scheduler.lastIssue,
-    }),
-    audio: {
-      state: transcriber.state,
-      configured: !!config.audio.url,
-      credentialsReady: !!process.env.GROQ_API_KEY,
-      requests: transcriber.requests,
-      maxRequests: config.audio.maxRequests,
-      language: config.audio.language || "auto",
-      latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
-      transcriptCount: transcriber.recent().length,
-      latestText: transcriber.recent().at(-1)?.text ?? null,
-      loggedCount: store.transcriptCount(),
-      history: store.transcriptRows(),
-    },
-    capture: {
-      state: capture.state,
-      configured:
-        config.capture.backend === "rtmp"
-          ? !!config.capture.url
-          : !!config.capture.device,
-      lastFrameAt: capture.latest()?.capturedAt ?? null,
-      dimensions: capture.dimensions,
-      lastError: capture.lastError,
-      ffmpeg: config.capture.ffmpeg,
-      backend: config.capture.backend,
-      device: config.capture.backend === "rtmp" ? "" : config.capture.device,
-      lastFrameAgeMs: capture.latest()
-        ? Math.max(0, Date.now() - capture.latest()!.capturedAt)
-        : null,
-      framesInLastMinute: capture.frames.filter(
-        (f) => f.capturedAt > Date.now() - 60000,
-      ).length,
-      masks: config.capture.masks,
-    },
-    ai: {
-      state: scheduler.state,
-      manualApproval: config.ai.manualApproval,
-      pacing: config.ai.pacing,
-      contextWindowSeconds: config.ai.contextWindowSeconds,
-      busy: scheduler.busy,
-      phase: scheduler.phase,
-      lastIssue: scheduler.lastIssue,
-      diagnostics: scheduler.diagnostics,
-      reviewDraft: config.ai.reviewDraft,
-      reviewCount: scheduler.reviews,
-      input: {
-        audioChunkSeconds: config.audio.chunkSeconds,
-        audioLanguage: config.audio.language || "auto",
-        contextWindowSeconds: config.ai.contextWindowSeconds,
-        visualMode: config.ai.visualMode,
-        last: scheduler.lastInput,
-        availableTools: [],
+  app.get("/api/admin/status", async () =>
+    projectAdminStatus({
+      demo: !!opts.demo,
+      generatedAt: Date.now(),
+      originsRevealed: store.originsRevealed(),
+      sessionId: store.sessionId,
+      closed: store.closed(),
+      broadcastEnded: Object.values(supervisor.states).some(
+        (connector) => connector.state === "ended",
+      ),
+      aiDesiredRunning: store.aiDesiredRunning(),
+      personas: personas.automaticSummary(),
+      chatSummary: store.chatSummary(),
+      privacy: {
+        memoryOnly: !!opts.demo || config.database === ":memory:",
+        ready: privacyReady(),
+        issues: profileIssues(config.privacy),
+        pendingRights: rights
+          .list()
+          .filter((r) => !["completed", "limited"].includes(r.state)).length,
       },
-      pending: scheduler.pending
-        ? {
-            text: scheduler.pending.decision.text,
-            expires: scheduler.pending.expires,
-          }
-        : null,
-      gate: {
-        enabled: config.ai.gate.enabled,
-        state: opts.demo
-          ? "demo_bypass"
-          : config.ai.gate.enabled
-            ? scheduler.gate.state
-            : "disabled",
-        requests: scheduler.gate.requests,
-        maxRequests: config.ai.gate.maxRequests,
-        filtered: scheduler.gate.filtered,
-        errors: scheduler.gate.errors,
-        probability: scheduler.gate.probability,
-        suppressThreshold: config.ai.gate.threshold,
-      },
-      skips: scheduler.skips,
-      rejects: scheduler.rejects,
-      usage: store.usage(),
-      costEstimate:
-        config.ai.provider === "chatgpt_subscription" ||
-        config.ai.inputUsdPerMillion === null ||
-        config.ai.outputUsdPerMillion === null ||
-        !config.ai.priceCheckedAt
-          ? "unavailable"
-          : "configured_prices",
-      maxCalls: config.ai.maxCalls,
-      provider: config.ai.provider,
-      visualMode: config.ai.visualMode,
-      readiness: readyComponents(),
-      model: opts.demo
-        ? "mock"
-        : config.ai.provider === "chatgpt_subscription"
-          ? (chatgpt.active?.model ?? "not selected")
-          : (process.env.OPENAI_MODEL ?? "not configured"),
-    },
-    chatgpt: chatgpt.status,
-    setup: {
-      youtube: {
-        oauthConfigured: youtubeAuth.configured,
-        connected: youtubeAuth.connected,
-        channelId: youtubeAuth.channelId,
-        redirectUri: config.youtube.redirectUri,
-        noticeState: supervisor.youtubeNotices?.state ?? "disabled",
-        enabled: config.youtube.enabled,
-        consentNoticeEnabled: store.consentNoticeEnabled(
-          "youtube",
-          config.youtube.consentNoticeEnabled,
-        ),
-        credentialsConfigured: !!(
-          youtubeAuth.connected ||
-          process.env.YOUTUBE_API_KEY ||
-          process.env.YOUTUBE_ACCESS_TOKEN
-        ),
-        videoConfigured: !!config.youtube.video,
-        channelConfigured: !!config.youtube.channelId,
-      },
-      chzzk: {
-        enabled: config.chzzk.enabled,
-        tokenConfigured: !!auth.token,
-        consentNoticeEnabled: store.consentNoticeEnabled(
-          "chzzk",
-          config.chzzk.consentNoticeEnabled,
-        ),
-        credentialsConfigured: !!(
-          process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
-        ),
-        redirectUri: config.chzzk.redirectUri,
-      },
-      soop: {
-        mode: config.soop.mode,
-        consentNoticeEnabled: store.consentNoticeEnabled(
-          "soop",
-          config.soop.consentNoticeEnabled,
-        ),
-        streamerConfigured: !!config.soop.streamerId,
-        credentialsConfigured: !!(
-          process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET
-        ),
-        tokenConfigured: !!soopAuth.token,
-        redirectUri: config.soop.redirectUri,
-      },
+      retentionDays: config.retentionDays,
+      connectors: supervisor.states,
+      apiIssues: apiIssues({
+        youtubeRead: supervisor.states.youtube,
+        chzzkRead: supervisor.states.chzzk,
+        youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
+        chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
+        audioState: transcriber.state,
+        modelState: scheduler.state,
+        modelIssue: scheduler.lastIssue,
+      }),
       audio: {
-        credentialsConfigured: !!process.env.GROQ_API_KEY,
+        state: transcriber.state,
+        configured: !!config.audio.url,
+        credentialsReady: !!process.env.GROQ_API_KEY,
+        requests: transcriber.requests,
+        maxRequests: config.audio.maxRequests,
+        language: config.audio.language || "auto",
+        latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
+        transcriptCount: transcriber.recent().length,
+        latestText: transcriber.recent().at(-1)?.text ?? null,
+        loggedCount: store.transcriptCount(),
+        history: store.transcriptRows(),
+      },
+      capture: {
+        state: capture.state,
+        configured:
+          config.capture.backend === "rtmp"
+            ? !!config.capture.url
+            : !!config.capture.device,
+        lastFrameAt: capture.latest()?.capturedAt ?? null,
+        dimensions: capture.dimensions,
+        lastError: capture.lastError,
+        ffmpeg: config.capture.ffmpeg,
+        backend: config.capture.backend,
+        device: config.capture.backend === "rtmp" ? "" : config.capture.device,
+        lastFrameAgeMs: capture.latest()
+          ? Math.max(0, Date.now() - capture.latest()!.capturedAt)
+          : null,
+        framesInLastMinute: capture.frames.filter(
+          (f) => f.capturedAt > Date.now() - 60000,
+        ).length,
+        masks: config.capture.masks,
       },
       ai: {
+        state: scheduler.state,
+        manualApproval: config.ai.manualApproval,
+        pacing: config.ai.pacing,
+        contextWindowSeconds: config.ai.contextWindowSeconds,
+        busy: scheduler.busy,
+        phase: scheduler.phase,
+        lastIssue: scheduler.lastIssue,
+        diagnostics: scheduler.diagnostics,
+        reviewDraft: config.ai.reviewDraft,
+        reviewCount: scheduler.reviews,
+        input: {
+          audioChunkSeconds: config.audio.chunkSeconds,
+          audioLanguage: config.audio.language || "auto",
+          contextWindowSeconds: config.ai.contextWindowSeconds,
+          visualMode: config.ai.visualMode,
+          last: scheduler.lastInput,
+          availableTools: [],
+        },
+        pending: scheduler.pending
+          ? {
+              text: scheduler.pending.decision.text,
+              expires: scheduler.pending.expires,
+            }
+          : null,
+        gate: {
+          enabled: config.ai.gate.enabled,
+          state: opts.demo
+            ? "demo_bypass"
+            : config.ai.gate.enabled
+              ? scheduler.gate.state
+              : "disabled",
+          requests: scheduler.gate.requests,
+          maxRequests: config.ai.gate.maxRequests,
+          filtered: scheduler.gate.filtered,
+          errors: scheduler.gate.errors,
+          probability: scheduler.gate.probability,
+          suppressThreshold: config.ai.gate.threshold,
+        },
+        skips: scheduler.skips,
+        rejects: scheduler.rejects,
+        usage: store.usage(),
+        costEstimate:
+          config.ai.provider === "chatgpt_subscription" ||
+          config.ai.inputUsdPerMillion === null ||
+          config.ai.outputUsdPerMillion === null ||
+          !config.ai.priceCheckedAt
+            ? "unavailable"
+            : "configured_prices",
+        maxCalls: config.ai.maxCalls,
         provider: config.ai.provider,
-        connected:
-          config.ai.provider === "chatgpt_subscription"
-            ? !!chatgpt.active?.refreshToken
-            : !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
-        modelSelected:
-          config.ai.provider === "chatgpt_subscription"
-            ? !!chatgpt.active?.model
-            : !!process.env.OPENAI_MODEL,
+        visualMode: config.ai.visualMode,
+        readiness: readyComponents(),
+        model: opts.demo
+          ? "mock"
+          : config.ai.provider === "chatgpt_subscription"
+            ? (chatgpt.active?.model ?? "not selected")
+            : (process.env.OPENAI_MODEL ?? "not configured"),
       },
-    },
-    messages: store.readerSnapshot().messages,
-  }));
+      chatgpt: chatgpt.status,
+      setup: {
+        youtube: {
+          oauthConfigured: youtubeAuth.configured,
+          connected: youtubeAuth.connected,
+          channelId: youtubeAuth.channelId ?? null,
+          redirectUri: config.youtube.redirectUri,
+          noticeState: supervisor.youtubeNotices?.state ?? "disabled",
+          enabled: config.youtube.enabled,
+          consentNoticeEnabled: store.consentNoticeEnabled(
+            "youtube",
+            config.youtube.consentNoticeEnabled,
+          ),
+          credentialsConfigured: !!(
+            youtubeAuth.connected ||
+            process.env.YOUTUBE_API_KEY ||
+            process.env.YOUTUBE_ACCESS_TOKEN
+          ),
+          videoConfigured: !!config.youtube.video,
+          channelConfigured: !!config.youtube.channelId,
+        },
+        chzzk: {
+          enabled: config.chzzk.enabled,
+          tokenConfigured: !!auth.token,
+          consentNoticeEnabled: store.consentNoticeEnabled(
+            "chzzk",
+            config.chzzk.consentNoticeEnabled,
+          ),
+          credentialsConfigured: !!(
+            process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
+          ),
+          redirectUri: config.chzzk.redirectUri,
+        },
+        soop: {
+          mode: config.soop.mode,
+          consentNoticeEnabled: store.consentNoticeEnabled(
+            "soop",
+            config.soop.consentNoticeEnabled,
+          ),
+          streamerConfigured: !!config.soop.streamerId,
+          credentialsConfigured: !!(
+            process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET
+          ),
+          tokenConfigured: !!soopAuth.token,
+          redirectUri: config.soop.redirectUri,
+        },
+        audio: {
+          credentialsConfigured: !!process.env.GROQ_API_KEY,
+        },
+        ai: {
+          provider: config.ai.provider,
+          connected:
+            config.ai.provider === "chatgpt_subscription"
+              ? !!chatgpt.active?.refreshToken
+              : !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
+          modelSelected:
+            config.ai.provider === "chatgpt_subscription"
+              ? !!chatgpt.active?.model
+              : !!process.env.OPENAI_MODEL,
+        },
+      },
+      messages: store.readerSnapshot().messages,
+    } satisfies AdminStatus),
+  );
   app.post("/api/admin/consent-notices/:platform", async (req, reply) => {
     const platform = z
       .enum(["youtube", "chzzk", "soop"])

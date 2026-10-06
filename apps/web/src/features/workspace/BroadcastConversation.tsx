@@ -31,7 +31,7 @@ export function BroadcastConversation({
   cast: CastMember[];
   summary?: Summary;
   transcripts: Transcript[];
-  pending?: { text: string } | null;
+  pending?: { text: string | null } | null;
   closed: boolean;
   busy: boolean;
   stale: boolean;
@@ -125,20 +125,17 @@ export function BroadcastConversation({
               </p>
             ) : (
               <ol className="transcript-history">
-                {transcripts
-                  .slice(-10)
-                  .reverse()
-                  .map((entry) => (
-                    <li key={entry.id}>
-                      <time>
-                        {new Date(entry.capturedAt).toLocaleTimeString(
-                          "ko-KR",
-                          { hour: "2-digit", minute: "2-digit" },
-                        )}
-                      </time>
-                      <p>{entry.text}</p>
-                    </li>
-                  ))}
+                {transcripts.slice(0, 10).map((entry) => (
+                  <li key={entry.id}>
+                    <time>
+                      {new Date(entry.capturedAt).toLocaleTimeString("ko-KR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                    <p>{entry.text}</p>
+                  </li>
+                ))}
               </ol>
             )}
           </section>

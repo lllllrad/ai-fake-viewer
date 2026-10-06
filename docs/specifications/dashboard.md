@@ -163,8 +163,13 @@ The [status session](../../apps/web/src/features/workspace/status-session.ts)
 owns one status request and schedules its next poll after completion. Explicit
 refresh or sign-out invalidates older responses, including transports that ignore
 cancellation. Service failures retain an explicitly stale view; authentication
-failure erases it. The remaining legacy status projection and feature-specific
-payloads still require conversion to shared validated DTOs during reconstruction.
+failure erases it. The [status contract](../../packages/contracts/admin-status.ts) validates both
+server output and client input. Required missing or malformed fields make status
+unavailable; the UI does not substitute healthy defaults. Unknown fields are
+stripped at every object boundary. The [status projection](../../packages/application/status/projection.ts)
+clears closed-broadcast messages, cast, transcripts, summary and pending drafts
+without mutating its input. Transcript history is ordered newest first. Other
+feature-specific payloads still require shared DTOs during reconstruction.
 
 Browser checks must cover navigation, controls, account actions, stale/error states,
 manual candidate review, shared notice/individual consent, withdrawal and reconnect,

@@ -1,42 +1,6 @@
+import type { AdminStatus } from "../../../packages/contracts/admin-status.ts";
 import React from "react";
 import { inputHealth, chatHealth, type Health } from "./input-health";
-
-export function normalizeAdminStatus(raw: any) {
-  return {
-    ...raw,
-    incomplete:
-      !raw.capture || !raw.audio || !raw.ai?.readiness || !raw.connectors,
-    capture: {
-      state: "unknown",
-      lastFrameAt: null,
-      lastFrameAgeMs: null,
-      ...raw.capture,
-    },
-    audio: {
-      state: "unknown",
-      latestAt: null,
-      history: [],
-      ...raw.audio,
-      ...(raw.closed ? { history: [], latestText: "" } : {}),
-    },
-    connectors: raw.connectors ?? {},
-    messages: raw.closed ? [] : (raw.messages ?? []),
-    personas: raw.closed ? [] : (raw.personas ?? []),
-    chatSummary: raw.closed ? undefined : raw.chatSummary,
-    chatgpt: { accounts: [], ...raw.chatgpt },
-    ai: {
-      state: "unknown",
-      phase: "unknown",
-      ...raw.ai,
-      ...(raw.closed ? { pending: null } : {}),
-      readiness: { ready: false, checks: [], ...raw.ai?.readiness },
-      usage: { calls: 0, reservedUsd: 0, ...raw.ai?.usage },
-      pacing: { ...raw.ai?.pacing },
-      gate: { ...raw.ai?.gate },
-      input: { ...raw.ai?.input, last: { ...raw.ai?.input?.last } },
-    },
-  };
-}
 
 export function OperationsDashboard({
   status,
@@ -50,7 +14,7 @@ export function OperationsDashboard({
   onReveal,
   onNotice,
 }: {
-  status: any;
+  status: AdminStatus;
   stale: boolean;
   now: number;
   preview: string;
@@ -175,7 +139,7 @@ export function OperationsDashboard({
       </p>
       {!stale && status.apiIssues?.length > 0 && (
         <ul aria-label="API 사용 한도 및 권한 문제">
-          {status.apiIssues.map((issue: any) => (
+          {status.apiIssues.map((issue) => (
             <li key={`${issue.api}:${issue.operation}`}>
               <strong>
                 {issue.api} · {issue.operation}
@@ -333,7 +297,7 @@ export function OperationsDashboard({
             제어하며, 동의 전 채팅 차단은 항상 유지됩니다.
           </p>
           <div className="toolbar">
-            {["youtube", "chzzk", "soop"].map((platform) => (
+            {platforms.map((platform) => (
               <label key={platform}>
                 <input
                   type="checkbox"

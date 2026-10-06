@@ -1,3 +1,4 @@
+import type { AdminStatus } from "../../../packages/contracts/admin-status.ts";
 import "./style.css";
 import { BroadcastConversation } from "./features/workspace/BroadcastConversation";
 import { useWorkspaceNavigation } from "./features/workspace/navigation";
@@ -56,7 +57,7 @@ function SoopConnector({
   state,
   refresh,
 }: {
-  setup: any;
+  setup: AdminStatus["setup"]["soop"];
   state: string;
   refresh: () => Promise<void>;
 }) {
@@ -343,6 +344,7 @@ function Admin() {
     const loadPreview = async () => {
       if (
         !status?.capture?.lastFrameAt ||
+        status.capture.lastFrameAgeMs === null ||
         status.capture.lastFrameAgeMs > 10000
       ) {
         setPreview("");
@@ -388,10 +390,7 @@ function Admin() {
       void action("reveal");
   };
   const stale =
-    statusFailed ||
-    status?.incomplete ||
-    !status?.generatedAt ||
-    now - status.generatedAt > 10000;
+    statusFailed || !status?.generatedAt || now - status.generatedAt > 10000;
   if (session === "checking" || session === "unavailable")
     return (
       <main className="login">
@@ -650,20 +649,18 @@ function Admin() {
               </section>
             )}
             <div className="grid connections" id="connection-details">
-              {Object.entries(status.connectors).map(
-                ([p, s]: [string, any]) => (
-                  <section className="card" key={p}>
-                    <div className="eyebrow">{p.toUpperCase()}</div>
-                    <h2>
-                      <span className="dot" />
-                      {s.state}
-                    </h2>
-                    <p>
-                      {s.received} received · {s.recoveries} recoveries
-                    </p>
-                  </section>
-                ),
-              )}
+              {Object.entries(status.connectors).map(([p, s]) => (
+                <section className="card" key={p}>
+                  <div className="eyebrow">{p.toUpperCase()}</div>
+                  <h2>
+                    <span className="dot" />
+                    {s.state}
+                  </h2>
+                  <p>
+                    {s.received} received · {s.recoveries} recoveries
+                  </p>
+                </section>
+              ))}
             </div>
             <div className="toolbar">
               <button
@@ -735,7 +732,9 @@ function Admin() {
                   <span className="status">{status.capture.state}</span>
                 </div>
                 <div className="preview">
-                  {preview && status.capture.lastFrameAgeMs <= 10000 ? (
+                  {preview &&
+                  status.capture.lastFrameAgeMs !== null &&
+                  status.capture.lastFrameAgeMs <= 10000 ? (
                     <img alt="현재 송출 화면" src={preview} />
                   ) : (
                     <p>
@@ -799,7 +798,7 @@ function Admin() {
                 </p>
                 {status.audio.history.length > 0 && (
                   <ol>
-                    {status.audio.history.map((entry: any) => (
+                    {status.audio.history.map((entry) => (
                       <li key={entry.id}>
                         <time
                           dateTime={new Date(entry.capturedAt).toISOString()}
@@ -840,7 +839,7 @@ function Admin() {
                   </span>
                 </div>
                 <ul className="readiness-list">
-                  {status.ai.readiness.checks.map((check: any) => (
+                  {status.ai.readiness.checks.map((check) => (
                     <li
                       key={check.id}
                       className={check.ready ? "ready" : "not-ready"}
@@ -924,7 +923,7 @@ function Admin() {
                       <strong>Sign in with ChatGPT</strong>
                       <p>
                         {status.chatgpt.accounts.find(
-                          (a: any) => a.clientId === status.chatgpt.active,
+                          (a) => a.clientId === status.chatgpt.active,
                         )?.email || "선택한 계정 없음"}
                       </p>
                       <div className="toolbar">
@@ -938,7 +937,7 @@ function Admin() {
                           모델 목록 불러오기
                         </button>
                       </div>
-                      {status.chatgpt.accounts.map((a: any) => (
+                      {status.chatgpt.accounts.map((a) => (
                         <div key={a.clientId} className="toolbar">
                           <span>
                             {a.email || a.clientId}{" "}

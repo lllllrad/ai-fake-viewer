@@ -103,9 +103,13 @@ try {
     const response = await route.fetch();
     const body = await response.json();
     body.connectors = {
-      youtube: { state: "subscribed:grpc", received: 123 },
-      chzzk: { state: "subscribed" },
-      soop: { state: "disabled" },
+      youtube: {
+        ...body.connectors.youtube,
+        state: "subscribed:grpc",
+        received: 123,
+      },
+      chzzk: { ...body.connectors.chzzk, state: "subscribed" },
+      soop: { ...body.connectors.soop, state: "disabled" },
     };
     await route.fulfill({ json: body });
   });
@@ -120,9 +124,9 @@ try {
     const response = await route.fetch();
     const body = await response.json();
     body.connectors = {
-      youtube: { state: "permission_blocked" },
-      chzzk: { state: "subscribed" },
-      soop: { state: "disabled" },
+      youtube: { ...body.connectors.youtube, state: "permission_blocked" },
+      chzzk: { ...body.connectors.chzzk, state: "subscribed" },
+      soop: { ...body.connectors.soop, state: "disabled" },
     };
     await route.fulfill({ json: body });
   });
@@ -181,7 +185,9 @@ try {
   await adminPage.route("**/api/admin/status", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
-    body.ai.pending = rejected ? null : { text: "Synthetic pending draft" };
+    body.ai.pending = rejected
+      ? null
+      : { text: "Synthetic pending draft", expires: Date.now() + 30_000 };
     await route.fulfill({ json: body });
   });
   await adminPage.route("**/api/admin/ai/reject", (route) => {
