@@ -314,6 +314,15 @@ and delegate to the service; they do not access SQL. The shared
 [profile contract](../../packages/contracts/privacy-profile.ts) is independent
 of profile fingerprinting and runtime participation behavior.
 
+The [withdrawal follow-up coordinator](../../packages/application/rights/withdrawal-followups.ts)
+connects committed withdrawal to the independent rights database. It snapshots
+only intake identifiers and at most 100 distinct provider request IDs, rather than
+retaining participant objects. Late provider IDs attach to the matching consent
+epoch's task. Creation or attachment failures stay visible as pending work and
+retry without reversing local erasure or creating duplicate tasks in the running
+process. Completed rights records are durable; the retry queue remains process-local
+and needs a durable outbox before recovery from rights-storage failures is complete.
+
 The [conversation projection service](../../packages/application/conversation/projection-service.ts)
 owns public DTO creation, current consent checks, origin disclosure, snapshot
 windows and replay projection. Its

@@ -1,3 +1,4 @@
+import { WithdrawalFollowups } from "../../packages/application/rights/withdrawal-followups.ts";
 import { registerReaderStream } from "./http/reader-stream.ts";
 import { projectReadiness } from "../../packages/application/status/readiness.ts";
 import { registerInputRoutes } from "./http/routes/inputs.ts";
@@ -91,35 +92,20 @@ export async function createApp(
   const rights = createRightsService(
     opts.demo ? ":memory:" : config.privacy.rightsDatabase,
   );
-  const withdrawalTasks = new Map<string, string>();
-  const pendingRights = new Map<string, any>();
-  const flushRights = () => {
-    for (const [key, p] of pendingRights) {
-      try {
-        const task = rights.create(
-          {
-            platform: p.platform,
-            account: p.author,
-            session: p.session,
-            broadcaster: p.broadcaster,
-          },
-          p.requestIds,
-          true,
-        );
-        withdrawalTasks.set(key, task.id);
-        pendingRights.delete(key);
-      } catch {
-        /* Keep minimal follow-up work visible for retry, without blocking withdrawal. */
-      }
-    }
-  };
+  const followups = new WithdrawalFollowups(rights);
   if (participation)
-    participation.onWithdraw = (p) => {
-      const key = `${p.id}:${p.epoch}`;
-      if ((p.published || p.requestIds.length) && !withdrawalTasks.has(key))
-        pendingRights.set(key, { ...p, session: store.sessionId });
-    };
-  store.on("context_invalidated", flushRights);
+    participation.onWithdraw = (participant) =>
+      followups.withdrawn({
+        participantId: participant.id,
+        epoch: participant.epoch,
+        platform: participant.platform,
+        account: participant.author,
+        session: store.sessionId,
+        broadcaster: participant.broadcaster,
+        published: participant.published,
+        requestIds: participant.requestIds,
+      });
+  store.on("context_invalidated", () => followups.flush());
   const privacyReady = () =>
     !participation ||
     (!profileIssues(config.privacy).length &&
@@ -222,11 +208,7 @@ export async function createApp(
       for (const audience of audiences.get(input) ?? []) {
         const p = audience.participant;
         participation?.recordRequest(p.id, id);
-        const key = `${p.id}:${audience.epoch + 1}`;
-        const taskId = withdrawalTasks.get(key);
-        if (taskId) rights.attachRequest(taskId, id);
-        const pending = pendingRights.get(key);
-        if (pending) pending.requestIds.push(id);
+        followups.requestReturned(p.id, audience.epoch, id);
       }
     },
   };
@@ -545,10 +527,10 @@ export async function createApp(
     },
   );
   app.get("/api/admin/privacy", async () => {
-    flushRights();
+    followups.flush();
     return participationStatusSchema.parse({
       generatedAt: Date.now(),
-      pendingFollowups: pendingRights.size,
+      pendingFollowups: followups.pendingCount,
       noticeBot: noticeBot?.state ?? "disabled",
       youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
       chzzkNoticeBot: supervisor.chzzkNotices?.state ?? "disabled",
@@ -1089,11 +1071,10 @@ export async function createApp(
       await broadcast.shutdown();
     } finally {
       readers.closeAll();
-      flushRights();
+      followups.flush();
       store.close();
       rights.close();
-      withdrawalTasks.clear();
-      pendingRights.clear();
+      followups.clear();
     }
   });
   if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
