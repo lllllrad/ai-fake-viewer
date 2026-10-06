@@ -81,6 +81,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await page.route("**/api/admin/soop/chat-session", (route) =>
       route.fulfill({
         json: {
+          broadcastId: store.sessionId,
           clientId: "synthetic",
           accessToken: "synthetic",
           streamerId: "fixture",

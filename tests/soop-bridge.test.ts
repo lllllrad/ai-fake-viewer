@@ -57,6 +57,7 @@ function fixture() {
 test("SOOP bridge returns only the browser SDK session fields", async () => {
   const f = fixture();
   assert.deepEqual(await f.bridge.session(), {
+    broadcastId: "broadcast",
     clientId: "client",
     accessToken: "synthetic-token",
     streamerId: "owner",
@@ -113,41 +114,53 @@ test("current credential failure reports authorization required without provider
 });
 test("non-subscribed reports invalidate notice delivery before changing receiver state", () => {
   const f = fixture();
-  f.bridge.report("disconnected");
+  f.bridge.report("disconnected", "broadcast");
   assert.deepEqual(f.events, ["reset", "lost", ["status", "disconnected"]]);
   f.events.length = 0;
-  f.bridge.report("subscribed");
+  f.bridge.report("subscribed", "broadcast");
   assert.deepEqual(f.events, [["status", "subscribed"]]);
 });
 test("closed broadcast rejects browser status and chat, and cannot issue notices", async () => {
   const f = fixture();
   f.settings.closed = true;
-  assert.throws(() => f.bridge.report("subscribed"), SoopBridgeError);
+  assert.throws(
+    () => f.bridge.report("subscribed", "broadcast"),
+    SoopBridgeError,
+  );
   assert.throws(
     () =>
-      f.bridge.receive({
-        userId: "viewer",
-        userNickname: "Viewer",
-        message: "hello",
-      }),
+      f.bridge.receive(
+        {
+          userId: "viewer",
+          userNickname: "Viewer",
+          message: "hello",
+        },
+        "broadcast",
+      ),
     SoopBridgeError,
   );
   await assert.rejects(f.bridge.session(), SoopBridgeError);
-  assert.equal(f.bridge.nextNotice().notice, null);
+  assert.equal(f.bridge.nextNotice("broadcast").notice, null);
   assert.deepEqual(f.events, [["next", false]]);
 });
 test("broadcaster messages only reach echo confirmation; viewers enter the ingestion pipeline", () => {
   const f = fixture();
-  f.bridge.receive({
-    userId: "owner",
-    userNickname: "Owner",
-    message: "fixed",
-  });
-  f.bridge.receive({
-    userId: "viewer",
-    userNickname: "Viewer",
-    message: "hello",
-  });
+  f.bridge.receive(
+    {
+      userId: "owner",
+      userNickname: "Owner",
+      message: "fixed",
+    },
+    "broadcast",
+  );
+  f.bridge.receive(
+    {
+      userId: "viewer",
+      userNickname: "Viewer",
+      message: "hello",
+    },
+    "broadcast",
+  );
   assert.deepEqual(f.events, [
     ["echo", "owner", "fixed"],
     [
@@ -165,11 +178,14 @@ test("broadcaster messages only reach echo confirmation; viewers enter the inges
   f.settings.state = "disconnected";
   assert.throws(
     () =>
-      f.bridge.receive({
-        userId: "viewer",
-        userNickname: "Viewer",
-        message: "late",
-      }),
+      f.bridge.receive(
+        {
+          userId: "viewer",
+          userNickname: "Viewer",
+          message: "late",
+        },
+        "broadcast",
+      ),
     SoopBridgeError,
   );
   assert.equal(f.events.length, 2);
@@ -185,22 +201,78 @@ test("HTTP bridge validates viewer messages before ingestion and retains endpoin
     const invalid = await app.inject({
       method: "POST",
       url: "/api/admin/soop/message",
-      payload: { userId: "viewer", message: "hello" },
+      payload: { broadcastId: "broadcast", userId: "viewer", message: "hello" },
     });
     assert(invalid.statusCode >= 400);
     assert.deepEqual(f.events, []);
     const valid = await app.inject({
       method: "POST",
       url: "/api/admin/soop/message",
-      payload: { userId: "viewer", userNickname: "Viewer", message: " hello " },
+      payload: {
+        broadcastId: "broadcast",
+        userId: "viewer",
+        userNickname: "Viewer",
+        message: " hello ",
+      },
     });
     assert.equal(valid.statusCode, 200);
     assert.deepEqual(valid.json(), { ok: true });
     const notice = await app.inject({
       method: "POST",
       url: "/api/admin/soop/notices/next",
+      payload: { broadcastId: "broadcast" },
     });
     assert.equal(notice.json().notice.text, "fixed");
+  } finally {
+    await app.close();
+  }
+});
+
+test("previous broadcast requests cannot mutate a new open broadcast", async () => {
+  const f = fixture();
+  const old = await f.bridge.session();
+  f.settings.broadcastId = "next-broadcast";
+  assert.throws(
+    () => f.bridge.report("subscribed", old.broadcastId),
+    SoopBridgeError,
+  );
+  assert.throws(
+    () =>
+      f.bridge.receive(
+        { userId: "viewer", userNickname: "Viewer", message: "late" },
+        old.broadcastId,
+      ),
+    SoopBridgeError,
+  );
+  assert.throws(() => f.bridge.nextNotice(old.broadcastId), SoopBridgeError);
+  assert.throws(
+    () => f.bridge.noticeFailed("old-notice", old.broadcastId),
+    SoopBridgeError,
+  );
+  assert.deepEqual(f.events, []);
+  f.bridge.report("subscribed", "next-broadcast");
+  assert.deepEqual(f.events, [["status", "subscribed"]]);
+});
+test("HTTP rejects old broadcast scope even when the new broadcast is subscribed", async () => {
+  const f = fixture(),
+    app = Fastify();
+  registerSoopBridgeRoutes(app, f.bridge);
+  try {
+    f.settings.broadcastId = "next";
+    for (const [path, body] of [
+      ["status", { state: "subscribed" }],
+      ["message", { userId: "viewer", userNickname: "Viewer", message: "old" }],
+      ["notices/next", {}],
+      ["notices/failed", { id: "11111111-1111-4111-8111-111111111111" }],
+    ] as const) {
+      const response = await app.inject({
+        method: "POST",
+        url: "/api/admin/soop/" + path,
+        payload: { ...body, broadcastId: "broadcast" },
+      });
+      assert.equal(response.statusCode, 409, path);
+    }
+    assert.deepEqual(f.events, []);
   } finally {
     await app.close();
   }

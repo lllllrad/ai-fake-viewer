@@ -465,6 +465,14 @@ An awaited credential result is rechecked against the open broadcast, channel
 and app configuration before returning it to the browser. Late failures from a
 different broadcast cannot overwrite current authorization status. Closed
 broadcasts reject status and chat updates and cannot issue notices.
+The session response includes the durable broadcast ID. Every browser status,
+message and notice request carries that acquired ID; the server rejects a
+different ID before any side effect, even if the new broadcast is already open.
+Controller callbacks retain their own ID across reconnection, including rejection
+of an old pending notice. A failed authorization sends no unscoped status.
+The [shared bridge contract](../../packages/contracts/soop-bridge.ts) is consumed
+by both HTTP and browser adapters. Existing tabs must reload the updated client
+at cutover; missing broadcast scope is rejected.
 Broadcaster messages go only to exact notice echo confirmation; viewer messages
 enter the normal consent-aware ingestion path. Non-subscribed reports reset
 pending notices and delivery opportunity before updating receiver status.

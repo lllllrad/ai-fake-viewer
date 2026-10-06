@@ -1,11 +1,7 @@
+import { soopSessionSchema } from "../../../../../packages/contracts/soop-bridge.ts";
 import { z } from "zod";
 import { adminClient } from "../../lib/admin-client.ts";
 import type { SoopChat, SoopPorts } from "./controller.ts";
-const authSchema = z.object({
-  clientId: z.string(),
-  accessToken: z.string(),
-  streamerId: z.string(),
-});
 const noticeSchema = z.object({
   notice: z
     .object({ id: z.string(), text: z.string(), expiresAt: z.number() })
@@ -52,18 +48,24 @@ export function browserSoopPorts(refresh: () => Promise<void>): SoopPorts {
   const post = (path: string, body: unknown) =>
     adminClient.request(`soop/${path}`, { method: "POST", body });
   return {
-    authorization: () => adminClient.json("soop/chat-session", authSchema),
+    authorization: () =>
+      adminClient.json("soop/chat-session", soopSessionSchema),
     createChat: async (clientId) => {
       await loadSdk();
       return new (window as SdkWindow).SOOP!.ChatSDK(clientId);
     },
-    status: async (state) => {
-      await post("status", { state });
+    status: async (state, broadcastId) => {
+      await post("status", { state, broadcastId });
       await refresh();
     },
-    message: (message) => post("message", message),
-    nextNotice: () =>
-      adminClient.json("soop/notices/next", noticeSchema, { method: "POST" }),
-    failNotice: (id) => post("notices/failed", { id }),
+    message: (message, broadcastId) =>
+      post("message", { ...message, broadcastId }),
+    nextNotice: (broadcastId) =>
+      adminClient.json("soop/notices/next", noticeSchema, {
+        method: "POST",
+        body: { broadcastId },
+      }),
+    failNotice: (id, broadcastId) =>
+      post("notices/failed", { id, broadcastId }),
   };
 }

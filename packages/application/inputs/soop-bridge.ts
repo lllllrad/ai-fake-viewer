@@ -57,6 +57,10 @@ export class SoopBridge {
       throw new SoopBridgeError("SOOP chat input is unavailable.");
     return settings;
   }
+  private assertBroadcast(broadcastId: string) {
+    if (broadcastId !== this.ports.settings().broadcastId)
+      throw new SoopBridgeError("SOOP broadcast changed. Connect again.");
+  }
   async session() {
     const settings = this.assertAvailable();
     if (!settings.clientId || !settings.clientSecret)
@@ -88,12 +92,14 @@ export class SoopBridge {
         "SOOP broadcast or account configuration changed. Connect again.",
       );
     return {
+      broadcastId: settings.broadcastId,
       clientId: settings.clientId,
       accessToken,
       streamerId: settings.streamerId,
     };
   }
-  report(state: SoopBrowserState) {
+  report(state: SoopBrowserState, broadcastId: string) {
+    this.assertBroadcast(broadcastId);
     this.assertAvailable();
     if (state !== "subscribed") {
       this.ports.notices.reset();
@@ -101,17 +107,23 @@ export class SoopBridge {
     }
     this.ports.status(state);
   }
-  nextNotice() {
+  nextNotice(broadcastId: string) {
+    this.assertBroadcast(broadcastId);
     const settings = this.ports.settings();
     const notice = this.ports.notices.next(
       available(settings) && settings.state === "subscribed",
     );
     return { notice, state: this.ports.notices.state() };
   }
-  noticeFailed(id: string) {
+  noticeFailed(id: string, broadcastId: string) {
+    this.assertBroadcast(broadcastId);
     this.ports.notices.failed(id);
   }
-  receive(message: { userId: string; userNickname: string; message: string }) {
+  receive(
+    message: { userId: string; userNickname: string; message: string },
+    broadcastId: string,
+  ) {
+    this.assertBroadcast(broadcastId);
     const settings = this.assertAvailable();
     if (settings.state !== "subscribed")
       throw new SoopBridgeError(

@@ -62,6 +62,7 @@ function fixture() {
     events: string[] = [];
   const ports: SoopPorts = {
     authorization: async () => ({
+      broadcastId: "broadcast",
       clientId: "fixture",
       accessToken: "synthetic",
       streamerId: "fixture",
@@ -264,5 +265,72 @@ test("SDK connection errors expose a fixed diagnostic rather than SDK payloads",
   await f.controller.connect();
   assert.equal(f.controller.snapshot().phase, "failed");
   assert(!f.controller.snapshot().message.includes("SYNTHETIC_PRIVATE"));
+  f.controller.dispose();
+});
+
+test("all browser forwarding retains its acquired broadcast scope across reconnection", async () => {
+  const f = fixture(),
+    scopes: [string, string][] = [];
+  let broadcastId = "first";
+  const pending = deferred<{
+    notice: { id: string; text: string; expiresAt: number };
+  }>();
+  f.ports.authorization = async () => ({
+    broadcastId,
+    clientId: "fixture",
+    accessToken: "synthetic",
+    streamerId: "fixture",
+  });
+  f.ports.status = async (state, scope) => {
+    scopes.push([state, scope]);
+  };
+  f.ports.message = async (_message, scope) => {
+    scopes.push(["message", scope]);
+  };
+  f.ports.nextNotice = (scope) => {
+    scopes.push(["next", scope]);
+    return pending.promise;
+  };
+  f.ports.failNotice = async (_id, scope) => {
+    scopes.push(["failed-notice", scope]);
+  };
+  await f.controller.connect();
+  f.chats[0].receive("first");
+  await f.controller.drain();
+  const poll = f.controller.poll();
+  await f.controller.disconnect();
+  broadcastId = "second";
+  await f.controller.connect();
+  await f.controller.drain();
+  pending.resolve({
+    notice: {
+      id: "old",
+      text: "Synthetic notice",
+      expiresAt: Date.now() + 10000,
+    },
+  });
+  await poll;
+  f.chats[1].receive("second");
+  await f.controller.drain();
+  assert.deepEqual(scopes, [
+    ["subscribed", "first"],
+    ["message", "first"],
+    ["next", "first"],
+    ["disconnected", "first"],
+    ["subscribed", "second"],
+    ["failed-notice", "first"],
+    ["message", "second"],
+  ]);
+  assert(f.chats.every((chat) => chat.sent.length === 0));
+  f.controller.dispose();
+});
+test("failed authorization cannot send an unscoped receiver status", async () => {
+  const f = fixture();
+  f.ports.authorization = async () => {
+    throw new Error("fixture failure");
+  };
+  await f.controller.connect();
+  await f.controller.disconnect();
+  assert.deepEqual(f.events, []);
   f.controller.dispose();
 });

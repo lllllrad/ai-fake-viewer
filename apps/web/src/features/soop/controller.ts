@@ -1,12 +1,9 @@
+import type { SoopSession } from "../../../../../packages/contracts/soop-bridge.ts";
 import {
   dispatchFixedNotice,
   type FixedNotice,
 } from "../../soop-notice-sender.ts";
-export interface SoopAuthorization {
-  clientId: string;
-  accessToken: string;
-  streamerId: string;
-}
+export type SoopAuthorization = SoopSession;
 export interface SoopMessage {
   userId: string;
   userNickname: string;
@@ -28,10 +25,13 @@ export interface SoopChat {
 export interface SoopPorts {
   authorization(): Promise<SoopAuthorization>;
   createChat(clientId: string): Promise<SoopChat>;
-  status(state: "subscribed" | "disconnected" | "failed"): Promise<unknown>;
-  message(message: SoopMessage): Promise<unknown>;
-  nextNotice(): Promise<{ notice: FixedNotice | null }>;
-  failNotice(id: string): Promise<unknown>;
+  status(
+    state: "subscribed" | "disconnected" | "failed",
+    broadcastId: string,
+  ): Promise<unknown>;
+  message(message: SoopMessage, broadcastId: string): Promise<unknown>;
+  nextNotice(broadcastId: string): Promise<{ notice: FixedNotice | null }>;
+  failNotice(id: string, broadcastId: string): Promise<unknown>;
 }
 export interface SoopConnectionState {
   phase: "idle" | "connecting" | "connected" | "failed";
@@ -45,6 +45,7 @@ export class SoopController {
   private listeners = new Set<() => void>();
   private revision = 0;
   private chat?: SoopChat;
+  private broadcastId?: string;
   private tail: Promise<void> = Promise.resolve();
   private polling = false;
   private connectTimer?: ReturnType<typeof setTimeout>;
@@ -66,6 +67,7 @@ export class SoopController {
     this.revision++;
     const chat = this.chat;
     this.chat = undefined;
+    this.broadcastId = undefined;
     try {
       chat?.disconnect();
     } catch {
@@ -95,6 +97,7 @@ export class SoopController {
     if (this.state.phase === "connecting") return;
     this.detach();
     const revision = this.revision;
+    let broadcastId: string | undefined;
     this.update({
       phase: "connecting",
       message: "SOOP 채팅 연결을 준비하고 있습니다.",
@@ -106,15 +109,18 @@ export class SoopController {
         phase: "failed",
         message: "SOOP 연결 시간이 초과되었습니다. 다시 연결해 주세요.",
       });
-      void this.queue(
-        this.revision,
-        () => this.ports.status("failed"),
-        "연결 상태를 서버에 전달하지 못했습니다.",
-      );
+      if (broadcastId)
+        void this.queue(
+          this.revision,
+          () => this.ports.status("failed", broadcastId!),
+          "연결 상태를 서버에 전달하지 못했습니다.",
+        );
     }, 30000);
     try {
       const auth = await this.ports.authorization();
       if (!this.current(revision)) return;
+      broadcastId = auth.broadcastId;
+      this.broadcastId = broadcastId;
       const chat = await this.ports.createChat(auth.clientId);
       if (!this.current(revision)) {
         chat.disconnect();
@@ -135,7 +141,7 @@ export class SoopController {
         });
         void this.queue(
           revision,
-          () => this.ports.status("subscribed"),
+          () => this.ports.status("subscribed", auth.broadcastId),
           "연결 상태를 서버에 전달하지 못했습니다. 다시 연결해 주세요.",
         );
       };
@@ -146,7 +152,10 @@ export class SoopController {
         void this.queue(
           this.revision,
           () =>
-            this.ports.status(phase === "failed" ? "failed" : "disconnected"),
+            this.ports.status(
+              phase === "failed" ? "failed" : "disconnected",
+              auth.broadcastId,
+            ),
           "연결 종료 상태를 서버에 전달하지 못했습니다.",
         );
       };
@@ -187,7 +196,7 @@ export class SoopController {
         this.queuedMessages++;
         void this.queue(
           revision,
-          () => this.ports.message(message),
+          () => this.ports.message(message, auth.broadcastId),
           "채팅을 서버에 전달하지 못했습니다. 연결 상태를 확인해 주세요.",
         ).finally(() => {
           this.queuedMessages--;
@@ -219,21 +228,24 @@ export class SoopController {
             ? error.message
             : "SOOP에 연결하지 못했습니다. 계정·방송 상태를 확인해 주세요.",
       });
-      await this.queue(
-        this.revision,
-        () => this.ports.status("failed"),
-        "연결 실패 상태를 서버에 전달하지 못했습니다.",
-      );
+      if (broadcastId)
+        await this.queue(
+          this.revision,
+          () => this.ports.status("failed", broadcastId!),
+          "연결 실패 상태를 서버에 전달하지 못했습니다.",
+        );
     }
   };
   disconnect = async () => {
+    const broadcastId = this.broadcastId;
     this.detach();
     this.update({ phase: "idle", message: "SOOP 채팅 연결을 종료했습니다." });
-    await this.queue(
-      this.revision,
-      () => this.ports.status("disconnected"),
-      "연결 종료 상태를 서버에 전달하지 못했습니다.",
-    );
+    if (broadcastId)
+      await this.queue(
+        this.revision,
+        () => this.ports.status("disconnected", broadcastId),
+        "연결 종료 상태를 서버에 전달하지 못했습니다.",
+      );
   };
   dispose = () => {
     this.detach();
@@ -243,16 +255,17 @@ export class SoopController {
     if (this.polling || this.state.phase !== "connected") return;
     this.polling = true;
     const revision = this.revision,
-      chat = this.chat;
+      chat = this.chat,
+      broadcastId = this.broadcastId!;
     try {
       await dispatchFixedNotice(
-        () => this.ports.nextNotice(),
+        () => this.ports.nextNotice(broadcastId),
         () =>
           this.current(revision) &&
           this.state.phase === "connected" &&
           this.chat === chat,
         (text) => chat!.sendMessage(text),
-        (id) => this.ports.failNotice(id),
+        (id) => this.ports.failNotice(id, broadcastId),
       );
     } catch {
       if (this.current(revision))
