@@ -50,7 +50,7 @@ HTTP body logging is disabled; browser localStorage/IndexedDB does not retain or
 | Commands, age and delivery         | [participation.ts](../../packages/participation.ts), `POST /api/admin/privacy/participants/:id/{notice-delivered,confirm-live-command,block-age}`; manual delivery only where supported |
 | Projection, raw text and summaries | [storage.ts](../../packages/storage.ts), summary reset/hide/session-close APIs                                                                                                          |
 | Pre-send authorization             | [app.ts](../../apps/server/app.ts), [model.ts](../../packages/model.ts), [scheduler.ts](../../packages/scheduler.ts)                                                                    |
-| Minimal follow-up                  | [rights.ts](../../packages/rights.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`                                 |
+| Minimal follow-up                  | [RightsService](../../packages/application/rights/service.ts), `POST /api/admin/privacy/rights`, `PATCH/DELETE /api/admin/privacy/rights/:id`, `POST /api/admin/privacy/videos`         |
 | Admin UI                           | [privacy-panel.tsx](../../apps/web/src/privacy-panel.tsx)                                                                                                                               |
 
 Profile PUT applies only to the current process; persistent changes belong in YAML. Important changes stop inputs/generation, invalidate old consent and remove raw context. Rights database path changes require restart. Administrator APIs enforce authentication and local/Origin boundaries.

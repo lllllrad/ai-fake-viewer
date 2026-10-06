@@ -172,6 +172,18 @@ transcripts, consent records or credentials. Transcript downloads are explicit
 administrator actions and remain outside automatic deletion. Reader projections
 never contain administrator-only account, consent or rights data.
 
+The [rights service](../../packages/application/rights/service.ts) owns request
+intake, bounded provider-request references, resolution checks and deletion
+eligibility. Its [pure policy](../../packages/domain/rights/resolution.ts) checks
+completion independently of transport and storage. The
+[SQLite adapter](../../packages/infrastructure/rights/sqlite.ts) preserves the
+existing separate database format, validates stored records, and performs
+read/modify/write operations in transactions. The
+[HTTP routes](../../apps/server/http/routes/rights.ts) validate transport inputs
+and delegate to the service; they do not access SQL. The shared
+[profile contract](../../packages/contracts/privacy-profile.ts) is independent
+of profile fingerprinting and runtime participation behavior.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.

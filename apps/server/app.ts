@@ -16,7 +16,9 @@ import {
   assertProfileUpdate,
   profileIssues,
 } from "../../packages/privacy-profile.ts";
-import { RightsQueue, rightsIntakeSchema } from "../../packages/rights.ts";
+import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
+import { registerRightsRoutes } from "./http/routes/rights.ts";
+import { RightsActionError } from "../../packages/application/rights/service.ts";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
@@ -87,7 +89,7 @@ export async function createApp(
     ? new NoticeBot(participation, config.soop.streamerId)
     : undefined;
   store.on("reset", () => noticeBot?.reset());
-  const rights = new RightsQueue(
+  const rights = createRightsService(
     opts.demo ? ":memory:" : config.privacy.rightsDatabase,
   );
   const withdrawalTasks = new Map<string, string>();
@@ -530,6 +532,7 @@ export async function createApp(
         ? "Invalid request fields"
         : e instanceof AiStartError ||
             e instanceof PrivacyActionError ||
+            e instanceof RightsActionError ||
             e instanceof BroadcastCommandError
           ? e.message
           : req.url.startsWith("/api/admin/")
@@ -1238,17 +1241,7 @@ export async function createApp(
     store.revokeParticipant(p.platform, p.broadcaster, p.author);
     return { ok: true };
   });
-  app.post("/api/admin/privacy/rights", async (req) =>
-    rights.create(rightsIntakeSchema.parse(req.body)),
-  );
-  app.patch("/api/admin/privacy/rights/:id", async (req) =>
-    rights.update((req.params as any).id, req.body),
-  );
-  app.delete("/api/admin/privacy/rights/:id", async (req) => {
-    rights.remove((req.params as any).id);
-    return { ok: true };
-  });
-  app.post("/api/admin/privacy/videos", async (req) => rights.video(req.body));
+  registerRightsRoutes(app, rights);
   app.get("/api/admin/status", async () =>
     projectAdminStatus({
       demo: !!opts.demo,

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Participation } from "../packages/participation.ts";
 import { Store } from "../packages/storage.ts";
-import { RightsQueue } from "../packages/rights.ts";
+import { createRightsService } from "../packages/infrastructure/rights/sqlite.ts";
 import {
   privacyProfileSchema,
   profileIssues,
@@ -250,7 +250,7 @@ test("T20, T25, T26: no inherited approval defaults, incomplete/mismatched profi
 test("T23–T24: durable exception queue contains no chat and cannot confuse local deletion with complete external/video action", () => {
   const dir = mkdtempSync(join(tmpdir(), "rights-fixture-")),
     path = join(dir, "rights.sqlite");
-  let rights = new RightsQueue(path);
+  let rights = createRightsService(path);
   try {
     const task = rights.create(
       {
@@ -273,7 +273,7 @@ test("T23–T24: durable exception queue contains no chat and cannot confuse loc
       }),
     );
     rights.close();
-    rights = new RightsQueue(path);
+    rights = createRightsService(path);
     assert.equal(rights.list()[0].id, task.id);
     rights.update(task.id, {
       state: "completed",
