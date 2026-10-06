@@ -23,7 +23,7 @@ import type { Model, ModelInput } from "../model.ts";
 import { validateDecision } from "../model.ts";
 import type { Config } from "../config.ts";
 import type { PersonaGenerator, GenerationRequest } from "./generator.ts";
-import { limitModelConcurrency } from "../model.ts";
+import { limitModelConcurrency } from "../application/reactions/model-concurrency.ts";
 
 const fixtures = [
   ["unexpected_success", "unexpected success"],

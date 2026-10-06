@@ -375,6 +375,16 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [model port](../../packages/application/reactions/model-port.ts) defines
+provider-independent generation input and result types. Image bytes are generic
+Uint8Array data; the Node composition retains Buffer compatibility without
+requiring capture workers or HTTP clients in that interface. The
+[model concurrency limiter](../../packages/application/reactions/model-concurrency.ts)
+owns FIFO admission, canceled waiter removal and exactly-once slot release.
+Invalid limits fail immediately rather than leaving requests queued forever;
+queued cancellations never invoke a provider. Active calls retain their slots
+until they settle, even if their caller has requested cancellation.
+
 The [generation recovery policy](../../packages/application/reactions/recovery.ts)
 owns retry decisions and the operator-facing issue state. Three consecutive
 transient request failures stop AI; a successful response or a non-transient

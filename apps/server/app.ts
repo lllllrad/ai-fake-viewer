@@ -1,3 +1,4 @@
+import { limitModelConcurrency } from "../../packages/application/reactions/model-concurrency.ts";
 import { ParticipationAdministration } from "../../packages/application/participation/administration.ts";
 import { registerParticipationRoutes } from "./http/routes/participation.ts";
 import { ProfileUpdate } from "../../packages/application/participation/profile-update.ts";
@@ -53,12 +54,7 @@ import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
 import { AiStartError, Scheduler } from "../../packages/scheduler.ts";
-import {
-  mockModel,
-  openaiModel,
-  chatgptModel,
-  limitModelConcurrency,
-} from "../../packages/model.ts";
+import { mockModel, openaiModel, chatgptModel } from "../../packages/model.ts";
 import { ChatgptAuth } from "../../packages/chatgpt-auth.ts";
 import { ChzzkAuth } from "../../packages/chzzk.ts";
 import { SoopAuth } from "../../packages/soop.ts";
