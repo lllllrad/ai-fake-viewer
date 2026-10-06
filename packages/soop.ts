@@ -1,14 +1,9 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+  platformTokenSchema,
+  type PlatformToken,
+} from "./contracts/account-tokens.ts";
+import { EncryptedTokenFile } from "./infrastructure/accounts/encrypted-token-file.ts";
 import { z } from "zod";
-import { dirname } from "node:path";
 
 const root = "https://openapi.sooplive.com";
 const tokenSchema = z.object({
@@ -20,34 +15,27 @@ const tokenSchema = z.object({
 });
 
 export class SoopAuth {
+  private readonly file: EncryptedTokenFile<PlatformToken>;
   private generation = 0;
-  token?: { accessToken: string; refreshToken: string; expiresAt: number };
+  token?: PlatformToken;
   pending?: Promise<string>;
 
   constructor(
-    private key: string,
-    private path = "data/soop.tokens",
+    key: string,
+    path = "data/soop.tokens",
     private request: typeof fetch = fetch,
   ) {
     if (!/^[a-f0-9]{64}$/i.test(key))
       throw Error("TOKEN_ENCRYPTION_KEY must be 32 bytes of hex");
-    if (existsSync(path)) {
-      try {
-        const b = readFileSync(path);
-        const d = createDecipheriv(
-          "aes-256-gcm",
-          Buffer.from(key, "hex"),
-          b.subarray(0, 12),
-        );
-        d.setAuthTag(b.subarray(12, 28));
-        this.token = JSON.parse(
-          Buffer.concat([d.update(b.subarray(28)), d.final()]).toString(),
-        );
-      } catch {
-        throw Error(
-          "Stored SOOP credentials cannot be decrypted. Restore the encryption key or reauthorize.",
-        );
-      }
+    this.file = new EncryptedTokenFile(key, path, (value) =>
+      platformTokenSchema.parse(value),
+    );
+    try {
+      this.token = this.file.read();
+    } catch {
+      throw new Error(
+        "Stored SOOP credentials cannot be decrypted. Restore the encryption key or reauthorize.",
+      );
     }
   }
 
@@ -108,23 +96,7 @@ export class SoopAuth {
       refreshToken: parsed.data.refresh_token,
       expiresAt: Date.now() + parsed.data.expires_in * 1000,
     };
-    const iv = randomBytes(12);
-    const cipher = createCipheriv(
-      "aes-256-gcm",
-      Buffer.from(this.key, "hex"),
-      iv,
-    );
-    const encrypted = Buffer.concat([
-      cipher.update(JSON.stringify(next)),
-      cipher.final(),
-    ]);
-    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    writeFileSync(
-      `${this.path}.tmp`,
-      Buffer.concat([iv, cipher.getAuthTag(), encrypted]),
-      { mode: 0o600 },
-    );
-    renameSync(`${this.path}.tmp`, this.path);
+    this.file.write(next);
     this.token = next;
     return next.accessToken;
   }
@@ -149,6 +121,6 @@ export class SoopAuth {
   forget() {
     this.generation++;
     this.token = undefined;
-    rmSync(this.path, { force: true });
+    this.file.remove();
   }
 }

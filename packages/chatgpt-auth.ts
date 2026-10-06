@@ -1,18 +1,5 @@
-import {
-  createHash,
-  randomBytes,
-  randomUUID,
-  createCipheriv,
-  createDecipheriv,
-} from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname } from "node:path";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { EncryptedTokenFile } from "./infrastructure/accounts/encrypted-token-file.ts";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { z } from "zod";
 
@@ -65,13 +52,14 @@ type Pending = {
   expiresAt: number;
 };
 export class ChatgptAuth {
+  private readonly file: EncryptedTokenFile<State>;
   private generation = 0;
   private data: State;
   private pending: Pending | null = null;
   private refreshing: Promise<string> | null = null;
   constructor(
-    private key: string,
-    private path = "data/chatgpt.tokens",
+    key: string,
+    path = "data/chatgpt.tokens",
     private request: typeof fetch = fetch,
     private verify: (
       idToken: string,
@@ -86,27 +74,18 @@ export class ChatgptAuth {
       active: null,
       accounts: [],
     };
-    if (existsSync(path)) {
-      try {
-        const b = readFileSync(path);
-        const d = createDecipheriv(
-          "aes-256-gcm",
-          Buffer.from(key, "hex"),
-          b.subarray(0, 12),
-        );
-        d.setAuthTag(b.subarray(12, 28));
-        this.data = stateSchema.parse(
-          JSON.parse(
-            Buffer.concat([d.update(b.subarray(28)), d.final()]).toString(),
-          ),
-        );
-      } catch {
-        throw Error(
-          "Stored ChatGPT credentials cannot be decrypted. Restore TOKEN_ENCRYPTION_KEY.",
-        );
-      }
+    this.file = new EncryptedTokenFile(key, path, (value) =>
+      stateSchema.parse(value),
+    );
+    try {
+      this.data = this.file.read() ?? this.data;
+    } catch {
+      throw new Error(
+        "Stored ChatGPT credentials cannot be decrypted. Restore TOKEN_ENCRYPTION_KEY.",
+      );
     }
   }
+
   static async verifyIdentity(
     idToken: string,
     clientId: string,
@@ -126,17 +105,7 @@ export class ChatgptAuth {
     };
   }
   private save() {
-    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    const iv = randomBytes(12);
-    const c = createCipheriv("aes-256-gcm", Buffer.from(this.key, "hex"), iv);
-    const encrypted = Buffer.concat([
-      c.update(JSON.stringify(this.data)),
-      c.final(),
-    ]);
-    const b = Buffer.concat([iv, c.getAuthTag(), encrypted]);
-    const tmp = `${this.path}.${randomBytes(6).toString("hex")}.tmp`;
-    writeFileSync(tmp, b, { mode: 0o600 });
-    renameSync(tmp, this.path);
+    this.file.write(this.data);
   }
   get active() {
     return (

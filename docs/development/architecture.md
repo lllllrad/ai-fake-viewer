@@ -426,9 +426,21 @@ validate callback inputs and render fixed UTF-8 responses while preserving exist
 administrator endpoints and OAuth callback URLs. Provider details are mapped to
 bounded diagnostic messages. SOOP consumes its pending approval before exchange;
 a superseding authorization invalidates both the old token write and its late
-status update. Existing token adapters still own provider protocol, refresh and
-encrypted persistence and remain candidates for the remaining adapter rewrite.
+status update. Existing token adapters still own provider protocol and refresh and remain
+candidates for the remaining adapter rewrite.
 SOOP browser chat operations and AI provider accounts have separate lifecycles.
+
+The [encrypted token file](../../packages/infrastructure/accounts/encrypted-token-file.ts)
+owns credential file I/O for YouTube, CHZZK, SOOP and Sign in with ChatGPT.
+It preserves the existing AES-256-GCM envelope and validates each adapter's
+stored schema after decryption and before replacement. Missing files mean no
+stored account; unreadable, invalid or unauthenticated files fail closed without
+overwriting them or exposing plaintext in errors. Replacement uses a unique
+exclusive owner-only temporary file, flushes it before rename and removes it on
+failure. Provider adapters update in-memory platform tokens only after the write
+succeeds. Sign in with ChatGPT retains its independent multi-account state and
+sign-out behavior; the shared file mechanism does not own account selection or
+revocation.
 
 ## UI and contracts
 

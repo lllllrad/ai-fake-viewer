@@ -1,18 +1,5 @@
-import {
-  randomBytes,
-  createHash,
-  createCipheriv,
-  createDecipheriv,
-} from "node:crypto";
-import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  mkdirSync,
-  rmSync,
-} from "node:fs";
-import { dirname } from "node:path";
+import { randomBytes, createHash } from "node:crypto";
+import { EncryptedTokenFile } from "./infrastructure/accounts/encrypted-token-file.ts";
 import { z } from "zod";
 export const youtubeScope = "https://www.googleapis.com/auth/youtube.force-ssl";
 const stored = z.object({
@@ -24,6 +11,7 @@ const stored = z.object({
 });
 type Token = z.infer<typeof stored>;
 export class YoutubeAuth {
+  private readonly file: EncryptedTokenFile<Token>;
   private token?: Token;
   private pending?: Promise<string>;
   private login?: {
@@ -35,30 +23,20 @@ export class YoutubeAuth {
   };
   private generation = 0;
   constructor(
-    private key: string,
-    private path = "data/youtube.tokens",
+    key: string,
+    path = "data/youtube.tokens",
     private request: typeof fetch = fetch,
   ) {
     if (!/^[a-f0-9]{64}$/i.test(key)) throw Error("Invalid encryption key");
-    if (existsSync(path)) {
-      try {
-        const b = readFileSync(path),
-          d = createDecipheriv(
-            "aes-256-gcm",
-            Buffer.from(key, "hex"),
-            b.subarray(0, 12),
-          );
-        d.setAuthTag(b.subarray(12, 28));
-        this.token = stored.parse(
-          JSON.parse(
-            Buffer.concat([d.update(b.subarray(28)), d.final()]).toString(),
-          ),
-        );
-      } catch {
-        throw Error(
-          "Stored YouTube credentials cannot be decrypted. Restore the key or reconnect.",
-        );
-      }
+    this.file = new EncryptedTokenFile(key, path, (value) =>
+      stored.parse(value),
+    );
+    try {
+      this.token = this.file.read();
+    } catch {
+      throw new Error(
+        "Stored YouTube credentials cannot be decrypted. Restore the key or reconnect.",
+      );
     }
   }
   get connected() {
@@ -113,19 +91,7 @@ export class YoutubeAuth {
     return data.data;
   }
   private save(next: Token) {
-    const iv = randomBytes(12),
-      c = createCipheriv("aes-256-gcm", Buffer.from(this.key, "hex"), iv);
-    const encrypted = Buffer.concat([
-      c.update(JSON.stringify(next)),
-      c.final(),
-    ]);
-    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    writeFileSync(
-      `${this.path}.tmp`,
-      Buffer.concat([iv, c.getAuthTag(), encrypted]),
-      { mode: 0o600 },
-    );
-    renameSync(`${this.path}.tmp`, this.path);
+    this.file.write(next);
     this.token = next;
   }
   async callback(code: string | undefined, state: string, denied = false) {
@@ -209,6 +175,6 @@ export class YoutubeAuth {
     this.generation++;
     this.login = undefined;
     this.token = undefined;
-    rmSync(this.path, { force: true });
+    this.file.remove();
   }
 }

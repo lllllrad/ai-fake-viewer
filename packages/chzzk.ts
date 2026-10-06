@@ -1,19 +1,10 @@
 import {
-  randomBytes,
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-} from "node:crypto";
-import {
-  existsSync,
-  readFileSync,
-  writeFileSync,
-  renameSync,
-  mkdirSync,
-  rmSync,
-} from "node:fs";
+  platformTokenSchema,
+  type PlatformToken,
+} from "./contracts/account-tokens.ts";
+import { randomBytes, createHash } from "node:crypto";
+import { EncryptedTokenFile } from "./infrastructure/accounts/encrypted-token-file.ts";
 import { z } from "zod";
-import { dirname } from "node:path";
 import { ApiQuotaError } from "./api-health.ts";
 const root = "https://openapi.chzzk.naver.com";
 const tokenSchema = z.object({
@@ -55,34 +46,27 @@ export function normalizeChzzk(raw: unknown) {
   };
 }
 export class ChzzkAuth {
+  private readonly file: EncryptedTokenFile<PlatformToken>;
   private generation = 0;
   pending?: Promise<string>;
   states = new Map<string, number>();
-  token?: { accessToken: string; refreshToken: string; expiresAt: number };
+  token?: PlatformToken;
   constructor(
-    private key: string,
-    private path = "data/chzzk.tokens",
+    key: string,
+    path = "data/chzzk.tokens",
     private request: typeof fetch = fetch,
   ) {
     if (!/^[a-f0-9]{64}$/i.test(key))
       throw Error("TOKEN_ENCRYPTION_KEY must be 32 bytes of hex");
-    if (existsSync(path)) {
-      try {
-        const b = readFileSync(path);
-        const d = createDecipheriv(
-          "aes-256-gcm",
-          Buffer.from(key, "hex"),
-          b.subarray(0, 12),
-        );
-        d.setAuthTag(b.subarray(12, 28));
-        this.token = JSON.parse(
-          Buffer.concat([d.update(b.subarray(28)), d.final()]).toString(),
-        );
-      } catch {
-        throw Error(
-          "Stored CHZZK credentials cannot be decrypted. Restore the encryption key or reauthenticate.",
-        );
-      }
+    this.file = new EncryptedTokenFile(key, path, (value) =>
+      platformTokenSchema.parse(value),
+    );
+    try {
+      this.token = this.file.read();
+    } catch {
+      throw new Error(
+        "Stored CHZZK credentials cannot be decrypted. Restore the encryption key or reauthenticate.",
+      );
     }
   }
   authorizationUrl(redirect: string) {
@@ -145,19 +129,7 @@ export class ChzzkAuth {
       refreshToken: t.refreshToken,
       expiresAt: Date.now() + t.expiresIn * 1000,
     };
-    const iv = randomBytes(12);
-    const c = createCipheriv("aes-256-gcm", Buffer.from(this.key, "hex"), iv);
-    const encrypted = Buffer.concat([
-      c.update(JSON.stringify(next)),
-      c.final(),
-    ]);
-    mkdirSync(dirname(this.path), { recursive: true, mode: 0o700 });
-    writeFileSync(
-      `${this.path}.tmp`,
-      Buffer.concat([iv, c.getAuthTag(), encrypted]),
-      { mode: 0o600 },
-    );
-    renameSync(`${this.path}.tmp`, this.path);
+    this.file.write(next);
     this.token = next;
     return next.accessToken;
   }
@@ -200,6 +172,6 @@ export class ChzzkAuth {
     this.generation++;
     this.token = undefined;
     this.states.clear();
-    rmSync(this.path, { force: true });
+    this.file.remove();
   }
 }
