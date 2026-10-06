@@ -11,7 +11,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Store } from "./storage.ts";
 import type { Config } from "./config.ts";
 import { incomingSchema } from "./contracts.ts";
-import { runYoutube } from "./youtube.ts";
+import { runYoutube } from "./infrastructure/platforms/youtube-receiver.ts";
 import { ChzzkAuth } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {

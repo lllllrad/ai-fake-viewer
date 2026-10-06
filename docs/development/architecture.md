@@ -211,8 +211,9 @@ HTTP clients or credential classes. It revalidates ownership before applying
 transport results and ignores late exceptions after reset. The
 [infrastructure composition](../../packages/infrastructure/participation/platform-notices.ts)
 provides transport, clock and identifiers; the old flat notice modules only
-re-export these constructors for reference callers. Remaining provider receive
-loops still require reconstruction.
+re-export these constructors for reference callers. The YouTube receiver and
+CHZZK connection have separate owners; supervisor composition and the reference
+SOOP loop still require reconstruction.
 
 The [YouTube chat payload adapter](../../packages/infrastructure/platforms/youtube-chat-payload.ts)
 normalizes REST and gRPC messages through the shared incoming-message contract.
@@ -241,6 +242,18 @@ chat-list attribution even when their body is not JSON; provider bodies are not
 exposed in errors. Retry delays are finite, nonnegative and bounded to the host
 timer range, including receiver jitter. Chat pages remain decoded by the shared
 payload adapter before persistence.
+
+The [YouTube receiver use case](../../packages/application/inputs/youtube-receiver.ts)
+coordinates discovery, logical receive state, cursor recovery and fallback through
+explicit transport/storage/clock ports. The [infrastructure composition](../../packages/infrastructure/platforms/youtube-receiver.ts)
+binds it to one broadcast ID, typed HTTP/gRPC adapters, ingestion and the
+[checkpoint repository](../../packages/infrastructure/storage/connector-checkpoints.ts).
+A replaced or closed broadcast invalidates late discovery, REST responses and
+gRPC callbacks before writes or status changes. Each failed gRPC attempt counts
+once; configured fallback begins after three failures, using the REST-specific
+cursor. Invalid cursors clear only their own key. Normal polling does not signal
+reconnection, and REST decoder failures identify the list API rather than the
+stream API. The old YouTube module only re-exports compatibility entry points.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints

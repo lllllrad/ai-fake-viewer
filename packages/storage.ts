@@ -1,3 +1,4 @@
+import { SqliteConnectorCheckpoints } from "./infrastructure/storage/connector-checkpoints.ts";
 import { ConversationIdentities } from "./application/conversation/identity-service.ts";
 import { SqliteConversationIdentities } from "./infrastructure/conversation/identity-sqlite.ts";
 import { ConversationIngestion } from "./application/conversation/ingestion.ts";
@@ -48,6 +49,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly checkpoints: SqliteConnectorCheckpoints;
   readonly identities: ConversationIdentities;
   readonly ingestion: ConversationIngestion;
   private readonly referenceAdmission: ReferenceAdmission;
@@ -86,6 +88,7 @@ export class Store extends EventEmitter {
       this.db.close();
       throw error;
     }
+    this.checkpoints = new SqliteConnectorCheckpoints(this.db);
     this.incomingMessages = new SqliteIncomingMessages(this.db, {
       sessionId: () => this.sessionId,
       now: () => Date.now(),
@@ -426,11 +429,7 @@ export class Store extends EventEmitter {
       }));
   }
   checkpoint(key: string) {
-    return (
-      this.db
-        .prepare("SELECT value FROM connector_checkpoints WHERE key=?")
-        .get(key) as any
-    )?.value;
+    return this.checkpoints.get(key);
   }
   closed() {
     return !!(
