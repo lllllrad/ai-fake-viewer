@@ -26,7 +26,12 @@ import { RightsActionError } from "../../packages/application/rights/service.ts"
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { timingSafeEqual, randomBytes, createHmac } from "node:crypto";
+import {
+  timingSafeEqual,
+  randomBytes,
+  createHmac,
+  randomUUID,
+} from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
@@ -92,19 +97,12 @@ export async function createApp(
   const rights = createRightsService(
     opts.demo ? ":memory:" : config.privacy.rightsDatabase,
   );
-  const followups = new WithdrawalFollowups(rights);
-  if (participation)
-    participation.onWithdraw = (participant) =>
-      followups.withdrawn({
-        participantId: participant.id,
-        epoch: participant.epoch,
-        platform: participant.platform,
-        account: participant.author,
-        session: store.sessionId,
-        broadcaster: participant.broadcaster,
-        published: participant.published,
-        requestIds: participant.requestIds,
-      });
+  const followups = new WithdrawalFollowups(
+    rights,
+    store.rightsFollowups,
+    randomUUID,
+  );
+  followups.flush();
   store.on("context_invalidated", () => followups.flush());
   const privacyReady = () =>
     !participation ||

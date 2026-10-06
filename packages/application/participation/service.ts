@@ -316,7 +316,7 @@ export class ParticipationService {
       if (this.persistence) this.persistence.afterCommit(effect);
       else effect();
     }
-    this.persistence?.eraseContext(copy);
+    this.persistence?.eraseContext(copy, notify);
   }
   private changed() {
     this.persistence?.save();

@@ -315,13 +315,20 @@ and delegate to the service; they do not access SQL. The shared
 of profile fingerprinting and runtime participation behavior.
 
 The [withdrawal follow-up coordinator](../../packages/application/rights/withdrawal-followups.ts)
-connects committed withdrawal to the independent rights database. It snapshots
-only intake identifiers and at most 100 distinct provider request IDs, rather than
-retaining participant objects. Late provider IDs attach to the matching consent
-epoch's task. Creation or attachment failures stay visible as pending work and
-retry without reversing local erasure or creating duplicate tasks in the running
-process. Completed rights records are durable; the retry queue remains process-local
-and needs a durable outbox before recovery from rights-storage failures is complete.
+connects committed withdrawal to the independent rights database. Its
+[durable queue](../../packages/infrastructure/rights/followup-queue.ts) is written
+inside the consent/erasure transaction and contains only intake identifiers and at
+most 100 distinct provider request IDs. A queue write failure rolls back that
+transaction. Undelivered rights work survives broadcast end and restart; it is
+rights-processing data, not retained chat or media. Startup and participation
+status queries retry delivery. Successful delivery removes the queue payload.
+
+The rights database commits a minimal receipt with each intake. Retrying after a
+crash between intake and queue acknowledgement reuses the same task identifier.
+Receipt tombstones contain only opaque IDs and prevent a resolved/deleted task
+from being recreated by an old retry. Late provider IDs attach to their matching
+consent epoch. Rights-storage failure leaves work pending without reversing
+completed local erasure or propagating an unrelated model-request failure.
 
 The [conversation projection service](../../packages/application/conversation/projection-service.ts)
 owns public DTO creation, current consent checks, origin disclosure, snapshot

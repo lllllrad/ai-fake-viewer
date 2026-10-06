@@ -39,6 +39,39 @@ export class RightsService {
     this.repository.insert(record);
     return record;
   }
+  createFollowup(
+    id: string,
+    raw: RightsIntake,
+    requestIds: string[],
+  ): { id: string } {
+    return this.repository.transaction(() => {
+      const existing = this.repository.find(id);
+      if (existing) {
+        this.repository.save({
+          ...existing,
+          requestIds: [
+            ...new Set([...existing.requestIds, ...requestIds]),
+          ].slice(-100),
+        });
+      } else if (!this.repository.receivedFollowup(id)) {
+        const data = rightsIntakeSchema.parse(raw);
+        this.repository.insert({
+          ...data,
+          id,
+          requestIds: [...new Set(requestIds)].slice(-100),
+          state: "external_pending",
+          appDone: true,
+          providerDone: false,
+          videoDone: false,
+          copiesDone: false,
+          outcome: "pending",
+          createdAt: this.runtime.now(),
+        });
+      }
+      this.repository.acknowledgeFollowup(id);
+      return { id };
+    });
+  }
   attachRequest(id: string, requestId: string) {
     this.repository.transaction(() => {
       const record = this.repository.find(id);

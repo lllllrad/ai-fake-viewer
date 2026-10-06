@@ -59,3 +59,13 @@ export type RightsIntake = z.input<typeof rightsIntakeSchema>;
 export type RightsRecord = z.infer<typeof rightsRecordSchema>;
 export type RightsUpdate = z.infer<typeof rightsUpdateSchema>;
 export type VideoRecord = z.infer<typeof videoRecordSchema>;
+
+export const pendingFollowupSchema = z
+  .object({
+    key: z.string().min(1).max(256),
+    taskId: z.string().min(1).max(100),
+    intake: rightsIntakeSchema.optional(),
+    requestIds: z.array(z.string()).max(100),
+  })
+  .strict();
+export type PendingFollowup = z.input<typeof pendingFollowupSchema>;

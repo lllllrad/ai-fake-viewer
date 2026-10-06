@@ -1,3 +1,5 @@
+import { SqliteFollowupQueue } from "./infrastructure/rights/followup-queue.ts";
+import { enqueueWithdrawal } from "./application/rights/withdrawal-followups.ts";
 import { SqliteModelUsage } from "./infrastructure/reactions/usage-sqlite.ts";
 import {
   LocalPublicationService,
@@ -25,6 +27,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly rightsFollowups: SqliteFollowupQueue;
   private readonly transactions: SqliteTransactions;
   private readonly participationSnapshots: SqliteParticipationSnapshots;
   private readonly conversationContext: ConversationContext;
@@ -41,6 +44,7 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    this.rightsFollowups = new SqliteFollowupQueue(this.db);
     this.participationSnapshots = new SqliteParticipationSnapshots(this.db);
     this.transactions = new SqliteTransactions(this.db, () => {
       const sessionId = this.sessionId;
@@ -283,12 +287,28 @@ export class Store extends EventEmitter {
       this.participation.bindPersistence({
         run: (work) => this.transaction(work),
         save: () => this.saveParticipation(),
-        eraseContext: (participant) =>
+        eraseContext: (participant, followup) => {
+          if (followup)
+            enqueueWithdrawal(
+              this.rightsFollowups,
+              {
+                participantId: participant.id,
+                epoch: participant.epoch,
+                platform: participant.platform,
+                account: participant.author,
+                session: this.sessionId,
+                broadcaster: participant.broadcaster,
+                published: participant.published,
+                requestIds: participant.requestIds,
+              },
+              randomUUID,
+            );
           this.revokeParticipant(
             participant.platform,
             participant.broadcaster,
             participant.author,
-          ),
+          );
+        },
         afterCommit: (effect) => this.transactions.afterCommit(effect),
       });
       this.saveParticipation();

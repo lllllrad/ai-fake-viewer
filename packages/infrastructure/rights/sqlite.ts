@@ -18,7 +18,7 @@ export class SqliteRightsRepository implements RightsRepository {
     this.db = new DatabaseSync(path);
     if (path !== ":memory:") chmodSync(path, 0o600);
     this.db.exec(
-      "PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS rights_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,platform TEXT NOT NULL,url TEXT NOT NULL,broadcast_at TEXT NOT NULL,status TEXT NOT NULL);",
+      "PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS rights_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS rights_followup_receipts(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,platform TEXT NOT NULL,url TEXT NOT NULL,broadcast_at TEXT NOT NULL,status TEXT NOT NULL);",
     );
   }
   transaction<T>(work: () => T): T {
@@ -31,6 +31,16 @@ export class SqliteRightsRepository implements RightsRepository {
       this.db.exec("ROLLBACK");
       throw error;
     }
+  }
+  receivedFollowup(id: string) {
+    return !!this.db
+      .prepare("SELECT 1 FROM rights_followup_receipts WHERE id=?")
+      .get(id);
+  }
+  acknowledgeFollowup(id: string) {
+    this.db
+      .prepare("INSERT OR IGNORE INTO rights_followup_receipts VALUES(?)")
+      .run(id);
   }
   insert(record: RightsRecord) {
     this.db

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   WithdrawalFollowups,
   type FollowupWriter,
+  type PendingFollowup,
 } from "../packages/application/rights/withdrawal-followups.ts";
 const withdrawal = {
   participantId: "participant",
@@ -22,19 +23,33 @@ function fixture() {
     }> = [],
     attached: Array<[string, string]> = [];
   const writer: FollowupWriter = {
-    create: (intake, requestIds, appDone) => {
+    createFollowup: (id, intake, requestIds) => {
+      const appDone = true;
       created.push(structuredClone({ intake, requestIds, appDone }));
-      return { id: `task-${created.length}` };
+      return { id };
     },
     attachRequest: (task, request) => {
       attached.push([task, request]);
     },
   };
+  const entries = new Map<string, PendingFollowup>();
+  let sequence = 0;
+  const queue = {
+    get: (key: string) => entries.get(key),
+    save: (entry: PendingFollowup) => {
+      entries.set(entry.key, structuredClone(entry));
+    },
+    remove: (key: string) => {
+      entries.delete(key);
+    },
+    entries: () => [...entries.values()],
+    count: () => entries.size,
+  };
   return {
     created,
     attached,
     writer,
-    service: new WithdrawalFollowups(writer),
+    service: new WithdrawalFollowups(writer, queue, () => `task-${++sequence}`),
   };
 }
 test("withdrawal snapshots only minimal intake and bounded deduplicated request identifiers", () => {
@@ -57,8 +72,8 @@ test("withdrawal snapshots only minimal intake and bounded deduplicated request 
 });
 test("failed creation keeps one follow-up and merges late IDs without blocking local withdrawal", () => {
   const f = fixture(),
-    create = f.writer.create;
-  f.writer.create = () => {
+    create = f.writer.createFollowup;
+  f.writer.createFollowup = () => {
     throw new Error("fixture rights unavailable");
   };
   f.service.withdrawn(withdrawal);
@@ -66,7 +81,7 @@ test("failed creation keeps one follow-up and merges late IDs without blocking l
   f.service.requestReturned(withdrawal.participantId, 1, "late-request");
   f.service.requestReturned(withdrawal.participantId, 1, "late-request");
   assert.equal(f.service.pendingCount, 1);
-  f.writer.create = create;
+  f.writer.createFollowup = create;
   f.service.flush();
   f.service.flush();
   assert.equal(f.created.length, 1);

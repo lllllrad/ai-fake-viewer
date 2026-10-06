@@ -10,6 +10,6 @@ export interface ParticipationRuntime {
 export interface ParticipationPersistence {
   run<T>(work: () => T): T;
   save(): void;
-  eraseContext(participant: Participant): void;
+  eraseContext(participant: Participant, followup: boolean): void;
   afterCommit(effect: () => void): void;
 }

@@ -54,8 +54,9 @@ export function ParticipationPage({ now }: { now: number }) {
         <>
           {!!data.pendingFollowups && (
             <p role="alert">
-              후속 작업 {data.pendingFollowups}건을 저장하지 못했습니다.
-              저장소를 확인하고 재시도 결과를 확인한 뒤 종료하세요.
+              후속 작업 {data.pendingFollowups}건의 권리 요청 저장 처리가 대기
+              중입니다. 대기 기록은 저장되어 있으며 서버 재시작 후에도 다시
+              시도합니다.
             </p>
           )}
           <section aria-label="자동 안내 상태" className="participation-health">
