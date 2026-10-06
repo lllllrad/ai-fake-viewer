@@ -1,4 +1,9 @@
 import {
+  SoopBridge,
+  SoopBridgeError,
+} from "../../packages/application/inputs/soop-bridge.ts";
+import { registerSoopBridgeRoutes } from "./http/routes/soop-bridge.ts";
+import {
   ModelAccount,
   AccountChangedError,
 } from "../../packages/application/accounts/model-account.ts";
@@ -438,7 +443,8 @@ export async function createApp(
             e instanceof PrivacyActionError ||
             e instanceof RightsActionError ||
             e instanceof BroadcastCommandError ||
-            e instanceof AccountChangedError
+            e instanceof AccountChangedError ||
+            e instanceof SoopBridgeError
           ? e.message
           : req.url.startsWith("/api/admin/")
             ? "Action unavailable. Check configuration, credentials, fresh frames and session state."
@@ -686,99 +692,32 @@ export async function createApp(
   });
   registerModelAccountRoutes(app, modelAccount);
   registerPlatformAccountRoutes(app, platformAccounts);
-  app.get("/api/admin/soop/chat-session", async (_req, reply) => {
-    if (
-      opts.demo ||
-      !participation?.available("soop", config.soop.streamerId) ||
-      config.soop.mode !== "official" ||
-      !config.soop.streamerId
-    )
-      return reply
-        .code(409)
-        .send({ error: "SOOP official mode and streamer ID are required." });
-    if (!process.env.SOOP_CLIENT_ID || !process.env.SOOP_CLIENT_SECRET)
-      return reply
-        .code(409)
-        .send({ error: "SOOP developer app credentials are not configured." });
-    try {
-      return {
-        clientId: process.env.SOOP_CLIENT_ID,
-        accessToken: await soopAuth.access(
-          process.env.SOOP_CLIENT_ID,
-          process.env.SOOP_CLIENT_SECRET,
-        ),
-        streamerId: config.soop.streamerId,
-      };
-    } catch {
-      supervisor.status("soop", "auth_required");
-      return reply
-        .code(409)
-        .send({ error: "Authorize SOOP from the admin page first." });
-    }
+  const soopBridge = new SoopBridge({
+    settings: () => ({
+      enabled: !opts.demo && config.soop.mode === "official",
+      available: !!participation?.available("soop", config.soop.streamerId),
+      closed: store.closed(),
+      broadcastId: store.sessionId,
+      streamerId: config.soop.streamerId,
+      clientId: process.env.SOOP_CLIENT_ID,
+      clientSecret: process.env.SOOP_CLIENT_SECRET,
+      state: supervisor.states.soop.state,
+    }),
+    access: (clientId, secret) => soopAuth.access(clientId, secret),
+    status: (state) => supervisor.status("soop", state),
+    connectionLost: () => participation?.connectionLost("soop"),
+    receive: (message) => supervisor.receive("soop", message),
+    notices: {
+      reset: () => noticeBot?.reset(),
+      next: (connected) => noticeBot?.next(connected) ?? null,
+      state: () => noticeBot?.state ?? "disabled",
+      failed: (id) => noticeBot?.failed(id),
+      echo: (author, text) => {
+        noticeBot?.echo(author, text);
+      },
+    },
   });
-  app.post("/api/admin/soop/status", async (req) => {
-    const body = z
-      .object({
-        state: z.enum([
-          "connecting",
-          "subscribed",
-          "disconnected",
-          "permission_blocked",
-          "failed",
-        ]),
-      })
-      .parse(req.body);
-    if (body.state !== "subscribed") noticeBot?.reset();
-    if (body.state !== "subscribed" && participation) {
-      participation.connectionLost("soop");
-    }
-    supervisor.status("soop", body.state);
-    return { ok: true };
-  });
-  app.post("/api/admin/soop/notices/next", async () => ({
-    notice:
-      noticeBot?.next(
-        !opts.demo &&
-          config.soop.mode === "official" &&
-          !store.closed() &&
-          supervisor.states.soop.state === "subscribed",
-      ) ?? null,
-    state: noticeBot?.state ?? "disabled",
-  }));
-  app.post("/api/admin/soop/notices/failed", async (req) => {
-    const { id } = z.object({ id: z.string().uuid() }).strict().parse(req.body);
-    noticeBot?.failed(id);
-    return { ok: true };
-  });
-  app.post("/api/admin/soop/message", async (req, reply) => {
-    if (opts.demo || config.soop.mode !== "official" || store.closed())
-      return reply.code(409).send({ error: "SOOP chat input is unavailable." });
-    if (supervisor.states.soop.state !== "subscribed")
-      return reply.code(409).send({
-        error: "SOOP chat is not connected to the configured broadcast.",
-      });
-    const body = z
-      .object({
-        userId: z.string().min(1).max(256),
-        userNickname: z.string().trim().min(1).max(120),
-        message: z.string().trim().min(1).max(4000),
-      })
-      .strict()
-      .parse(req.body);
-    if (body.userId === config.soop.streamerId) {
-      noticeBot?.echo(body.userId, body.message);
-      return { ok: true };
-    }
-    supervisor.receive("soop", {
-      platform: "soop",
-      channel: config.soop.streamerId,
-      author: body.userId,
-      name: body.userNickname,
-      text: body.message,
-      sourceId: null,
-    });
-    return { ok: true };
-  });
+  registerSoopBridgeRoutes(app, soopBridge);
   if (existsSync(resolve("dist/web"))) {
     await app.register(fastifyStatic, {
       root: resolve("dist/web"),

@@ -456,6 +456,19 @@ older token exchange cannot overwrite the selection. The
 before invoking effects and preserve existing endpoints; protocol and encrypted
 account state remain in the adapter.
 
+The [SOOP bridge service](../../packages/application/inputs/soop-bridge.ts)
+owns the official browser SDK's server-side session, status, inbound messages
+and fixed-notice coordination. Its
+[HTTP adapter](../../apps/server/http/routes/soop-bridge.ts) validates browser
+payloads without accessing credentials or mutating participation directly.
+An awaited credential result is rechecked against the open broadcast, channel
+and app configuration before returning it to the browser. Late failures from a
+different broadcast cannot overwrite current authorization status. Closed
+broadcasts reject status and chat updates and cannot issue notices.
+Broadcaster messages go only to exact notice echo confirmation; viewer messages
+enter the normal consent-aware ingestion path. Non-subscribed reports reset
+pending notices and delivery opportunity before updating receiver status.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.
