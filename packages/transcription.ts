@@ -1,33 +1,16 @@
 import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { z } from "zod";
 import type { Config } from "./config.ts";
 import { workerEnv } from "./capture.ts";
 
-export interface Transcript {
-  id: string;
-  capturedAt: number;
-  text: string;
-}
+import {
+  transcribeSpeech,
+  type Transcript,
+} from "./application/inputs/transcribe-speech.ts";
+import { groqSpeech } from "./infrastructure/inputs/groq-speech.ts";
+export type { Transcript } from "./application/inputs/transcribe-speech.ts";
+export { wavFromPcm } from "./infrastructure/inputs/groq-speech.ts";
 
-export function wavFromPcm(pcm: Buffer) {
-  const header = Buffer.alloc(44);
-  header.write("RIFF", 0);
-  header.writeUInt32LE(36 + pcm.length, 4);
-  header.write("WAVEfmt ", 8);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(1, 22);
-  header.writeUInt32LE(16000, 24);
-  header.writeUInt32LE(32000, 28);
-  header.writeUInt16LE(2, 32);
-  header.writeUInt16LE(16, 34);
-  header.write("data", 36);
-  header.writeUInt32LE(pcm.length, 40);
-  return Buffer.concat([header, pcm]);
-}
-
-const response = z.object({ text: z.string().max(4000) });
 export class Transcriber {
   allowProcessing: () => boolean = () => true;
   state = "stopped";
@@ -114,14 +97,6 @@ export class Transcriber {
     const key = process.env.GROQ_API_KEY;
     if (!key) return;
     this.busy = true;
-    this.requests++;
-    try {
-      this.onRequest?.(this.requests);
-    } catch {
-      this.state = "storage_error";
-      this.busy = false;
-      return;
-    }
     const generation = this.generation;
     const contextRevision = this.contextRevision;
     this.controller = new AbortController();
@@ -129,68 +104,45 @@ export class Transcriber {
       this.controller.signal,
       AbortSignal.timeout(20000),
     ]);
-    const body = new FormData();
-    body.set("model", "whisper-large-v3-turbo");
-    body.set("response_format", "json");
-    if (this.config.language) body.set("language", this.config.language);
-    body.set(
-      "file",
-      new Blob([new Uint8Array(wavFromPcm(pcm))], { type: "audio/wav" }),
-      "audio.wav",
-    );
+    const current = () =>
+      generation === this.generation &&
+      contextRevision === this.contextRevision &&
+      this.allowProcessing();
     try {
-      const result = await this.request(
-        "https://api.groq.com/openai/v1/audio/transcriptions",
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${key}` },
-          body,
-          signal,
+      const outcome = await transcribeSpeech({
+        capturedAt,
+        current,
+        reserve: () => {
+          this.requests++;
+          this.onRequest?.(this.requests);
         },
-      );
-      if (!result.ok)
-        throw Error(
-          result.status === 429
-            ? "quota_blocked"
-            : result.status === 401 || result.status === 403
-              ? "auth_required"
-              : "provider_error",
-        );
-      const raw = await result.text();
-      if (raw.length > 8192) throw Error("Groq transcription too large");
-      const text = response.parse(JSON.parse(raw)).text.trim().slice(0, 1000);
-      if (
-        generation === this.generation &&
-        contextRevision === this.contextRevision &&
-        this.allowProcessing() &&
-        text
-      ) {
-        const entry = { id: randomUUID(), capturedAt, text };
-        try {
-          if (this.onTranscript && !this.onTranscript(entry)) return;
-        } catch {
-          this.state = "storage_error";
-          return;
-        }
-        this.transcripts.push(entry);
+        request: () =>
+          groqSpeech({
+            pcm,
+            language: this.config.language,
+            key,
+            signal,
+            request: this.request,
+          }),
+        publish: (entry) => this.onTranscript?.(entry) ?? true,
+        id: randomUUID,
+      });
+      // A stop or context reset can occur between use-case completion and resumption.
+      if (!current()) return;
+      if (outcome.kind === "failed") this.state = outcome.state;
+      else if (outcome.kind === "published") {
+        this.transcripts.push(outcome.entry);
         this.transcripts = this.recent();
         this.state = "receiving";
         this.failures = 0;
       }
-    } catch (error) {
-      if (generation === this.generation)
-        this.state =
-          error instanceof Error &&
-          ["quota_blocked", "auth_required"].includes(error.message)
-            ? error.message
-            : "provider_error";
     } finally {
       this.busy = false;
       if (
         generation === this.generation &&
         this.requests >= this.config.maxRequests
       ) {
-        this.state = "budget_exhausted";
+        if (this.state !== "storage_error") this.state = "budget_exhausted";
         this.child?.kill();
       }
     }

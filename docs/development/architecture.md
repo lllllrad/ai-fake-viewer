@@ -295,6 +295,16 @@ hooks are isolated in [demo routes](../../apps/server/demo/persona-routes.ts),
 loaded only for synthetic demo operation. They remain reference functionality,
 not part of the live product's architecture or UI.
 
+The [speech transcription use case](../../packages/application/inputs/transcribe-speech.ts)
+owns durable request reservation, current-context checks, text normalization and
+publication outcomes. The [Groq adapter](../../packages/infrastructure/inputs/groq-speech.ts)
+owns WAV encoding, multipart request fields and provider response/error parsing.
+The existing worker coordinator supplies cancellation, clocks and publication
+callbacks. Failed request-count persistence sends no audio and conservatively retains
+the attempted count because a throwing callback may already have committed. Late results and failures after context reset
+cannot publish speech or overwrite the current input state. Recent-window
+selection and the AI pipeline's latest-ten-chunk contract remain unchanged.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate
