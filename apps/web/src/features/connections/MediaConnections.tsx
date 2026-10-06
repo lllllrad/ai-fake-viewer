@@ -1,7 +1,7 @@
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import { inputHealth } from "../../input-health.ts";
 import { connectionApi } from "./api.ts";
-import { useConnectionActions } from "./use-connection-actions.ts";
+import { useAdminActions } from "../../lib/use-admin-actions.ts";
 export function MediaConnections({
   status,
   preview,
@@ -13,7 +13,7 @@ export function MediaConnections({
   stale: boolean;
   refresh: () => Promise<void>;
 }) {
-  const actions = useConnectionActions(refresh),
+  const actions = useAdminActions(refresh),
     audio = inputHealth(status.audio.state, "transcription");
   const fresh =
     !stale &&

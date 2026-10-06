@@ -96,7 +96,10 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       await route.fulfill({ json: data });
     });
     await navigation.getByRole("link", { name: "방송", exact: true }).click();
-    await page.getByRole("button", { name: "상태 다시 확인" }).click();
+    await page
+      .getByRole("region", { name: "방송 상태 및 AI 제어" })
+      .getByRole("button", { name: "상태 다시 확인" })
+      .click();
     await page.route(
       "https://static.sooplive.com/asset/app/chat-sdk/sooplive-chat-sdk.js",
       (route) =>
@@ -224,11 +227,36 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await panel.getByRole("button", { name: "요청 접수", exact: true }).click();
     const item = panel.locator("article").filter({
       has: page.getByRole("heading", {
-        name: "soop · browser-viewer · 접수",
+        name: /^SOOP · browser-viewer ·/,
       }),
     });
     await expect(item).toBeVisible();
     await item.getByLabel("앱 조치 확인", { exact: true }).check();
+    // Refresh must not overwrite an unfinished form.
+    await panel.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect(
+      item.getByLabel("앱 조치 확인", { exact: true }),
+    ).toBeChecked();
+    // Malformed responses retain a visibly stale view and disable mutations.
+    await page.route("**/api/admin/privacy", (route) =>
+      route.fulfill({ json: {} }),
+    );
+    await panel.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect(panel.getByRole("alert")).toContainText("마지막 확인 결과");
+    await expect(
+      item.getByRole("button", { name: "처리 상태 저장" }),
+    ).toBeDisabled();
+    await expect(
+      panel.getByRole("region", { name: "자동 안내 상태" }),
+    ).toContainText("확인 필요");
+    await page.unroute("**/api/admin/privacy");
+    await panel.getByRole("button", { name: "상태 다시 확인" }).click();
+    await expect(
+      item.getByRole("button", { name: "처리 상태 저장" }),
+    ).toBeEnabled();
+    await expect(
+      item.getByLabel("앱 조치 확인", { exact: true }),
+    ).toBeChecked();
     await item.getByLabel("진행 상태").selectOption("completed");
     await item.getByRole("button", { name: "처리 상태 저장" }).click();
     await expect(panel.getByRole("alert")).toContainText("각각 확인");
@@ -236,9 +264,49 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await item.getByRole("button", { name: "처리 상태 저장" }).click();
     await expect(
       panel.getByRole("heading", {
-        name: "soop · browser-viewer · 외부·영상 조치 확인 중",
+        name: "SOOP · browser-viewer · 외부·영상 조치 확인 중",
       }),
     ).toBeVisible();
+    await item.getByLabel("외부 제공자 조치 확인", { exact: true }).check();
+    await item.getByLabel("공개 영상 조치 확인", { exact: true }).check();
+    await item
+      .getByLabel("원본·편집본·재업로드 사본 조치 확인", { exact: true })
+      .check();
+    await item.getByLabel("진행 상태").selectOption("completed");
+    await item.getByLabel("조치 결과").selectOption("deleted");
+    await item.getByRole("button", { name: "처리 상태 저장" }).click();
+    const resolved = panel.locator("article").filter({
+      has: page.getByRole("heading", {
+        name: "SOOP · browser-viewer · 완료",
+        exact: true,
+      }),
+    });
+    await expect(resolved).toBeVisible();
+    page.once("dialog", (dialog) => void dialog.accept());
+    await resolved
+      .getByRole("button", { name: "불필요해진 요청 정보 삭제" })
+      .click();
+    await expect(resolved).toHaveCount(0);
+    await panel.getByText(/영상·사본 목록/).click();
+    await panel.getByLabel("영상 주소 또는 사본 위치").fill("fixture://video");
+    await panel.getByLabel("방송 시각", { exact: true }).fill("2026-01-01");
+    await panel.getByRole("button", { name: "영상 목록에 추가" }).click();
+    await expect(
+      panel.getByText("SOOP · fixture://video · 2026-01-01 · 공개", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    assert(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    );
+    await page.screenshot({
+      path: "test-results/participation-mobile.png",
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
     assert(
       !(await page.locator("body").innerText()).includes(
         "PRIVATE_UNCONSENTED_FIXTURE",

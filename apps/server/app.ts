@@ -17,6 +17,7 @@ import {
   profileIssues,
 } from "../../packages/privacy-profile.ts";
 import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
+import { participationStatusSchema } from "../../packages/contracts/participation.ts";
 import { registerRightsRoutes } from "./http/routes/rights.ts";
 import { RightsActionError } from "../../packages/application/rights/service.ts";
 import Fastify from "fastify";
@@ -1152,7 +1153,8 @@ export async function createApp(
   });
   app.get("/api/admin/privacy", async () => {
     flushRights();
-    return {
+    return participationStatusSchema.parse({
+      generatedAt: Date.now(),
       pendingFollowups: pendingRights.size,
       noticeBot: noticeBot?.state ?? "disabled",
       youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
@@ -1177,7 +1179,7 @@ export async function createApp(
         : [],
       rights: rights.list(),
       videos: rights.videos(),
-    };
+    });
   });
   app.put("/api/admin/privacy/profile", async (req) => {
     const profile = privacyProfileSchema.parse(req.body);

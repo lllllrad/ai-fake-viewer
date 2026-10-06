@@ -2,7 +2,8 @@
 
 This defines the replacement UI for the current live feature set. The broadcast,
 connections and participation destinations are implemented. The connection screen uses separate platform, media, AI account and reader-link
-components. The SOOP browser connection uses a dedicated controller; rights components and
+components. Participation uses separate participant, operating-profile, rights-request
+and video-inventory views. The SOOP browser connection uses a dedicated controller;
 remaining server adapters still require replacement during reconstruction. Behavior is
 owned by [requirements](behavior.md), [participation](participation.md) and
 [personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
@@ -134,6 +135,18 @@ removal, provider action, public-video action and controlled-copy action. Requir
 an outcome or stated limitation before marking a request complete. The UI does
 not claim to have performed external deletion by changing a status. Allow removal
 of unnecessary resolved records and optional video inventory administration.
+
+The [participation page](../../apps/web/src/features/participation/ParticipationPage.tsx)
+owns one cancellable query lifetime for its
+[validated status contract](../../packages/contracts/participation.ts). It reuses
+the workspace request/session machinery rather than starting interval requests
+that can overlap. Authentication failure clears its data; service or malformed
+responses retain a visibly stale view with mutations disabled. Participant and
+rights-record commands have independent pending/error state. Navigation and
+polling preserve unfinished edits; untouched rights records follow current server
+values. Resolved-record deletion requires confirmation. Shared
+[admin actions](../../apps/web/src/lib/use-admin-actions.ts) suppress duplicate
+commands and abort requests when their owning component is removed.
 
 ## Reader and OBS overlay
 

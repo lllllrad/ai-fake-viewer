@@ -1,0 +1,147 @@
+.participation-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.participation-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.participation-heading h2 {
+  margin-top: 0;
+}
+.participation-heading p {
+  max-width: 70ch;
+  color: var(--muted, #aab5c4);
+}
+.participation-heading > button {
+  flex-shrink: 0;
+}
+.participation-health {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.participation-health p {
+  background: #fff;
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  margin: 0;
+  border: 1px solid #dce4d8;
+  border-radius: 12px;
+}
+.participation-health span {
+  font-size: 0.9rem;
+}
+.participation-section {
+  font-size: 14px;
+  margin-top: 0;
+  color: #24332e;
+  background: #fff;
+  border: 1px solid #dce4d8;
+  border-radius: 12px;
+  padding: 18px;
+  min-width: 0;
+}
+.participation-section > summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.participation-list {
+  display: grid;
+  gap: 12px;
+  padding: 0;
+  list-style: none;
+}
+.participation-item {
+  padding: 16px 0;
+  border-top: 1px solid #dce4d8;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.participation-item h3 {
+  margin-top: 0;
+}
+.participation-item button {
+  margin: 4px 8px 4px 0;
+}
+.participation-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0;
+}
+.participation-fields label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.participation-fields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.participation-item fieldset {
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+.participation-item legend {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.participation-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.participation-check input {
+  width: auto;
+}
+.participation-notice {
+  padding: 12px;
+  background: #edf3e9;
+  border-radius: 8px;
+}
+.participation-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px 20px;
+}
+.participation-facts dt {
+  color: var(--muted, #aab5c4);
+}
+.participation-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.operator-workspace .participation-page [role="alert"] {
+  color: #9b3434;
+}
+@media (max-width: 680px) {
+  .participation-heading {
+    flex-direction: column;
+  }
+  .participation-health,
+  .participation-fields,
+  .participation-facts {
+    grid-template-columns: 1fr;
+  }
+  .participation-facts dd {
+    margin-bottom: 8px;
+  }
+}
+
+.participation-fields select {
+  border: 1px solid #c8d3c5;
+  border-radius: 8px;
+  padding: 12px;
+}
+.participation-section > summary {
+  color: #273f2f;
+  font-size: 15px;
+}

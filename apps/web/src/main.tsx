@@ -7,7 +7,7 @@ import "./features/workspace/workspace.css";
 import { adminClient } from "./lib/admin-client";
 import { useAdminSession } from "./features/workspace/use-admin-session";
 import { ConversationPage } from "./features/conversation/ConversationPage";
-import { PrivacyPanel } from "./privacy-panel";
+import { ParticipationPage } from "./features/participation/ParticipationPage";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { OperationsDashboard } from "./operations-dashboard";
@@ -252,14 +252,16 @@ function Admin() {
             className="workspace-screen"
             id="participation"
           >
-            <h2 className="workspace-page-title">시청자 참여 관리</h2>
+            {status.demo && (
+              <h2 className="workspace-page-title">시청자 참여 관리</h2>
+            )}
             {status.demo ? (
               <p className="card">
                 데모에서는 인공 입력을 사용합니다. 실제 방송의 동의·권리행사
                 관리는 실제 입력 모드에서 사용할 수 있습니다.
               </p>
             ) : (
-              <PrivacyPanel />
+              <ParticipationPage now={now} />
             )}
           </div>
           <div

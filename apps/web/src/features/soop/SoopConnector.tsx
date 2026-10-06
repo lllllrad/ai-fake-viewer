@@ -4,7 +4,7 @@ import { inputHealth } from "../../input-health.ts";
 import { SoopController } from "./controller.ts";
 import { browserSoopPorts } from "./browser-adapter.ts";
 import { connectionApi } from "../connections/api.ts";
-import { useConnectionActions } from "../connections/use-connection-actions.ts";
+import { useAdminActions } from "../../lib/use-admin-actions.ts";
 export function SoopConnector({
   setup,
   state,
@@ -27,7 +27,7 @@ export function SoopConnector({
     controller.subscribe,
     controller.snapshot,
   );
-  const actions = useConnectionActions(refresh);
+  const actions = useAdminActions(refresh);
   useEffect(() => {
     const timer = setInterval(() => void controller.poll(), 1000);
     return () => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-export function useConnectionActions(refresh: () => Promise<void>) {
+export function useAdminActions(refresh: () => Promise<void>) {
   const requests = useRef(new Map<string, AbortController>());
   const [pending, setPending] = useState<string[]>([]);
   const [error, setError] = useState("");
@@ -14,7 +14,7 @@ export function useConnectionActions(refresh: () => Promise<void>) {
     key: string,
     task: (signal: AbortSignal) => Promise<void>,
   ) => {
-    if (requests.current.has(key)) return;
+    if (requests.current.has(key)) return false;
     const controller = new AbortController();
     requests.current.set(key, controller);
     setPending([...requests.current.keys()]);
@@ -22,6 +22,7 @@ export function useConnectionActions(refresh: () => Promise<void>) {
     try {
       await task(controller.signal);
       if (!controller.signal.aborted) await refresh();
+      return !controller.signal.aborted;
     } catch (error) {
       if (!controller.signal.aborted)
         setError(
@@ -29,6 +30,7 @@ export function useConnectionActions(refresh: () => Promise<void>) {
             ? error.message
             : "요청을 처리하지 못했습니다.",
         );
+      return false;
     } finally {
       if (requests.current.get(key) === controller)
         requests.current.delete(key);

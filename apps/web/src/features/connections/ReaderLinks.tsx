@@ -1,10 +1,10 @@
 import { useState } from "react";
 import type { ReaderLinks as Links } from "../../../../../packages/contracts/connections.ts";
 import { connectionApi } from "./api.ts";
-import { useConnectionActions } from "./use-connection-actions.ts";
+import { useAdminActions } from "../../lib/use-admin-actions.ts";
 export function ReaderLinks({ refresh }: { refresh: () => Promise<void> }) {
   const [links, setLinks] = useState<Links>();
-  const actions = useConnectionActions(refresh);
+  const actions = useAdminActions(refresh);
   return (
     <section className="card" aria-label="리더와 OBS 연결">
       <h2>리더·OBS 연결</h2>

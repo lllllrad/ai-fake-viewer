@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import type { AvailableModel } from "../../../../../packages/contracts/connections.ts";
 import { connectionApi } from "./api.ts";
-import { useConnectionActions } from "./use-connection-actions.ts";
+import { useAdminActions } from "../../lib/use-admin-actions.ts";
 export function AiConnection({
   status,
   stale,
@@ -12,7 +12,7 @@ export function AiConnection({
   stale: boolean;
   refresh: () => Promise<void>;
 }) {
-  const actions = useConnectionActions(refresh),
+  const actions = useAdminActions(refresh),
     [models, setModels] = useState<AvailableModel[]>([]),
     [loginUrl, setLoginUrl] = useState("");
   const activeAccount = useRef(status.chatgpt.active);
