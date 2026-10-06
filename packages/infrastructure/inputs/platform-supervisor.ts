@@ -13,7 +13,7 @@ import type { Config } from "../../config.ts";
 import { incomingSchema } from "../../contracts.ts";
 import { runYoutube } from "../platforms/youtube-receiver.ts";
 import { ChzzkAuth } from "../accounts/chzzk-auth.ts";
-import { workerEnv } from "../../capture.ts";
+import { workerEnv } from "./worker-session.ts";
 export class Supervisor {
   youtubeNotices?: YoutubeNotices;
   chzzkNotices?: ChzzkNotices;

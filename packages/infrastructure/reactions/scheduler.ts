@@ -5,10 +5,10 @@ import { TimingGate } from "../../application/reactions/timing-gate.ts";
 import { TypeSafeTimingGate } from "./typesafe-gate.ts";
 import { generationIssue, ModelRequestError } from "../../model-errors.ts";
 import type { Store } from "../../storage.ts";
-import type { Capture } from "../../capture.ts";
+import type { Capture } from "../inputs/screen-input.ts";
 import type { Config } from "../../config.ts";
 import type { Model } from "../../model.ts";
-import type { Transcriber } from "../../transcription.ts";
+import type { Transcriber } from "../inputs/speech-input.ts";
 
 /** Node composition only; the application coordinator owns generation and publication flow. */
 export class Scheduler extends ReactionCoordinator<Buffer, NodeJS.Timeout> {

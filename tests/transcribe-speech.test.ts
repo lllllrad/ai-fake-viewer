@@ -118,3 +118,97 @@ test("failed usage persistence sends no audio and retains its conservative attem
     else process.env.GROQ_API_KEY = key;
   }
 });
+
+for (const retire of ["clear", "stop"] as const) {
+  for (const failed of [false, true]) {
+    test(`speech ${retire} releases retired work without disturbing its replacement (failed=${failed})`, async (t) => {
+      const key = process.env.GROQ_API_KEY;
+      process.env.GROQ_API_KEY = "fixture-key";
+      t.after(() => {
+        if (key === undefined) delete process.env.GROQ_API_KEY;
+        else process.env.GROQ_API_KEY = key;
+      });
+      const responses: Array<(response: Response) => void> = [];
+      const signals: AbortSignal[] = [];
+      const published: Transcript[] = [];
+      const transcriber = new Transcriber(
+        configSchema.parse({ audio: { maxRequests: 2 } }).audio,
+        async (_url, init) => {
+          signals.push(init!.signal!);
+          return new Promise<Response>((resolve) => {
+            responses.push(resolve);
+          });
+        },
+        (entry) => {
+          published.push(entry);
+          return true;
+        },
+      );
+      t.after(() => transcriber.stop());
+      transcriber.state = "receiving";
+      const first = transcriber.transcribe(Buffer.alloc(320000));
+      assert.equal(responses.length, 1);
+      if (retire === "clear") transcriber.clearContext();
+      else transcriber.stop();
+      assert(signals[0].aborted);
+      assert.equal(transcriber.busy, false);
+      transcriber.state = "receiving";
+      const second = transcriber.transcribe(Buffer.alloc(320000));
+      assert.equal(responses.length, 2);
+      assert.equal(transcriber.busy, true);
+      responses[0](
+        failed
+          ? new Response(null, { status: 429 })
+          : Response.json({ text: "retired fixture" }),
+      );
+      await first;
+      assert.equal(transcriber.busy, true);
+      assert.equal(transcriber.state, "receiving");
+      assert.equal(published.length, 0);
+      assert.equal(signals[1].aborted, false);
+      await transcriber.transcribe(Buffer.alloc(320000));
+      assert.equal(responses.length, 2);
+      responses[1](Response.json({ text: "current fixture" }));
+      await second;
+      assert.equal(transcriber.busy, false);
+      assert.equal(transcriber.controller, undefined);
+      assert.equal(transcriber.state, "budget_exhausted");
+      assert.deepEqual(
+        published.map((entry) => entry.text),
+        ["current fixture"],
+      );
+      assert.deepEqual(
+        transcriber.recent().map((entry) => entry.text),
+        ["current fixture"],
+      );
+    });
+  }
+}
+
+test("clearing the last reserved speech request immediately exposes its exhausted budget", async (t) => {
+  const key = process.env.GROQ_API_KEY;
+  process.env.GROQ_API_KEY = "fixture-key";
+  t.after(() => {
+    if (key === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = key;
+  });
+  let complete!: (response: Response) => void;
+  const transcriber = new Transcriber(
+    configSchema.parse({ audio: { maxRequests: 1 } }).audio,
+    () =>
+      new Promise<Response>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  t.after(() => transcriber.stop());
+  transcriber.state = "receiving";
+  const pending = transcriber.transcribe(Buffer.alloc(320000));
+  transcriber.clearContext();
+  assert.equal(transcriber.requests, 1);
+  assert.equal(transcriber.busy, false);
+  assert.equal(transcriber.state, "budget_exhausted");
+  complete(Response.json({ text: "retired fixture" }));
+  await pending;
+  assert.equal(transcriber.state, "budget_exhausted");
+  assert.deepEqual(transcriber.recent(), []);
+});

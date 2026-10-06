@@ -143,6 +143,22 @@ and retired worker messages cannot enter the new broadcast.
 
 ## Screen and speech inputs
 
+The [screen adapter](../../packages/infrastructure/inputs/screen-input.ts) wires
+worker events to bounded screen context. Its artificial image renderer is loaded
+only for demo capture. The [speech adapter](../../packages/infrastructure/inputs/speech-input.ts)
+wires worker PCM to the transcription use case, provider transport and durable
+publication callback. Root media modules retain compatibility exports only;
+production composition imports these adapters directly.
+
+Speech requests have identity-bound ownership. Context invalidation and input
+stop detach the current request before aborting it, so fresh context need not wait
+for an obsolete transport to settle. A late success or failure cannot publish,
+clear the replacement's busy state or apply budget-stop state to its worker.
+Canceled requests retain their already-reserved usage. Only the current request
+can finish its processing slot. Clearing context at an already-exhausted cap
+stops the worker and reports that cap immediately, without waiting for a retired
+response.
+
 The [speech transcription use case](../../packages/application/inputs/transcribe-speech.ts)
 owns durable request reservation, current-context checks, text normalization and
 publication outcomes. The [Groq adapter](../../packages/infrastructure/inputs/groq-speech.ts)

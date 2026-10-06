@@ -1,7 +1,7 @@
 import { ModelAuthorization } from "../../application/reactions/model-authorization.ts";
 import type { Store } from "../../storage.ts";
-import type { Capture } from "../../capture.ts";
-import type { Transcriber } from "../../transcription.ts";
+import type { Capture } from "../inputs/screen-input.ts";
+import type { Transcriber } from "../inputs/speech-input.ts";
 import type { ParticipationService } from "../../application/participation/service.ts";
 import type { WithdrawalFollowups } from "../../application/rights/withdrawal-followups.ts";
 import { SqliteModelAudience } from "./model-audience.ts";
