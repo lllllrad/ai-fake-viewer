@@ -1,5 +1,6 @@
 import { limitState, type ApiFailure } from "./api-health.ts";
-import { NoticeBot } from "./notice-bot.ts";
+import { randomUUID } from "node:crypto";
+import { FixedNoticeDelivery } from "./application/participation/fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import type { ChzzkAuth } from "./chzzk.ts";
 import { noticeParts } from "./youtube-notices.ts";
@@ -7,9 +8,9 @@ export class ChzzkNotices {
   state = "waiting_connection";
   failure?: ApiFailure;
   private target?: { chat: string; broadcaster: string };
-  private bots = new Map<string, NoticeBot>();
+  private bots = new Map<string, FixedNoticeDelivery>();
   private job?: {
-    bot: NoticeBot;
+    bot: FixedNoticeDelivery;
     id: string;
     text: string;
     parts: string[];
@@ -51,7 +52,12 @@ export class ChzzkNotices {
     try {
       let bot = this.bots.get(target.broadcaster);
       if (!bot) {
-        bot = new NoticeBot(this.participation, target.broadcaster, "chzzk");
+        bot = new FixedNoticeDelivery(
+          this.participation,
+          target.broadcaster,
+          "chzzk",
+          { now: () => Date.now(), id: randomUUID },
+        );
         this.bots.set(target.broadcaster, bot);
       }
       if (this.job && !bot.valid(this.job.id)) {

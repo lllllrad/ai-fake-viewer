@@ -28,7 +28,7 @@ import {
 } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
-import { NoticeBot } from "../../packages/notice-bot.ts";
+import { FixedNoticeDelivery } from "../../packages/application/participation/fixed-notice-delivery.ts";
 import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
 import {
   PrivacyActionError,
@@ -101,7 +101,10 @@ export async function createApp(
     participation,
   );
   const noticeBot = participation
-    ? new NoticeBot(participation, config.soop.streamerId)
+    ? new FixedNoticeDelivery(participation, config.soop.streamerId, "soop", {
+        now: () => Date.now(),
+        id: randomUUID,
+      })
     : undefined;
   store.on("reset", () => noticeBot?.reset());
   const rights = createRightsService(

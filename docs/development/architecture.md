@@ -171,7 +171,16 @@ and drains the request before shutdown finishes. Queued callbacks and late
 failures cannot restart sending. Unexpected exceptions retire this delivery
 session and expose unconfirmed delivery; reconnect the platform to resume.
 Expected provider failures retain their existing sender-specific backoff policy.
-Remaining provider loops and notice sender internals still require reconstruction.
+The [fixed notice delivery owner](../../packages/application/participation/fixed-notice-delivery.ts)
+selects eligible waiting viewers, reserves attempts, binds one outstanding notice
+to the broadcast/profile/consent revision, and verifies delivery receipts. Time
+and identifier generation are injected by composition. Sending and receipt use
+the same eligibility check; a target already covered by another confirmed notice
+cannot turn a late receipt into delivery for newer viewers. Invalidated jobs
+release the queue without waiting for their expiry. Reset discards receipts but
+does not refund the process-level attempt budget. Only exact authenticated
+broadcaster echoes confirm SOOP notices; individual consent remains separate.
+Remaining provider loops and notice sender transport internals still require reconstruction.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
