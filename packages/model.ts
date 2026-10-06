@@ -1,3 +1,4 @@
+import { readResponsesStream } from "./infrastructure/reactions/responses-stream.ts";
 import { modelMessages } from "./infrastructure/reactions/model-messages.ts";
 export { modelMessages } from "./infrastructure/reactions/model-messages.ts";
 import type {
@@ -172,72 +173,21 @@ export function chatgptModel(
         { status: r.status },
         r.status === 408 || r.status === 429 || r.status >= 500,
       );
-    let completed: any;
-    let buffer = "";
-    let streamedText = "";
-    let size = 0;
-    const reader = r.body.getReader();
-    const decoder = new TextDecoder();
-    try {
-      while (true) {
-        const part = await reader.read();
-        if (part.done) break;
-        size += part.value.byteLength;
-        if (size > 1024 * 1024) throw Error("ChatGPT response too large");
-        buffer += decoder.decode(part.value, { stream: true });
-        let end: number;
-        while ((end = buffer.search(/\r?\n\r?\n/)) >= 0) {
-          const raw = buffer.slice(0, end);
-          const match = buffer.slice(end).match(/^\r?\n\r?\n/)!;
-          buffer = buffer.slice(end + match[0].length);
-          const payload = raw
-            .split(/\r?\n/)
-            .filter((line) => line.startsWith("data:"))
-            .map((line) => line.slice(5).trimStart())
-            .join("\n");
-          if (!payload || payload === "[DONE]") continue;
-          const event = JSON.parse(payload);
-          if (
-            event.type === "response.failed" ||
-            event.type === "response.incomplete" ||
-            event.type === "error"
-          )
-            throw Error("ChatGPT response failed or incomplete");
-          if (event.type === "response.output_text.delta") {
-            if (typeof event.delta !== "string")
-              throw Error("Invalid ChatGPT text delta");
-            streamedText += event.delta;
-            if (streamedText.length > 10000)
-              throw Error("ChatGPT output too large");
-          }
-          if (event.type === "response.completed") completed = event.response;
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-    if (!completed || completed.status !== "completed")
-      throw Error("ChatGPT stream ended before completion");
-    const completedText = (completed.output ?? [])
-      .flatMap((v: any) => (v.type === "message" ? (v.content ?? []) : []))
-      .filter((v: any) => v.type === "output_text")
-      .map((v: any) => v.text)
-      .join("");
-    const output = completedText || streamedText;
-    if (!output || output.length > 10000)
-      throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
-    const usage = completed.usage;
-    if (usage?.input_tokens > config.maxInputTokens)
+    const { output, inputTokens, outputTokens } = await readResponsesStream(
+      r.body,
+      signal,
+    );
+    if (inputTokens !== undefined && inputTokens > config.maxInputTokens)
       throw new ModelRequestError(
         "input_token_limit",
         "ChatGPT token budget exceeded",
-        { actual: usage.input_tokens, limit: config.maxInputTokens },
+        { actual: inputTokens, limit: config.maxInputTokens },
       );
-    if (usage?.output_tokens > config.maxOutputTokens)
+    if (outputTokens !== undefined && outputTokens > config.maxOutputTokens)
       throw new ModelRequestError(
         "output_token_limit",
         "ChatGPT token budget exceeded",
-        { actual: usage.output_tokens, limit: config.maxOutputTokens },
+        { actual: outputTokens, limit: config.maxOutputTokens },
       );
     let decision: unknown;
     try {
@@ -247,8 +197,8 @@ export function chatgptModel(
     }
     return {
       decision: decision as Decision,
-      inputTokens: usage?.input_tokens,
-      outputTokens: usage?.output_tokens,
+      inputTokens,
+      outputTokens,
     };
   };
 }

@@ -375,6 +375,14 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [Responses API stream decoder](../../packages/infrastructure/reactions/responses-stream.ts)
+handles SSE framing, chunked UTF-8 text, completion validation and optional usage
+counts separately from authentication, HTTP requests and decision validation.
+It requires a completed response, rejects invalid/oversized text and bounds the
+stream to 1 MiB. Parse failures and caller cancellation cancel the reader before
+releasing its lock; cancellation also wakes an idle stream read. Its event types
+follow the [official streaming guide](https://developers.openai.com/api/docs/guides/streaming-responses).
+
 The [outgoing context projection](../../packages/application/reactions/model-context.ts)
 selects message IDs, pseudonymous speakers, text, transcript timestamps and frame
 references explicitly. Extra fields attached to internal objects never enter the
