@@ -82,18 +82,7 @@ export class Supervisor {
       this.store.participation &&
       ["reconnecting", "disconnected", "failed"].includes(s)
     ) {
-      const people = [...this.store.participation.participants.values()].filter(
-        (person) =>
-          person.platform === p &&
-          person.accepted.includes("manual_live_order"),
-      );
       this.store.participation.connectionLost(p);
-      for (const person of people)
-        this.store.revokeParticipant(
-          person.platform,
-          person.broadcaster,
-          person.author,
-        );
     }
     this.states[p].state = s;
     if (s === "ended" && previous !== "ended") this.onBroadcastEnded?.();

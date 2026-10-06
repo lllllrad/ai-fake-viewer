@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";
 import { noticeParts } from "../packages/youtube-notices.ts";
 import type { ChzzkAuth } from "../packages/chzzk.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 function fixture(

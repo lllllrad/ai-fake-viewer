@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { YoutubeAuth, youtubeScope } from "../packages/youtube-auth.ts";
 import { YoutubeNotices, noticeParts } from "../packages/youtube-notices.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 import { configSchema } from "../packages/config.ts";

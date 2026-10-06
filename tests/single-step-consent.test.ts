@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { YoutubeNotices } from "../packages/youtube-notices.ts";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";

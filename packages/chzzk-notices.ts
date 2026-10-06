@@ -1,6 +1,6 @@
 import { limitState, type ApiFailure } from "./api-health.ts";
 import { NoticeBot } from "./notice-bot.ts";
-import type { Participation } from "./participation.ts";
+import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import type { ChzzkAuth } from "./chzzk.ts";
 import { noticeParts } from "./youtube-notices.ts";
 export class ChzzkNotices {

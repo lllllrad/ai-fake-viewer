@@ -119,16 +119,34 @@ testable operations, with resources closed exactly once.
 The [consent policy](../../packages/domain/participation/consent.ts) is a pure
 state transition over explicit time, profile availability and observation identity.
 It returns the next participant, permission result and invalidation revision;
-it performs no persistence, identifier generation or callbacks. The legacy
-participation coordinator currently applies these transitions to its stored
-participant references and invokes downstream invalidation. The [guidance policy](../../packages/domain/participation/notices.ts) separately
+it performs no persistence, identifier generation or callbacks. The [participation service](../../packages/application/participation/service.ts)
+applies these transitions with injected time, identifiers and profile fingerprints.
+It owns command, delivery and profile operations; a bound persistence port commits
+the resulting consent state and dependent chat removal together. The [guidance policy](../../packages/domain/participation/notices.ts) separately
 decides rate reservations and room-scoped delivery opportunities without treating
 either as consent. It rejects another reservation for an already-covered viewer.
-Provider scheduling, profile replacement and snapshot storage remain separate
-reconstruction work.
+Provider scheduling remains separate reconstruction work. Profile validation is
+an application policy; the process adapter supplies cryptographic fingerprints
+without importing Node APIs into the application layer.
 
 Withdrawal must commit consent invalidation and local raw/dependent deletion in
 one storage transaction, then invalidate running work and refresh all projections.
+The [SQLite transaction owner](../../packages/infrastructure/storage/transactions.ts)
+joins nested synchronous mutations. Before the outer transaction it checkpoints
+session identity, participant references, observations, profile and notice budget.
+A work or commit failure restores those in-memory values as well as rolling back
+SQL; even a swallowed nested failure prevents commit. Withdrawal callbacks and
+public removal notifications run after successful commit, so failed writes cannot
+create follow-up work or publish an uncommitted removal. Notification failures do
+not roll back committed data or prevent the remaining queued notifications.
+
+The [snapshot adapter](../../packages/infrastructure/participation/snapshots.ts)
+retains the existing broadcast-database record. Restoring a process still drops
+unconfirmed manual observations; rolling back a transaction preserves them.
+The legacy conversation store currently implements context erasure behind the
+participation persistence port; its remaining SQL and projections still require
+replacement.
+
 External-request authorization is rechecked after asynchronous preparation and
 immediately before transmission. Late provider results must pass the same current
 permission checks before publication. Only previously approved coarse anonymous

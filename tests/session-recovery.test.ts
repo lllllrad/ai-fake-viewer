@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { Store } from "../packages/storage.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { NoticeBot } from "../packages/notice-bot.ts";
 import {
   approvedProfile,
@@ -28,7 +28,7 @@ test("broadcast state survives abrupt process exit; end deletes it and remains c
       "-e",
       `
     import {Store} from './packages/storage.ts';
-    import {Participation} from './packages/participation.ts';
+    import {Participation} from './packages/infrastructure/participation/runtime.ts';
     import {approvedProfile,activateFixture,privacyMessage} from './tests/privacy-fixtures.ts';
     let now=Date.now(); Date.now=()=>now;
     const p=new Participation(approvedProfile(),''), s=new Store(process.argv[1],p);

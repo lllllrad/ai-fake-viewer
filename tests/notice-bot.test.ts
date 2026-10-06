@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { NoticeBot } from "../packages/notice-bot.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 import { dispatchFixedNotice } from "../apps/web/src/soop-notice-sender.ts";

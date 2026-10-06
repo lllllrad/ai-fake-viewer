@@ -67,7 +67,7 @@ Register the actual destination channel, recording/VOD and edited-copy retention
 ## 6. Rehearse participation and withdrawal
 
 1. Confirm unconsented ordinary text does not reach admin conversation, reader, overlay or AI.
-2. The first consent command starts guidance; exact localized commands are defined in [participation.ts](../../packages/participation.ts). Deliver each stage and receive a fresh confirmation; age unknown/under 14 stays blocked. Only messages after all stages may appear.
+2. Ordinary viewer activity starts one short guidance notice. After confirmed delivery, each viewer sends one fresh localized consent command; this includes their age declaration. Only subsequent permitted messages appear. Unknown or blocked age cannot activate participation. The [consent policy](../../packages/domain/participation/consent.ts) defines exact commands and ordering.
 3. Start AI manually. Six synthetic personas are generated automatically. Verify local reader/overlay publication; no native-platform AI sending exists.
 4. Send the withdrawal command. Verify local disappearance, cancelled pending replies and a separate external/video follow-up task where relevant. No email resubmission is required for this live request.
 5. Verify the participation-status command, reconnection snapshots and a new session requiring new consent. Do not infer SDK event-order guarantees from synthetic tests.

@@ -1,4 +1,6 @@
-import type { Participation } from "./participation.ts";
+import { SqliteTransactions } from "./infrastructure/storage/transactions.ts";
+import { SqliteParticipationSnapshots } from "./infrastructure/participation/snapshots.ts";
+import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import { summarizeChat, summaryWindowMs } from "./chat-summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID, createHash } from "node:crypto";
@@ -13,6 +15,8 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  private readonly transactions: SqliteTransactions;
+  private readonly participationSnapshots: SqliteParticipationSnapshots;
   sessionId: string;
   readerCollisionNames = new Set<string>();
   constructor(
@@ -23,6 +27,17 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    this.participationSnapshots = new SqliteParticipationSnapshots(this.db);
+    this.transactions = new SqliteTransactions(this.db, () => {
+      const sessionId = this.sessionId;
+      const names = new Set(this.readerCollisionNames);
+      const restoreParticipation = this.participation?.checkpoint();
+      return () => {
+        this.sessionId = sessionId;
+        this.readerCollisionNames = names;
+        restoreParticipation?.();
+      };
+    });
     if (path !== ":memory:" && process.platform !== "win32")
       chmodSync(path, 0o600);
     this.db
@@ -178,30 +193,32 @@ export class Store extends EventEmitter {
         .run(this.sessionId, Date.now());
     if (this.participation) {
       this.participation.sessionId = this.sessionId;
-      const saved = this.db
-        .prepare("SELECT value FROM runtime_flags WHERE key='participation'")
-        .get() as { value: string } | undefined;
-      if (saved) {
-        try {
-          this.participation.restore(JSON.parse(saved.value));
-        } catch (error) {
-          this.db.close();
-          throw error;
-        }
+      try {
+        const saved = this.participationSnapshots.read();
+        if (saved) this.participation.restore(saved);
+      } catch (error) {
+        this.db.close();
+        throw error;
       }
-      this.participation.onChange = () => this.saveParticipation();
+      this.participation.bindPersistence({
+        run: (work) => this.transaction(work),
+        save: () => this.saveParticipation(),
+        eraseContext: (participant) =>
+          this.revokeParticipant(
+            participant.platform,
+            participant.broadcaster,
+            participant.author,
+          ),
+        afterCommit: (effect) => this.transactions.afterCommit(effect),
+      });
       this.saveParticipation();
     }
     if (this.originsRevealed())
       this.readerCollisionNames = this.collisionNameSet();
   }
   saveParticipation() {
-    if (!this.participation) return;
-    this.db
-      .prepare(
-        "INSERT INTO runtime_flags(key,value) VALUES('participation',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      )
-      .run(JSON.stringify(this.participation.snapshot()));
+    if (this.participation)
+      this.participationSnapshots.save(this.participation.snapshot());
   }
   grantConsent(platform: string, channel: string, author: string) {
     if (this.participation) throw Error("참여자의 직접 동의가 필요합니다.");
@@ -213,15 +230,7 @@ export class Store extends EventEmitter {
       .run(this.sessionId, platform, channel, author, Date.now());
   }
   transaction<T>(fn: () => T): T {
-    this.db.exec("BEGIN IMMEDIATE");
-    try {
-      const r = fn();
-      this.db.exec("COMMIT");
-      return r;
-    } catch (e) {
-      this.db.exec("ROLLBACK");
-      throw e;
-    }
+    return this.transactions.run(fn);
   }
   audit(action: string) {
     this.db
@@ -247,18 +256,6 @@ export class Store extends EventEmitter {
         if (this.participation && m.platform !== "experiment") {
           const result = this.participation.handle(m);
           consentEpoch = result.epoch;
-          if (result.withdraw) {
-            const rows = this.db
-              .prepare(
-                "SELECT m.id FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform=? AND m.channel=? AND a.author=?",
-              )
-              .all(this.sessionId, m.platform, m.channel, m.author) as any[];
-            this.eraseChatContext(
-              rows.map((r) => r.id),
-              seqs,
-            );
-            invalidated = true;
-          }
           if (!result.allow) continue;
         }
         const command = m.text.trim().toLocaleLowerCase();
@@ -770,9 +767,11 @@ export class Store extends EventEmitter {
         rows.map((r) => r.id),
         seqs,
       );
+      this.transactions.afterCommit(() => {
+        this.emit("context_invalidated");
+        for (const seq of seqs) this.emit("event", this.publicEvent(seq));
+      });
     });
-    this.emit("context_invalidated");
-    for (const seq of seqs) this.emit("event", this.publicEvent(seq));
   }
   context(allowed: string[]) {
     return (this.snapshot().messages.filter(Boolean) as PublicMessage[])
@@ -1175,7 +1174,7 @@ export class Store extends EventEmitter {
   }
   close() {
     this.saveParticipation();
-    if (this.participation) this.participation.onChange = undefined;
+    this.participation?.bindPersistence(undefined);
     this.db.close();
   }
   personaRuntime() {

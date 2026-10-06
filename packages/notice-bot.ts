@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Participation } from "./participation.ts";
+import type { ParticipationService as Participation } from "./application/participation/service.ts";
 
 // Only reviewed fixed notices cross this interface. No caller-supplied text or recipient nickname.
 export class NoticeBot {

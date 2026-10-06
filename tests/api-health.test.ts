@@ -5,7 +5,7 @@ import { googleJson, UpstreamError } from "../packages/youtube.ts";
 import { Transcriber } from "../packages/transcription.ts";
 import { configSchema } from "../packages/config.ts";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
 const base = {
   youtubeRead: { state: "subscribed" },

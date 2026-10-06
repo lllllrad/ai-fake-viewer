@@ -1,6 +1,6 @@
 import { limitState, type ApiFailure } from "./api-health.ts";
 import { NoticeBot } from "./notice-bot.ts";
-import type { Participation } from "./participation.ts";
+import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import type { YoutubeAuth } from "./youtube-auth.ts";
 // Conservative local 200-character message cap. Never truncate a notice or a URL.
 export function noticeParts(text: string, budget = 170) {

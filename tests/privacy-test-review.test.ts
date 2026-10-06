@@ -5,7 +5,7 @@ import {
   profileIssues,
   assertProfileUpdate,
 } from "../packages/privacy-profile.ts";
-import { Participation } from "../packages/participation.ts";
+import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { NoticeBot } from "../packages/notice-bot.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";

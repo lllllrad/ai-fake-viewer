@@ -21,7 +21,7 @@ Setup creates private credentials/configuration. Open the local address printed 
 
 Starting AI composes six synthetic personas from research-informed participation patterns, with no operator authoring requirement and no real-viewer profiling. The current broadcast's cast survives restart and is deleted at broadcast end. See the [persona specification](docs/specifications/personas.md).
 
-UI controls and viewer commands are described in English here; the app retains localized labels. Exact commands are defined in [participation.ts](packages/participation.ts).
+UI controls and viewer commands are described in English here; the app retains localized labels. Exact commands are defined in [participation.ts](packages/application/participation/service.ts).
 
 The first exact consent command starts guidance; it does not grant participation. Each delivered notice requires a new explicit command: age 14+ self-declaration, collection/use, broadcast/recording/publication, overseas processing, and third-party provision if applicable. Until every required stage succeeds, ordinary text is discarded before display, storage or AI processing. Account identity is scoped to platform, broadcaster and this broadcast session. Uncertain command order requires verification of the actual observed live command; old commands cannot be invented or approved on the viewer's behalf.
 

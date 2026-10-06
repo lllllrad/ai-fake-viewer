@@ -9,7 +9,7 @@ import { apiIssues } from "../../packages/api-health.ts";
 import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
-import { Participation } from "../../packages/participation.ts";
+import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
 import {
   PrivacyActionError,
   privacyProfileSchema,
@@ -223,9 +223,7 @@ export async function createApp(
     requestId: (id: string, input: ModelInput) => {
       for (const audience of audiences.get(input) ?? []) {
         const p = audience.participant;
-        p.requestIds.push(id);
-        p.requestIds = p.requestIds.slice(-100);
-        participation?.changed();
+        participation?.recordRequest(p.id, id);
         const key = `${p.id}:${audience.epoch + 1}`;
         const taskId = withdrawalTasks.get(key);
         if (taskId) rights.attachRequest(taskId, id);
@@ -1191,11 +1189,8 @@ export async function createApp(
     transcriber.stop();
     store.clearTranscripts();
     await supervisor.stop();
-    const prior = participation ? [...participation.participants.values()] : [];
     participation?.replaceProfile(profile);
     config.privacy = profile;
-    for (const p of prior)
-      store.revokeParticipant(p.platform, p.broadcaster, p.author);
     return { profile, issues: profileIssues(profile) };
   });
   app.post(
@@ -1239,8 +1234,7 @@ export async function createApp(
   );
   app.post("/api/admin/privacy/participants/:id/block-age", async (req) => {
     if (!participation) throw Error("Live 참여 상태가 없습니다.");
-    const p = participation.blockAge((req.params as any).id);
-    store.revokeParticipant(p.platform, p.broadcaster, p.author);
+    participation.blockAge((req.params as any).id);
     return { ok: true };
   });
   registerRightsRoutes(app, rights);
@@ -1511,10 +1505,7 @@ export async function createApp(
   });
   const invalidateChatgptContext = () => {
     scheduler.stop("chatgpt_account_changed");
-    const prior = participation ? [...participation.participants.values()] : [];
     participation?.invalidateAll();
-    for (const p of prior)
-      store.revokeParticipant(p.platform, p.broadcaster, p.author);
   };
   app.post("/api/admin/chatgpt/authorize", async (req) => {
     const body = z
@@ -1694,11 +1685,7 @@ export async function createApp(
       .parse(req.body);
     if (body.state !== "subscribed") noticeBot?.reset();
     if (body.state !== "subscribed" && participation) {
-      const prior = [...participation.participants.values()];
       participation.connectionLost("soop");
-      for (const p of prior)
-        if (p.state === "WITHDRAWN")
-          store.revokeParticipant(p.platform, p.broadcaster, p.author);
     }
     supervisor.status("soop", body.state);
     return { ok: true };
