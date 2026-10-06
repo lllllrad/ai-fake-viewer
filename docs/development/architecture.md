@@ -375,6 +375,14 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [generation work owner](../../packages/application/reactions/generation-work.ts)
+tracks the current asynchronous request with an identity-bound lease. Cancellation
+advances the generation, detaches the busy slot, clears retained chat context
+from every draft/review input variant and aborts the request. A replacement can
+start even if an old transport ignores cancellation. Late completion or input
+callbacks cannot clear the new busy slot, restore canceled context or change its
+pacing. The scheduler also ignores errors escaping an obsolete generation.
+
 The [reaction schedule](../../packages/application/reactions/scheduling.ts)
 owns polling and delayed-publication timers through an injected clock. Canceling,
 restarting or replacing a timer invalidates callbacks already queued by the host;

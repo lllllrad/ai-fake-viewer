@@ -1,3 +1,4 @@
+import { GenerationWork } from "./application/reactions/generation-work.ts";
 import { ReactionSchedule } from "./application/reactions/scheduling.ts";
 import { generateReviewedDraft } from "./application/reactions/draft-review.ts";
 import { callMeteredModel } from "./application/reactions/model-call.ts";
@@ -47,7 +48,15 @@ export class Scheduler {
   }
   readyCheck?: () => string[];
   preparePersonas?: () => void;
-  private activeInput?: ModelInput;
+  private readonly work = new GenerationWork<ModelInput>((input) =>
+    this.discardInput(input),
+  );
+  private discardInput(input: ModelInput) {
+    input.messages = [];
+    input.newMessages = [];
+    input.chatSummary = undefined;
+    input.reviewDraft = undefined;
+  }
   state = "stopped";
   lastIssue?: {
     code: string;
@@ -56,7 +65,9 @@ export class Scheduler {
     continuing: boolean;
   };
   private transientFailures = 0;
-  controller?: AbortController;
+  get controller() {
+    return this.work.controller;
+  }
   private readonly scheduling = new ReactionSchedule<NodeJS.Timeout>(
     {
       repeat: (callback, milliseconds) => setInterval(callback, milliseconds),
@@ -72,8 +83,12 @@ export class Scheduler {
   get dispatchTimer() {
     return this.scheduling.dispatchHandle;
   }
-  generation = 0;
-  busy = false;
+  get generation() {
+    return this.work.generation;
+  }
+  get busy() {
+    return this.work.busy;
+  }
   lastAttempt = 0;
   lastSpoke = 0;
   lastHash = "";
@@ -124,16 +139,9 @@ export class Scheduler {
     store.on("reset", () => this.invalidateChatContext());
   }
   invalidateChatContext() {
-    this.generation++;
-    this.controller?.abort();
+    this.work.cancel();
     this.scheduling.cancelDispatch();
-    for (const input of [this.activeInput, this.pending?.input]) {
-      if (!input) continue;
-      input.messages = [];
-      input.newMessages = [];
-      input.chatSummary = undefined;
-      input.reviewDraft = undefined;
-    }
+    if (this.pending) this.discardInput(this.pending.input);
     this.pending = undefined;
     this.store.cancelChatContextAttempts();
     this.processedMessageVersions.clear();
@@ -173,8 +181,8 @@ export class Scheduler {
     void this.tick();
   }
   stop(state = "stopped", preserveDesired = false) {
-    this.generation++;
-    this.controller?.abort();
+    this.work.cancel();
+    if (this.pending) this.discardInput(this.pending.input);
     this.scheduling.stop();
     this.pending = undefined;
     this.lastAttempt = 0;
@@ -191,10 +199,11 @@ export class Scheduler {
     return ["experiment", "youtube", "chzzk", "soop"];
   }
   async tick(now = Date.now()) {
+    const generation = this.generation;
     try {
       await this.tickOnce(now);
     } catch {
-      this.schedulerFailed();
+      if (generation === this.generation) this.schedulerFailed();
     }
   }
   private schedulerFailed() {
@@ -205,8 +214,6 @@ export class Scheduler {
       at: Date.now(),
       continuing: false,
     };
-    this.activeInput = undefined;
-    this.busy = false;
     try {
       this.stop("scheduler_error");
     } catch {
@@ -376,7 +383,6 @@ export class Scheduler {
     };
     const generation = this.generation;
     input.chatSummary = this.store.chatSummary();
-    this.activeInput = input;
     const attemptId = activeMember && personaRuntime ? randomUUID() : undefined;
     if (attemptId && activeMember && personaRuntime) {
       const created = this.store.attempts.begin({
@@ -406,18 +412,16 @@ export class Scheduler {
         configRevision: personaRuntime.configRevision,
       });
       if (!created) {
-        this.activeInput = undefined;
         this.lastHash = hash;
         this.phase = "waiting_for_input";
         return;
       }
     }
-    this.controller = new AbortController();
+    const lease = this.work.begin(input);
     const signal = AbortSignal.any([
-      this.controller.signal,
+      lease.signal,
       AbortSignal.timeout(personaRuntime?.policy.model_timeout_ms ?? 30000),
     ]);
-    this.busy = true;
     this.lastHash = hash;
     this.lastExternal = externalSeq;
     try {
@@ -463,8 +467,7 @@ export class Scheduler {
       const outcome = await generateReviewedDraft({
         input,
         signal,
-        isCurrent: () =>
-          generation === this.generation && this.state === "running",
+        isCurrent: () => this.work.current(lease) && this.state === "running",
         inspectAllowed: c.visualMode === "on_request",
         review: c.reviewDraft && !this.demo,
         latestFrames: () => this.capture.recent(),
@@ -472,7 +475,7 @@ export class Scheduler {
         model: (request, requestSignal) =>
           this.callModel(request, requestSignal),
         active: (request) => {
-          this.activeInput = request;
+          this.work.track(lease, request);
         },
         phase: (phase) => {
           this.phase = phase;
@@ -605,8 +608,7 @@ export class Scheduler {
           );
       }
     } finally {
-      this.activeInput = undefined;
-      this.busy = false;
+      this.work.finish(lease);
       if (generation === this.generation && this.state === "running") {
         if (!this.pending) this.phase = "random_wait";
         const { minSeconds, maxSeconds } = c.pacing;

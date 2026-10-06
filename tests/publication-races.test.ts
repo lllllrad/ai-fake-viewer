@@ -145,3 +145,67 @@ test("delayed publication storage failure stops AI without an uncaught timer exc
     store.close();
   }
 });
+
+for (const cancel of ["stop", "context"] as const)
+  test(`a slow canceled request cannot block or release replacement work after ${cancel}`, async () => {
+    const releases: Array<() => void> = [];
+    const entered: Array<() => void> = [];
+    const arrivals = [0, 1].map(
+      (index) =>
+        new Promise<void>((resolve) => {
+          entered[index] = resolve;
+        }),
+    );
+    const signals: AbortSignal[] = [];
+    const inputs: ModelInput[] = [];
+    let calls = 0;
+    const { store, scheduler } = fixture(async (input, signal) => {
+      const index = calls++,
+        response = result(input);
+      signals.push(signal);
+      inputs.push(input);
+      const held = new Promise<void>((resolve) => {
+        releases[index] = resolve;
+      });
+      entered[index]?.();
+      await held; // Simulates a transport that ignores cancellation.
+      return response;
+    });
+    try {
+      const old = scheduler.tick();
+      await arrivals[0];
+      if (cancel === "stop") {
+        scheduler.stop();
+        scheduler.state = "running";
+      } else scheduler.invalidateChatContext();
+      assert.equal(scheduler.busy, false);
+      assert.equal(signals[0].aborted, true);
+      assert.equal(inputs[0].messages.length, 0);
+      store.ingestion.ingest([
+        {
+          ...original,
+          sourceId: "replacement-source",
+          text: "Replacement synthetic input",
+        },
+      ]);
+      const replacement = scheduler.tick();
+      await arrivals[1];
+      assert.equal(scheduler.busy, true);
+      releases[0]();
+      await old;
+      assert.equal(scheduler.busy, true);
+      assert.equal(signals[1].aborted, false);
+      assert.equal(scheduler.pending, undefined);
+      await scheduler.tick();
+      assert.equal(calls, 2);
+      releases[1]();
+      await replacement;
+      assert.equal(scheduler.busy, false);
+      assert(scheduler.pending);
+      assert.equal(scheduler.state, "running");
+    } finally {
+      for (const release of releases) release();
+      scheduler.stop();
+      store.close();
+    }
+  });
