@@ -377,6 +377,15 @@ failed write leave the candidate unclaimed; a second claim cannot succeed.
 
 ## Persistence and external effects
 
+[Broadcast retention](../../packages/application/broadcast/retention.ts) keeps
+active live-broadcast history regardless of its age. For eligible historical
+records, its [SQLite repository](../../packages/infrastructure/storage/retention-sqlite.ts)
+removes expired content, related cast records and orphaned identities in one
+transaction. It preserves the current session row, including a closed marker,
+so cleanup cannot implicitly reopen a broadcast on restart. Identity disclosure
+payloads lose deleted actors without removing fresh disclosures. Only committed
+changes trigger compaction and reader reset; no-op cleanup emits neither.
+
 [Database initialization](../../packages/infrastructure/storage/initialize.ts)
 sets connection pragmas and rejects schemas newer than this application supports
 before writing broadcast records. The

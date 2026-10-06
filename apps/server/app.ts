@@ -663,10 +663,10 @@ export async function createApp(
       app.get(path, async (req, reply) => reply.sendFile("index.html"));
   }
   const retention = setInterval(() => {
-    store.purge(Date.now() - config.retentionDays * 86400000);
+    store.retention.purge(Date.now() - config.retentionDays * 86400000);
   }, 3600000);
   retention.unref();
-  store.purge(Date.now() - config.retentionDays * 86400000);
+  store.retention.purge(Date.now() - config.retentionDays * 86400000);
   app.addHook("onRequest", async (req, reply) => {
     if (
       !opts.demo &&

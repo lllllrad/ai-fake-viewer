@@ -1,3 +1,5 @@
+import { BroadcastRetention } from "./application/broadcast/retention.ts";
+import { SqliteRetention } from "./infrastructure/storage/retention-sqlite.ts";
 import { initializeBroadcastDatabase } from "./infrastructure/storage/initialize.ts";
 import { BroadcastLifetime } from "./application/broadcast/lifetime.ts";
 import { SqliteBroadcastLifetime } from "./infrastructure/broadcast/lifetime-sqlite.ts";
@@ -42,6 +44,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly retention: BroadcastRetention;
   readonly lifetime: BroadcastLifetime;
   private readonly castRuntime: SqliteCastRuntime;
   readonly dispatch: CastDispatch;
@@ -103,6 +106,22 @@ export class Store extends EventEmitter {
         restoreParticipation?.();
       };
     });
+    this.retention = new BroadcastRetention(
+      new SqliteRetention(this.db),
+      this.transactions,
+      {
+        sessionId: () => this.sessionId,
+        live: () => !!this.participation,
+        closed: () => this.closed(),
+        now: () => Date.now(),
+        refreshSummary: () => {
+          this.chatSummary();
+        },
+        reset: () => {
+          this.emit("reset");
+        },
+      },
+    );
     this.lifetime = new BroadcastLifetime(
       new SqliteBroadcastLifetime(this.db),
       this.transactions,
@@ -640,146 +659,7 @@ export class Store extends EventEmitter {
     this.lifetime.createNext();
   }
   purge(before: number) {
-    // An active broadcast owns its history until explicit broadcast end.
-    if (this.participation && !this.closed()) return;
-    if (!this.participation)
-      this.db
-        .prepare(
-          "DELETE FROM chat_context_summaries WHERE expires<? OR session IN (SELECT id FROM sessions WHERE closed<?)",
-        )
-        .run(Date.now(), before);
-    this.db.exec(
-      "DELETE FROM ai_message_context WHERE message_id NOT IN (SELECT id FROM messages) OR source_message_id NOT IN (SELECT id FROM messages)",
-    );
-    if (
-      !this.db
-        .prepare("SELECT 1 FROM messages WHERE received<? LIMIT 1")
-        .get(before) &&
-      !this.db
-        .prepare("SELECT 1 FROM transcripts WHERE captured<? LIMIT 1")
-        .get(before) &&
-      !this.db
-        .prepare(
-          "SELECT 1 FROM persona_sessions WHERE source_session IN (SELECT id FROM sessions WHERE closed<?) OR (state IN ('ended','archived') AND updated<?) LIMIT 1",
-        )
-        .get(before, before) &&
-      !this.db
-        .prepare("SELECT 1 FROM persona_audit WHERE at<? LIMIT 1")
-        .get(Date.now() - 90 * 86400000) &&
-      !this.db
-        .prepare("SELECT 1 FROM persona_model_runs WHERE started_at<? LIMIT 1")
-        .get(Date.now() - 90 * 86400000)
-    )
-      return;
-    this.transaction(() => {
-      this.db
-        .prepare(
-          "DELETE FROM persona_publication_outbox WHERE attempt_id IN (SELECT id FROM persona_reaction_attempts WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=? ) AND started_at<?)",
-        )
-        .run(this.sessionId, before);
-      this.db
-        .prepare(
-          "DELETE FROM persona_reaction_attempts WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=?) AND started_at<?",
-        )
-        .run(this.sessionId, before);
-      this.db
-        .prepare(
-          "UPDATE persona_reaction_attempts SET result=NULL WHERE finished_at<?",
-        )
-        .run(Date.now() - 24 * 60 * 60 * 1000);
-      const expiredPersonaSessions = this.db
-        .prepare(
-          "SELECT id FROM persona_sessions WHERE source_session IN (SELECT id FROM sessions WHERE closed<?) OR (state IN ('ended','archived') AND updated<?)",
-        )
-        .all(before, before) as any[];
-      for (const personaSession of expiredPersonaSessions) {
-        this.db
-          .prepare(
-            "DELETE FROM persona_publication_outbox WHERE attempt_id IN (SELECT id FROM persona_reaction_attempts WHERE session_id=?)",
-          )
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_reaction_attempts WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_presence WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_cast WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_name_denylist WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_evaluations WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare(
-            "DELETE FROM persona_reviews WHERE evaluation_id IN (SELECT id FROM persona_jobs WHERE session_id=?)",
-          )
-          .run(personaSession.id);
-        this.db
-          .prepare(
-            "DELETE FROM persona_model_runs WHERE job_id IN (SELECT id FROM persona_jobs WHERE session_id=?)",
-          )
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_jobs WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_audit WHERE session_id=?")
-          .run(personaSession.id);
-        this.db
-          .prepare(
-            "DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id')=?",
-          )
-          .run(personaSession.id);
-        this.db
-          .prepare("DELETE FROM persona_sessions WHERE id=?")
-          .run(personaSession.id);
-      }
-      this.db
-        .prepare("DELETE FROM persona_audit WHERE at<?")
-        .run(Date.now() - 90 * 86400000);
-      this.db
-        .prepare("DELETE FROM persona_model_runs WHERE started_at<?")
-        .run(Date.now() - 90 * 86400000);
-      this.db.prepare("DELETE FROM events WHERE at<?").run(before);
-      this.db.prepare("DELETE FROM messages WHERE received<?").run(before);
-      this.db.exec(
-        "DELETE FROM ai_message_context WHERE message_id NOT IN (SELECT id FROM messages) OR source_message_id NOT IN (SELECT id FROM messages)",
-      );
-      this.chatSummary();
-      this.db.prepare("DELETE FROM transcripts WHERE captured<?").run(before);
-      this.db
-        .prepare(
-          "DELETE FROM viewer_consents WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-        )
-        .run(before);
-      this.db
-        .prepare(
-          "DELETE FROM consent_notice_targets WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-        )
-        .run(before);
-      this.db
-        .prepare(
-          "DELETE FROM consent_notice_state WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-        )
-        .run(before);
-      this.db
-        .prepare(
-          "DELETE FROM actors_private WHERE id NOT IN (SELECT actor FROM messages)",
-        )
-        .run();
-      this.db.exec("DELETE FROM events WHERE type='identity.revealed'");
-      this.db
-        .prepare("DELETE FROM model_usage WHERE at<? AND session<>?")
-        .run(before, this.sessionId);
-      this.db.prepare("DELETE FROM audit_events WHERE at<?").run(before);
-      this.db.prepare("DELETE FROM sessions WHERE closed<?").run(before);
-    });
-    this.db.exec("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;");
-    this.emit("reset");
+    return this.retention.purge(before);
   }
   deleteAll(closed = false) {
     this.lifetime.erase(closed);
