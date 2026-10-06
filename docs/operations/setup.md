@@ -141,7 +141,8 @@ test modes. Use normal viewer accounts and synthetic fixtures for verification.
 ## Broadcast restart and end
 
 If startup fails, the server closes resources already opened during initialization,
-including started inputs and both databases. This cleanup does not end the
+including the HTTP listener, started inputs and both databases. A failure starting
+inputs after the port opens also closes that listener. This cleanup does not end the
 broadcast or erase its saved state. Correct the reported configuration, file
 access or input error and retry through `sh run-command.sh just server-start`;
 do not delete the broadcast database to work around a startup error.

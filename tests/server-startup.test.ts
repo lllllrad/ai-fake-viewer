@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { initializeServer } from "../apps/server/startup.ts";
+import { initializeServer, launchServer } from "../apps/server/startup.ts";
 import { createApp } from "../apps/server/app.ts";
 import { configSchema } from "../packages/config.ts";
 import { Store } from "../packages/storage.ts";
@@ -173,4 +173,80 @@ test("rights schema initialization failure closes its partially constructed data
   assert(acquired);
   const database = acquired;
   assert.throws(() => database.prepare("SELECT 1"));
+});
+
+test("listen failure skips input startup and preserves both start and cleanup errors", async () => {
+  const events: string[] = [];
+  const cause = new Error("port fixture");
+  const cleanup = new Error("close fixture");
+  await assert.rejects(
+    launchServer({
+      listen: async () => {
+        events.push("listen");
+        throw cause;
+      },
+      startInputs: () => {
+        events.push("inputs");
+      },
+      close: async () => {
+        events.push("close");
+        throw cleanup;
+      },
+    }),
+    (error: unknown) => {
+      assert(error instanceof AggregateError);
+      assert.equal(error.cause, cause);
+      assert.deepEqual(error.errors, [cause, cleanup]);
+      return true;
+    },
+  );
+  assert.deepEqual(events, ["listen", "close"]);
+});
+
+test("input failure after listening closes the socket, capture and storage", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "server-launch-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const env = await createApp(configSchema.parse({}), {
+    ...options(dir),
+    demo: true,
+    startInputs: false,
+  });
+  t.after(() => env.app.close());
+  const cause = new Error("input launch fixture");
+  let listeningAtInputStart = false;
+  t.mock.method(env.transcriber, "start", () => {
+    listeningAtInputStart = env.app.server.listening;
+    assert(env.capture.timer);
+    throw cause;
+  });
+  await assert.rejects(
+    launchServer({
+      listen: () => env.app.listen({ host: "127.0.0.1", port: 0 }),
+      startInputs: () => env.broadcast.startInputs(),
+      close: () => env.app.close(),
+    }),
+    (error) => error === cause,
+  );
+  assert.equal(listeningAtInputStart, true);
+  assert.equal(env.app.server.listening, false);
+  assert.equal(env.capture.timer, undefined);
+  assert.equal(env.capture.state, "stopped");
+  assert.throws(() => env.store.db.prepare("SELECT 1"));
+  assert.throws(() => env.rights.list());
+});
+
+test("successful launch leaves the listening server owned by normal shutdown", async () => {
+  const events: string[] = [];
+  await launchServer({
+    listen: async () => {
+      events.push("listen");
+    },
+    startInputs: () => {
+      events.push("inputs");
+    },
+    close: async () => {
+      events.push("close");
+    },
+  });
+  assert.deepEqual(events, ["listen", "inputs"]);
 });

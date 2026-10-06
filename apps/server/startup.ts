@@ -1,5 +1,18 @@
 type Cleanup = () => void | Promise<unknown>;
 
+/** Listening and input startup share the already-composed server's cleanup. */
+export function launchServer(dependencies: {
+  listen(): Promise<unknown>;
+  startInputs(): void;
+  close(): Promise<unknown>;
+}) {
+  return initializeServer(async (startup) => {
+    startup.add(() => dependencies.close());
+    await dependencies.listen();
+    dependencies.startInputs();
+  });
+}
+
 /** Partial composition owns its resources until the normal shutdown hook takes over. */
 export interface StartupCleanup {
   add(cleanup: Cleanup): void;

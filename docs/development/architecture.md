@@ -105,7 +105,10 @@ are acquired during server composition. Failed initialization drains those
 resources in reverse order, attempts every cleanup and preserves the original
 failure. Once the normal shutdown hook is installed, it becomes the sole cleanup
 owner, including when starting inputs fails. Startup failure never ends or erases
-the recovered broadcast.
+the recovered broadcast. The process entry point uses the same owner for HTTP
+listen and subsequent input startup. Failure after the socket opens still closes
+that socket, inputs and storage; a cleanup failure retains the original startup
+cause alongside cleanup errors.
 
 The [maintenance owner](../../apps/server/maintenance.ts) owns the hourly retention
 and one-second AI recovery timers. These synchronous local tasks catch their own

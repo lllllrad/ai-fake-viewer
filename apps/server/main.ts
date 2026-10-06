@@ -3,6 +3,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { SessionProfileMismatchError } from "../../packages/privacy-profile.ts";
 import { loadConfig } from "../../packages/config.ts";
 import { createApp } from "./app.ts";
+import { launchServer } from "./startup.ts";
 if (existsSync(".env")) loadEnvFile(".env");
 try {
   const demo = process.argv.includes("--demo");
@@ -33,15 +34,14 @@ try {
   });
   scheduler.onDiagnostic = (entry) =>
     console.log(JSON.stringify({ type: "ai_diagnostic", ...entry }));
-  await app
-    .listen({ host: config.network.bindHost, port: config.port })
-    .catch(async (error) => {
-      await app.close();
-      throw error;
-    });
-  if (!store.closed()) {
-    broadcast.startInputs();
-  }
+  await launchServer({
+    listen: () =>
+      app.listen({ host: config.network.bindHost, port: config.port }),
+    startInputs: () => {
+      if (!store.closed()) broadcast.startInputs();
+    },
+    close: () => app.close(),
+  });
   console.log(
     `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — reviewed privacy profile and viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
   );
