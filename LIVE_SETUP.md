@@ -1,6 +1,6 @@
-# Live setup for the consent-based text profile
+# Live setup for the consent-based profile
 
-This runbook applies to the live application, not historical audio/vision experiments. Read the [privacy implementation and acceptance boundaries](docs/privacy-implementation.md) before enabling real input. Actual platform approval, published policy text and provider eligibility cannot be supplied by this repository.
+This runbook applies to the live application, including separately enabled broadcast inputs. Read the [privacy implementation and acceptance boundaries](docs/privacy-implementation.md) before enabling real input. Actual platform approval, published policy text and provider eligibility cannot be supplied by this repository.
 
 ## 1. Prepare the app PC
 
@@ -129,7 +129,7 @@ There is no automatic speaker identification or filtering of chat read aloud.
 Withdrawal/context invalidation conservatively erases all session transcripts and
 aborts in-flight transcription; further captured speech is new input. Session
 end/restart also erases records. Downloaded JSONL files and provider-side records
-remain separate operator-managed copies. Video remains disabled. Set
+remain separate operator-managed copies. Video has a separate `privacy.videoEnabled` switch. Set
 `privacy.audioEnabled: false` to disable this path again.
 
 When testing YouTube staged consent, wait for all numbered notice parts before
@@ -173,3 +173,20 @@ bot IDs remain excluded. Withdrawal and known-underage restrictions remain activ
 Use `just server-restart` through the repository wrapper after YAML changes; the
 restart clears the old participation session. Platform quota or permission errors
 still prevent actual delivery and cannot be removed by the simplified flow.
+
+## OBS Program video input
+
+Set `privacy.videoEnabled: true` and update `privacy.noticeVersion` when enabling
+reviewed broadcast video. For the existing remote stream, keep `capture.backend:
+rtmp`, its private reader URL and the configured FFmpeg wrapper. Start OBS streaming
+and check the administrator preview. For a local virtual camera, configure the
+platform capture backend/device and select OBS Program output.
+
+`ai.visualMode: continuous` includes recent frames automatically; `on_request`
+provides them only when the model requests inspection. This setting does not itself
+enable capture permission. New frame selection requires frames under ten seconds
+old; already selected evidence remains valid for at most thirty seconds while
+generation/review completes. Frames stay in memory. Withdrawal/context reset clears
+them and rejects pre-reset frames arriving late. The application cannot remove
+unconsented content embedded in an upstream video; the reviewed Program source
+must provide the intended content. No mask-confirmation step is required.

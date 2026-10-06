@@ -1,12 +1,12 @@
 # AI chat pipeline and improvement guide
 
-The live profile is consent-gated chat and optional broadcast-transcript processing through the OpenAI Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
+The live profile is consent-gated chat and optional broadcast-transcript and OBS Program image processing through the OpenAI Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](docs/privacy-implementation.md) owns the data-boundary requirements; [development](docs/development.md) owns fixture commands.
 
 ## Runtime scope and startup
 
 `createApp` always constructs an in-memory Store. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI requires manual start after restart. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
-Video, Jev, persistent Store and persona authoring libraries remain testable independently. They are not enabled live paths; broadcast transcription has a separate explicit profile option. Demo uses artificial data and a mock model.
+Jev, persistent Store and persona authoring libraries remain standalone paths. Live video and broadcast transcription have separate explicit profile options. Demo uses artificial data and a mock model.
 
 ## Withdrawal and anonymous chat summaries
 
@@ -64,7 +64,7 @@ Legacy utility only. Enabling it blocks live readiness rather than transmitting 
 
 ### 5. Answer generation and inspection
 
-Both adapters check profile/model/revision, absence of live frames, explicit audio permission and freshness/content of transcript evidence and current permission for every input message during preparation and immediately before the Responses API request. Only API-key mode performs token counting, with a permission check before that request too; token counting and inference use the configured endpoint. Sign in with ChatGPT uses its supported public Responses API endpoint without the API-key token-counting preflight. Neither mode silently falls back to another region/provider. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. The live profile cannot satisfy image inspection requests.
+Both adapters check profile/model/revision, explicit video/audio permission and freshness/content of transcript evidence and current permission for every input message during preparation and immediately before the Responses API request. Only API-key mode performs token counting, with a permission check before that request too; token counting and inference use the configured endpoint. Sign in with ChatGPT uses its supported public Responses API endpoint without the API-key token-counting preflight. Neither mode silently falls back to another region/provider. Requests have `store:false`, bounded input/output, strict output schema, no provider tools, persistent conversation, `previous_response_id`, files or opaque retained context. Image inspection requires enabled video and current frames.
 
 ### 6. AI draft review (default enabled)
 

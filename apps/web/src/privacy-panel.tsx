@@ -136,8 +136,8 @@ export function PrivacyPanel() {
         </p>
         <p className="hint">
           운영 프로필은 config.yaml의 privacy에서 설정합니다. 실제 계약·안내
-          내용을 확인한 뒤 적용하세요. 영상과 선택하지 않은 AI 제공자 경로는
-          사용하지 않습니다. 음성·전사 입력:{" "}
+          내용을 확인한 뒤 적용하세요. 영상 입력:{" "}
+          {data.profile.videoEnabled ? "사용" : "사용 안 함"}. 음성·전사 입력:{" "}
           {data.profile.audioEnabled ? "사용" : "사용 안 함"}.
         </p>
       </details>

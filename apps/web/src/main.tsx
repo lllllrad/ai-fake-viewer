@@ -1001,16 +1001,15 @@ function Admin() {
                   </p>
                 )}
                 <p className="hint">
-                  Config: capture · FFmpeg {status.capture.ffmpeg}. For OBS
-                  Virtual Camera, select Program output in OBS, then use Start
-                  capture here. For remote OBS, configure capture.backend: rtmp
-                  and its private reader URL. Start streaming/virtual camera
-                  before expecting frames. Recent video is available to AI
-                  automatically.
+                  {status.privacy?.videoEnabled
+                    ? status.capture.backend === "rtmp"
+                      ? "OBS에서 송출을 시작하면 연결된 방송 화면을 받습니다. AI가 켜져 있으면 설정된 방식으로 화면을 참고합니다."
+                      : "OBS 가상 카메라를 Program 출력으로 시작한 뒤 화면 수신을 시작하세요."
+                    : "현재 운영 설정에서 영상 입력을 사용하지 않습니다."}
                 </p>
                 <div className="toolbar">
                   <button
-                    disabled={!status.demo}
+                    disabled={!status.privacy?.videoEnabled}
                     onClick={() => void action("capture/start")}
                   >
                     Start capture

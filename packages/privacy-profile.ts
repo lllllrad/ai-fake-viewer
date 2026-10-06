@@ -14,6 +14,7 @@ export const privacyProfileSchema = z
       .strict()
       .optional(),
     audioEnabled: z.boolean().default(false),
+    videoEnabled: z.boolean().default(false),
     singleStepTest: z.boolean().default(false),
     operator: text,
     officer: text,
@@ -180,6 +181,7 @@ export function assertProfileUpdate(
     JSON.stringify({
       testReview: p.testReview,
       audioEnabled: p.audioEnabled,
+      videoEnabled: p.videoEnabled,
       singleStepTest: p.singleStepTest,
       operator: p.operator,
       collection: p.collectionNotice,

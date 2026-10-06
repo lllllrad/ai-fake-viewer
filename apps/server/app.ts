@@ -108,7 +108,8 @@ export async function createApp(
         pendingRights.set(key, { ...p, session: store.sessionId });
     };
   store.on("context_invalidated", flushRights);
-  if (!opts.demo) config.ai.visualMode = "on_request";
+  if (!opts.demo && !config.privacy.videoEnabled)
+    config.ai.visualMode = "on_request";
   const privacyReady = () =>
     !participation ||
     (!profileIssues(config.privacy).length &&
@@ -126,16 +127,23 @@ export async function createApp(
       !store.closed() &&
       !participation?.ended);
   const capture = new Capture(config.capture, !!opts.demo);
+  const videoAllowed = () =>
+    !!opts.demo ||
+    (config.privacy.videoEnabled &&
+      !profileIssues(config.privacy).length &&
+      !store.closed() &&
+      !participation?.ended);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.recordTranscript(entry),
   );
   if (!opts.demo) {
-    capture.allowProcessing = () => false;
+    capture.allowProcessing = videoAllowed;
     transcriber.allowProcessing = audioAllowed;
-    capture.state = "privacy_blocked";
+    capture.state = videoAllowed() ? "stopped" : "privacy_blocked";
     transcriber.state = audioAllowed() ? "stopped" : "privacy_blocked";
   }
   const clearSpeechContext = () => {
+    capture.clearContext();
     transcriber.clearContext();
     store.clearTranscripts();
   };
@@ -150,7 +158,7 @@ export async function createApp(
     authorize: (input: ModelInput) => {
       if (
         !privacyReady() ||
-        input.frames.length ||
+        (input.frames.length > 0 && !videoAllowed()) ||
         ((input.transcripts?.length ?? 0) > 0 && !audioAllowed())
       )
         throw Error(
@@ -158,6 +166,16 @@ export async function createApp(
         );
       if (
         input.privacyRevision !== participation!.revision ||
+        input.frames.some(
+          (f) =>
+            !capture.has(f.id) ||
+            !capture.frames.some(
+              (current) =>
+                current.id === f.id &&
+                current.capturedAt === f.capturedAt &&
+                current.bytes.equals(f.bytes),
+            ),
+        ) ||
         [...(input.transcripts ?? []), ...(input.newTranscripts ?? [])].some(
           (t) =>
             !transcriber
@@ -309,8 +327,8 @@ export async function createApp(
       },
       {
         id: "capture",
-        label: "영상 입력 사용 안 함",
-        ready: true,
+        label: videoAllowed() ? "송출 화면" : "영상 입력 사용 안 함",
+        ready: !videoAllowed() || !!capture.recent().length,
         optional: true,
       },
       {
@@ -1111,6 +1129,7 @@ export async function createApp(
       throw Error("권리행사 저장소 변경은 재시작이 필요합니다.");
     assertProfileUpdate(config.privacy, profile);
     scheduler.stop("privacy_profile_changed");
+    capture.stop();
     transcriber.stop();
     store.clearTranscripts();
     await supervisor.stop();
@@ -1191,8 +1210,11 @@ export async function createApp(
     chatSummary: store.chatSummary(),
     privacy: {
       memoryOnly: true,
-      textOnly: !opts.demo && !config.privacy.audioEnabled,
-      videoEnabled: !!opts.demo,
+      textOnly:
+        !opts.demo &&
+        !config.privacy.audioEnabled &&
+        !config.privacy.videoEnabled,
+      videoEnabled: videoAllowed(),
       audioEnabled: audioAllowed(),
       ready: privacyReady(),
       issues: profileIssues(config.privacy),
@@ -1868,7 +1890,7 @@ export async function createApp(
       !opts.demo &&
       ((config.ai.provider !== "chatgpt_subscription" &&
         /^\/api\/admin\/chatgpt(?:\/|$)/.test(req.url)) ||
-        /^\/api\/admin\/capture\/start/.test(req.url) ||
+        (!videoAllowed() && /^\/api\/admin\/capture\/start/.test(req.url)) ||
         (!audioAllowed() &&
           /^\/api\/admin\/(?:audio\/start|transcripts\/export)/.test(
             req.url,

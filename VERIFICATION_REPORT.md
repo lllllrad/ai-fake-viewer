@@ -4,6 +4,32 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Reviewed OBS Program input — 2026-10-06
+
+The private RTMP URL and FFmpeg Docker wrapper were already configured, but live
+capture and model image input were unconditionally blocked. Added default-off
+`privacy.videoEnabled`, included it in processing-scope version checks, and connected
+capture, model authorization, status and the start control to that setting. The
+private profile enables video with a new notice version and continuous AI image
+input. The simplified test notice includes screen scope and still fits one CHZZK
+message. Capture help now reflects actual permission and backend state.
+
+Selected frames remain valid for at most thirty seconds during generation/review;
+new selection still requires frames under ten seconds old. Withdrawal/reset clears
+frames and rejects late pre-reset frames. Current permission, revision and matching
+frame content are rechecked at the model boundary. No mask-confirmation gate was
+added. Frames stay in memory.
+
+The full check passed all 158 tests, TypeScript/Vite and documentation/configuration
+checks. New tests exercise the live image adapter boundary, permission/versioning,
+withdrawal and delayed frame rejection. Chromium 153.0.8010.12 browser checks passed
+without console errors. After managed restart, live RTMP capture reported
+1920x1080 receiving; the authenticated preview returned HTTP 200 image/jpeg. No
+live screenshot was saved as a test artifact.
+After resuming AI, a live attempt with one frame and no chat/transcript input
+returned `say` from generation (7700 ms), `say` from review (9306 ms), and
+`published`. Capture and AI remained running.
+
 ## Reply review expiry and diagnostics — 2026-10-06
 
 Live status showed AI running, permitted CHZZK messages present, transcription

@@ -31,6 +31,11 @@ export function workerEnv() {
 export class Capture {
   allowProcessing: () => boolean = () => true;
   frames: Frame[] = [];
+  private contextFloor = 0;
+  clearContext() {
+    this.contextFloor = Date.now();
+    this.frames = [];
+  }
   state = "stopped";
   child?: ChildProcess;
   timer?: NodeJS.Timeout;
@@ -122,7 +127,7 @@ export class Capture {
     },
     source: Frame["source"],
   ) {
-    if (!this.allowProcessing()) return;
+    if (!this.allowProcessing() || m.capturedAt <= this.contextFloor) return;
     this.failures = 0;
     this.lastError = "";
     const dims = `${m.sourceWidth ?? m.width}x${m.sourceHeight ?? m.height}`;
@@ -154,7 +159,7 @@ export class Capture {
   }
   has(id: string) {
     return this.frames.some(
-      (frame) => frame.id === id && frame.capturedAt > Date.now() - 10000,
+      (frame) => frame.id === id && frame.capturedAt > Date.now() - 30000,
     );
   }
   stop() {
