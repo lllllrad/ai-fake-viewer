@@ -375,6 +375,13 @@ reserved plus published activity, global/member cooldowns, inflight and
 consecutive limits, and normalized long-text duplication. Invalid records or a
 failed write leave the candidate unclaimed; a second claim cannot succeed.
 
+The [generation recovery policy](../../packages/application/reactions/recovery.ts)
+owns retry decisions and the operator-facing issue state. Three consecutive
+transient request failures stop AI; a successful response or a non-transient
+validation/stale-context outcome breaks that streak. Permanent errors and budget
+exhaustion stop immediately. Provider error classification supplies a typed issue,
+while the scheduler applies the returned stop state only for its current generation.
+
 The optional [timing gate use case](../../packages/application/reactions/timing-gate.ts)
 owns its separate request cap, probability threshold and evaluation status.
 Its [TypeSafe adapter](../../packages/infrastructure/reactions/typesafe-gate.ts)

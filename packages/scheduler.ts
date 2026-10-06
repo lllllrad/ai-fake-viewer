@@ -1,3 +1,4 @@
+import { GenerationRecovery } from "./application/reactions/recovery.ts";
 import { GenerationWork } from "./application/reactions/generation-work.ts";
 import { ReactionSchedule } from "./application/reactions/scheduling.ts";
 import { generateReviewedDraft } from "./application/reactions/draft-review.ts";
@@ -59,13 +60,10 @@ export class Scheduler {
     input.reviewDraft = undefined;
   }
   state = "stopped";
-  lastIssue?: {
-    code: string;
-    message: string;
-    at: number;
-    continuing: boolean;
-  };
-  private transientFailures = 0;
+  private readonly recovery = new GenerationRecovery();
+  get lastIssue() {
+    return this.recovery.lastIssue;
+  }
   get controller() {
     return this.work.controller;
   }
@@ -173,8 +171,7 @@ export class Scheduler {
       );
     this.preparePersonas?.();
     this.stop();
-    this.lastIssue = undefined;
-    this.transientFailures = 0;
+    this.recovery.success();
     this.state = "running";
     this.phase = "waiting_for_input";
     this.store.setAiDesiredRunning(true);
@@ -209,12 +206,7 @@ export class Scheduler {
   }
   private schedulerFailed() {
     this.rejects++;
-    this.lastIssue = {
-      code: "scheduler_error",
-      message: "AI 생성 준비 또는 표시 중 오류가 발생해 중지했습니다.",
-      at: Date.now(),
-      continuing: false,
-    };
+    this.recovery.schedulerFailed(Date.now());
     try {
       this.stop("scheduler_error");
     } catch {
@@ -491,11 +483,8 @@ export class Scheduler {
         this.state !== "running"
       )
         return;
+      this.recovery.success();
       if (outcome.kind === "skipped") {
-        if (outcome.reason === "model_skip") {
-          this.lastIssue = undefined;
-          this.transientFailures = 0;
-        }
         if (attemptId)
           this.store.attempts.finish(
             attemptId,
@@ -508,8 +497,6 @@ export class Scheduler {
       }
       input = outcome.input;
       const d = outcome.decision;
-      this.lastIssue = undefined;
-      this.transientFailures = 0;
       const problem = this.store.closed()
         ? "broadcast_closed"
         : evidenceProblem(input, d, this.currentEvidence(input, d));
@@ -588,25 +575,8 @@ export class Scheduler {
           code: issue.code,
           ...(error instanceof ModelRequestError ? error.details : {}),
         });
-        if (issue.transient) this.transientFailures++;
-        const continuing =
-          issue.retryable && (!issue.transient || this.transientFailures < 3);
-        this.lastIssue = {
-          code: issue.code,
-          message: continuing
-            ? issue.message
-            : issue.transient
-              ? "AI 연결 오류가 3회 연속 발생해 중지했습니다. 연결 상태를 확인해 주세요."
-              : issue.message,
-          at: Date.now(),
-          continuing,
-        };
-        if (!continuing)
-          this.stop(
-            issue.code === "budget_exhausted"
-              ? "budget_exhausted"
-              : "model_error",
-          );
+        const stopState = this.recovery.failed(issue, Date.now());
+        if (stopState) this.stop(stopState);
       }
     } finally {
       this.work.finish(lease);

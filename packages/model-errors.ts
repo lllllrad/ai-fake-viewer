@@ -1,3 +1,4 @@
+import type { GenerationIssue } from "./application/reactions/recovery.ts";
 import { StaleModelContextError } from "./application/reactions/errors.ts";
 export { StaleModelContextError } from "./application/reactions/errors.ts";
 import { ZodError } from "zod";
@@ -13,7 +14,7 @@ export class ModelRequestError extends Error {
   }
 }
 
-export function generationIssue(error: unknown) {
+export function generationIssue(error: unknown): GenerationIssue {
   if (error instanceof SyntaxError)
     return {
       code: "provider_invalid_json",
