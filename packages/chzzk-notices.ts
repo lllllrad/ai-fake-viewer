@@ -1,4 +1,5 @@
-import { limitState, type ApiFailure } from "./api-health.ts";
+import type { ApiFailure } from "./api-health.ts";
+import { ChzzkNoticeTransport } from "./infrastructure/platforms/chzzk-notice-transport.ts";
 import { randomUUID } from "node:crypto";
 import { FixedNoticeDelivery } from "./application/participation/fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
@@ -20,11 +21,14 @@ export class ChzzkNotices {
   private blockedUntil = 0;
   private busy = false;
   connected = false;
+  private readonly transport: ChzzkNoticeTransport;
   constructor(
     private participation: Participation,
     private auth: ChzzkAuth,
-    private request: typeof fetch = fetch,
-  ) {}
+    request: typeof fetch = fetch,
+  ) {
+    this.transport = new ChzzkNoticeTransport(auth, request);
+  }
   resolve(chat: string, broadcaster: string) {
     this.reset();
     this.target = { chat, broadcaster };
@@ -90,95 +94,35 @@ export class ChzzkNotices {
       }
       const job = this.job;
       if (!first && !bot.reservePart(job.id)) return;
-      const token = await this.auth.access();
-      const credentials = this.auth.token;
-      // OAuth refresh is asynchronous: recheck consent/session/target immediately before sending.
-      const valid = () =>
-        !signal.aborted &&
-        this.connected &&
-        this.target === target &&
-        this.job === job &&
-        !!credentials &&
-        this.auth.token === credentials &&
-        bot!.valid(job.id);
-      if (!valid()) {
-        bot.failed(job.id);
-        this.job = undefined;
-        return;
-      }
-      const identity = await this.request(
-        "https://openapi.chzzk.naver.com/open/v1/users/me",
+      const result = await this.transport.send(
+        { broadcaster: target.broadcaster, text: job.parts[job.index] },
+        signal,
         {
-          headers: { authorization: `Bearer ${token}` },
-          signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-        },
-      );
-      if (!identity.ok) {
-        const state = limitState(identity.status);
-        this.failure = {
-          api: "CHZZK User API / users/me",
-          operation: "identity",
-          state,
-        };
-        throw Error(state);
-      }
-      const user = (await identity.json()) as any;
-      if (user.code !== 200 || user.content?.channelId !== target.broadcaster)
-        throw Error("channel_mismatch");
-      if (!valid()) {
-        bot.failed(job.id);
-        this.job = undefined;
-        return;
-      }
-      const text = job.parts[job.index];
-      this.state = "sending";
-      const r = await this.request(
-        "https://openapi.chzzk.naver.com/open/v1/chats/send",
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${token}`,
-            "content-type": "application/json",
+          valid: () =>
+            this.connected &&
+            this.target === target &&
+            this.job === job &&
+            bot!.valid(job.id),
+          sending: () => {
+            this.state = "sending";
           },
-          body: JSON.stringify({ message: text }),
-          signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
         },
       );
-      if (!valid()) {
+      // Transport completion and application continuation are separate cancellation boundaries.
+      if (this.target !== target || this.job !== job) return;
+      if (result.status === "stale" || !result.current()) {
         bot.failed(job.id);
         this.job = undefined;
         return;
       }
-      if (!r.ok) {
-        const errorBody = (await r.json().catch(() => ({}))) as any;
-        this.state = limitState(
-          r.status,
-          String(errorBody.error?.errors?.[0]?.reason ?? ""),
-        );
-        this.failure = {
-          api: "CHZZK Chat API / chats/send",
-          operation: "send",
-          state: this.state,
-        };
-        // No immediate retry of ambiguous writes; count failures against the same limits.
-        this.blockedUntil =
-          Date.now() + (r.status === 401 || r.status === 403 ? 300000 : 60000);
+      if (result.status === "rejected") {
+        this.state = result.state;
+        this.failure = result.failure;
+        this.blockedUntil = Date.now() + result.retryAfterMs;
         bot.failed(job.id);
         this.job = undefined;
         return;
       }
-      const b = (await r.json()) as any;
-      if (!valid()) {
-        bot.failed(job.id);
-        this.job = undefined;
-        return;
-      }
-      if (
-        b.code !== 200 ||
-        typeof b.content?.messageId !== "string" ||
-        !b.content.messageId
-      )
-        throw Error("delivery_unconfirmed");
       this.failure = undefined;
       if (++job.index === job.parts.length) {
         bot.echo(target.broadcaster, job.text);

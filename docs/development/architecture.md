@@ -188,7 +188,15 @@ not invalidate a successful insertion with the exact chat, broadcaster and text.
 Invalidated requests cannot overwrite current status with late provider errors.
 Failures identify `liveChatMessages.insert` as a send operation and preserve its
 existing retry delay; provider bodies never become diagnostics.
-Remaining provider loops and CHZZK notice transport still require reconstruction.
+The [CHZZK notice transport](../../packages/infrastructure/platforms/chzzk-notice-transport.ts)
+owns account identity lookup and insertion with typed identity/receipt validation.
+It binds requests to refreshed credentials and checks cancellation and application
+eligibility after each response. Its result retains a validity check for the
+application continuation, so replaced credentials or reset targets cannot apply
+an obsolete success or error. Identity lookup and insertion keep separate API
+failure attribution and their existing retry delays. No provider body is exposed
+as an operator diagnostic. Remaining provider loops and sender coordination still
+require reconstruction.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
