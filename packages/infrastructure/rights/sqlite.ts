@@ -16,10 +16,15 @@ export class SqliteRightsRepository implements RightsRepository {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
-    if (path !== ":memory:") chmodSync(path, 0o600);
-    this.db.exec(
-      "PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS rights_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS rights_followup_receipts(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,platform TEXT NOT NULL,url TEXT NOT NULL,broadcast_at TEXT NOT NULL,status TEXT NOT NULL);",
-    );
+    try {
+      if (path !== ":memory:") chmodSync(path, 0o600);
+      this.db.exec(
+        "PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON; CREATE TABLE IF NOT EXISTS rights_requests(id TEXT PRIMARY KEY,payload TEXT NOT NULL,created INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS rights_followup_receipts(id TEXT PRIMARY KEY); CREATE TABLE IF NOT EXISTS videos(id TEXT PRIMARY KEY,platform TEXT NOT NULL,url TEXT NOT NULL,broadcast_at TEXT NOT NULL,status TEXT NOT NULL);",
+      );
+    } catch (error) {
+      this.db.close();
+      throw error;
+    }
   }
   transaction<T>(work: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");

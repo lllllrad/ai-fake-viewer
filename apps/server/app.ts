@@ -1,5 +1,6 @@
 import { registerHttpAccess } from "./http/access.ts";
 import { ServerShutdown } from "./shutdown.ts";
+import { initializeServer, type StartupCleanup } from "./startup.ts";
 import { registerHttpErrors } from "./http/errors.ts";
 import {
   AdministratorSessions,
@@ -52,20 +53,27 @@ import { SoopAuth } from "../../packages/infrastructure/accounts/soop-auth.ts";
 import { Supervisor } from "../../packages/infrastructure/inputs/platform-supervisor.ts";
 import { createBroadcastCast } from "../../packages/infrastructure/cast/runtime.ts";
 export { equal } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
-export async function createApp(
+interface AppOptions {
+  demo?: boolean;
+  adminToken: string;
+  readerToken: string;
+  encryptionKey: string;
+  startInputs?: boolean;
+  persistReaderToken?: (token: string) => void;
+  chatgptTokenPath?: string;
+  chzzkTokenPath?: string;
+  soopTokenPath?: string;
+  youtubeTokenPath?: string;
+}
+
+export function createApp(config: Config, opts: AppOptions) {
+  return initializeServer((startup) => assembleApp(config, opts, startup));
+}
+
+async function assembleApp(
   config: Config,
-  opts: {
-    demo?: boolean;
-    adminToken: string;
-    readerToken: string;
-    encryptionKey: string;
-    startInputs?: boolean;
-    persistReaderToken?: (token: string) => void;
-    chatgptTokenPath?: string;
-    chzzkTokenPath?: string;
-    soopTokenPath?: string;
-    youtubeTokenPath?: string;
-  },
+  opts: AppOptions,
+  startup: StartupCleanup,
 ) {
   if (
     opts.adminToken.length < 32 ||
@@ -74,6 +82,7 @@ export async function createApp(
   )
     throw Error("Generate independent credentials using npm run setup");
   const app = Fastify({ logger: false, bodyLimit: 65536 });
+  startup.add(() => app.close());
   config = structuredClone(config);
   const participation = opts.demo
     ? undefined
@@ -82,6 +91,7 @@ export async function createApp(
     opts.demo ? ":memory:" : config.database,
     participation,
   );
+  startup.add(() => store.close());
   const noticeBot = participation
     ? new FixedNoticeDelivery(participation, config.soop.streamerId, "soop", {
         now: () => Date.now(),
@@ -92,11 +102,13 @@ export async function createApp(
   const rights = createRightsService(
     opts.demo ? ":memory:" : config.privacy.rightsDatabase,
   );
+  startup.add(() => rights.close());
   const followups = new WithdrawalFollowups(
     rights,
     store.rightsFollowups,
     randomUUID,
   );
+  startup.add(() => followups.clear());
   followups.flush();
   store.on("context_invalidated", () => followups.flush());
   const privacyReady = () =>
@@ -276,6 +288,7 @@ export async function createApp(
       stopChat: () => supervisor.stop(),
     },
   });
+  startup.add(() => broadcast.shutdown());
   supervisor.onBroadcastEnded = () => {
     void broadcast.endBroadcast().catch(() => {
       console.error(
@@ -343,6 +356,7 @@ export async function createApp(
       personaModel,
     );
   }
+  startup.add(() => cancelAuthoringJobs());
   const readers = registerReaderStream(
     app,
     {
@@ -371,6 +385,7 @@ export async function createApp(
       authenticate: (token) => equal(token, readerToken),
     },
   );
+  startup.add(() => readers.closeAll());
   const participationAdmin = new ParticipationAdministration({
     participation,
     profile: () => config.privacy,
@@ -526,6 +541,7 @@ export async function createApp(
   const retention = setInterval(() => {
     store.retention.purge(Date.now() - config.retentionDays * 86400000);
   }, 3600000);
+  startup.add(() => clearInterval(retention));
   retention.unref();
   store.retention.purge(Date.now() - config.retentionDays * 86400000);
   app.addHook("onRequest", async (req, reply) => {
@@ -542,6 +558,7 @@ export async function createApp(
   });
   const resumeAiIfRequested = () => broadcast.recoverAi();
   const restartRecovery = setInterval(resumeAiIfRequested, 1000);
+  startup.add(() => clearInterval(restartRecovery));
   restartRecovery.unref();
   const shutdown = new ServerShutdown({
     cancelTimers: () => {
@@ -557,6 +574,7 @@ export async function createApp(
     clearFollowups: () => followups.clear(),
   });
   app.addHook("onClose", () => shutdown.close());
+  startup.handoff(() => app.close());
   if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
   return {
     app,

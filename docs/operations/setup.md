@@ -140,6 +140,12 @@ test modes. Use normal viewer accounts and synthetic fixtures for verification.
 
 ## Broadcast restart and end
 
+If startup fails, the server closes resources already opened during initialization,
+including started inputs and both databases. This cleanup does not end the
+broadcast or erase its saved state. Correct the reported configuration, file
+access or input error and retry through `sh run-command.sh just server-start`;
+do not delete the broadcast database to work around a startup error.
+
 `database` selects the private SQLite broadcast state file. Keep it on persistent
 local storage, outside tracked files and public static directories. Server restart
 restores chat, consent, notices, personas, counters and the AI enabled setting.

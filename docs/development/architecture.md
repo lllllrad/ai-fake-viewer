@@ -100,6 +100,13 @@ before awaiting an adapter shutdown. No delayed start, model result or notice
 acknowledgement can reopen a closed broadcast. Shutdown and end must be separately
 testable operations, with resources closed exactly once.
 
+The [startup owner](../../apps/server/startup.ts) records cleanup as resources
+are acquired during server composition. Failed initialization drains those
+resources in reverse order, attempts every cleanup and preserves the original
+failure. Once the normal shutdown hook is installed, it becomes the sole cleanup
+owner, including when starting inputs fails. Startup failure never ends or erases
+the recovered broadcast.
+
 The [server shutdown owner](../../apps/server/shutdown.ts) cancels periodic work
 and reference authoring, drains broadcast inputs, closes readers, flushes durable
 rights follow-ups, then closes both stores and clears transient follow-up state.
