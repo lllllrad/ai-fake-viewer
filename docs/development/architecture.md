@@ -1,7 +1,7 @@
 # Architecture and reconstruction contract
 
-This is the implementation target for rebuilding the existing product. It is not
-a claim that all boundaries below already exist. The accepted behavior is owned
+This describes the responsibility boundaries and acceptance contract for the
+reconstructed existing product. The accepted behavior is owned
 by [behavior](../specifications/behavior.md), [participation](../specifications/participation.md)
 and [personas](../specifications/personas.md). The [dashboard contract](../specifications/dashboard.md)
 defines the replacement UI. The microphone-only mode is outside this rewrite.
@@ -50,11 +50,12 @@ flowchart LR
 | `apps/web/src/`            | Typed API client, session hooks, feature screens and reusable presentation components                 | Provider tokens in browser storage, server policy decisions, raw state mutation |
 | `workers/`                 | Bounded audio/video and incompatible SDK process isolation                                            | Broadcast state or permission decisions                                         |
 
-Flat legacy modules may remain during replacement. A temporary adapter can connect
-a new use case to an old module while its replacement is under test. Final
-completion requires removing superseded runtime paths, not leaving a permanent
-facade over the same monolith. Each file should have one reason to change; split
-by responsibility, not by an arbitrary line-count target.
+Production composition calls the application owners and infrastructure adapters
+directly. Retained manual authoring and unofficial reference reception are isolated
+from the live composition; they do not define another live product. Root configuration,
+status/error helpers and storage composition have explicit responsibilities rather
+than serving as alternate implementations. Keep each file focused on one reason
+to change; split by responsibility, not by an arbitrary line-count target.
 
 ## Application services
 

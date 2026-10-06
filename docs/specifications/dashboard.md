@@ -3,8 +3,8 @@
 This defines the replacement UI for the current live feature set. The broadcast,
 connections and participation destinations are implemented. The connection screen uses separate platform, media, AI account and reader-link
 components. Participation uses separate participant, operating-profile, rights-request
-and video-inventory views. The SOOP browser connection uses a dedicated controller;
-remaining server adapters still require replacement during reconstruction. Behavior is
+and video-inventory views. The SOOP browser connection uses a dedicated controller, while server-side input
+and account lifetimes belong to their infrastructure adapters. Behavior is
 owned by [requirements](behavior.md), [participation](participation.md) and
 [personas](personas.md). Implementation boundaries are in [architecture](../development/architecture.md).
 
@@ -234,8 +234,10 @@ server output and client input. Required missing or malformed fields make status
 unavailable; the UI does not substitute healthy defaults. Unknown fields are
 stripped at every object boundary. The [status projection](../../packages/application/status/projection.ts)
 clears closed-broadcast messages, cast, transcripts, summary and pending drafts
-without mutating its input. Transcript history is ordered newest first. Other
-feature-specific payloads still require shared DTOs during reconstruction.
+without mutating its input. Transcript history is ordered newest first. Connection payloads use the shared [connection contracts](../../packages/contracts/connections.ts);
+participation and rights views use their [participation](../../packages/contracts/participation.ts)
+and [rights](../../packages/contracts/rights.ts) contracts. Successful commands whose
+bodies are not consumed refresh the authoritative status rather than inventing local state.
 
 Browser checks must cover navigation, controls, account actions, stale/error states,
 manual candidate review, shared notice/individual consent, withdrawal and reconnect,
