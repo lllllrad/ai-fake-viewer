@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "short-context",
+  "revision": 1,
+  "description": "Compare three recent speech chunks against the baseline ten.",
+  "ai": {
+    "visualMode": "on_request",
+    "transcriptLimit": 3
+  }
+}

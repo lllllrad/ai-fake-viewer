@@ -15,6 +15,7 @@ export interface ReactionConfig {
   ai: ModelCallPolicy & {
     visualMode: "continuous" | "on_request";
     contextWindowSeconds: number;
+    transcriptLimit?: number;
     pacing: { minSeconds: number; maxSeconds: number };
     personas: Array<{ name: string; style: string }>;
     description: string;

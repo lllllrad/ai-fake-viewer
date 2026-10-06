@@ -90,11 +90,15 @@ const voices = [
 
 export function automaticDefinitions(
   topic: string,
+  runtime: { index(length: number): number; id(): string } = {
+    index: (length: number) => randomInt(length),
+    id: randomUUID,
+  },
 ): Array<{ definition: Definition; sources: readonly string[] }> {
   // Voice is sampled independently of motives; research does not establish a link.
   return motives.map((seed, index) => {
-    const voice = voices[randomInt(voices.length)];
-    const personaId = randomUUID();
+    const voice = voices[runtime.index(voices.length)];
+    const personaId = runtime.id();
     return {
       sources: seed.refs,
       definition: definitionSchema.parse({

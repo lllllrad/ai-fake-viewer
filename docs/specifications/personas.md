@@ -127,3 +127,10 @@ multiple speakers per event, schema repair and memory retrieval are not promised
 by this contract. Automated tests cover composition, selection, lifecycle and
 publication guards. Real-model naturalness and real platform authorization or
 reception require separate acceptance evidence.
+
+## Developer experiments
+
+[Versioned experiment profiles](../development/experiments.md) can patch automatic
+composition rules and prompts. This does not introduce operator-authored viewers.
+Existing cast snapshots survive restart; persona patches affect the next fresh
+broadcast cast. The live server and isolated runner share the same pipeline.

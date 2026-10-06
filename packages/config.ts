@@ -160,6 +160,8 @@ export const configSchema = z
             "maxSeconds must be at least minSeconds",
           )
           .default({ minSeconds: 35, maxSeconds: 95 }),
+        pipelineProfile: z.string().max(1024).default(""),
+        transcriptLimit: z.number().int().min(1).max(10).default(10),
         contextWindowSeconds: z.number().int().min(30).max(300).default(120),
         manualApproval: z.boolean().default(false),
         reviewDraft: z.boolean().default(true),
@@ -202,6 +204,8 @@ export const configSchema = z
         provider: "openai_api",
         gate: gateSchema.parse({}),
         pacing: { minSeconds: 35, maxSeconds: 95 },
+        pipelineProfile: "",
+        transcriptLimit: 10,
         contextWindowSeconds: 120,
         manualApproval: false,
         reviewDraft: true,

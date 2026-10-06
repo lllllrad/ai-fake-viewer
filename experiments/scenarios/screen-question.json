@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "screen-question",
+  "description": "Synthetic image inspection; the visible verification text is ALPHA 42.",
+  "topic": "화면에 보이는 검증 글자",
+  "durationMs": 8000,
+  "events": [
+    {
+      "kind": "frame",
+      "atMs": 0,
+      "file": "screen.svg"
+    },
+    {
+      "kind": "speech",
+      "atMs": 1000,
+      "text": "화면에 보이는 검증 글자를 읽어볼래요?"
+    },
+    {
+      "kind": "frame",
+      "atMs": 5000,
+      "file": "screen.svg"
+    }
+  ],
+  "expectations": {
+    "maxPublished": 2
+  }
+}

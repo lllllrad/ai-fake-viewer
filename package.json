@@ -19,7 +19,9 @@
     "format:check": "prettier --check apps packages workers scripts tests *.json *.ts *.yaml *.md research/*.md docs/**/*.md",
     "docs:check": "tsx scripts/check-docs.ts",
     "setup:check": "tsx scripts/check-local-setup.ts",
-    "test:server": "tsx scripts/server-control-check.ts"
+    "test:server": "tsx scripts/server-control-check.ts",
+    "experiment": "tsx scripts/experiment.ts",
+    "test:experiments:browser": "tsx scripts/experiment-browser-check.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

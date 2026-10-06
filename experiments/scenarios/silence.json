@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "id": "silence",
+  "description": "No input must not trigger model calls or publication.",
+  "topic": "조용한 구간",
+  "durationMs": 30000,
+  "events": [],
+  "expectations": {
+    "maxPublished": 0
+  }
+}

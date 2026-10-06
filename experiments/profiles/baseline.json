@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "baseline",
+  "revision": 1,
+  "description": "Current automatic viewers and review, with text-triggered visual inspection.",
+  "ai": {
+    "visualMode": "on_request"
+  }
+}

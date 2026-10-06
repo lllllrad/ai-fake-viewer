@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "id": "direct-question",
+  "description": "Synthetic question followed by an explanation and a viewer response.",
+  "topic": "선택 이유와 방법의 차이",
+  "durationMs": 90000,
+  "events": [
+    {
+      "kind": "speech",
+      "atMs": 1000,
+      "text": "새로운 방법을 두 가지 비교하고 있어요. 여러분이라면 어느 쪽을 먼저 시도할까요?"
+    },
+    {
+      "kind": "speech",
+      "atMs": 4000,
+      "text": "첫 번째는 간단하지만 느리고, 두 번째는 설정이 복잡하지만 빨라요."
+    },
+    {
+      "kind": "chat",
+      "atMs": 7000,
+      "author": "synthetic-viewer",
+      "text": "저라면 처음에는 간단한 쪽부터 해볼 것 같아요."
+    },
+    {
+      "kind": "speech",
+      "atMs": 12000,
+      "text": "간단한 방법은 같은 순서를 여러 번 반복해야 해요."
+    },
+    {
+      "kind": "speech",
+      "atMs": 20000,
+      "text": "복잡한 방법은 준비만 끝나면 반복 작업이 줄어들어요."
+    },
+    {
+      "kind": "speech",
+      "atMs": 28000,
+      "text": "아직 두 번째 방법을 직접 실행해 보지는 않았어요."
+    },
+    {
+      "kind": "speech",
+      "atMs": 45000,
+      "text": "간단한 방법부터 해보니 예상보다 시간이 오래 걸리네요. 순서를 바꾸면 어떨까요?"
+    }
+  ],
+  "expectations": {
+    "maxPublished": 4,
+    "forbiddenText": ["제가 예전에 후원했잖아요"]
+  }
+}

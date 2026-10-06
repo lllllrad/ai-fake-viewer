@@ -1,3 +1,8 @@
+import {
+  loadPipelineProfile,
+  applyPipelineProfile,
+  pipelineCards,
+} from "../../packages/infrastructure/reactions/pipeline-profile.ts";
 import { registerHttpAccess } from "./http/access.ts";
 import { ServerShutdown } from "./shutdown.ts";
 import { ServerMaintenance } from "./maintenance.ts";
@@ -84,7 +89,8 @@ async function assembleApp(
     throw Error("Generate independent credentials using npm run setup");
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   startup.add(() => app.close());
-  config = structuredClone(config);
+  const pipeline = loadPipelineProfile(config.ai.pipelineProfile || undefined);
+  config = applyPipelineProfile(structuredClone(config), pipeline);
   const participation = opts.demo
     ? undefined
     : new Participation(config.privacy, "");
@@ -164,15 +170,25 @@ async function assembleApp(
     opts.demo
       ? mockModel
       : config.ai.provider === "chatgpt_subscription"
-        ? chatgptModel(config.ai, chatgpt, fetch, modelBoundary)
+        ? chatgptModel(config.ai, chatgpt, fetch, {
+            ...modelBoundary,
+            prompts: pipeline.prompts,
+          })
         : openaiModel(config.ai, {
             endpoint: () => config.privacy.processing.endpoint,
             model: () => config.privacy.processing.model,
             ...modelBoundary,
+            prompts: pipeline.prompts,
           }),
     2,
   );
-  const personas = createBroadcastCast(store, () => config.ai.description);
+  const personas = createBroadcastCast(store, () => config.ai.description, {
+    cards: pipelineCards(pipeline),
+    researchBasis: `real-viewer-research-v0.1;pipeline=${pipeline.profile.id}@${pipeline.profile.revision};sha256=${pipeline.digest}`,
+  });
+  store.audit(
+    `pipeline.loaded:${pipeline.profile.id}@${pipeline.profile.revision}:${pipeline.digest}`,
+  );
   let cancelAuthoringJobs = () => {};
   const scheduler = new Scheduler(
     store,

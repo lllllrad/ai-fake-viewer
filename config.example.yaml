@@ -54,6 +54,9 @@ ai:
   pacing:
     minSeconds: 35
     maxSeconds: 95
+  # Optional versioned persona/prompt/pipeline profile; see docs/development/experiments.md.
+  pipelineProfile: ""
+  transcriptLimit: 10
   contextWindowSeconds: 120
   maxCalls: 100
   maxInputTokens: 24000

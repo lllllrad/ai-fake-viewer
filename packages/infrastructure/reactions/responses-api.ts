@@ -4,7 +4,7 @@ import type {
   ModelLimits,
 } from "../../application/reactions/model-port.ts";
 import { decisionJsonSchema, type Decision } from "../../contracts/decision.ts";
-import { modelMessages } from "./model-messages.ts";
+import { modelMessages, type ModelPrompts } from "./model-messages.ts";
 import {
   completedResponseSchema,
   responseText,
@@ -15,6 +15,7 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
   options?: {
     endpoint: () => string;
     model: () => string;
+    prompts?: ModelPrompts;
     authorize: (input: ModelInput<Bytes>) => void;
     requestId?: (id: string, input: ModelInput<Bytes>) => void;
   },
@@ -26,7 +27,7 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
     options?.authorize(input);
     const endpoint = options?.endpoint() ?? "https://api.openai.com/v1";
     const model = options?.model() ?? process.env.OPENAI_MODEL;
-    const messages = modelMessages(input);
+    const messages = modelMessages(input, options?.prompts);
     const headers = {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",

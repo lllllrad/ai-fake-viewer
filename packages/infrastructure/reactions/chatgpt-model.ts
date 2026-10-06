@@ -4,7 +4,7 @@ import type {
   ModelLimits,
 } from "../../application/reactions/model-port.ts";
 import { decisionJsonSchema, type Decision } from "../../contracts/decision.ts";
-import { modelMessages } from "./model-messages.ts";
+import { modelMessages, type ModelPrompts } from "./model-messages.ts";
 import { readResponsesStream } from "./responses-stream.ts";
 import { ModelRequestError } from "../../model-errors.ts";
 export interface ChatgptModelAccount {
@@ -17,6 +17,7 @@ export function chatgptModel<Bytes extends Uint8Array = Uint8Array>(
   auth: ChatgptModelAccount,
   request: typeof fetch = fetch,
   options?: {
+    prompts?: ModelPrompts;
     authorize: (input: ModelInput<Bytes>) => void;
     requestId?: (id: string, input: ModelInput<Bytes>) => void;
   },
@@ -30,7 +31,7 @@ export function chatgptModel<Bytes extends Uint8Array = Uint8Array>(
       model,
       store: false,
       stream: true,
-      input: modelMessages(input),
+      input: modelMessages(input, options?.prompts),
       text: {
         format: {
           type: "json_schema",

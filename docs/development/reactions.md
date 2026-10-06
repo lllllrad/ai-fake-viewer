@@ -10,7 +10,7 @@ Media acquisition is documented in [inputs and accounts](inputs-and-accounts.md)
 
 Separate input selection, pacing/eligibility, persona selection, model request,
 review and publication. Use injected time/randomness at policy boundaries so tests
-do not depend on sleeps or probability. Context includes the latest ten recent
+do not depend on sleeps or probability. By default, context includes the latest ten recent
 transcript chunks, eligible human text and configured visual evidence. New input
 and background context are distinct; input received during pacing remains eligible.
 
@@ -20,7 +20,7 @@ storage settings and bounded concurrency. Do not replace tested wire protocols
 with assumptions. A provider cannot silently switch account or authentication.
 
 The [evidence policy](../../packages/domain/reactions/evidence.ts) selects the
-current chat window and latest ten transcript chunks by capture time, separates
+current chat window and latest ten transcript chunks by default by capture time, separates
 new triggers from background, and prunes consumed-input bookkeeping without
 consuming new evidence. Synthetic chat alone is not a speech-trigger substitute.
 Message revisions include both speaker and text; the coordinator hashes that
@@ -250,3 +250,9 @@ are one-shot even when invoked again. A synchronous polling or publication error
 stops both timers before reaching the coordinator's error handler. Delayed storage
 failures therefore stop AI with a diagnostic instead of escaping the timer and
 terminating the process. Manual publication also cancels its queued callback.
+
+## Experiments
+
+[Persona and pipeline experiments](experiments.md) invoke the same coordinator,
+draft/review owner and model adapters with an isolated store and injected clock.
+Versioned profiles are also consumed by the live server at startup.

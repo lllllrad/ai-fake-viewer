@@ -6,13 +6,21 @@ const promptPath = (name: string) => resolve(process.cwd(), "prompts", name);
 const answerPrompt = readFileSync(promptPath("answer.md"), "utf8").trim();
 const reviewPrompt = readFileSync(promptPath("review.md"), "utf8").trim();
 
-export function modelMessages(input: ModelInput) {
+export const defaultPrompts = Object.freeze({
+  answer: answerPrompt,
+  review: reviewPrompt,
+});
+export type ModelPrompts = typeof defaultPrompts;
+export function modelMessages(
+  input: ModelInput,
+  prompts: ModelPrompts = defaultPrompts,
+) {
   return [
     {
       role: "developer",
       content: input.reviewDraft
-        ? reviewPrompt
-        : answerPrompt
+        ? prompts.review
+        : prompts.answer
             .replaceAll("{{persona_style}}", input.persona.style)
             .replaceAll(
               "{{visual_instruction}}",

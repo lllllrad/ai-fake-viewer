@@ -24,6 +24,7 @@ export function messageVersion(message: ContextMessage) {
 export function selectEvidenceWindow<T extends SpeechEvidence>(input: {
   now: number;
   windowMs: number;
+  transcriptLimit?: number;
   recent: Array<ObservedMessage | null>;
   messages: ContextMessage[];
   transcripts: T[];
@@ -43,7 +44,7 @@ export function selectEvidenceWindow<T extends SpeechEvidence>(input: {
   const transcripts = input.transcripts
     .filter((t) => t.capturedAt >= floor)
     .sort((a, b) => a.capturedAt - b.capturedAt)
-    .slice(-10);
+    .slice(-(input.transcriptLimit ?? 10));
   const transcriptIds = new Set(transcripts.map((t) => t.id));
   const messageIds = new Set(messages.map((message) => message.id));
   const processedTranscriptIds = new Set(

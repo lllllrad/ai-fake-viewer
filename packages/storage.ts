@@ -72,6 +72,10 @@ export class Store extends EventEmitter {
   constructor(
     path: string,
     public participation?: Participation,
+    private readonly runtime: { now(): number; id(): string } = {
+      now: () => Date.now(),
+      id: randomUUID,
+    },
   ) {
     super();
     if (path !== ":memory:")
@@ -81,8 +85,8 @@ export class Store extends EventEmitter {
       if (path !== ":memory:" && process.platform !== "win32")
         chmodSync(path, 0o600);
       this.sessionId = initializeBroadcastDatabase(this.db, {
-        now: () => Date.now(),
-        id: randomUUID,
+        now: () => this.runtime.now(),
+        id: () => this.runtime.id(),
       });
     } catch (error) {
       this.db.close();
@@ -91,24 +95,24 @@ export class Store extends EventEmitter {
     this.checkpoints = new SqliteConnectorCheckpoints(this.db);
     this.incomingMessages = new SqliteIncomingMessages(this.db, {
       sessionId: () => this.sessionId,
-      now: () => Date.now(),
-      id: randomUUID,
+      now: () => this.runtime.now(),
+      id: () => this.runtime.id(),
     });
     this.castRuntime = new SqliteCastRuntime(this.db, () => this.sessionId);
     this.dispatch = new SqliteCastDispatch(this.db, {
       sessionId: () => this.sessionId,
       closed: () => this.closed(),
-      now: () => Date.now(),
+      now: () => this.runtime.now(),
       transaction: (work) => this.transaction(work),
     });
     this.attempts = new SqliteReactionAttempts(this.db, {
       sessionId: () => this.sessionId,
-      now: () => Date.now(),
+      now: () => this.runtime.now(),
     });
     this.transcripts = new TranscriptJournal(new SqliteTranscripts(this.db), {
       sessionId: () => this.sessionId,
       closed: () => this.closed(),
-      now: () => Date.now(),
+      now: () => this.runtime.now(),
     });
     this.rightsFollowups = new SqliteFollowupQueue(this.db);
     this.participationSnapshots = new SqliteParticipationSnapshots(this.db);
@@ -127,7 +131,7 @@ export class Store extends EventEmitter {
       this.transactions,
       {
         sessionId: () => this.sessionId,
-        now: () => Date.now(),
+        now: () => this.runtime.now(),
         rememberCollisions: (names) => {
           this.readerCollisionNames = names;
         },
@@ -141,7 +145,7 @@ export class Store extends EventEmitter {
     );
     this.referenceAdmission = new ReferenceAdmission(this.db, {
       sessionId: () => this.sessionId,
-      now: () => Date.now(),
+      now: () => this.runtime.now(),
       erase: (ids, sequences) => this.eraseChatContext(ids, sequences),
     });
     this.ingestion = new ConversationIngestion(
@@ -188,7 +192,7 @@ export class Store extends EventEmitter {
         sessionId: () => this.sessionId,
         live: () => !!this.participation,
         closed: () => this.closed(),
-        now: () => Date.now(),
+        now: () => this.runtime.now(),
         refreshSummary: () => {
           this.chatSummary();
         },
@@ -204,8 +208,8 @@ export class Store extends EventEmitter {
         sessionId: () => this.sessionId,
         closed: () => this.closed(),
         live: () => !!this.participation,
-        id: randomUUID,
-        now: () => Date.now(),
+        id: () => this.runtime.id(),
+        now: () => this.runtime.now(),
         replace: (sessionId, startedAt, closed, erase) => {
           this.sessionId = sessionId;
           if (erase) this.readerCollisionNames.clear();
@@ -229,16 +233,16 @@ export class Store extends EventEmitter {
       this.db,
       {
         sessionId: () => this.sessionId,
-        id: randomUUID,
-        now: () => Date.now(),
+        id: () => this.runtime.id(),
+        now: () => this.runtime.now(),
       },
       this.transactions,
     );
     this.publication = new LocalPublicationService(
       new SqliteLocalPublication(this.db, {
         sessionId: () => this.sessionId,
-        id: randomUUID,
-        now: () => Date.now(),
+        id: () => this.runtime.id(),
+        now: () => this.runtime.now(),
       }),
       this.transactions,
       (receipt) => {
@@ -267,7 +271,7 @@ export class Store extends EventEmitter {
       {
         sessionId: () => this.sessionId,
         liveParticipation: () => !!this.participation,
-        now: () => Date.now(),
+        now: () => this.runtime.now(),
         lastSequence: () => this.lastSeq(),
         permittedRows: (now, cutoff) =>
           (this.snapshot().messages.filter(Boolean) as PublicMessage[])
@@ -346,14 +350,20 @@ export class Store extends EventEmitter {
   audit(action: string) {
     this.db
       .prepare("INSERT INTO audit_events(session,at,action) VALUES(?,?,?)")
-      .run(this.sessionId, Date.now(), action);
+      .run(this.sessionId, this.runtime.now(), action);
   }
   event(type: string, target: string | null, payload: unknown = null) {
     const r = this.db
       .prepare(
         "INSERT INTO events(session,type,target,at,payload) VALUES(?,?,?,?,?)",
       )
-      .run(this.sessionId, type, target, Date.now(), JSON.stringify(payload));
+      .run(
+        this.sessionId,
+        type,
+        target,
+        this.runtime.now(),
+        JSON.stringify(payload),
+      );
     return Number(r.lastInsertRowid);
   }
   ingestBatch(items: Incoming[], checkpoint?: { key: string; value: string }) {
@@ -397,7 +407,7 @@ export class Store extends EventEmitter {
   replay(after: number) {
     return this.conversationProjection.replay(after);
   }
-  chatSummary(now = Date.now()) {
+  chatSummary(now = this.runtime.now()) {
     return this.conversationContext.summary(now);
   }
   clearChatSummary() {
