@@ -1,12 +1,12 @@
+import { projectReadiness } from "../../packages/application/status/readiness.ts";
 import { registerInputRoutes } from "./http/routes/inputs.ts";
-import type { AdminStatus } from "../../packages/contracts/admin-status.ts";
+import { RuntimeStatusSource } from "../../packages/infrastructure/status/runtime.ts";
 import { projectAdminStatus } from "../../packages/application/status/projection.ts";
 import {
   BroadcastService,
   BroadcastCommandError,
 } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
-import { apiIssues } from "../../packages/api-health.ts";
 import { StaleModelContextError } from "../../packages/model-errors.ts";
 import { YoutubeAuth } from "../../packages/youtube-auth.ts";
 import { NoticeBot } from "../../packages/notice-bot.ts";
@@ -302,68 +302,22 @@ export async function createApp(
     (config.soop.mode === "official" &&
       !!config.soop.streamerId &&
       !!soopAuth.token);
-  scheduler.readyCheck = () => {
-    if (opts.demo) return [];
-    const missing: string[] = [];
-    if (!privacyReady())
-      missing.push("운영 프로필·국외 처리·선택한 AI 서비스 설정 확인");
-    if (!scheduler.providerReady()) missing.push("연결된 AI 모델");
-    return missing;
-  };
-  const readyComponents = () => {
-    if (opts.demo)
-      return {
-        ready: true,
-        checks: [
-          { id: "capture", label: "데모 영상 입력", ready: true },
-          { id: "audio", label: "데모 음성 입력", ready: true },
-          {
-            id: "receiver",
-            label: "데모 채팅 입력",
-            ready: true,
-            optional: true,
-          },
-          { id: "model", label: "데모 AI 모델", ready: true },
-        ],
-      };
-    const checks = [
-      {
-        id: "privacy",
-        label: "운영 프로필 및 동의 범위",
-        ready: privacyReady(),
-      },
-      {
-        id: "capture",
-        label: "송출 화면",
-        ready: !!capture.recent().length,
-        optional: true,
-      },
-      {
-        id: "audio",
-        label: "음성 인식 입력",
-        ready: ["receiving", "listening"].includes(transcriber.state),
-        optional: true,
-      },
-      {
-        id: "receiver",
-        label: "선택 플랫폼 채팅 수신기",
-        optional: true,
-        ready:
-          !receiverConfigured() ||
-          Object.values(supervisor.states).some((connector) =>
-            [
-              "connecting",
-              "connected",
-              "streaming",
-              "polling",
-              "receiving",
-            ].includes(connector.state),
-          ),
-      },
-      { id: "model", label: "AI 모델", ready: scheduler.providerReady() },
-    ];
-    return { ready: checks.every((c) => c.ready || c.optional), checks };
-  };
+  const readyComponents = () =>
+    projectReadiness({
+      demo: !!opts.demo,
+      profileReady: privacyReady(),
+      modelReady: scheduler.providerReady(),
+      screenRecent: !!capture.recent().length,
+      speechState: transcriber.state,
+      receiverConfigured: !!receiverConfigured(),
+      receiverStates: Object.values(supervisor.states).map(
+        (connector) => connector.state,
+      ),
+    });
+  scheduler.readyCheck = () =>
+    readyComponents()
+      .checks.filter((check) => !check.optional && !check.ready)
+      .map((check) => check.label);
   const broadcast = new BroadcastService({
     repository: {
       closed: () => store.closed(),
@@ -1232,193 +1186,36 @@ export async function createApp(
     return { ok: true };
   });
   registerRightsRoutes(app, rights);
-  app.get("/api/admin/status", async () =>
-    projectAdminStatus({
-      demo: !!opts.demo,
-      generatedAt: Date.now(),
-      originsRevealed: store.originsRevealed(),
-      sessionId: store.sessionId,
-      closed: store.closed(),
-      broadcastEnded: Object.values(supervisor.states).some(
-        (connector) => connector.state === "ended",
+  const statusSource = new RuntimeStatusSource({
+    demo: !!opts.demo,
+    config,
+    store,
+    capture,
+    transcriber,
+    scheduler,
+    supervisor,
+    personas,
+    rights,
+    chatgpt,
+    youtubeAuth,
+    auth,
+    soopAuth,
+    privacyReady,
+    readyComponents,
+    now: () => Date.now(),
+    credentials: () => ({
+      speech: !!process.env.GROQ_API_KEY,
+      youtube: !!(
+        process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
       ),
-      aiDesiredRunning: store.aiDesiredRunning(),
-      personas: personas.automaticSummary(),
-      chatSummary: store.chatSummary(),
-      privacy: {
-        memoryOnly: !!opts.demo || config.database === ":memory:",
-        ready: privacyReady(),
-        issues: profileIssues(config.privacy),
-        pendingRights: rights
-          .list()
-          .filter((r) => !["completed", "limited"].includes(r.state)).length,
-      },
-      retentionDays: config.retentionDays,
-      connectors: supervisor.states,
-      apiIssues: apiIssues({
-        youtubeRead: supervisor.states.youtube,
-        chzzkRead: supervisor.states.chzzk,
-        youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
-        chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
-        audioState: transcriber.state,
-        modelState: scheduler.state,
-        modelIssue: scheduler.lastIssue,
-      }),
-      audio: {
-        state: transcriber.state,
-        configured: !!config.audio.url,
-        credentialsReady: !!process.env.GROQ_API_KEY,
-        requests: transcriber.requests,
-        maxRequests: config.audio.maxRequests,
-        language: config.audio.language || "auto",
-        latestAt: transcriber.recent().at(-1)?.capturedAt ?? null,
-        transcriptCount: transcriber.recent().length,
-        latestText: transcriber.recent().at(-1)?.text ?? null,
-        loggedCount: store.transcriptCount(),
-        history: store.transcriptRows(),
-      },
-      capture: {
-        state: capture.state,
-        configured:
-          config.capture.backend === "rtmp"
-            ? !!config.capture.url
-            : !!config.capture.device,
-        lastFrameAt: capture.latest()?.capturedAt ?? null,
-        dimensions: capture.dimensions,
-        lastError: capture.lastError,
-        ffmpeg: config.capture.ffmpeg,
-        backend: config.capture.backend,
-        device: config.capture.backend === "rtmp" ? "" : config.capture.device,
-        lastFrameAgeMs: capture.latest()
-          ? Math.max(0, Date.now() - capture.latest()!.capturedAt)
-          : null,
-        framesInLastMinute: capture.frames.filter(
-          (f) => f.capturedAt > Date.now() - 60000,
-        ).length,
-        masks: config.capture.masks,
-      },
-      ai: {
-        state: scheduler.state,
-        manualApproval: config.ai.manualApproval,
-        pacing: config.ai.pacing,
-        contextWindowSeconds: config.ai.contextWindowSeconds,
-        busy: scheduler.busy,
-        phase: scheduler.phase,
-        lastIssue: scheduler.lastIssue,
-        diagnostics: scheduler.diagnostics,
-        reviewDraft: config.ai.reviewDraft,
-        reviewCount: scheduler.reviews,
-        input: {
-          audioChunkSeconds: config.audio.chunkSeconds,
-          audioLanguage: config.audio.language || "auto",
-          contextWindowSeconds: config.ai.contextWindowSeconds,
-          visualMode: config.ai.visualMode,
-          last: scheduler.lastInput,
-          availableTools: [],
-        },
-        pending: scheduler.pending
-          ? {
-              text: scheduler.pending.decision.text,
-              expires: scheduler.pending.expires,
-            }
-          : null,
-        gate: {
-          enabled: config.ai.gate.enabled,
-          state: opts.demo
-            ? "demo_bypass"
-            : config.ai.gate.enabled
-              ? scheduler.gate.state
-              : "disabled",
-          requests: scheduler.gate.requests,
-          maxRequests: config.ai.gate.maxRequests,
-          filtered: scheduler.gate.filtered,
-          errors: scheduler.gate.errors,
-          probability: scheduler.gate.probability,
-          suppressThreshold: config.ai.gate.threshold,
-        },
-        skips: scheduler.skips,
-        rejects: scheduler.rejects,
-        usage: store.usage(),
-        costEstimate:
-          config.ai.provider === "chatgpt_subscription" ||
-          config.ai.inputUsdPerMillion === null ||
-          config.ai.outputUsdPerMillion === null ||
-          !config.ai.priceCheckedAt
-            ? "unavailable"
-            : "configured_prices",
-        maxCalls: config.ai.maxCalls,
-        provider: config.ai.provider,
-        visualMode: config.ai.visualMode,
-        readiness: readyComponents(),
-        model: opts.demo
-          ? "mock"
-          : config.ai.provider === "chatgpt_subscription"
-            ? (chatgpt.active?.model ?? "not selected")
-            : (process.env.OPENAI_MODEL ?? "not configured"),
-      },
-      chatgpt: chatgpt.status,
-      setup: {
-        youtube: {
-          oauthConfigured: youtubeAuth.configured,
-          connected: youtubeAuth.connected,
-          channelId: youtubeAuth.channelId ?? null,
-          redirectUri: config.youtube.redirectUri,
-          noticeState: supervisor.youtubeNotices?.state ?? "disabled",
-          enabled: config.youtube.enabled,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "youtube",
-            config.youtube.consentNoticeEnabled,
-          ),
-          credentialsConfigured: !!(
-            youtubeAuth.connected ||
-            process.env.YOUTUBE_API_KEY ||
-            process.env.YOUTUBE_ACCESS_TOKEN
-          ),
-          videoConfigured: !!config.youtube.video,
-          channelConfigured: !!config.youtube.channelId,
-        },
-        chzzk: {
-          enabled: config.chzzk.enabled,
-          tokenConfigured: !!auth.token,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "chzzk",
-            config.chzzk.consentNoticeEnabled,
-          ),
-          credentialsConfigured: !!(
-            process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET
-          ),
-          redirectUri: config.chzzk.redirectUri,
-        },
-        soop: {
-          mode: config.soop.mode,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "soop",
-            config.soop.consentNoticeEnabled,
-          ),
-          streamerConfigured: !!config.soop.streamerId,
-          credentialsConfigured: !!(
-            process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET
-          ),
-          tokenConfigured: !!soopAuth.token,
-          redirectUri: config.soop.redirectUri,
-        },
-        audio: {
-          credentialsConfigured: !!process.env.GROQ_API_KEY,
-        },
-        ai: {
-          provider: config.ai.provider,
-          connected:
-            config.ai.provider === "chatgpt_subscription"
-              ? !!chatgpt.active?.refreshToken
-              : !!(process.env.OPENAI_API_KEY && process.env.OPENAI_MODEL),
-          modelSelected:
-            config.ai.provider === "chatgpt_subscription"
-              ? !!chatgpt.active?.model
-              : !!process.env.OPENAI_MODEL,
-        },
-      },
-      messages: store.readerSnapshot().messages,
-    } satisfies AdminStatus),
+      chzzk: !!(process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET),
+      soop: !!(process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET),
+      apiKey: !!process.env.OPENAI_API_KEY,
+      apiModel: process.env.OPENAI_MODEL,
+    }),
+  });
+  app.get("/api/admin/status", async () =>
+    projectAdminStatus(statusSource.read()),
   );
   app.post("/api/admin/consent-notices/:platform", async (req, reply) => {
     const platform = z

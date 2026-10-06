@@ -9,9 +9,9 @@ import { adminStatusSchema } from "../packages/contracts/admin-status.ts";
 import { projectAdminStatus } from "../packages/application/status/projection.ts";
 
 for (const demo of [false, true])
-  test(`administrator status contract covers ${demo ? "synthetic" : "live"} setup without external inputs`, async () => {
+  test(`administrator status contract covers ${demo ? "synthetic" : "live"} setup without external inputs`, async (t) => {
     const directory = mkdtempSync(join(tmpdir(), "status-contract-"));
-    const { app, store, supervisor } = await createApp(
+    const { app, store, supervisor, capture, transcriber } = await createApp(
       configSchema.parse({
         database: ":memory:",
         privacy: { rightsDatabase: ":memory:" },
@@ -42,6 +42,18 @@ for (const demo of [false, true])
       Object.assign(supervisor.states.youtube!, {
         unapprovedField: "SYNTHETIC_PRIVATE_VALUE",
       });
+      let speechReads = 0,
+        frameReads = 0;
+      const originalSpeech = transcriber.recent.bind(transcriber);
+      const originalFrame = capture.latest.bind(capture);
+      t.mock.method(transcriber, "recent", () => {
+        speechReads++;
+        return originalSpeech();
+      });
+      t.mock.method(capture, "latest", () => {
+        frameReads++;
+        return originalFrame();
+      });
       const response = await app.inject({
         method: "GET",
         url: "/api/admin/status",
@@ -51,6 +63,8 @@ for (const demo of [false, true])
         },
       });
       assert.equal(response.statusCode, 200);
+      assert.equal(speechReads, 1);
+      assert.equal(frameReads, 1);
       const status = adminStatusSchema.parse(response.json());
       assert.equal(status.demo, demo);
       assert.equal(status.sessionId, store.sessionId);

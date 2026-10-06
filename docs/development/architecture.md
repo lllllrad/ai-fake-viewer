@@ -301,6 +301,17 @@ messages. Identity payloads are rebuilt for the currently visible permitted
 window; removed identities and extra stored fields are excluded. The server's
 synchronous snapshot/listener registration remains unchanged.
 
+The [runtime status source](../../packages/infrastructure/status/runtime.ts) gathers
+current adapter observations through read-only dependencies. It reads the current
+speech window and latest frame once per query and uses one timestamp for frame
+age and throughput. Environment access stays in server composition and supplies
+credential-presence flags rather than secrets. The application projection validates
+the resulting DTO and removes closed-broadcast content. The
+[readiness projection](../../packages/application/status/readiness.ts) is shared
+by status and AI-start validation, keeping required profile/model availability
+separate from visible optional input failures. Legacy input/provider adapters are
+still being replaced; this query adapter does not claim to replace their internals.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.
