@@ -195,8 +195,14 @@ eligibility after each response. Its result retains a validity check for the
 application continuation, so replaced credentials or reset targets cannot apply
 an obsolete success or error. Identity lookup and insertion keep separate API
 failure attribution and their existing retry delays. No provider body is exposed
-as an operator diagnostic. Remaining provider loops and sender coordination still
-require reconstruction.
+as an operator diagnostic. The [single-notice formatter](../../packages/domain/participation/notice-text.ts)
+normalizes whitespace and rejects oversized complete notices. Senders hold one
+message rather than a fragment array or progress index; the visible prefix has no
+multipart counter. Existing conservative body budgets remain 170 UTF-16 code
+units for YouTube and 88 for CHZZK. URLs and required text are never truncated.
+YouTube can reserve another attempt after pausing before insertion, while
+confirmed delivery completes the job immediately. Remaining provider loops and
+sender coordination still require reconstruction.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints

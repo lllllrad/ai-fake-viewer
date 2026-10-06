@@ -1,24 +1,10 @@
+import { fixedNoticeText } from "./domain/participation/notice-text.ts";
 import type { ApiFailure } from "./api-health.ts";
 import { YoutubeNoticeTransport } from "./infrastructure/platforms/youtube-notice-transport.ts";
 import { randomUUID } from "node:crypto";
 import { FixedNoticeDelivery } from "./application/participation/fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import type { YoutubeAuth } from "./youtube-auth.ts";
-// Conservative local 200-character message cap. Never truncate a notice or a URL.
-export function noticeParts(text: string, budget = 170) {
-  const chunks: string[] = [];
-  let chunk = "";
-  for (const word of text.split(/\s+/u)) {
-    if (word.length > budget) throw Error("notice_too_long");
-    if (chunk && chunk.length + word.length + 1 > budget) {
-      chunks.push(chunk);
-      chunk = "";
-    }
-    chunk += (chunk ? " " : "") + word;
-  }
-  if (chunk) chunks.push(chunk);
-  return chunks.map((s, i) => `[안내 ${i + 1}/${chunks.length}] ${s}`);
-}
 export class YoutubeNotices {
   state = "waiting_connection";
   failure?: ApiFailure;
@@ -28,9 +14,7 @@ export class YoutubeNotices {
     bot: FixedNoticeDelivery;
     id: string;
     text: string;
-    parts: string[];
-    index: number;
-    target: { chat: string; broadcaster: string };
+    message: string;
   };
   private blockedUntil = 0;
   private busy = false;
@@ -94,10 +78,9 @@ export class YoutubeNotices {
           return;
         }
         first = true;
-        let parts: string[];
+        let message: string;
         try {
-          parts = noticeParts(next.text);
-          if (parts.length !== 1) throw Error("notice_too_long");
+          message = fixedNoticeText(next.text);
         } catch (error) {
           bot.failed(next.id);
           throw error;
@@ -105,15 +88,13 @@ export class YoutubeNotices {
         this.job = {
           ...next,
           bot,
-          parts,
-          index: 0,
-          target,
+          message,
         };
       }
       const job = this.job;
-      if (!first && !bot.reservePart(job.id)) return;
+      if (!first && !bot.reserveAttempt(job.id)) return;
       const result = await this.transport.send(
-        { ...target, text: job.parts[job.index] },
+        { ...target, text: job.message },
         signal,
         {
           valid: () =>
@@ -150,11 +131,9 @@ export class YoutubeNotices {
         return;
       }
       this.failure = undefined;
-      if (++job.index === job.parts.length) {
-        bot.echo(target.broadcaster, job.text);
-        this.job = undefined;
-        this.state = bot.state;
-      } else this.state = "sending";
+      bot.echo(target.broadcaster, job.text);
+      this.job = undefined;
+      this.state = bot.state;
     } catch (e) {
       this.job?.bot.failed(this.job.id);
       this.job = undefined;

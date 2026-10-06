@@ -108,7 +108,7 @@ export class FixedNoticeDelivery {
       (p.profile.notices.approvedLimitConfirmed || !!p.profile.testReview)
     );
   }
-  reservePart(id: string) {
+  reserveAttempt(id: string) {
     if (!this.valid(id)) return false;
     this.attempts = this.attempts.filter(
       (at) => at > this.runtime.now() - 60000,

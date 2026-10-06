@@ -1,10 +1,10 @@
+import { fixedNoticeText } from "./domain/participation/notice-text.ts";
 import type { ApiFailure } from "./api-health.ts";
 import { ChzzkNoticeTransport } from "./infrastructure/platforms/chzzk-notice-transport.ts";
 import { randomUUID } from "node:crypto";
 import { FixedNoticeDelivery } from "./application/participation/fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
 import type { ChzzkAuth } from "./chzzk.ts";
-import { noticeParts } from "./youtube-notices.ts";
 export class ChzzkNotices {
   state = "waiting_connection";
   failure?: ApiFailure;
@@ -14,9 +14,7 @@ export class ChzzkNotices {
     bot: FixedNoticeDelivery;
     id: string;
     text: string;
-    parts: string[];
-    index: number;
-    target: { chat: string; broadcaster: string };
+    message: string;
   };
   private blockedUntil = 0;
   private busy = false;
@@ -68,18 +66,15 @@ export class ChzzkNotices {
         bot.failed(this.job.id);
         this.job = undefined;
       }
-      let first = false;
       if (!this.job) {
         const next = bot.next(true);
         if (!next) {
           this.state = bot.state;
           return;
         }
-        first = true;
-        let parts: string[];
+        let message: string;
         try {
-          parts = noticeParts(next.text, 88);
-          if (parts.length !== 1) throw Error("notice_too_long");
+          message = fixedNoticeText(next.text, 88);
         } catch (error) {
           bot.failed(next.id);
           throw error;
@@ -87,15 +82,12 @@ export class ChzzkNotices {
         this.job = {
           ...next,
           bot,
-          parts,
-          index: 0,
-          target,
+          message,
         };
       }
       const job = this.job;
-      if (!first && !bot.reservePart(job.id)) return;
       const result = await this.transport.send(
-        { broadcaster: target.broadcaster, text: job.parts[job.index] },
+        { broadcaster: target.broadcaster, text: job.message },
         signal,
         {
           valid: () =>
@@ -124,11 +116,9 @@ export class ChzzkNotices {
         return;
       }
       this.failure = undefined;
-      if (++job.index === job.parts.length) {
-        bot.echo(target.broadcaster, job.text);
-        this.job = undefined;
-        this.state = bot.state;
-      } else this.state = "sending";
+      bot.echo(target.broadcaster, job.text);
+      this.job = undefined;
+      this.state = bot.state;
     } catch (e) {
       this.job?.bot.failed(this.job.id);
       this.job = undefined;

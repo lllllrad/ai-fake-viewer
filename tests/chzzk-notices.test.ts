@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ChzzkNotices } from "../packages/chzzk-notices.ts";
-import { noticeParts } from "../packages/youtube-notices.ts";
+import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
 import type { ChzzkAuth } from "../packages/chzzk.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
@@ -127,7 +127,7 @@ test("CHZZK rejects mismatched sender, missing permission and ambiguous write su
 });
 test("long unbroken notice URLs are rejected instead of truncated", () => {
   assert.throws(
-    () => noticeParts(`https://example.test/${"x".repeat(200)}`),
+    () => fixedNoticeText(`https://example.test/${"x".repeat(200)}`),
     /notice_too_long/,
   );
 });

@@ -4,7 +4,8 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { YoutubeAuth, youtubeScope } from "../packages/youtube-auth.ts";
-import { YoutubeNotices, noticeParts } from "../packages/youtube-notices.ts";
+import { YoutubeNotices } from "../packages/youtube-notices.ts";
+import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
@@ -183,7 +184,7 @@ test("YouTube rejects mismatched sender, missing permission and ambiguous write 
 });
 test("long unbroken notice URLs are rejected instead of truncated", () => {
   assert.throws(
-    () => noticeParts(`https://example.test/${"x".repeat(200)}`),
+    () => fixedNoticeText(`https://example.test/${"x".repeat(200)}`),
     /notice_too_long/,
   );
 });
@@ -386,7 +387,7 @@ test("supervisor sends fixed notices and excludes broadcast account messages", a
                 snippet: {
                   type: "textMessageEvent",
                   publishedAt: new Date().toISOString(),
-                  displayMessage: "[안내 1/1] fixed bot notice",
+                  displayMessage: "[안내] fixed bot notice",
                 },
                 authorDetails: {
                   channelId: "fixture",
@@ -513,7 +514,7 @@ test("broadcast account messages are excluded from viewer participation", async 
   );
 });
 
-test("YouTube retains confirmed parts when receive state changes during an insertion", async (t) => {
+test("YouTube retains confirmed delivery when receive state changes during an insertion", async (t) => {
   const f = fixture(t, undefined, async (_url, init) => {
     const b = JSON.parse(String(init?.body));
     // A normal receiver rollover can happen while the independent write finishes.
@@ -525,20 +526,16 @@ test("YouTube retains confirmed parts when receive state changes during an inser
   });
   f.message("!동의");
   const person = f.p.get("youtube", "fixture", "viewer")!;
-  const parts: string[] = [];
-  for (let n = 0; n < 20 && person.deliveredAt === null; n++) {
-    f.sender.connected = true;
-    await f.sender.tick(f.signal);
-    parts.push(f.sent.at(-1)?.snippet.textMessageDetails.messageText);
-    f.message("!동의"); // Only the command after final confirmed delivery may advance.
-    if (person.stage === 1) break;
-    assert.equal(person.stage, 0);
-    f.tick();
-  }
+  await f.sender.tick(f.signal);
+  assert.equal(f.sender.connected, false);
+  assert.notEqual(person.deliveredAt, null);
+  assert.equal(person.stage, 0);
+  f.message("!동의");
   assert.equal(person.stage, 1);
-  assert.equal(new Set(parts).size, parts.length);
-  assert.equal(parts.length, 1);
-  assert(parts[0].startsWith("[안내 1/"));
+  assert.equal(f.sent.length, 1);
+  assert(
+    f.sent[0].snippet.textMessageDetails.messageText.startsWith("[안내] "),
+  );
 });
 
 test("YouTube confirms an intro across receive rollover and does not send it again without new chat", async (t) => {
@@ -578,9 +575,7 @@ test("YouTube pauses during credential refresh disconnect without dropping confi
   f.sender.connected = true;
   await f.sender.tick(f.signal);
   assert.equal(f.sent.length, 1);
-  assert(
-    f.sent[0].snippet.textMessageDetails.messageText.startsWith("[안내 1/1]"),
-  );
+  assert(f.sent[0].snippet.textMessageDetails.messageText.startsWith("[안내]"));
 });
 
 test("YouTube normal REST poll continuation does not disconnect notice delivery", async (t) => {
@@ -633,19 +628,14 @@ test("single notice is delivered without additional viewer chat", async (t) => {
   f.message("!동의");
   const person = f.p.get("youtube", "fixture", "viewer")!;
   await f.sender.tick(f.signal);
-  const total = Number(
-    f.sent[0].snippet.textMessageDetails.messageText.match(
-      /^\[안내 1\/(\d+)\]/,
-    )[1],
+  assert.equal(f.sent.length, 1);
+  assert(
+    f.sent[0].snippet.textMessageDetails.messageText.startsWith("[안내] "),
   );
-  assert.equal(total, 1);
-  for (let part = 2; part <= total; part++) {
-    f.tick(2999);
+  for (let repeat = 0; repeat < 3; repeat++) {
+    f.tick(3000);
     await f.sender.tick(f.signal);
-    assert.equal(f.sent.length, part - 1);
-    f.tick(1);
-    await f.sender.tick(f.signal);
-    assert.equal(f.sent.length, part);
+    assert.equal(f.sent.length, 1);
   }
   assert.notEqual(person.deliveredAt, null);
   assert.equal(person.stage, 0);

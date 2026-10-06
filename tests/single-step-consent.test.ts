@@ -73,7 +73,7 @@ for (const platform of ["youtube", "chzzk"] as const) {
     assert.equal(person.state, "WAITING_CONSENT");
     await sender.tick(new AbortController().signal);
     assert.equal(sent.length, 1);
-    assert(sent[0].startsWith("[안내 1/1]"));
+    assert(sent[0].startsWith("[안내]"));
     assert(sent[0].length <= (platform === "chzzk" ? 100 : 200));
     assert(sent[0].includes(profile.noticeUrl));
     assert(sent[0].includes("14세"));
