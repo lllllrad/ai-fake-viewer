@@ -180,7 +180,15 @@ cannot turn a late receipt into delivery for newer viewers. Invalidated jobs
 release the queue without waiting for their expiry. Reset discards receipts but
 does not refund the process-level attempt budget. Only exact authenticated
 broadcaster echoes confirm SOOP notices; individual consent remains separate.
-Remaining provider loops and notice sender transport internals still require reconstruction.
+The [YouTube notice transport](../../packages/infrastructure/platforms/youtube-notice-transport.ts)
+owns token access, the fixed insertion request and typed receipt/error decoding.
+It rechecks account and application eligibility after token refresh and after
+reading response bodies. Reconnecting receipt input pauses new writes but does
+not invalidate a successful insertion with the exact chat, broadcaster and text.
+Invalidated requests cannot overwrite current status with late provider errors.
+Failures identify `liveChatMessages.insert` as a send operation and preserve its
+existing retry delay; provider bodies never become diagnostics.
+Remaining provider loops and CHZZK notice transport still require reconstruction.
 
 Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints

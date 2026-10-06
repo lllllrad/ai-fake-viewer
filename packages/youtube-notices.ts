@@ -1,4 +1,5 @@
-import { limitState, type ApiFailure } from "./api-health.ts";
+import type { ApiFailure } from "./api-health.ts";
+import { YoutubeNoticeTransport } from "./infrastructure/platforms/youtube-notice-transport.ts";
 import { randomUUID } from "node:crypto";
 import { FixedNoticeDelivery } from "./application/participation/fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
@@ -34,11 +35,14 @@ export class YoutubeNotices {
   private blockedUntil = 0;
   private busy = false;
   connected = false;
+  private readonly transport: YoutubeNoticeTransport;
   constructor(
     private participation: Participation,
     private auth: YoutubeAuth,
-    private request: typeof fetch = fetch,
-  ) {}
+    request: typeof fetch = fetch,
+  ) {
+    this.transport = new YoutubeNoticeTransport(auth, request);
+  }
   resolve(chat: string, broadcaster: string) {
     this.reset();
     this.target = { chat, broadcaster };
@@ -108,83 +112,43 @@ export class YoutubeNotices {
       }
       const job = this.job;
       if (!first && !bot.reservePart(job.id)) return;
-      const token = await this.auth.access();
-      // OAuth refresh is asynchronous: recheck consent/session/target immediately before sending.
-      const valid = () =>
-        !signal.aborted &&
-        this.target === target &&
-        this.job === job &&
-        this.auth.channelId === target.broadcaster &&
-        bot!.valid(job.id);
-      if (!valid()) {
+      const result = await this.transport.send(
+        { ...target, text: job.parts[job.index] },
+        signal,
+        {
+          valid: () =>
+            this.target === target && this.job === job && bot!.valid(job.id),
+          connected: () => this.connected,
+          sending: () => {
+            this.state = "sending";
+          },
+        },
+      );
+      // The application may reset while a settled transport result is queued.
+      if (this.target !== target || this.job !== job) return;
+      if (
+        result.status === "stale" ||
+        signal.aborted ||
+        !this.auth.connected ||
+        this.auth.channelId !== target.broadcaster ||
+        !bot.valid(job.id)
+      ) {
         bot.failed(job.id);
-        this.job = undefined;
+        if (this.job === job) this.job = undefined;
         return;
       }
-      // Connectivity gates new writes, not acknowledgements of completed writes.
-      // A receive rollover during refresh must not discard already confirmed parts.
-      if (!this.connected) {
+      if (result.status === "waiting_connection") {
         this.state = "waiting_connection";
         return;
       }
-      const text = job.parts[job.index];
-      this.state = "sending";
-      const r = await this.request(
-        "https://www.googleapis.com/youtube/v3/liveChat/messages?part=snippet",
-        {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${token}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            snippet: {
-              liveChatId: target.chat,
-              type: "textMessageEvent",
-              textMessageDetails: { messageText: text },
-            },
-          }),
-          signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
-        },
-      );
-      if (!valid()) {
+      if (result.status === "rejected") {
+        this.state = result.failure.state;
+        this.failure = result.failure;
+        this.blockedUntil = Date.now() + result.retryAfterMs;
         bot.failed(job.id);
         this.job = undefined;
         return;
       }
-      if (!r.ok) {
-        const errorBody = (await r.json().catch(() => ({}))) as any;
-        this.state = limitState(
-          r.status,
-          String(errorBody.error?.errors?.[0]?.reason ?? ""),
-        );
-        this.failure = {
-          api: "YouTube liveChatMessages.insert",
-          operation: "send",
-          state: this.state,
-        };
-        // No immediate retry of ambiguous writes; count failures against the same limits.
-        this.blockedUntil =
-          Date.now() + (r.status === 401 || r.status === 403 ? 300000 : 60000);
-        bot.failed(job.id);
-        this.job = undefined;
-        return;
-      }
-      // The exact successful resource proves delivery even if receipt is reconnecting.
-      // Session, target, consent, authentication and cancellation still have to match.
-      const b = (await r.json()) as any;
-      if (!valid()) {
-        bot.failed(job.id);
-        this.job = undefined;
-        return;
-      }
-      if (
-        !b.id ||
-        b.snippet?.liveChatId !== target.chat ||
-        b.snippet?.authorChannelId !== target.broadcaster ||
-        b.snippet?.textMessageDetails?.messageText !== text
-      )
-        throw Error("delivery_unconfirmed");
       this.failure = undefined;
       if (++job.index === job.parts.length) {
         bot.echo(target.broadcaster, job.text);

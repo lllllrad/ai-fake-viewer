@@ -670,3 +670,21 @@ test("YouTube explicit quota errors identify insertion independently from receip
   });
   assert.equal(f.p.get("youtube", "fixture", "viewer")!.introDelivered, false);
 });
+
+test("YouTube sender rejects transport results invalidated before its continuation", async (t) => {
+  const f = fixture(t, undefined, async () => {
+    const response = Response.json({}, { status: 403 });
+    response.json = async () => {
+      // Reset after transport decoding but before the sender resumes from await.
+      queueMicrotask(() =>
+        queueMicrotask(() => queueMicrotask(() => f.sender.reset())),
+      );
+      return { error: { errors: [{ reason: "quotaExceeded" }] } };
+    };
+    return response;
+  });
+  f.message("hello");
+  await f.sender.tick(f.signal);
+  assert.equal(f.sender.state, "waiting_connection");
+  assert.equal(f.sender.failure, undefined);
+});
