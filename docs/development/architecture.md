@@ -305,6 +305,16 @@ the attempted count because a throwing callback may already have committed. Late
 cannot publish speech or overwrite the current input state. Recent-window
 selection and the AI pipeline's latest-ten-chunk contract remain unchanged.
 
+The [input worker session](../../packages/infrastructure/inputs/worker-session.ts)
+owns the child process, restricted environment, IPC listeners and reconnect timer
+for both capture and speech. Stop releases callbacks before sending the stop
+command and killing the child. Released generations and superseded retry
+callbacks cannot mutate current state or restart inputs. Natural exit releases
+the handle before notifying the coordinator. Capture and speech still own their
+distinct backoff, input validation and recent-window policies; this process
+adapter does not decide broadcast lifetime. Speech budget exhaustion stops the
+worker without scheduling another reconnect.
+
 ## Persistence and external effects
 
 One private SQLite broadcast database owns session-scoped records; a separate

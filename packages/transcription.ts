@@ -1,7 +1,6 @@
-import { fork, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { Config } from "./config.ts";
-import { workerEnv } from "./capture.ts";
+import { InputWorkerSession } from "./infrastructure/inputs/worker-session.ts";
 
 import {
   transcribeSpeech,
@@ -14,8 +13,12 @@ export { wavFromPcm } from "./infrastructure/inputs/groq-speech.ts";
 export class Transcriber {
   allowProcessing: () => boolean = () => true;
   state = "stopped";
-  child?: ChildProcess;
-  retryTimer?: NodeJS.Timeout;
+  private readonly worker = new InputWorkerSession(
+    new URL("../workers/audio.mjs", import.meta.url),
+  );
+  get child() {
+    return this.worker.child;
+  }
   controller?: AbortController;
   generation = 0;
   contextRevision = 0;
@@ -47,51 +50,48 @@ export class Transcriber {
       this.state = "budget_exhausted";
       return;
     }
-    clearTimeout(this.retryTimer);
+    this.worker.cancelRetry();
     const generation = ++this.generation;
     this.state = "connecting";
-    this.child = fork(new URL("../workers/audio.mjs", import.meta.url), [], {
-      env: workerEnv(),
-      execArgv: [],
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
-    });
-    this.child.on("message", (message: any) => {
-      if (generation !== this.generation) return;
-      if (message?.type === "activity") {
-        if (this.state === "connecting") this.state = "listening";
-        return;
-      }
-      if (message?.type !== "audio") return;
-      if (
-        typeof message.pcm !== "string" ||
-        message.pcm.length > this.config.chunkSeconds * 16000 * 4
-      )
-        return;
-      const pcm = Buffer.from(message.pcm, "base64");
-      if (pcm.length !== this.config.chunkSeconds * 16000 * 2) return;
-      void this.transcribe(pcm, message.capturedAt);
-    });
-    this.child.on("error", () => {
-      this.state = "failed";
-    });
-    this.child.on("exit", () => {
-      if (generation !== this.generation) return;
-      this.child = undefined;
-      this.state = "reconnecting";
-      this.failures++;
-      this.retryTimer = setTimeout(
-        () => this.start(),
-        Math.min(30000, 1000 * 2 ** Math.min(this.failures, 5)),
-      );
-    });
-    this.child.send({ type: "start", config: this.config });
+    this.worker.start(
+      { type: "start", config: this.config },
+      {
+        message: (message: any) => {
+          if (generation !== this.generation) return;
+          if (message?.type === "activity") {
+            if (this.state === "connecting") this.state = "listening";
+            return;
+          }
+          if (
+            message?.type !== "audio" ||
+            typeof message.pcm !== "string" ||
+            message.pcm.length > this.config.chunkSeconds * 16000 * 4
+          )
+            return;
+          const pcm = Buffer.from(message.pcm, "base64");
+          if (pcm.length !== this.config.chunkSeconds * 16000 * 2) return;
+          void this.transcribe(pcm, message.capturedAt);
+        },
+        error: () => {
+          this.state = "failed";
+        },
+        exit: () => {
+          this.state = "reconnecting";
+          this.failures++;
+          this.worker.retry(
+            Math.min(30000, 1000 * 2 ** Math.min(this.failures, 5)),
+            () => this.start(),
+          );
+        },
+      },
+    );
   }
   async transcribe(pcm: Buffer, capturedAt = Date.now()) {
     if (!this.allowProcessing() || this.busy || this.state === "stopped")
       return;
     if (this.requests >= this.config.maxRequests) {
       this.state = "budget_exhausted";
-      this.child?.kill();
+      this.worker.stop();
       return;
     }
     const key = process.env.GROQ_API_KEY;
@@ -143,7 +143,7 @@ export class Transcriber {
         this.requests >= this.config.maxRequests
       ) {
         if (this.state !== "storage_error") this.state = "budget_exhausted";
-        this.child?.kill();
+        this.worker.stop();
       }
     }
   }
@@ -163,10 +163,8 @@ export class Transcriber {
   stop() {
     this.generation++;
     this.controller?.abort();
-    clearTimeout(this.retryTimer);
-    this.child?.send({ type: "stop" });
-    this.child?.kill();
-    this.child = undefined;
+    this.worker.cancelRetry();
+    this.worker.stop();
     this.transcripts = [];
     this.state = "stopped";
   }

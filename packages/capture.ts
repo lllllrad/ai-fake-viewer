@@ -1,4 +1,5 @@
-import { fork, type ChildProcess } from "node:child_process";
+import { InputWorkerSession } from "./infrastructure/inputs/worker-session.ts";
+export { workerEnv } from "./infrastructure/inputs/worker-session.ts";
 import { randomUUID, createHash } from "node:crypto";
 import sharp from "sharp";
 import type { Config } from "./config.ts";
@@ -12,22 +13,6 @@ export interface Frame {
   source: "obs_program" | "demo";
   maskConfigVersion: string;
 }
-export function workerEnv() {
-  return Object.fromEntries(
-    Object.entries(process.env).filter(
-      ([k, v]) =>
-        [
-          "PATH",
-          "SystemRoot",
-          "WINDIR",
-          "TEMP",
-          "TMP",
-          "HOME",
-          "USERPROFILE",
-        ].includes(k) && v,
-    ),
-  ) as NodeJS.ProcessEnv;
-}
 export class Capture {
   allowProcessing: () => boolean = () => true;
   frames: Frame[] = [];
@@ -37,9 +22,13 @@ export class Capture {
     this.frames = [];
   }
   state = "stopped";
-  child?: ChildProcess;
+  private readonly worker = new InputWorkerSession(
+    new URL("../workers/capture.mjs", import.meta.url),
+  );
+  get child() {
+    return this.worker.child;
+  }
   timer?: NodeJS.Timeout;
-  retryTimer?: NodeJS.Timeout;
   failures = 0;
   generation = 0;
   dimensions = "";
@@ -62,7 +51,7 @@ export class Capture {
       return;
     }
     if (this.child || this.timer) return;
-    clearTimeout(this.retryTimer);
+    this.worker.cancelRetry();
     this.frames = [];
     this.dimensions = "";
     const generation = ++this.generation;
@@ -85,44 +74,39 @@ export class Capture {
     }
     this.lastError = "";
     this.state = "connecting";
-    this.child = fork(new URL("../workers/capture.mjs", import.meta.url), [], {
-      env: workerEnv(),
-      execArgv: [],
-      stdio: ["ignore", "ignore", "ignore", "ipc"],
-    });
-    this.child.on("message", (m: any) => {
-      if (
-        m.type === "frame" &&
-        typeof m.bytes === "string" &&
-        m.bytes.length < 4 * 1024 * 1024 &&
-        generation === this.generation
-      )
-        this.add(
-          { ...m, bytes: Buffer.from(m.bytes, "base64") },
-          "obs_program",
-        );
-    });
-    this.child.on("error", () => {
-      this.state = "failed";
-      this.frames = [];
-      this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and capture device/RTMP URL.`;
-    });
-    this.child.on("exit", (code, signal) => {
-      if (generation === this.generation) {
-        this.child = undefined;
-        this.state = "failed";
-        this.frames = [];
-        this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, capture device/RTMP URL, and FFmpeg availability.`;
-        if (++this.failures <= 5) {
-          this.state = "reconnecting";
-          this.retryTimer = setTimeout(
-            () => this.start(),
-            Math.min(30000, 1000 * 2 ** this.failures),
-          );
-        }
-      }
-    });
-    this.child.send({ type: "start", config: this.config });
+    this.worker.start(
+      { type: "start", config: this.config },
+      {
+        message: (m: any) => {
+          if (
+            m?.type === "frame" &&
+            typeof m.bytes === "string" &&
+            m.bytes.length < 4 * 1024 * 1024 &&
+            generation === this.generation
+          )
+            this.add(
+              { ...m, bytes: Buffer.from(m.bytes, "base64") },
+              "obs_program",
+            );
+        },
+        error: () => {
+          this.state = "failed";
+          this.frames = [];
+          this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and capture device/RTMP URL.`;
+        },
+        exit: (code, signal) => {
+          this.state = "failed";
+          this.frames = [];
+          this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, capture device/RTMP URL, and FFmpeg availability.`;
+          if (++this.failures <= 5) {
+            this.state = "reconnecting";
+            this.worker.retry(Math.min(30000, 1000 * 2 ** this.failures), () =>
+              this.start(),
+            );
+          }
+        },
+      },
+    );
   }
   add(
     m: {
@@ -172,12 +156,10 @@ export class Capture {
   }
   stop() {
     this.generation++;
-    clearTimeout(this.retryTimer);
+    this.worker.cancelRetry();
     clearInterval(this.timer);
     this.timer = undefined;
-    this.child?.send({ type: "stop" });
-    this.child?.kill();
-    this.child = undefined;
+    this.worker.stop();
     this.frames = [];
     this.state = "stopped";
     this.lastError = "";
