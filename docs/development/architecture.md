@@ -121,8 +121,11 @@ state transition over explicit time, profile availability and observation identi
 It returns the next participant, permission result and invalidation revision;
 it performs no persistence, identifier generation or callbacks. The legacy
 participation coordinator currently applies these transitions to its stored
-participant references and invokes downstream invalidation. Notice scheduling,
-profile replacement and snapshot storage remain separate reconstruction work.
+participant references and invokes downstream invalidation. The [guidance policy](../../packages/domain/participation/notices.ts) separately
+decides rate reservations and room-scoped delivery opportunities without treating
+either as consent. It rejects another reservation for an already-covered viewer.
+Provider scheduling, profile replacement and snapshot storage remain separate
+reconstruction work.
 
 Withdrawal must commit consent invalidation and local raw/dependent deletion in
 one storage transaction, then invalidate running work and refresh all projections.

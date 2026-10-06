@@ -1,4 +1,8 @@
 import {
+  reserveGuidance,
+  applyGuidanceDelivery,
+} from "./domain/participation/notices.ts";
+import {
   PrivacyActionError,
   SessionProfileMismatchError,
 } from "./privacy-profile.ts";
@@ -174,20 +178,24 @@ export class Participation {
     const p = this.byId(id),
       a = this.approval(p.platform, p.broadcaster),
       now = Date.now();
-    this.sent = this.sent.filter((t) => t > now - 60000);
-    if (
-      !["UNCONSENTED", "WAITING_CONSENT"].includes(p.state) ||
-      !this.available(p.platform, p.broadcaster) ||
-      !a?.fixedNotices ||
-      !(
-        this.profile.notices.approvedLimitConfirmed || this.profile.testReview
-      ) ||
-      now - p.lastNoticeAt < this.profile.notices.perAccountIntervalMs ||
-      this.sent.length >= this.profile.notices.globalPerMinute
-    )
+    const reservation = reserveGuidance(
+      p,
+      this.sent,
+      {
+        participationAvailable: this.available(p.platform, p.broadcaster),
+        fixedNoticesApproved: !!a?.fixedNotices,
+        limitsConfirmed:
+          this.profile.notices.approvedLimitConfirmed ||
+          !!this.profile.testReview,
+        perAccountIntervalMs: this.profile.notices.perAccountIntervalMs,
+        globalPerMinute: this.profile.notices.globalPerMinute,
+      },
+      now,
+    );
+    this.sent = reservation.history;
+    if (!reservation.allowed)
       throw new PrivacyActionError("안내 권한·단계·발송 제한을 확인해 주세요.");
-    p.lastNoticeAt = now;
-    this.sent.push(now);
+    p.lastNoticeAt = reservation.reservedAt;
     this.changed();
     return p;
   }
@@ -249,23 +257,10 @@ export class Participation {
     at: number,
     target: string,
   ) {
-    for (const p of this.participants.values()) {
-      if (
-        p.platform !== platform ||
-        p.broadcaster !== broadcaster ||
-        p.age === "blocked" ||
-        p.state !== "WAITING_CONSENT" ||
-        p.deliveredAt !== null
-      )
-        continue;
-      if (
-        p.id !== target &&
-        (p.lastSeenAt < at - 5 * 60_000 || p.lastSeenAt > at)
-      )
-        continue;
-      p.deliveredAt = at;
-      p.introPending = false;
-      p.introDelivered = true;
+    const delivery = { platform, broadcaster, at, targetId: target };
+    for (const participant of this.participants.values()) {
+      const next = applyGuidanceDelivery(participant, delivery);
+      if (next !== participant) Object.assign(participant, next);
     }
     this.changed();
   }
