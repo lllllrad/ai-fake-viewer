@@ -246,7 +246,10 @@ Avoid two complete production implementations or unrelated speculative features.
 
 The existing tests are a starting point. Keep protocol and user-observable
 regressions; replace implementation-coupled tests with boundary tests where the
-architecture changes. Add dependency checks to prevent SQL in routes and provider
-imports in domain code. A green subset or a set of moved files is not completion.
+architecture changes. The [dependency checks](../../tests/architecture-boundaries.test.ts) enforce
+domain, application, contract and HTTP-route import boundaries, including type-only,
+inline type, re-export and deferred imports. Routes depend on application/contracts
+and their HTTP/validation/stream utilities; concrete database/provider imports are
+rejected. Domain and application code cannot import transports or storage. A green subset or a set of moved files is not completion.
 Real platform/account acceptance remains separate from synthetic validation; do
 not send rehearsal notices or invoke paid live AI merely to obtain a test result.

@@ -15,49 +15,73 @@ function sources(directory: string): string[] {
   });
 }
 
-// Enforce reconstructed boundaries while legacy modules are replaced incrementally.
-for (const [directory, allowed] of [
-  ["packages/domain", ["packages/domain"]],
+function dependencies(file: string, source: string) {
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const imports: string[] = [];
+  const literal = (node: ts.Node | undefined) => {
+    assert(
+      node && ts.isStringLiteral(node),
+      `${file}: computed imports cannot hide dependencies`,
+    );
+    imports.push(node.text);
+  };
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier
+    )
+      literal(node.moduleSpecifier);
+    if (ts.isImportTypeNode(node)) {
+      assert(
+        ts.isLiteralTypeNode(node.argument),
+        `${file}: import type must name its dependency`,
+      );
+      literal(node.argument.literal);
+    }
+    if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    )
+      literal(node.moduleReference.expression);
+    if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === "require"))
+    ) {
+      assert.equal(
+        node.arguments.length,
+        1,
+        `${file}: import requires one literal dependency`,
+      );
+      literal(node.arguments[0]);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return imports;
+}
+
+// Include type-only dependencies: route signatures must not expose concrete database/provider adapters.
+for (const [directory, allowed, external] of [
+  ["packages/domain", ["packages/domain"], []],
   [
     "packages/application",
     ["packages/domain", "packages/application", "packages/contracts"],
+    [],
   ],
-  ["packages/contracts", ["packages/contracts"]],
+  ["packages/contracts", ["packages/contracts"], ["zod"]],
+  [
+    "apps/server/http/routes",
+    ["apps/server/http/routes", "packages/application", "packages/contracts"],
+    ["fastify", "zod", "node:stream"],
+  ],
 ] as const) {
-  test(`${directory} has no transport, persistence or provider dependencies`, () => {
+  test(`${directory} imports only dependencies permitted by its responsibility`, () => {
     for (const file of sources(directory)) {
-      const ast = ts.createSourceFile(
-        file,
-        readFileSync(file, "utf8"),
-        ts.ScriptTarget.Latest,
-        true,
-      );
-      const imports: string[] = [];
-      const visit = (node: ts.Node) => {
-        if (
-          (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-          node.moduleSpecifier &&
-          ts.isStringLiteral(node.moduleSpecifier)
-        )
-          imports.push(node.moduleSpecifier.text);
-        if (
-          ts.isCallExpression(node) &&
-          (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-            (ts.isIdentifier(node.expression) &&
-              node.expression.text === "require"))
-        ) {
-          assert(
-            node.arguments.length === 1 &&
-              ts.isStringLiteral(node.arguments[0]),
-            `${file}: computed imports cannot hide dependencies`,
-          );
-          imports.push((node.arguments[0] as ts.StringLiteral).text);
-        }
-        ts.forEachChild(node, visit);
-      };
-      visit(ast);
+      const imports = dependencies(file, readFileSync(file, "utf8"));
       for (const specifier of imports) {
-        if (directory === "packages/contracts" && specifier === "zod") continue;
+        if ((external as readonly string[]).includes(specifier)) continue;
         assert(
           specifier.startsWith("."),
           `${file}: unexpected external dependency ${specifier}`,
@@ -74,6 +98,38 @@ for (const [directory, allowed] of [
     }
   });
 }
+
+test("boundary inspection includes type imports, re-exports and deferred dependencies", () => {
+  assert.deepEqual(
+    dependencies(
+      "fixture.ts",
+      `
+    import type { A } from "./a.ts";
+    export type { B } from "./b.ts";
+    type Database = import("node:sqlite").DatabaseSync;
+    import client = require("provider-sdk");
+    const deferred = import("./deferred.ts");
+    const runtime = require("./runtime.ts");
+  `,
+    ),
+    [
+      "./a.ts",
+      "./b.ts",
+      "node:sqlite",
+      "provider-sdk",
+      "./deferred.ts",
+      "./runtime.ts",
+    ],
+  );
+  assert.throws(
+    () => dependencies("fixture.ts", "import(providerPath)"),
+    /computed imports/,
+  );
+  assert.throws(
+    () => dependencies("fixture.ts", "require(providerPath)"),
+    /computed imports/,
+  );
+});
 
 test("live server static dependencies exclude manual persona authoring and audition generation", () => {
   const visited = new Set<string>();
