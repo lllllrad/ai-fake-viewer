@@ -128,9 +128,9 @@ export async function createApp(
   const inputSessionOpen = () => !store.closed() && !participation?.ended;
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
-    store.recordTranscript(entry),
+    store.transcripts.record(entry),
   );
-  transcriber.transcripts = store.recentTranscripts();
+  transcriber.transcripts = store.transcripts.recent();
   transcriber.requests = Number(store.checkpoint("audio:requests") ?? 0);
   transcriber.onRequest = (count) =>
     store.ingestBatch([], { key: "audio:requests", value: String(count) });
@@ -143,7 +143,7 @@ export async function createApp(
   const clearSpeechContext = () => {
     capture.clearContext();
     transcriber.clearContext();
-    store.clearTranscripts();
+    store.transcripts.clear();
   };
   store.on("context_invalidated", clearSpeechContext);
   store.on("reset", () => {
@@ -547,7 +547,7 @@ export async function createApp(
     scheduler.stop("privacy_profile_changed");
     capture.stop();
     transcriber.stop();
-    store.clearTranscripts();
+    store.transcripts.clear();
     await supervisor.stop();
     participation?.replaceProfile(profile);
     config.privacy = profile;
@@ -656,7 +656,7 @@ export async function createApp(
   });
   registerInputRoutes(app, broadcast, {
     preview: () => capture.latest(),
-    transcripts: () => store.exportTranscripts(),
+    transcripts: () => store.transcripts.export(),
   });
   registerBroadcastRoutes(app, broadcast, readyComponents);
   app.post("/api/admin/chat-summary/clear", async () => ({

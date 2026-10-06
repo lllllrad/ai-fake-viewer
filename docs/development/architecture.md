@@ -411,6 +411,20 @@ The [websocket adapter](../../apps/server/http/reader-stream.ts) owns socket and
 JSON framing and tracks both authenticated and waiting connections. Token rotation
 and server shutdown close both groups; late authentication cannot reattach them.
 
+The [transcript journal](../../packages/application/inputs/transcript-journal.ts)
+owns durable speech validation, closed-broadcast admission and the current
+broadcast's two-minute recovery window. Its
+[SQLite repository](../../packages/infrastructure/inputs/transcripts-sqlite.ts)
+owns insert, recovery and administrative export queries against the existing
+table. Recovery selects twelve chunks with insertion order as the timestamp-tie
+breaker; AI context subsequently selects the latest ten. The
+[transcript contract](../../packages/contracts/transcript.ts) is shared with
+transcription publication. Restart restores committed text; broadcast erasure
+continues to remove the table's session data within the broadcast transaction.
+Diagnostic count/export reflects all stored rows so closed or foreign records
+cannot be hidden from deletion verification. Context invalidation clears all
+stored speech, preserving the existing erasure boundary.
+
 ## Platform account connections
 
 The [platform account service](../../packages/application/accounts/platform-accounts.ts)

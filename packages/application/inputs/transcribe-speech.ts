@@ -1,8 +1,5 @@
-export interface Transcript {
-  id: string;
-  capturedAt: number;
-  text: string;
-}
+import type { Transcript } from "../../contracts/transcript.ts";
+export type { Transcript } from "../../contracts/transcript.ts";
 export type SpeechFailureCode =
   "quota_blocked" | "auth_required" | "provider_error";
 export class SpeechProviderError extends Error {

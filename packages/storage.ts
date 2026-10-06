@@ -1,3 +1,6 @@
+import { TranscriptJournal } from "./application/inputs/transcript-journal.ts";
+import { SqliteTranscripts } from "./infrastructure/inputs/transcripts-sqlite.ts";
+import type { Transcript } from "./contracts/transcript.ts";
 import { SqliteFollowupQueue } from "./infrastructure/rights/followup-queue.ts";
 import { enqueueWithdrawal } from "./application/rights/withdrawal-followups.ts";
 import { SqliteModelUsage } from "./infrastructure/reactions/usage-sqlite.ts";
@@ -27,6 +30,7 @@ import {
 } from "./contracts.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly transcripts: TranscriptJournal;
   readonly rightsFollowups: SqliteFollowupQueue;
   private readonly transactions: SqliteTransactions;
   private readonly participationSnapshots: SqliteParticipationSnapshots;
@@ -44,6 +48,11 @@ export class Store extends EventEmitter {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(path);
+    this.transcripts = new TranscriptJournal(new SqliteTranscripts(this.db), {
+      sessionId: () => this.sessionId,
+      closed: () => this.closed(),
+      now: () => Date.now(),
+    });
     this.rightsFollowups = new SqliteFollowupQueue(this.db);
     this.participationSnapshots = new SqliteParticipationSnapshots(this.db);
     this.transactions = new SqliteTransactions(this.db, () => {
@@ -916,58 +925,23 @@ export class Store extends EventEmitter {
     );
     this.emit("reset");
   }
-  recordTranscript(entry: { id: string; capturedAt: number; text: string }) {
-    if (this.closed()) return false;
-    if (
-      !Number.isSafeInteger(entry.capturedAt) ||
-      !entry.text.trim() ||
-      entry.text.length > 1000
-    )
-      throw Error("Invalid transcript");
-    this.db
-      .prepare(
-        "INSERT INTO transcripts(id,session,captured,text) VALUES(?,?,?,?)",
-      )
-      .run(entry.id, this.sessionId, entry.capturedAt, entry.text);
-    return true;
+  recordTranscript(entry: Transcript) {
+    return this.transcripts.record(entry);
   }
   recentTranscripts() {
-    return this.db
-      .prepare(
-        "SELECT id,captured AS capturedAt,text FROM transcripts WHERE session=? AND captured>? ORDER BY captured DESC LIMIT 12",
-      )
-      .all(this.sessionId, Date.now() - 120000)
-      .reverse() as { id: string; capturedAt: number; text: string }[];
+    return this.transcripts.recent();
   }
   clearTranscripts() {
-    this.db.exec("DELETE FROM transcripts");
+    this.transcripts.clear();
   }
   transcriptCount() {
-    return (
-      this.db.prepare("SELECT COUNT(*) AS count FROM transcripts").get() as {
-        count: number;
-      }
-    ).count;
+    return this.transcripts.count();
   }
   transcriptRows(limit = 10) {
-    return this.db
-      .prepare(
-        "SELECT id,session AS sessionId,captured AS capturedAt,text FROM transcripts ORDER BY rowid DESC LIMIT ?",
-      )
-      .all(limit) as {
-      id: string;
-      sessionId: string;
-      capturedAt: number;
-      text: string;
-    }[];
+    return this.transcripts.rows(limit);
   }
-  *exportTranscripts() {
-    const rows = this.db
-      .prepare(
-        "SELECT id,session AS sessionId,captured AS capturedAt,text FROM transcripts ORDER BY rowid",
-      )
-      .iterate();
-    for (const row of rows) yield JSON.stringify(row) + "\n";
+  exportTranscripts() {
+    return this.transcripts.export();
   }
   reserve(maxCalls: number, maxUsd: number | null, reserved: number | null) {
     return this.modelUsage.reserve(maxCalls, maxUsd, reserved);
