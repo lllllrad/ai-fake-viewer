@@ -147,7 +147,15 @@ It owns command, delivery and profile operations; a bound persistence port commi
 the resulting consent state and dependent chat removal together. The [guidance policy](../../packages/domain/participation/notices.ts) separately
 decides rate reservations and room-scoped delivery opportunities without treating
 either as consent. It rejects another reservation for an already-covered viewer.
-Provider scheduling remains separate reconstruction work. Profile validation is
+The [CHZZK connection adapter](../../packages/infrastructure/platforms/chzzk-connection.ts)
+owns session authorization, worker subscription, reconnect backoff and cleanup.
+The supervisor supplies account, admission, notice and status ports; the adapter
+does not access broadcast storage. Each connection retires its callbacks on
+abort, worker exit or error, removes listeners and clears its subscription timeout.
+Late subscription failures cannot change a replacement connection's state or
+admit messages. Repeated connected events issue only one subscription per worker.
+Broadcaster messages and messages outside the subscribed room remain excluded.
+Notice scheduling and the remaining provider loops still require reconstruction. Profile validation is
 an application policy; the process adapter supplies cryptographic fingerprints
 without importing Node APIs into the application layer.
 

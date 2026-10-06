@@ -1,5 +1,5 @@
 import { ChzzkNotices } from "./chzzk-notices.ts";
-import { ApiQuotaError } from "./api-health.ts";
+import { runChzzk } from "./infrastructure/platforms/chzzk-connection.ts";
 import { YoutubeAuth } from "./youtube-auth.ts";
 import { YoutubeNotices } from "./youtube-notices.ts";
 import { fork, type ChildProcess } from "node:child_process";
@@ -7,11 +7,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type { Store } from "./storage.ts";
 import type { Config } from "./config.ts";
 import { incomingSchema } from "./contracts.ts";
-import {
-  runYoutube,
-  ignoreYoutubeOwnMessage as ignoreOwnNoticeMessage,
-} from "./youtube.ts";
-import { ChzzkAuth, normalizeChzzk } from "./chzzk.ts";
+import { runYoutube } from "./youtube.ts";
+import { ChzzkAuth } from "./chzzk.ts";
 import { workerEnv } from "./capture.ts";
 export class Supervisor {
   youtubeNotices?: YoutubeNotices;
@@ -243,138 +240,26 @@ export class Supervisor {
     return child;
   }
   async chzzk(signal: AbortSignal) {
-    let attempts = 0;
-    while (!signal.aborted) {
-      let child: ChildProcess | undefined,
-        key: string | undefined,
-        terminal = false;
-      const abort = () => child?.kill();
-      signal.addEventListener("abort", abort, { once: true });
-      try {
-        this.status("chzzk", "connecting");
-        await this.auth.access();
-        const session = await this.auth.api("/open/v1/sessions/auth");
-        if (signal.aborted) return;
-        if (typeof session.url !== "string" || session.url.length > 4096)
-          throw Error("permission_blocked");
-        const url = new URL(session.url);
-        if (
-          url.protocol !== "https:" ||
-          !url.hostname.endsWith(".nchat.naver.com") ||
-          url.username ||
-          url.password
-        )
-          throw Error("permission_blocked");
-        child = this.worker("chzzk");
-        let subscribed = false;
-        let subscribedChannel: string | undefined;
-        const timeout = setTimeout(() => child?.kill(), 15000);
-        await new Promise<void>((resolve, reject) => {
-          child!.once("exit", () => {
-            clearTimeout(timeout);
-            resolve();
-          });
-          child!.once("error", () => reject(Error("reconnecting")));
-          child!.on("message", (m: any) => {
-            void (async () => {
-              if (signal.aborted) return;
-              if (m.type === "SYSTEM") {
-                const e =
-                  typeof m.data === "string" ? JSON.parse(m.data) : m.data;
-                if (
-                  e.type === "connected" &&
-                  typeof e.data?.sessionKey === "string"
-                ) {
-                  key = e.data.sessionKey;
-                  await this.auth.api(
-                    `/open/v1/sessions/events/subscribe/chat?${new URLSearchParams({ sessionKey: key! })}`,
-                    "POST",
-                  );
-                } else if (
-                  e.type === "subscribed" &&
-                  e.data?.eventType === "CHAT"
-                ) {
-                  if (typeof e.data.channelId !== "string" || !e.data.channelId)
-                    throw Error("invalid_subscription");
-                  if (
-                    this.store.participation &&
-                    !this.store.participation.available(
-                      "chzzk",
-                      e.data.channelId,
-                    )
-                  )
-                    throw Error("permission_blocked");
-                  subscribedChannel = e.data.channelId;
-                  this.chzzkNotices?.resolve(
-                    e.data.channelId,
-                    e.data.channelId,
-                  );
-                  subscribed = true;
-                  clearTimeout(timeout);
-                  this.status("chzzk", "subscribed");
-                  attempts = 0;
-                } else if (["revoked", "unsubscribed"].includes(e.type)) {
-                  terminal = true;
-                  this.status("chzzk", "permission_blocked");
-                  child?.kill();
-                }
-              } else if (m.type === "CHAT" && subscribed) {
-                const parsed = normalizeChzzk(m.data);
-                if (
-                  parsed.channel !== subscribedChannel ||
-                  ignoreOwnNoticeMessage(parsed, subscribedChannel)
-                )
-                  return;
-                this.receive("chzzk", parsed);
-              }
-            })().catch((error) => {
-              terminal = true;
-              this.status(
-                "chzzk",
-                error instanceof ApiQuotaError
-                  ? "quota_blocked"
-                  : "permission_blocked",
-              );
-              if (error instanceof ApiQuotaError)
-                this.states.chzzk.api = error.api;
-              child?.kill();
-            });
-          });
-          child!.send({ type: "connect", url: session.url });
-        });
-      } catch (e: any) {
-        const state = [
-          "auth_required",
-          "permission_blocked",
-          "quota_blocked",
-        ].includes(e.message)
-          ? e.message
-          : "reconnecting";
-        this.status("chzzk", state);
-        if (e instanceof ApiQuotaError) this.states.chzzk.api = e.api;
-        terminal = state !== "reconnecting";
-      } finally {
-        this.chzzkNotices?.reset();
-        signal.removeEventListener("abort", abort);
-        child?.kill();
-        if (key)
-          await this.auth
-            .api(
-              `/open/v1/sessions/events/unsubscribe/chat?${new URLSearchParams({ sessionKey: key })}`,
-              "POST",
-            )
-            .catch(() => {});
-      }
-      if (terminal || signal.aborted) return;
-      this.states.chzzk.recoveries++;
-      this.status("chzzk", "reconnecting");
-      await sleep(
-        Math.min(30000, 1000 * 2 ** Math.min(attempts++, 5)) *
-          (1 + Math.random() * 0.2),
-        undefined,
-        { signal },
-      ).catch(() => {});
-    }
+    await runChzzk(
+      {
+        account: this.auth,
+        worker: () => this.worker("chzzk"),
+        available: (channel) =>
+          !this.store.participation ||
+          this.store.participation.available("chzzk", channel),
+        subscribed: (channel) => this.chzzkNotices?.resolve(channel, channel),
+        receive: (message) => this.receive("chzzk", message),
+        status: (state, api) => {
+          this.status("chzzk", state);
+          this.states.chzzk.api = api;
+        },
+        recovered: () => {
+          this.states.chzzk.recoveries++;
+        },
+        reset: () => this.chzzkNotices?.reset(),
+      },
+      signal,
+    );
   }
   async soop(signal: AbortSignal) {
     let attempts = 0;
