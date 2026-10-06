@@ -411,3 +411,123 @@ for (const [expireEvidence, reviewSkip] of [
     }
   });
 }
+
+test("questions received during pacing remain new alongside later narration", async (t) => {
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(Math, "random", () => 0);
+  const config = configSchema.parse({
+    ai: {
+      visualMode: "on_request",
+      forceReplyTest: true,
+      pacing: { minSeconds: 20, maxSeconds: 20 },
+      reviewDraft: false,
+    },
+  });
+  const store = new Store(":memory:");
+  const service = new PersonaService(store, undefined, config);
+  const session = service.ensureAutomaticCast();
+  service.arm(session.id, session.control_epoch);
+  let evidence = [
+    { id: "question", text: "화면의 글자를 읽어 주세요.", capturedAt: ++now },
+  ];
+  const transcriber = {
+    recent: () => evidence,
+    has: (id: string) => evidence.some((t) => t.id === id),
+  } as Transcriber;
+  let calls = 0;
+  const model: Model = async (input) => {
+    calls++;
+    assert.deepEqual(
+      input.newTranscripts?.map((t) => t.id),
+      ["question", "later"],
+    );
+    return { decision: skipped };
+  };
+  const scheduler = new Scheduler(
+    store,
+    new Capture(config.capture, false),
+    config,
+    model,
+    false,
+    () => true,
+    transcriber,
+  );
+  scheduler.state = "running";
+  scheduler.lastAttempt = now + 20000;
+  try {
+    await scheduler.tick(now);
+    assert.equal(calls, 0);
+    now += 30000;
+    evidence.push({
+      id: "later",
+      text: "조금 기다려 볼게요.",
+      capturedAt: now,
+    });
+    await scheduler.tick(now);
+    assert.equal(calls, 1);
+    now += 30000;
+    await scheduler.tick(now);
+    assert.equal(calls, 1);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});
+
+test("generation and review receive the latest ten transcript chunks", async (t) => {
+  const now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  t.mock.method(Math, "random", () => 0);
+  const config = configSchema.parse({
+    ai: { visualMode: "on_request", reviewDraft: true },
+  });
+  const store = new Store(":memory:");
+  const chunks = Array.from({ length: 12 }, (_, i) => ({
+    id: `chunk-${i}`,
+    text: `Synthetic chunk ${i}`,
+    capturedAt: now - (11 - i) * 10000,
+  }));
+  const transcriber = {
+    recent: () => chunks,
+    has: (id: string) => chunks.some((t) => t.id === id),
+  } as Transcriber;
+  let calls = 0;
+  const model: Model = async (input) => {
+    calls++;
+    assert.deepEqual(
+      input.transcripts?.map((t) => t.id),
+      chunks.slice(-10).map((t) => t.id),
+    );
+    assert.equal(!!input.reviewDraft, calls === 2);
+    return {
+      decision: {
+        action: "say",
+        text: "확인했어요.",
+        replyToMessageId: null,
+        evidenceFrameIds: [],
+        evidenceMessageIds: [],
+        evidenceTranscriptIds: ["chunk-11"],
+      },
+    };
+  };
+  const scheduler = new Scheduler(
+    store,
+    new Capture(config.capture, false),
+    config,
+    model,
+    false,
+    () => true,
+    transcriber,
+  );
+  scheduler.state = "running";
+  try {
+    await scheduler.tick(now);
+    assert.equal(calls, 2);
+    assert.equal(scheduler.lastInput.contextTranscripts, 10);
+    assert.equal(store.snapshot().messages.length, 1);
+  } finally {
+    scheduler.stop();
+    store.close();
+  }
+});

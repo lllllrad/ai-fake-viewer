@@ -152,7 +152,7 @@ export function modelMessages(input: ModelInput) {
         ...input.frames.map((f) => ({
           type: "input_image",
           image_url: `data:image/jpeg;base64,${f.bytes.toString("base64")}`,
-          detail: "low",
+          detail: "high",
         })),
       ],
     },

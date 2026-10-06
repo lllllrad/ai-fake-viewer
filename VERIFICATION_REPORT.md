@@ -4,6 +4,31 @@
 
 This report contains dated historical runs, not a certification of the current checkout. The 31-test initial run and later 46-test update below cover different revisions. Their environment, performance and live-service observations must not be assumed current. The current live profile supersedes historical persistent-chat storage, automatic restart recovery and enabled audio/vision paths; Sign in with ChatGPT support was restored in the 2026-10-05 milestone. Use the newest milestone and the [documentation index](docs/README.md) for current behavior. Older results remain historical evidence, not live approval.
 
+## Direct questions and ten-chunk speech context — 2026-10-06
+
+Live AI remained running and published generic acknowledgements rather than reading
+the requested screen text. A live browser check matched all six server messages in
+the overlay DOM. Speech history contained the screen-reading question, but the
+12-second new-observation cutoff was shorter than pacing plus inference latency.
+The test prompt also explicitly allowed generic acknowledgements, and image inputs
+used low detail.
+
+Unconsumed observation eligibility now accounts for pacing plus the model deadline,
+within the configured context window. Generation and review favor substantive answers
+to direct questions. Image requests use the latest single frame with high detail.
+Per the operator's additional instruction, model speech context is the latest ten
+available chunks; the new-input subset remains distinct. Review removes only expired
+background. No viewer permission or evidence validation was bypassed.
+
+An isolated live-provider probe generated a random verification string rendered only
+inside a synthetic image. The textual request did not contain the target string.
+Generation and review both returned `say` containing that string. This demonstrates
+the revised prompt/image path, not correct reading of the operator's actual screen.
+The full check passed all 167 tests, TypeScript/Vite and documentation/configuration
+validation. New cases retain a question across a 30-second wait without replaying
+consumed input and verify exactly the latest ten of twelve chunks reach generation
+and review. The changes were applied with a managed server restart.
+
 ## Provider failure diagnostics and bounded recovery — 2026-10-06
 
 A previous live review failed under the generic `model_error` category after a

@@ -144,6 +144,7 @@ test("ChatGPT inference requires completed stream and sends masked image with su
     assert.equal(result.decision.action, "skip");
     assert.equal(seen.store, false);
     assert.equal(seen.stream, true);
+    assert.equal(seen.input[1].content[1].detail, "high");
     assert.equal(seen.max_output_tokens, undefined);
     assert.equal(
       seen.input[1].content[1].image_url,

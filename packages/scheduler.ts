@@ -220,9 +220,9 @@ export class Scheduler {
     let messages = this.store
       .context(this.allowed())
       .filter((m) => recentIds.has(m.id));
-    let transcripts = (this.transcriber?.recent() ?? []).filter(
-      (t) => t.capturedAt >= contextFloor,
-    );
+    let transcripts = (this.transcriber?.recent() ?? [])
+      .filter((t) => t.capturedAt >= contextFloor)
+      .slice(-10);
     const currentTranscriptIds = new Set(transcripts.map((t) => t.id));
     const currentMessageIds = new Set(messages.map((m) => m.id));
     this.processedTranscriptIds = new Set(
@@ -261,7 +261,9 @@ export class Scheduler {
         newMessages.some((item) => item.id === m.id),
       )?.id ?? "";
     let frames =
-      this.config.ai.visualMode === "continuous" ? this.capture.recent() : [];
+      this.config.ai.visualMode === "continuous"
+        ? this.capture.recent().slice(-1)
+        : [];
     const hash =
       this.config.ai.visualMode === "continuous"
         ? frames.at(-1)!.hash
@@ -361,8 +363,14 @@ export class Scheduler {
                 (p.left_at === null || f.capturedAt <= p.left_at),
             ),
           );
-          const observationAge =
-            personaRuntime.policy.max_observation_age_ms ?? 12000;
+          const observationAge = Math.min(
+            this.config.ai.contextWindowSeconds * 1000,
+            Math.max(
+              personaRuntime.policy.max_observation_age_ms ?? 12000,
+              this.config.ai.pacing.maxSeconds * 1000 +
+                (personaRuntime.policy.model_timeout_ms ?? 30000),
+            ),
+          );
           const memberNewMessages = newMessages.filter((x) => {
             const event = messageById.get(x.id);
             return (
@@ -609,7 +617,7 @@ export class Scheduler {
           this.skips++;
           return;
         }
-        input = { ...input, frames: this.capture.recent() };
+        input = { ...input, frames: this.capture.recent().slice(-1) };
         this.activeInput = input;
         this.phase = "generating_draft_with_frame";
         r = await this.callModel(input, signal);
@@ -705,7 +713,7 @@ export class Scheduler {
               .map((f) => f.capturedAt)
           : []),
       ];
-      const triggerAt = triggerTimes.length ? Math.min(...triggerTimes) : now;
+      const triggerAt = triggerTimes.length ? Math.max(...triggerTimes) : now;
       const responseDelay = personaRuntime
         ? Math.floor(
             Math.random() *

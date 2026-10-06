@@ -166,3 +166,21 @@ Its local output-token check uses reported total usage, which includes non-visib
 tokens as described in [Counting tokens](https://developers.openai.com/api/docs/guides/token-counting).
 An earlier generic `model_error` cannot be retroactively assigned a precise cause
 without the original detailed evidence.
+
+## Questions, transcript context and readable images
+
+Generation receives the latest ten available transcript chunks within the configured
+context window, further limited to the selected persona's presence. Review uses the
+same context after removing expired background. `newTranscripts` is the unconsumed
+subset, not the total speech input; `contextTranscripts` reports the context count.
+Fewer than ten available/current chunks are sent without padding or fabricating
+speech. Unconsumed observation eligibility covers configured pacing plus the model
+deadline, capped by the context window, so waiting alone does not expire a question
+after twelve seconds. Candidate lifetime uses the newest supplied triggering input.
+
+Generation and review prioritize answering direct questions over merely acknowledging
+a test. Screen-reading answers must come from readable image evidence or explicitly
+state that the text is illegible. Continuous capture and inspection supply the latest
+single frame at `detail: high` rather than several low-detail frames. This improves
+visual detail while limiting redundant image context; see the official
+[image-detail guidance](https://developers.openai.com/api/docs/guides/images-vision).
