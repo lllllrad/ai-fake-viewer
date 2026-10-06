@@ -74,3 +74,9 @@ export const conversationIdentitySchema = z.object({
   kind: z.enum(["system_generated", "platform_received"]),
 });
 export type ConversationIdentity = z.infer<typeof conversationIdentitySchema>;
+
+export const readerAuthSchema = z.object({
+  type: z.literal("auth"),
+  token: z.string(),
+  afterSeq: z.number().int().nonnegative().optional(),
+});

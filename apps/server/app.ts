@@ -1,3 +1,4 @@
+import { registerReaderStream } from "./http/reader-stream.ts";
 import { projectReadiness } from "../../packages/application/status/readiness.ts";
 import { registerInputRoutes } from "./http/routes/inputs.ts";
 import { RuntimeStatusSource } from "../../packages/infrastructure/status/runtime.ts";
@@ -29,7 +30,6 @@ import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
-import type { PublicEvent } from "../../packages/contracts.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/capture.ts";
 import { Transcriber } from "../../packages/transcription.ts";
@@ -413,7 +413,6 @@ export async function createApp(
       equal(value.slice(dot + 1), signSession(payload))
     );
   };
-  const sockets = new Set<any>();
   await app.register(websocket, { options: { maxPayload: 4096 } });
   app.addHook("onRequest", async (req, reply) => {
     reply
@@ -517,86 +516,34 @@ export async function createApp(
       personaModel,
     );
   }
-  app.get("/stream", { websocket: true }, (socket, req) => {
-    if (!req.headers.origin || !origins.includes(req.headers.origin)) {
-      socket.close(1008);
-      return;
-    }
-    let authorized = false;
-    let alive = true;
-    const timeout = setTimeout(() => socket.close(1008), 5000);
-    const send = (data: unknown) => {
-      if (socket.readyState !== 1) return;
-      if (socket.bufferedAmount > 1024 * 1024) {
-        socket.close(1013);
-        return;
-      }
-      socket.send(JSON.stringify(data));
-    };
-    const event = (e: PublicEvent) =>
-      send({ type: "event", event: store.readerEvent(e) });
-    const reset = () => send({ ...store.readerSnapshot(), demo: !!opts.demo });
-    const consentNotice = (notice: {
-      platform: string;
-      channel: string;
-      occurredAt: number;
-    }) => {
-      const enabled = store.consentNoticeEnabled(
-        notice.platform,
-        config[notice.platform as "youtube" | "chzzk" | "soop"]
-          ?.consentNoticeEnabled,
-      );
-      if (enabled)
-        send({
-          type: "consent_notice",
-          platform: notice.platform,
-          occurredAt: notice.occurredAt,
-        });
-    };
-    socket.on("pong", () => {
-      alive = true;
-    });
-    const heartbeat = setInterval(() => {
-      if (!alive) {
-        socket.terminate();
-        return;
-      }
-      alive = false;
-      socket.ping();
-    }, 30000);
-    socket.on("message", (raw) => {
-      try {
-        const m = JSON.parse(raw.toString());
-        if (authorized) {
-          socket.close(1008);
-          return;
-        }
-        if (m.type !== "auth" || !equal(m.token, readerToken)) {
-          socket.close(1008);
-          return;
-        }
-        authorized = true;
-        clearTimeout(timeout);
-        sockets.add(socket);
-        // Synchronous SQLite snapshot plus listener registration has no asynchronous gap.
-        // Always refresh the current window; historical hidden bodies are never replayed.
-        reset();
-        store.on("event", event);
-        store.on("reset", reset);
-        store.on("consent_notice", consentNotice);
-      } catch {
-        socket.close(1008);
-      }
-    });
-    socket.on("close", () => {
-      clearTimeout(timeout);
-      clearInterval(heartbeat);
-      sockets.delete(socket);
-      store.off("event", event);
-      store.off("reset", reset);
-      store.off("consent_notice", consentNotice);
-    });
-  });
+  const readers = registerReaderStream(
+    app,
+    {
+      snapshot: () => store.readerSnapshot(),
+      event: (event) => store.readerEvent(event),
+      noticeEnabled: (notice) =>
+        store.consentNoticeEnabled(
+          notice.platform,
+          config[notice.platform as "youtube" | "chzzk" | "soop"]
+            ?.consentNoticeEnabled,
+        ),
+      subscribe: (listeners) => {
+        store.on("event", listeners.event);
+        store.on("reset", listeners.reset);
+        store.on("consent_notice", listeners.notice);
+        return () => {
+          store.off("event", listeners.event);
+          store.off("reset", listeners.reset);
+          store.off("consent_notice", listeners.notice);
+        };
+      },
+    },
+    {
+      origins,
+      demo: !!opts.demo,
+      authenticate: (token) => equal(token, readerToken),
+    },
+  );
   app.get("/api/admin/privacy", async () => {
     flushRights();
     return participationStatusSchema.parse({
@@ -733,7 +680,7 @@ export async function createApp(
     const next = randomBytes(32).toString("hex");
     opts.persistReaderToken?.(next);
     readerToken = next;
-    for (const s of sockets) s.close(1008);
+    readers.closeAll(1008);
     store.audit("reader_token.rotated");
     return {
       token: readerToken,
@@ -1141,7 +1088,7 @@ export async function createApp(
     try {
       await broadcast.shutdown();
     } finally {
-      for (const s of sockets) s.close();
+      readers.closeAll();
       flushRights();
       store.close();
       rights.close();

@@ -342,6 +342,15 @@ by status and AI-start validation, keeping required profile/model availability
 separate from visible optional input failures. Legacy input/provider adapters are
 still being replaced; this query adapter does not claim to replace their internals.
 
+The [reader session](../../packages/application/conversation/reader-session.ts)
+owns authentication lifetime, heartbeat state, bounded output and source
+subscriptions through clock/transport ports. It always sends the current snapshot
+on authentication and reprojects every event before delivery. Disposal immediately
+removes timers and listeners rather than waiting for a peer to finish closing.
+The [websocket adapter](../../apps/server/http/reader-stream.ts) owns socket and
+JSON framing and tracks both authenticated and waiting connections. Token rotation
+and server shutdown close both groups; late authentication cannot reattach them.
+
 ## UI and contracts
 
 Build a new operator workspace, not more sections inside the current page.
