@@ -1,3 +1,5 @@
+import { adminClient } from "./lib/admin-client";
+import { useAdminSession } from "./features/workspace/use-admin-session";
 import { ConversationPage } from "./features/conversation/ConversationPage";
 import { dispatchFixedNotice } from "./soop-notice-sender";
 import { PrivacyPanel } from "./privacy-panel";
@@ -5,10 +7,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { PublicMessage } from "../../../packages/contracts";
 import "./style.css";
-import {
-  OperationsDashboard,
-  normalizeAdminStatus,
-} from "./operations-dashboard";
+import { OperationsDashboard } from "./operations-dashboard";
 function TokenForm({
   title,
   onSubmit,
@@ -65,17 +64,8 @@ function SoopConnector({
   const verified = useRef(false);
   const ready = useRef(false);
   const roomVerified = useRef(false);
-  const post = async (path: string, body?: unknown) => {
-    const response = await fetch(`/api/admin/${path}`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers:
-        body === undefined ? undefined : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    if (!response.ok) throw Error((await response.json()).error);
-    return response.json();
-  };
+  const post = async (path: string, body?: unknown) =>
+    (await adminClient.request(path, { method: "POST", body })).json();
   useEffect(
     () => () => {
       verified.current = false;
@@ -128,10 +118,7 @@ function SoopConnector({
     setBusy(true);
     setMessage("Loading SOOP chat SDK…");
     try {
-      const response = await fetch("/api/admin/soop/chat-session", {
-        credentials: "same-origin",
-      });
-      if (!response.ok) throw Error((await response.json()).error);
+      const response = await adminClient.request("soop/chat-session");
       const auth = await response.json();
       if (!(window as any).SOOP?.ChatSDK) {
         await new Promise<void>((resolve, reject) => {
@@ -296,11 +283,14 @@ function SoopConnector({
 }
 
 function Admin() {
-  const [session, setSession] = useState<
-    "checking" | "signed_in" | "signed_out"
-  >("checking");
-  const [status, setStatus] = useState<any>();
-  const [statusFailed, setStatusFailed] = useState(false);
+  const {
+    phase: session,
+    data: status,
+    failed: statusFailed,
+    error: statusError,
+    refresh,
+    signOut,
+  } = useAdminSession();
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
@@ -313,34 +303,10 @@ function Admin() {
   const [chatgptModels, setChatgptModels] = useState<
     { slug: string; name: string }[]
   >([]);
-  const api = async (path: string, method = "GET") => {
-    const r = await fetch(`/api/admin/${path}`, {
-      method,
-      credentials: "same-origin",
-    });
-    if (!r.ok) {
-      const b = await r.json();
-      throw Error(
-        typeof b.error === "string"
-          ? b.error
-          : (b.error?.message ?? b.error?.code ?? "요청 실패"),
-      );
-    }
-    return r;
-  };
-  const post = async (path: string, body: unknown) => {
-    const r = await fetch(`/api/admin/${path}`, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: {
-        "Content-Type": "application/json",
-        "Idempotency-Key": crypto.randomUUID(),
-      },
-      body: JSON.stringify(body),
-    });
-    if (!r.ok) throw Error((await r.json()).error);
-    return r.json();
-  };
+  const api = (path: string, method = "GET") =>
+    adminClient.request(path, { method });
+  const post = async (path: string, body: unknown) =>
+    (await adminClient.request(path, { method: "POST", body })).json();
   const personaAction = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -371,34 +337,6 @@ function Admin() {
       setError(e.message);
     }
   };
-  const refresh = async () => {
-    try {
-      const r = await api("status");
-      setStatus(normalizeAdminStatus(await r.json()));
-      setStatusFailed(false);
-    } catch (e: any) {
-      setStatusFailed(true);
-      if (e.message === "Administrator token required") {
-        setStatus(undefined);
-        setSession("signed_out");
-      } else setError(e.message);
-    }
-  };
-  useEffect(() => {
-    void api("status")
-      .then(async (r) => {
-        setStatus(normalizeAdminStatus(await r.json()));
-        setStatusFailed(false);
-        setSession("signed_in");
-      })
-      .catch(() => setSession("signed_out"));
-  }, []);
-  useEffect(() => {
-    if (session !== "signed_in") return;
-    void refresh();
-    const timer = setInterval(() => void refresh(), 2000);
-    return () => clearInterval(timer);
-  }, [session]);
   useEffect(() => {
     if (session !== "signed_in") return;
     let cancelled = false;
@@ -456,10 +394,17 @@ function Admin() {
     status?.incomplete ||
     !status?.generatedAt ||
     now - status.generatedAt > 10000;
-  if (session === "checking")
+  if (session === "checking" || session === "unavailable")
     return (
       <main className="login">
-        <p>Checking local session…</p>
+        <p>
+          {session === "checking"
+            ? "관리자 연결을 확인하고 있습니다."
+            : statusError}
+        </p>
+        {session === "unavailable" && (
+          <button onClick={() => void refresh()}>연결 다시 확인</button>
+        )}
       </main>
     );
   if (session === "signed_out")
@@ -468,16 +413,11 @@ function Admin() {
         title="Your broadcast, in one place."
         error={error}
         onSubmit={(token) => {
-          void fetch("/api/admin/login", {
-            method: "POST",
-            credentials: "same-origin",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token }),
-          })
-            .then(async (r) => {
-              if (!r.ok) throw Error((await r.json()).error);
+          void adminClient
+            .request("login", { method: "POST", body: { token } })
+            .then(async () => {
               setError("");
-              setSession("signed_in");
+              await refresh();
             })
             .catch((e) => setError(e.message));
         }}
@@ -1259,10 +1199,9 @@ function Admin() {
           onClick={() =>
             void api("logout", "POST")
               .then(() => {
-                setStatus(undefined);
+                signOut();
                 setPreview("");
                 setLinks(undefined);
-                setSession("signed_out");
               })
               .catch((e) => setError(e.message))
           }

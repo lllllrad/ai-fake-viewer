@@ -46,7 +46,20 @@ context.on("page", (page) => {
 });
 try {
   const adminPage = await context.newPage();
+  await adminPage.route("**/api/admin/status", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "text/html",
+      body: "<html>Synthetic service unavailable</html>",
+    }),
+  );
   await adminPage.goto(`${origin}/admin`);
+  await expect(
+    adminPage.getByRole("button", { name: "연결 다시 확인" }),
+  ).toBeVisible();
+  await expect(adminPage.getByLabel("Access token")).toHaveCount(0);
+  await adminPage.unroute("**/api/admin/status");
+  await adminPage.getByRole("button", { name: "연결 다시 확인" }).click();
   await adminPage.getByLabel("Access token").fill(admin);
   await adminPage.getByRole("button", { name: "Connect", exact: true }).click();
   await adminPage.getByRole("heading", { name: "Broadcast studio" }).waitFor();

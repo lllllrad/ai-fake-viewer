@@ -148,6 +148,16 @@ refresh, freshness and authentication; screens consume projections rather than
 making competing polling loops. Status older than ten seconds or failed status
 reads cannot be presented as healthy. Stop stays available.
 
+The [administrator transport](../../apps/web/src/lib/admin-client.ts) owns
+same-origin credentials, request timeouts and HTTP error decoding. It distinguishes
+HTTP 401 from network/service failures and supports validated response decoders.
+The [status session](../../apps/web/src/features/workspace/status-session.ts)
+owns one status request and schedules its next poll after completion. Explicit
+refresh or sign-out invalidates older responses, including transports that ignore
+cancellation. Service failures retain an explicitly stale view; authentication
+failure erases it. The remaining legacy status projection and feature-specific
+payloads still require conversion to shared validated DTOs during reconstruction.
+
 Browser checks must cover navigation, controls, account actions, stale/error states,
 manual candidate review, shared notice/individual consent, withdrawal and reconnect,
 rights completion restrictions, reader/overlay synchronization and mobile layout.

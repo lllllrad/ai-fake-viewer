@@ -1,3 +1,4 @@
+import { adminClient } from "./lib/admin-client";
 import React, { useEffect, useState } from "react";
 const states: Record<string, string> = {
   UNCONSENTED: "미참여",
@@ -32,8 +33,15 @@ export function PrivacyPanel() {
     status: "public",
   });
   const refresh = async () => {
-    const r = await fetch("/api/admin/privacy");
-    if (r.ok) setData(await r.json());
+    try {
+      setData(await (await adminClient.request("privacy")).json());
+    } catch (error) {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "참여 상태를 확인하지 못했습니다.",
+      );
+    }
   };
   useEffect(() => {
     void refresh();
@@ -44,22 +52,7 @@ export function PrivacyPanel() {
     setBusy(true);
     setError("");
     try {
-      const r = await fetch(`/api/admin/privacy/${path}`, {
-        method,
-        headers:
-          body === undefined
-            ? undefined
-            : { "Content-Type": "application/json" },
-        body: body === undefined ? undefined : JSON.stringify(body),
-      });
-      if (!r.ok) {
-        const value = await r.json();
-        throw Error(
-          typeof value.error === "string"
-            ? value.error
-            : "처리 조건을 확인해 주세요.",
-        );
-      }
+      await adminClient.request(`privacy/${path}`, { method, body });
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "처리 실패");
@@ -67,7 +60,13 @@ export function PrivacyPanel() {
       setBusy(false);
     }
   };
-  if (!data) return null;
+  if (!data)
+    return (
+      <section className="card" aria-label="개인정보 및 참여 관리">
+        <p role="status">{error || "참여 상태를 확인하고 있습니다."}</p>
+        <button onClick={() => void refresh()}>상태 다시 확인</button>
+      </section>
+    );
   return (
     <section
       id="privacy-panel"
