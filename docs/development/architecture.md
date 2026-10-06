@@ -100,6 +100,15 @@ before awaiting an adapter shutdown. No delayed start, model result or notice
 acknowledgement can reopen a closed broadcast. Shutdown and end must be separately
 testable operations, with resources closed exactly once.
 
+The [platform task owner](../../packages/application/inputs/platform-tasks.ts)
+registers each adapter before invoking it and permits one task per platform.
+Cancellation holds that platform's slot through request draining and stopped-state
+notification. Whole-input shutdown blocks new platform starts until all adapters
+and the final state projection finish. Concurrent stops share their drain; abort
+listeners cannot reenter an unregistered stop, and synchronous adapter failures
+release their slots just like rejected requests. Late failures after cancellation
+do not overwrite the stopped state.
+
 Individual screen, speech and chat controls use the same broadcast command owner
 as whole-pipeline controls. They cannot start during a closed broadcast, process
 shutdown or an adapter shutdown still draining. Individual and whole-pipeline

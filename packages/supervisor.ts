@@ -1,3 +1,4 @@
+import { PlatformTasks } from "./application/inputs/platform-tasks.ts";
 import { NoticeDeliverySession } from "./application/participation/notice-delivery-session.ts";
 import { ChzzkNotices } from "./chzzk-notices.ts";
 import { runChzzk } from "./infrastructure/platforms/chzzk-connection.ts";
@@ -14,7 +15,12 @@ import { workerEnv } from "./capture.ts";
 export class Supervisor {
   youtubeNotices?: YoutubeNotices;
   chzzkNotices?: ChzzkNotices;
-  private platformTasks = new Map<string, Promise<void>>();
+  private readonly platformTasks = new PlatformTasks(
+    (platform) => {
+      if (this.states[platform]) this.status(platform, "failed");
+    },
+    (platform) => this.status(platform, "stopped"),
+  );
   onBroadcastEnded?: () => void;
   states: Record<
     string,
@@ -26,9 +32,7 @@ export class Supervisor {
       lastReceived: number | null;
     }
   > = {};
-  controllers = new Map<string, AbortController>();
   children = new Set<ChildProcess>();
-  tasks = new Set<Promise<void>>();
   demoTimer?: NodeJS.Timeout;
   constructor(
     public config: Config,
@@ -95,6 +99,7 @@ export class Supervisor {
     }
   }
   start() {
+    if (this.platformTasks.stopping) return;
     if (this.demo) {
       if (this.demoTimer) return;
       for (const p of Object.keys(this.states)) this.status(p, "demo_fixture");
@@ -215,21 +220,9 @@ export class Supervisor {
     }
   }
   launch(p: string, fn: (signal: AbortSignal) => Promise<void>) {
-    if (this.controllers.has(p)) return;
-    const c = new AbortController();
-    this.controllers.set(p, c);
-    const task = fn(c.signal)
-      .catch(() => {
-        if (!c.signal.aborted) this.status(p, "failed");
-      })
-      .finally(() => {
-        if (this.controllers.get(p) === c) this.controllers.delete(p);
-        this.tasks.delete(task);
-        if (this.platformTasks.get(p) === task) this.platformTasks.delete(p);
-      });
-    this.tasks.add(task);
-    this.platformTasks.set(p, task);
+    return this.platformTasks.start(p, fn);
   }
+
   worker(name: string) {
     const child = fork(new URL(`../workers/${name}.cjs`, import.meta.url), [], {
       execArgv: [],
@@ -306,17 +299,16 @@ export class Supervisor {
       }).catch(() => {});
     }
   }
-  async stopPlatform(p: string) {
-    this.controllers.get(p)?.abort();
-    await this.platformTasks.get(p);
-    this.status(p, "stopped");
+  stopPlatform(p: string) {
+    return this.platformTasks.stop(p);
   }
   async stop() {
     clearInterval(this.demoTimer);
     this.demoTimer = undefined;
-    for (const c of this.controllers.values()) c.abort();
+    const drain = this.platformTasks.stopAll(() => {
+      for (const p of Object.keys(this.states)) this.status(p, "stopped");
+    });
     for (const child of this.children) child.kill();
-    await Promise.allSettled([...this.tasks]);
-    for (const p of Object.keys(this.states)) this.status(p, "stopped");
+    await drain;
   }
 }
