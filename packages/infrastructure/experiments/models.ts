@@ -31,7 +31,8 @@ export const fixtureModel: Model<Buffer> = async (input, signal) => {
 export function experimentModel(
   provider: "fixture" | "openai_api" | "chatgpt_subscription",
   pipeline: LoadedPipeline,
-  sharedAuth?: ChatgptAuth,
+  testAuth?: ChatgptAuth,
+  refreshAuth = false,
 ) {
   const limits = configSchema.parse({}).ai;
   if (provider === "fixture")
@@ -51,28 +52,33 @@ export function experimentModel(
       name: process.env.OPENAI_MODEL,
     };
   }
-  const auth =
-    sharedAuth ?? new ChatgptAuth(process.env.TOKEN_ENCRYPTION_KEY ?? "");
+  const auth = testAuth;
+  if (!auth)
+    throw Error(
+      "Connect Sign in with ChatGPT in the separate test server first",
+    );
   const account = auth.active;
   if (!account?.model || !account.accessToken)
     throw Error(
-      "Connect Sign in with ChatGPT and select a model in the project first",
+      "Connect Sign in with ChatGPT and select a model in the test server first",
     );
-  // Read the existing session without refreshing/rotating the shared token file.
-  // The server remains the sole owner of persistent account refresh.
+  // CLI uses a read-only test-account snapshot; the standalone server may refresh.
+  // The test server remains the sole owner of persistent test-account refresh.
   return {
     model: chatgptModel<Buffer>(
       limits,
-      {
-        active: { clientId: account.clientId, model: account.model },
-        async access() {
-          if (account.expiresAt <= Date.now() + 60000)
-            throw Error(
-              "ChatGPT session needs refresh in the running project before this experiment",
-            );
-          return account.accessToken;
-        },
-      },
+      refreshAuth
+        ? auth
+        : {
+            active: { clientId: account.clientId, model: account.model },
+            async access() {
+              if (account.expiresAt <= Date.now() + 60000)
+                throw Error(
+                  "ChatGPT session needs refresh in the test server before this experiment",
+                );
+              return account.accessToken;
+            },
+          },
       fetch,
       { authorize() {}, prompts: pipeline.prompts },
     ),

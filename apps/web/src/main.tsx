@@ -1,4 +1,3 @@
-import { ExperimentsPage } from "./features/experiments/ExperimentsPage";
 import {
   Radio,
   SlidersHorizontal,
@@ -6,7 +5,6 @@ import {
   FolderCheck,
   MessagesSquare,
   LogOut,
-  FlaskConical,
 } from "lucide-react";
 import { Button, Input, StatusBadge } from "./components/ui";
 import { AdminLogin } from "./features/workspace/AdminLogin";
@@ -107,14 +105,6 @@ function Admin() {
       description: "방송 이후에도 필요한 요청과 외부 영상 조치를 관리하세요.",
       Icon: FolderCheck,
     },
-    {
-      key: "experiments",
-      label: "AI 테스트",
-      title: "AI 시청자 테스트",
-      description:
-        "직접 대화하며 반응을 살펴보고, 필요할 때 실행 기록을 확인하세요.",
-      Icon: FlaskConical,
-    },
   ] as const;
   const current = pages.find((item) => item.key === page)!;
   return (
@@ -145,12 +135,10 @@ function Admin() {
         <div className="mobile-safety">
           <Button
             className="danger"
-            aria-label={
-              page === "experiments" ? "방송 AI 긴급 중지" : "AI 긴급 중지"
-            }
+            aria-label="AI 긴급 중지"
             onClick={() => void action("ai/stop")}
           >
-            {page === "experiments" ? "방송 AI 중지" : "AI 중지"}
+            AI 중지
           </Button>
         </div>
         <div className="sidebar-footer">
@@ -178,16 +166,12 @@ function Admin() {
             <p>{current.description}</p>
           </div>
           <div className="session-meta">
-            {page === "experiments" ? (
-              <StatusBadge>테스트 전용</StatusBadge>
-            ) : (
-              <>
-                {status?.demo && <StatusBadge>데모 · 인공 입력</StatusBadge>}
-                <StatusBadge tone={status?.closed ? "neutral" : "success"}>
-                  {status?.closed ? "방송 종료" : "세션 진행 중"}
-                </StatusBadge>
-              </>
-            )}
+            <>
+              {status?.demo && <StatusBadge>데모 · 인공 입력</StatusBadge>}
+              <StatusBadge tone={status?.closed ? "neutral" : "success"}>
+                {status?.closed ? "방송 종료" : "세션 진행 중"}
+              </StatusBadge>
+            </>
           </div>
         </header>
         {(logout.error || actions.error) && (
@@ -208,7 +192,6 @@ function Admin() {
           <p role="status">방송 상태를 불러오고 있습니다.</p>
         ) : (
           <>
-            {page === "experiments" && <ExperimentsPage />}
             <div
               hidden={page !== "broadcast"}
               className="workspace-screen"
@@ -331,9 +314,7 @@ function Admin() {
           </>
         )}
         <footer className="workspace-footer">
-          {page === "experiments"
-            ? "테스트 기록은 방송 종료와 별도로 보관됩니다."
-            : "방송 데이터는 재시작 후 유지되고 방송 종료 시 삭제됩니다."}
+          방송 데이터는 재시작 후 유지되고 방송 종료 시 삭제됩니다.
         </footer>
       </main>
     </div>

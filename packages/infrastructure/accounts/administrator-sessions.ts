@@ -8,7 +8,6 @@ export function equal(value: unknown, expected: string) {
   );
 }
 
-const cookieName = "mixed_chat_admin";
 const ageSeconds = 7 * 24 * 60 * 60;
 const attributes = "HttpOnly; SameSite=Strict; Path=/api/admin";
 
@@ -17,6 +16,7 @@ export class AdministratorSessions {
   constructor(
     private readonly token: string,
     private readonly now: () => number = () => Date.now(),
+    private readonly cookieName = "mixed_chat_admin",
   ) {}
 
   authenticateToken(value: unknown) {
@@ -29,19 +29,19 @@ export class AdministratorSessions {
 
   issueCookie() {
     const payload = `${this.now() + ageSeconds * 1000}.${randomBytes(16).toString("base64url")}`;
-    return `${cookieName}=${payload}.${this.sign(payload)}; ${attributes}; Max-Age=${ageSeconds}`;
+    return `${this.cookieName}=${payload}.${this.sign(payload)}; ${attributes}; Max-Age=${ageSeconds}`;
   }
 
   clearCookie() {
-    return `${cookieName}=; ${attributes}; Max-Age=0`;
+    return `${this.cookieName}=; ${attributes}; Max-Age=0`;
   }
 
   authenticateCookie(cookie: string | undefined) {
     const value = cookie
       ?.split(";")
       .map((part) => part.trim())
-      .find((part) => part.startsWith(`${cookieName}=`))
-      ?.slice(cookieName.length + 1);
+      .find((part) => part.startsWith(`${this.cookieName}=`))
+      ?.slice(this.cookieName.length + 1);
     if (!value || !/^\d+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value))
       return false;
     const dot = value.lastIndexOf(".");

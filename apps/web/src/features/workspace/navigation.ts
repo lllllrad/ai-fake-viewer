@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
 export type WorkspacePage =
-  "broadcast" | "connections" | "participation" | "records" | "experiments";
+  "broadcast" | "connections" | "participation" | "records";
 export function workspacePage(hash: string): WorkspacePage {
   const target = hash.replace(/^#/, "");
-  if (target === "experiments") return "experiments";
   if (
     [
       "connections",

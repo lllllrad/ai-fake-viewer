@@ -120,3 +120,7 @@ Run `sh run-command.sh npm run setup:check` after editing `.env` or `config.yaml
 `npm run setup` creates missing local files and includes YouTube/SOOP OAuth fields for new installations. It does not overwrite existing files. Consult [.env.example](../../.env.example) for additions to an existing `.env`; keep existing API keys and encryption/access keys. YouTube automatic sending requires both client ID and client secret plus broadcaster OAuth authorization; an API key alone supports receipt only. After changing CHZZK app credentials or scopes, reconnect the broadcaster account.
 
 Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../operations/setup.md). For synthetic UI/consent/pipeline testing without a live profile, `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.
+
+## Independent AI test server
+
+Use the [test server setup and lifecycle commands](experiments.md#independent-server) for interactive AI viewer tests. `npm run build` emits independent `dist/web` and `dist/experiments` bundles. The live server does not host the test UI or APIs.

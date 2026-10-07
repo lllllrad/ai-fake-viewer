@@ -3,14 +3,22 @@ import { useState } from "react";
 import { adminClient } from "../../lib/admin-client";
 import { useAdminActions } from "../../lib/use-admin-actions";
 
-export function AdminLogin({ refresh }: { refresh: () => Promise<void> }) {
+export function AdminLogin({
+  refresh,
+  title = "방송 작업 공간에 로그인",
+  description = "로컬 .env 파일의 관리자 접속 토큰을 입력해 주세요.",
+}: {
+  refresh: () => Promise<void>;
+  title?: string;
+  description?: string;
+}) {
   const [token, setToken] = useState("");
   const actions = useAdminActions(refresh);
   return (
     <main className="login">
       <p className="login-brand">Mixed Chat Studio</p>
-      <h1>방송 작업 공간에 로그인</h1>
-      <p>로컬 .env 파일의 관리자 접속 토큰을 입력해 주세요.</p>
+      <h1>{title}</h1>
+      <p>{description}</p>
       <form
         aria-busy={actions.pending}
         onSubmit={(event) => {

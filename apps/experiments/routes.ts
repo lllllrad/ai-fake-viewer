@@ -3,17 +3,17 @@ import { z } from "zod";
 import {
   experimentStartSchema,
   experimentInputSchema,
-} from "../../../packages/contracts/interactive-experiment.ts";
+} from "../../packages/contracts/interactive-experiment.ts";
 import {
   ExperimentWorkspace,
   ExperimentError,
-} from "../../../packages/infrastructure/experiments/interactive.ts";
-import type { Config } from "../../../packages/config.ts";
+} from "../../packages/infrastructure/experiments/interactive.ts";
+import type { Config } from "../../packages/config.ts";
 import {
   providerRecording,
   speechApiKey,
   speechProviderInfo,
-} from "../../../packages/infrastructure/inputs/speech-provider.ts";
+} from "../../packages/infrastructure/inputs/speech-provider.ts";
 
 export function registerExperimentRoutes(
   app: FastifyInstance,

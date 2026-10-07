@@ -4,10 +4,51 @@ The experiment workspace runs the production persona composition and reaction
 pipeline without platform connectors or the broadcast database. It is a developer
 tool, not a new operator persona-authoring or forced-response mode.
 
+## Independent server
+
+The live server on port 3210 does not mount the test API, serve the test UI or
+construct an experiment workspace. Tests run in a separate process and frontend
+bundle with no platform connectors, broadcast controls or live database handles.
+The production reaction, nickname, transcription and pipeline modules remain shared
+code. Unit/browser fixtures and replay reports remain isolated developer commands.
+
+```sh
+sh run-command.sh npm run experiments:setup
+sh run-command.sh npm run build
+sh run-command.sh just experiments-start
+sh run-command.sh just experiments-status
+sh run-command.sh just experiments-restart
+sh run-command.sh just experiments-stop
+```
+
+For foreground development use `sh run-command.sh npm run experiments:start`.
+The default test port is 3211. If changing `config.json` to another port, pass the
+same value with `just --set experiments_port PORT experiments-start` (and the
+corresponding status/restart commands). The test administrator token is
+`EXPERIMENT_ADMIN_TOKEN` in `.local/experiments/.env`; it is different from the live
+administrator token. Cookies have separate names, so logging out of one workspace
+does not log out of the other. Test PID/log files are `.local/experiments/server.pid`
+and `.local/experiments/server.log`. Existing `.local/experiments/interactive` history
+is retained without copying or rewriting it.
+
+Setup creates missing files only. It snapshots `audio.provider`, `audio.language`
+and the pipeline profile path from the existing configuration, and copies only
+`OPENAI_API_KEY`, `OPENAI_MODEL` and `GROQ_API_KEY` into the private test environment.
+It generates independent administrator/encryption credentials. Runtime thereafter
+reads only `.local/experiments/config.json` and `.local/experiments/.env`; live setting
+changes do not affect it. API keys may initially refer to the same provider account
+and billing budget; replace them in the test environment for separate billing.
+
+Sign in with ChatGPT must be connected separately in **Test AI connection**.
+The test server owns `.local/experiments/chatgpt.tokens` and refreshes only that file.
+Changing/disconnecting a test account stops the current test, never the broadcast.
+The replay CLI also uses the test environment and reads that test account without
+refreshing it; run/refresh the test server account before a long CLI session.
+Offline fixture replay needs no setup, credentials or running server.
+
 ## Interactive viewer tests
 
-Open the authenticated administrator workspace and choose **AI viewer tests**
-(`/admin#experiments`). The primary surface is a conversation, with six
+Open the independent test workspace at `http://127.0.0.1:3211/admin`. The primary surface is a conversation, with six
 automatically composed viewers and expandable persona details alongside it.
 Enter a broadcast topic, explicitly choose Responses API, Sign in with ChatGPT
 or the offline fixture provider, and start a test. Text input represents what
@@ -26,7 +67,7 @@ Use **Speak with microphone** to record an utterance and the recording's send
 button to submit it. Recording automatically submits at 30 seconds. Browsers
 must support MediaRecorder and grant microphone access on localhost or HTTPS.
 Each upload is limited to 4 MiB and shares the broadcast transcription adapter
-and `audio.provider` / `audio.language` settings. OpenAI uses `whisper-1`
+and the test configuration's `audio.provider` / `audio.language` settings. OpenAI uses `whisper-1`
 with `OPENAI_API_KEY`; Groq uses `whisper-large-v3-turbo` with `GROQ_API_KEY`.
 The selected transcription provider is independent of the reaction model.
 The microphone status and key guidance follow that provider; there is no fallback
@@ -210,12 +251,11 @@ sh run-command.sh npm run experiment -- --provider openai_api --max-calls 6
 sh run-command.sh npm run experiment -- --provider chatgpt_subscription --max-calls 6
 ```
 
-The Responses API adapter uses `OPENAI_API_KEY` and `OPENAI_MODEL` from `.env`.
-The Sign in with ChatGPT adapter reads the project's existing selected account
-using `TOKEN_ENCRYPTION_KEY`. Experiment execution never refreshes or writes the
-shared token file: if the access token needs refresh, refresh the session through
-the running project's account flow and rerun. There is no account/provider
-fallback. The server remains the owner of persistent authentication updates.
+The Responses API adapter uses `OPENAI_API_KEY` and `OPENAI_MODEL` from
+`.local/experiments/.env`. The Sign in with ChatGPT CLI adapter reads only the test
+account using `EXPERIMENT_ENCRYPTION_KEY`. Replay never refreshes or writes that
+token file: refresh the account through the independent test server and rerun.
+There is no account/provider fallback or live-account access.
 
 `--max-calls` defaults to 12 per run and counts generation, inspection and review.
 `--total-calls` defaults to 100 across the entire command. Runs are sequential and
@@ -252,9 +292,9 @@ configuration, platform connectivity, model account selection or budgets.
   strict profile validation, prompt resolution, fingerprint and cast composition.
 - [Interactive workspace](../../packages/infrastructure/experiments/interactive.ts):
   isolated real-time sessions, bounded private history and shutdown.
-- [Interactive routes](../../apps/server/http/experiment-routes.ts):
+- [Interactive routes](../../apps/experiments/routes.ts):
   administrator-only commands, text admission, bounded audio upload and trace export.
-- [Interactive UI](../../apps/web/src/features/experiments/ExperimentsPage.tsx):
+- [Interactive UI](../../apps/experiments/web/features/ExperimentsPage.tsx):
   conversation-first tests, personas and optional execution history.
 - [Runner](../../packages/infrastructure/experiments/runner.ts): isolated adapters,
   fixture ingestion and production pipeline invocation.

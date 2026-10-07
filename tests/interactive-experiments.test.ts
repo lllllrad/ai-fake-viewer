@@ -9,11 +9,11 @@ import Fastify from "fastify";
 import { ExperimentWorkspace } from "../packages/infrastructure/experiments/interactive.ts";
 import { loadPipelineProfile } from "../packages/infrastructure/reactions/pipeline-profile.ts";
 import { fixtureModel } from "../packages/infrastructure/experiments/models.ts";
-import { registerExperimentRoutes } from "../apps/server/http/experiment-routes.ts";
-import { registerHttpErrors } from "../apps/server/http/errors.ts";
+import { registerExperimentRoutes } from "../apps/experiments/routes.ts";
+import { registerExperimentErrors } from "../apps/experiments/errors.ts";
 import type { Model } from "../packages/application/reactions/model-port.ts";
-import { createApp } from "../apps/server/app.ts";
-import { configSchema } from "../packages/config.ts";
+import { createExperimentApp } from "../apps/experiments/app.ts";
+import { experimentSettingsSchema } from "../apps/experiments/settings.ts";
 
 const until = async (condition: () => boolean) => {
   const deadline = Date.now() + 4000;
@@ -187,7 +187,7 @@ for (const { provider, keyName, endpoint, model, language } of [
   test(`${provider} microphone route uses shared settings and admits only current-session speech`, async () => {
     const { service, cleanup } = workspace();
     const app = Fastify();
-    registerHttpErrors(app);
+    registerExperimentErrors(app);
     let seen = 0;
     let finish: (() => void) | undefined;
     registerExperimentRoutes(app, service, { provider, language }, (async (
@@ -284,25 +284,18 @@ for (const { provider, keyName, endpoint, model, language } of [
 
 test("experiment APIs require administrator auth and stay isolated from the broadcast", async () => {
   const directory = mkdtempSync(join(tmpdir(), "experiment-http-"));
-  const instance = await createApp(
-    configSchema.parse({ database: ":memory:" }),
+  const instance = await createExperimentApp(
+    experimentSettingsSchema.parse({ port: 3211 }),
     {
-      demo: true,
+      directory,
       adminToken: "a".repeat(64),
-      readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
-      startInputs: false,
-      experimentDirectory: join(directory, "experiments"),
-      chatgptTokenPath: join(directory, "chatgpt"),
-      youtubeTokenPath: join(directory, "youtube"),
-      chzzkTokenPath: join(directory, "chzzk"),
-      soopTokenPath: join(directory, "soop"),
     },
   );
   try {
-    const { app, store } = instance;
+    const { app } = instance;
     const headers = {
-      host: "127.0.0.1:3210",
+      host: "127.0.0.1:3211",
       authorization: `Bearer ${"a".repeat(64)}`,
     };
     assert.equal(
@@ -329,8 +322,7 @@ test("experiment APIs require administrator auth and stay isolated from the broa
       payload: { id: randomUUID(), text: "테스트 입력" },
     });
     assert.equal(input.statusCode, 200);
-    assert.equal(store.transcriptRows().length, 0);
-    assert.equal(store.snapshot().messages.length, 0);
+
     const invalid = await app.inject({
       method: "POST",
       url: "/api/admin/experiments",

@@ -1,5 +1,9 @@
 import { parseArgs } from "node:util";
-import { loadEnvFile } from "node:process";
+import {
+  experimentDirectory,
+  loadExperimentEnvironment,
+} from "../apps/experiments/settings.ts";
+import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts";
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -73,7 +77,14 @@ Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`)
   }));
   if (profiles.length * scenarios.length * repeats > 100)
     throw Error("Maximum 100 runs per command");
-  if (provider !== "fixture" && existsSync(".env")) loadEnvFile(".env");
+  const environment =
+    provider === "fixture" ? undefined : loadExperimentEnvironment();
+  const testAuth = environment
+    ? new ChatgptAuth(
+        environment.encryptionKey,
+        join(experimentDirectory, "chatgpt.tokens"),
+      )
+    : undefined;
   const output = resolve(
     values.out ??
       `.local/experiments/${new Date().toISOString().replaceAll(":", "-")}`,
@@ -132,7 +143,7 @@ Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`)
     for (const { path, scenario } of scenarios)
       for (let repeat = 0; repeat < repeats; repeat++)
         for (const pipeline of profiles) {
-          const adapter = experimentModel(provider, pipeline);
+          const adapter = experimentModel(provider, pipeline, testAuth);
           const result = await runExperiment({
             pipeline,
             scenario,

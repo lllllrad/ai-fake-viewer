@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Mic, Square } from "lucide-react";
-import { Button } from "../../components/ui";
+import { Button } from "../../../web/src/components/ui";
 
 export function MicrophoneInput({
   disabled,

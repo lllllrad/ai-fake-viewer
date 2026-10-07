@@ -11,5 +11,12 @@
     "skipLibCheck": true,
     "types": ["node"]
   },
-  "include": ["apps", "packages", "scripts", "tests", "vite.config.ts"]
+  "include": [
+    "apps",
+    "packages",
+    "scripts",
+    "tests",
+    "vite.config.ts",
+    "vite.experiments.config.ts"
+  ]
 }

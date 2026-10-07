@@ -21,8 +21,6 @@ Use five task destinations within the authenticated workspace:
   operating-profile/notice-settings tab.
 - **Records and rights:** separate rights-request and video-inventory tabs for
   follow-up work that can outlive the broadcast.
-- **AI viewer tests:** isolated text/microphone conversation, persona inspection
-  and separately opened execution history. See [interactive tests](../development/experiments.md#interactive-viewer-tests).
 
 The live workspace is the landing page. The conversation is the main work area;
 source preview and context occupy a secondary column. The AI switch and emergency
@@ -49,7 +47,7 @@ shows progress and clears the workspace after success. Returning to login starts
 with an empty token field; credentials are never persisted in browser storage.
 
 Workspace navigation uses fragment links (`#broadcast`, `#connections`,
-`#participation`, `#records`, `#experiments`). Existing input-detail links select their owning screen. Broadcast and participation screens
+`#participation`, `#records`). Existing input-detail links select their owning screen. Broadcast and participation screens
 retain their component lifetime while hidden: navigating must not reconnect SOOP
 or discard unfinished participation forms. The test screen unmounts when leaving
 to release the microphone; the isolated server session continues until ended. The broadcast conversation, transcripts,
@@ -293,3 +291,5 @@ desktop/mobile views and axe accessibility results under ignored
 real provider accounts, live platform permissions, speech accuracy or OBS operation.
 The shipped theme is light for the workspace/reader and dark on a transparent
 OBS canvas; theme switching is not implemented.
+
+AI viewer tests use a [separate server and workspace](../development/experiments.md#independent-server). They are not part of live navigation or broadcast status polling.

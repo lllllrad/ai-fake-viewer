@@ -3,8 +3,8 @@ import { chromium, expect } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { configSchema } from "../packages/config.ts";
-import { createApp } from "../apps/server/app.ts";
+import { createExperimentApp } from "../apps/experiments/app.ts";
+import { experimentSettingsSchema } from "../apps/experiments/settings.ts";
 import { captureUIReview } from "./ui-review.ts";
 const directory = mkdtempSync(join(tmpdir(), "interactive-browser-"));
 const speechProvider =
@@ -17,27 +17,16 @@ const endpoint =
 const priorKey = process.env[keyName];
 process.env[keyName] = "fixture-whisper";
 const port = 33221;
-const { app, experiments, store } = await createApp(
-  configSchema.parse({
+const { app, experiments } = await createExperimentApp(
+  experimentSettingsSchema.parse({
     port,
-    database: ":memory:",
     audio: { provider: speechProvider, language: "ko" },
-    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
-    chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
-    soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
   }),
   {
-    demo: true,
+    directory,
     adminToken: "a".repeat(64),
-    readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
-    startInputs: false,
-    experimentDirectory: join(directory, "experiments"),
-    chatgptTokenPath: join(directory, "chatgpt"),
-    youtubeTokenPath: join(directory, "youtube"),
-    chzzkTokenPath: join(directory, "chzzk"),
-    soopTokenPath: join(directory, "soop"),
-    experimentSpeechRequest: (async (url, init) => {
+    speechRequest: (async (url, init) => {
       assert.equal(url, endpoint);
       const file = (init!.body as FormData).get("file") as File;
       assert(file.size > 0);
@@ -118,8 +107,7 @@ try {
       .filter({ hasText: "다음에는 무엇을" }),
   ).toBeVisible();
   assert.equal(experiments.active!.microphoneCalls, 1);
-  assert.equal(store.transcriptRows().length, 0);
-  assert.equal(store.snapshot().messages.length, 0);
+
   await captureUIReview(page, "experiment-conversation");
   delete process.env[keyName];
   await page.reload();

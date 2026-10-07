@@ -7,15 +7,18 @@ import {
   Select,
   ConfirmButton,
   StatusBadge,
-} from "../../components/ui";
-import { adminClient, createAdminClient } from "../../lib/admin-client";
+} from "../../../web/src/components/ui";
+import {
+  adminClient,
+  createAdminClient,
+} from "../../../web/src/lib/admin-client";
 import {
   experimentSessionSchema,
   experimentIndexSchema,
   experimentTraceSchema,
   type ExperimentSession,
   type ExperimentTrace,
-} from "../../../../../packages/contracts/interactive-experiment";
+} from "../../../../packages/contracts/interactive-experiment";
 import { MicrophoneInput } from "./MicrophoneInput";
 import "./experiments.css";
 

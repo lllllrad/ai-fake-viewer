@@ -10,7 +10,7 @@
     "dev": "tsx watch apps/server/main.ts",
     "start": "tsx apps/server/main.ts",
     "demo": "tsx apps/server/main.ts --demo",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build --config vite.experiments.config.ts",
     "test": "tsx --test tests/*.test.ts",
     "setup": "tsx scripts/setup.ts",
     "check": "npm run docs:check && npm run build && npm test",
@@ -21,7 +21,9 @@
     "setup:check": "tsx scripts/check-local-setup.ts",
     "test:server": "tsx scripts/server-control-check.ts",
     "experiment": "tsx scripts/experiment.ts",
-    "test:experiments:browser": "tsx scripts/experiment-browser-check.ts && tsx scripts/interactive-experiment-browser-check.ts"
+    "test:experiments:browser": "tsx scripts/experiment-browser-check.ts && tsx scripts/interactive-experiment-browser-check.ts",
+    "experiments:start": "tsx apps/experiments/main.ts",
+    "experiments:setup": "tsx apps/experiments/setup.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

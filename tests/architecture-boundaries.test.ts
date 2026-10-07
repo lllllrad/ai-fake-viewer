@@ -136,6 +136,9 @@ test("live server static dependencies exclude manual persona authoring and audit
   const forbidden = new Set([
     resolve("packages/persona/service.ts"),
     resolve("packages/persona/generator.ts"),
+    resolve("packages/infrastructure/experiments/interactive.ts"),
+    resolve("packages/infrastructure/experiments/models.ts"),
+    resolve("apps/experiments/app.ts"),
   ]);
   const visit = (file: string) => {
     assert(

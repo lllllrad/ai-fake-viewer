@@ -1,0 +1,54 @@
+.test-workspace {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: clamp(16px, 3vw, 40px);
+}
+.test-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.test-header h1 {
+  font-size: 1.75rem;
+}
+.test-account {
+  margin-bottom: 24px;
+  padding: 16px;
+}
+.test-account summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.test-account p {
+  margin-top: 12px;
+}
+.test-account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.test-account-actions label {
+  display: grid;
+  gap: 6px;
+}
+.test-workspace footer {
+  margin-top: 24px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+@media (max-width: 600px) {
+  .test-header {
+    flex-direction: column;
+  }
+  .test-account-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+.test-workspace summary {
+  min-height: 44px;
+}
