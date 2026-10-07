@@ -49,6 +49,13 @@ export type ExperimentSession = z.infer<typeof experimentSessionSchema>;
 export const experimentIndexSchema = z.object({
   activeId: z.string().nullable(),
   microphoneReady: z.boolean(),
+  microphone: z.object({
+    provider: z.enum(["groq", "openai"]),
+    label: z.string(),
+    model: z.string(),
+    keyName: z.enum(["GROQ_API_KEY", "OPENAI_API_KEY"]),
+    language: z.string(),
+  }),
   sessions: z.array(
     experimentSessionSchema.pick({
       id: true,

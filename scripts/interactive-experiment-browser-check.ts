@@ -7,13 +7,21 @@ import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
 import { captureUIReview } from "./ui-review.ts";
 const directory = mkdtempSync(join(tmpdir(), "interactive-browser-"));
-const priorKey = process.env.OPENAI_API_KEY;
-process.env.OPENAI_API_KEY = "fixture-whisper";
+const speechProvider =
+  process.env.EXPERIMENT_TEST_SPEECH_PROVIDER === "openai" ? "openai" : "groq";
+const keyName = speechProvider === "openai" ? "OPENAI_API_KEY" : "GROQ_API_KEY";
+const endpoint =
+  speechProvider === "openai"
+    ? "https://api.openai.com/v1/audio/transcriptions"
+    : "https://api.groq.com/openai/v1/audio/transcriptions";
+const priorKey = process.env[keyName];
+process.env[keyName] = "fixture-whisper";
 const port = 33221;
 const { app, experiments, store } = await createApp(
   configSchema.parse({
     port,
     database: ":memory:",
+    audio: { provider: speechProvider, language: "ko" },
     youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
     soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
@@ -30,7 +38,7 @@ const { app, experiments, store } = await createApp(
     chzzkTokenPath: join(directory, "chzzk"),
     soopTokenPath: join(directory, "soop"),
     experimentSpeechRequest: (async (url, init) => {
-      assert.equal(url, "https://api.openai.com/v1/audio/transcriptions");
+      assert.equal(url, endpoint);
       const file = (init!.body as FormData).get("file") as File;
       assert(file.size > 0);
       return Response.json({ text: "이 퍼즐 게임 다음에는 무엇을 해볼까요?" });
@@ -101,6 +109,16 @@ try {
   assert.equal(store.transcriptRows().length, 0);
   assert.equal(store.snapshot().messages.length, 0);
   await captureUIReview(page, "experiment-conversation");
+  delete process.env[keyName];
+  await page.reload();
+  await expect(page.locator(".experiment-composer")).toContainText(
+    `서버의 ${keyName}가 필요합니다`,
+  );
+  await expect(
+    page.getByRole("button", { name: "마이크로 말하기", exact: true }),
+  ).toBeDisabled();
+  process.env[keyName] = "fixture-whisper";
+  await page.reload();
   const sessionId = experiments.active!.id;
   await page.getByRole("button", { name: "테스트 종료", exact: true }).click();
   await expect(
@@ -146,7 +164,7 @@ try {
 } finally {
   await browser.close();
   await app.close();
-  if (priorKey === undefined) delete process.env.OPENAI_API_KEY;
-  else process.env.OPENAI_API_KEY = priorKey;
+  if (priorKey === undefined) delete process.env[keyName];
+  else process.env[keyName] = priorKey;
   rmSync(directory, { recursive: true, force: true });
 }

@@ -8,13 +8,20 @@ import {
   ExperimentWorkspace,
   ExperimentError,
 } from "../../../packages/infrastructure/experiments/interactive.ts";
-import { providerRecording } from "../../../packages/infrastructure/inputs/speech-provider.ts";
+import type { Config } from "../../../packages/config.ts";
+import {
+  providerRecording,
+  speechApiKey,
+  speechProviderInfo,
+} from "../../../packages/infrastructure/inputs/speech-provider.ts";
 
 export function registerExperimentRoutes(
   app: FastifyInstance,
   workspace: ExperimentWorkspace,
+  audio: Pick<Config["audio"], "provider" | "language">,
   request: typeof fetch = fetch,
 ) {
+  const speech = speechProviderInfo(audio.provider);
   const id = (params: unknown) =>
     z.object({ id: z.string().uuid() }).parse(params).id;
   const microphone = new Set<string>();
@@ -23,7 +30,8 @@ export function registerExperimentRoutes(
       workspace.active && !workspace.active.endedAt
         ? workspace.active.id
         : null,
-    microphoneReady: !!process.env.OPENAI_API_KEY,
+    microphoneReady: !!speechApiKey(audio.provider),
+    microphone: { ...speech, language: audio.language },
     sessions: workspace.list(),
   }));
   app.post("/api/admin/experiments", async (req) =>
@@ -82,10 +90,10 @@ export function registerExperimentRoutes(
         throw new ExperimentError(
           "음성을 전사 중입니다. 완료 후 다시 말해 주세요.",
         );
-      const key = process.env.OPENAI_API_KEY;
+      const key = speechApiKey(audio.provider);
       if (!key)
         throw new ExperimentError(
-          "마이크 전사에는 OPENAI_API_KEY가 필요합니다.",
+          `마이크 전사에는 서버의 ${speech.keyName}가 필요합니다.`,
         );
       if (session.microphoneCalls >= 30)
         throw new ExperimentError(
@@ -101,11 +109,11 @@ export function registerExperimentRoutes(
         const extension = input.mime.split("/")[1];
         const text = (
           await providerRecording({
-            provider: "openai",
+            provider: audio.provider,
             bytes,
             mime: input.mime,
             filename: "recording." + extension,
-            language: "ko",
+            language: audio.language,
             key,
             request,
             signal: AbortSignal.any([
@@ -127,7 +135,7 @@ export function registerExperimentRoutes(
       } catch (error) {
         if (error instanceof ExperimentError) throw error;
         throw new ExperimentError(
-          "음성 전사에 실패했습니다. OpenAI 키·한도와 연결을 확인하거나 텍스트로 입력해 주세요.",
+          `음성 전사에 실패했습니다. ${speech.label} 키·한도와 연결을 확인하거나 텍스트로 입력해 주세요.`,
           502,
         );
       } finally {

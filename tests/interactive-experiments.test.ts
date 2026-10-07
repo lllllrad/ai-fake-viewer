@@ -157,70 +157,119 @@ test("call limits stop the test without fabricating a reviewed reply", async () 
   }
 });
 
-test("microphone route transcribes a bounded upload and admits only current-session speech", async () => {
-  const { service, cleanup } = workspace();
-  const app = Fastify();
-  registerHttpErrors(app);
-  let seen = 0;
-  let finish: (() => void) | undefined;
-  registerExperimentRoutes(app, service, (async (url, init) => {
-    seen++;
-    assert.equal(url, "https://api.openai.com/v1/audio/transcriptions");
-    const body = init!.body as FormData;
-    assert.equal(body.get("model"), "whisper-1");
-    assert.equal((body.get("file") as File).name, "recording.webm");
-    assert.equal((body.get("file") as File).type, "audio/webm");
-    if (seen === 2)
-      await new Promise<void>((resolve) => {
-        finish = resolve;
+for (const { provider, keyName, endpoint, model, language } of [
+  {
+    provider: "groq",
+    keyName: "GROQ_API_KEY",
+    endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+    model: "whisper-large-v3-turbo",
+    language: "",
+  },
+  {
+    provider: "openai",
+    keyName: "OPENAI_API_KEY",
+    endpoint: "https://api.openai.com/v1/audio/transcriptions",
+    model: "whisper-1",
+    language: "ja",
+  },
+] as const) {
+  test(`${provider} microphone route uses shared settings and admits only current-session speech`, async () => {
+    const { service, cleanup } = workspace();
+    const app = Fastify();
+    registerHttpErrors(app);
+    let seen = 0;
+    let finish: (() => void) | undefined;
+    registerExperimentRoutes(app, service, { provider, language }, (async (
+      url,
+      init,
+    ) => {
+      seen++;
+      assert.equal(url, endpoint);
+      const body = init!.body as FormData;
+      assert.equal(body.get("model"), model);
+      assert.equal(body.get("language"), language || null);
+      assert.equal(
+        (init!.headers as Record<string, string>).Authorization,
+        "Bearer fixture-only",
+      );
+      assert.equal((body.get("file") as File).name, "recording.webm");
+      assert.equal((body.get("file") as File).type, "audio/webm");
+      if (seen === 2)
+        await new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+      return Response.json({ text: "마이크로 전한 게임 이야기" });
+    }) as typeof fetch);
+    const prior = process.env[keyName];
+    const otherKey =
+      keyName === "GROQ_API_KEY" ? "OPENAI_API_KEY" : "GROQ_API_KEY";
+    const priorOther = process.env[otherKey];
+    process.env[otherKey] = "fixture-unselected";
+    process.env[keyName] = "fixture-only";
+    try {
+      const missingIndex = (
+        await app.inject({ url: "/api/admin/experiments" })
+      ).json();
+      assert.equal(missingIndex.microphone.provider, provider);
+      assert.equal(missingIndex.microphone.keyName, keyName);
+      assert.equal(missingIndex.microphone.language, language);
+      assert.equal(missingIndex.microphoneReady, true);
+      const session = service.start({
+        topic: "게임",
+        provider: "fixture",
+        maxCalls: 6,
       });
-    return Response.json({ text: "마이크로 전한 게임 이야기" });
-  }) as typeof fetch);
-  const prior = process.env.OPENAI_API_KEY;
-  process.env.OPENAI_API_KEY = "fixture-only";
-  try {
-    const session = service.start({
-      topic: "게임",
-      provider: "fixture",
-      maxCalls: 6,
-    });
-    const payload = {
-      id: randomUUID(),
-      audio: Buffer.from("fixture audio").toString("base64"),
-      mime: "audio/webm",
-    };
-    const upload = () =>
-      app.inject({
+      const payload = {
+        id: randomUUID(),
+        audio: Buffer.from("fixture audio").toString("base64"),
+        mime: "audio/webm",
+      };
+      const upload = () =>
+        app.inject({
+          method: "POST",
+          url: `/api/admin/experiments/${session.id}/audio`,
+          payload,
+        });
+      delete process.env[keyName];
+      assert.equal(
+        (await app.inject({ url: "/api/admin/experiments" })).json()
+          .microphoneReady,
+        false,
+      );
+      const denied = await upload();
+      assert.equal(denied.statusCode, 409);
+      assert.ok(denied.json().error.includes(keyName));
+      assert.equal(seen, 0);
+      process.env[keyName] = "fixture-only";
+      assert.equal((await upload()).statusCode, 200);
+      assert.equal((await upload()).statusCode, 200);
+      assert.equal(seen, 1);
+      assert.equal(
+        service.read(session.id).session.inputs[0].source,
+        "microphone",
+      );
+      const pending = app.inject({
         method: "POST",
         url: `/api/admin/experiments/${session.id}/audio`,
-        payload,
+        payload: { ...payload, id: randomUUID() },
       });
-    assert.equal((await upload()).statusCode, 200);
-    assert.equal((await upload()).statusCode, 200);
-    assert.equal(seen, 1);
-    assert.equal(
-      service.read(session.id).session.inputs[0].source,
-      "microphone",
-    );
-    const pending = app.inject({
-      method: "POST",
-      url: `/api/admin/experiments/${session.id}/audio`,
-      payload: { ...payload, id: randomUUID() },
-    });
-    const started = pending.then((result) => result);
-    await until(() => !!finish);
-    service.current(session.id).stop();
-    finish!();
-    assert.equal((await started).statusCode, 409);
-    assert.equal(service.read(session.id).session.inputs.length, 1);
-    assert.equal(service.read(session.id).session.microphoneCalls, 2);
-  } finally {
-    if (prior === undefined) delete process.env.OPENAI_API_KEY;
-    else process.env.OPENAI_API_KEY = prior;
-    await app.close();
-    cleanup();
-  }
-});
+      const started = pending.then((result) => result);
+      await until(() => !!finish);
+      service.current(session.id).stop();
+      finish!();
+      assert.equal((await started).statusCode, 409);
+      assert.equal(service.read(session.id).session.inputs.length, 1);
+      assert.equal(service.read(session.id).session.microphoneCalls, 2);
+    } finally {
+      if (priorOther === undefined) delete process.env[otherKey];
+      else process.env[otherKey] = priorOther;
+      if (prior === undefined) delete process.env[keyName];
+      else process.env[keyName] = prior;
+      await app.close();
+      cleanup();
+    }
+  });
+}
 
 test("experiment APIs require administrator auth and stay isolated from the broadcast", async () => {
   const directory = mkdtempSync(join(tmpdir(), "experiment-http-"));

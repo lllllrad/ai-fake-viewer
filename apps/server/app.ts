@@ -468,7 +468,12 @@ async function assembleApp(
   );
   startup.add(() => experiments.close());
   app.addHook("onClose", async () => experiments.close());
-  registerExperimentRoutes(app, experiments, opts.experimentSpeechRequest);
+  registerExperimentRoutes(
+    app,
+    experiments,
+    config.audio,
+    opts.experimentSpeechRequest,
+  );
   app.get("/api/admin/status", async () =>
     projectAdminStatus(statusSource.read()),
   );

@@ -4,16 +4,22 @@ import type { Config } from "../../config.ts";
 
 const speechProviders = {
   groq: {
+    label: "Groq",
     endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
     model: "whisper-large-v3-turbo",
     key: "GROQ_API_KEY",
   },
   openai: {
+    label: "OpenAI Whisper",
     endpoint: "https://api.openai.com/v1/audio/transcriptions",
     model: "whisper-1",
     key: "OPENAI_API_KEY",
   },
 } as const;
+export function speechProviderInfo(provider: Config["audio"]["provider"]) {
+  const { label, model, key } = speechProviders[provider];
+  return { provider, label, model, keyName: key };
+}
 export function speechApiKey(provider: Config["audio"]["provider"]) {
   return process.env[speechProviders[provider].key];
 }

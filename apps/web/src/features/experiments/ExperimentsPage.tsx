@@ -549,9 +549,11 @@ export function ExperimentsPage() {
                     </Button>
                   </div>
                   <p className="hint">
-                    {index?.microphoneReady
-                      ? "녹음 전송을 누르면 OpenAI Whisper로 전사합니다. 최대 30초이며 원본 음성은 저장하지 않습니다."
-                      : "마이크 전사에는 서버의 OPENAI_API_KEY가 필요합니다. 텍스트로도 테스트할 수 있습니다."}
+                    {!index
+                      ? "음성 전사 설정을 확인하고 있습니다."
+                      : index.microphoneReady
+                        ? `녹음 전송을 누르면 ${index.microphone.label}로 전사합니다. 최대 30초이며 원본 음성은 저장하지 않습니다.`
+                        : `마이크 전사에는 서버의 ${index.microphone.keyName}가 필요합니다. 텍스트로도 테스트할 수 있습니다.`}
                   </p>
                 </form>
               </section>

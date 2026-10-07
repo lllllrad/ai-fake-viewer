@@ -25,8 +25,12 @@ requires restarting the server and starting a new test.
 Use **Speak with microphone** to record an utterance and the recording's send
 button to submit it. Recording automatically submits at 30 seconds. Browsers
 must support MediaRecorder and grant microphone access on localhost or HTTPS.
-Each upload is limited to 4 MiB and uses OpenAI Whisper `whisper-1` with the
-server's `OPENAI_API_KEY`, independently of the selected reaction model.
+Each upload is limited to 4 MiB and shares the broadcast transcription adapter
+and `audio.provider` / `audio.language` settings. OpenAI uses `whisper-1`
+with `OPENAI_API_KEY`; Groq uses `whisper-large-v3-turbo` with `GROQ_API_KEY`.
+The selected transcription provider is independent of the reaction model.
+The microphone status and key guidance follow that provider; there is no fallback
+to another provider's key. An empty language enables automatic detection.
 Microphone transcription is a separate paid API operation, including when
 reactions use the fixture provider or Sign in with ChatGPT. The recognized text
 appears in the conversation; raw audio is not saved. Missing microphone support,
@@ -59,7 +63,7 @@ downloaded copies or provider-side records. Test keys and account credentials
 are never included in records.
 
 The fixtures verify the browser's recording/upload flow with a synthetic
-microphone and mocked Whisper. They do not establish real microphone quality,
+microphone and mocked transcription providers. They do not establish real microphone quality,
 speech recognition accuracy or real-model naturalness.
 
 ## Replay and compare
