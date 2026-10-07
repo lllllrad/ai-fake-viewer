@@ -35,18 +35,13 @@ export interface ExperimentOptions {
   provider: string;
   modelName: string;
   model: Model<Buffer>;
-  maxCalls: number;
+  /** Legacy callers may pass this; generation no longer has a call-count cap. */
+  maxCalls?: number;
   personaIndex?: number;
 }
 /** Synthetic evidence only. No platform connectors, live DB, or account writes. */
 export async function runExperiment(options: ExperimentOptions) {
   const scenario = scenarioSchema.parse(options.scenario);
-  if (
-    !Number.isInteger(options.maxCalls) ||
-    options.maxCalls < 1 ||
-    options.maxCalls > 1000
-  )
-    throw Error("Invalid call limit");
   await ensureAiService();
   const implementation = reactionPipelines.get(
     options.pipeline.profile.ai.pipelineType ?? "standard",
@@ -66,7 +61,6 @@ export async function runExperiment(options: ExperimentOptions) {
             ? "chatgpt_subscription"
             : "openai_api",
         description: scenario.topic,
-        maxCalls: options.maxCalls,
       },
     }),
     options.pipeline,
@@ -103,7 +97,6 @@ export async function runExperiment(options: ExperimentOptions) {
     DraftOutcome<ModelInput<Buffer>> | { kind: "failed"; reason: string }
   > = [];
   const model: Model<Buffer> = async (input, signal) => {
-    if (calls.length >= options.maxCalls) throw Error("budget_exhausted");
     const started = performance.now();
     // Copy before the live coordinator retires mutable context at lease end.
     const call: (typeof calls)[number] = {

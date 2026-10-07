@@ -189,12 +189,12 @@ export function AiConnection({
       <details>
         <summary>생성·검토·사용량</summary>
         <p>
-          호출 {status.ai.usage.calls} / {status.ai.maxCalls}회 · 건너뜀{" "}
-          {status.ai.skips}회 · 검토 제외 {status.ai.rejects}회
+          호출 {status.ai.usage.calls}회 · 건너뜀 {status.ai.skips}회 · 검토
+          제외 {status.ai.rejects}회
         </p>
         <p>
           {status.ai.costEstimate === "unavailable"
-            ? "비용 추정 미지원 · 호출 한도 적용 중"
+            ? "비용 추정 미지원"
             : `사용·예약 비용 추정: $${status.ai.usage.reservedUsd.toFixed(4)}`}
         </p>
         <p>

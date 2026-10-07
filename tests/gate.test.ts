@@ -383,17 +383,20 @@ test("Jev runs once before a text decision and its subsequent masked-frame inspe
   }
 });
 
-test("exhausted answer-model call budget does not spend a gate request", async () => {
-  const h = harness((async () => {
-    assert.fail("gate request after model budget exhaustion");
-  }) as typeof fetch);
+test("legacy answer-model call limit does not stop generation", async () => {
+  const h = harness(
+    (async () => {
+      assert.fail("gate request after model budget exhaustion");
+    }) as typeof fetch,
+    { enabled: false },
+  );
   try {
     h.config.ai.maxCalls = 1;
-    h.store.reserve(1, null, null);
+    h.store.reserve(null, null);
     await h.scheduler.tick();
-    assert.equal(h.scheduler.state, "budget_exhausted");
+    assert.equal(h.scheduler.state, "running");
     assert.equal(h.gate.requests, 0);
-    assert.equal(h.calls(), 0);
+    assert.equal(h.calls(), 1);
   } finally {
     h.close();
   }

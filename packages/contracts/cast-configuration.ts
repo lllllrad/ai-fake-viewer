@@ -87,12 +87,8 @@ export const policySchema = z
     max_recent_public_messages: z.number().int().min(1).max(50).default(30),
     max_own_recent_messages: z.number().int().min(1).max(20).default(10),
     max_retrieved_memories: z.number().int().min(0).max(20).default(8),
-    max_live_model_calls_per_session: z
-      .number()
-      .int()
-      .min(1)
-      .max(10000)
-      .default(300),
+    // Legacy policy values no longer limit generation calls.
+    max_live_model_calls_per_session: z.number().optional(),
     max_authoring_model_calls_per_job: z
       .number()
       .int()

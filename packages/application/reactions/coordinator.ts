@@ -464,10 +464,6 @@ export class ReactionCoordinator<
     this.lastHash = hash;
     this.lastExternal = externalSeq;
     try {
-      const liveLimit =
-        personaRuntime?.policy.max_live_model_calls_per_session ?? c.maxCalls;
-      if (this.store.usage().calls >= Math.min(c.maxCalls, liveLimit))
-        throw Error("budget_exhausted");
       const consumeNewInput = () => {
         for (const transcript of newTranscripts)
           this.processedTranscriptIds.add(transcript.id);

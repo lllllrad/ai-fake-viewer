@@ -11,13 +11,15 @@ export const experimentStartSchema = z
       .string()
       .regex(/^[a-z][a-z0-9_-]{0,63}$/)
       .optional(),
-    maxCalls: z.number().int().min(1).max(100).default(12),
+    // Accepted for older clients; ignored.
+    maxCalls: z.number().optional(),
   })
   .strict();
 export type ExperimentStart = z.infer<typeof experimentStartSchema>;
 export const experimentResumeSchema = z
   .object({
-    additionalCalls: z.number().int().min(1).max(100).default(12),
+    // Accepted for older clients; ignored.
+    additionalCalls: z.number().optional(),
   })
   .strict();
 export const experimentInputSchema = z
@@ -43,7 +45,6 @@ export const experimentSessionSchema = z.object({
     revision: z.number(),
     digest: z.string(),
   }),
-  maxCalls: z.number(),
   calls: z.number(),
   microphoneCalls: z.number(),
   inputs: z.array(

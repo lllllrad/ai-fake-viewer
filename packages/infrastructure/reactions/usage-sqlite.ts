@@ -10,13 +10,10 @@ export class SqliteModelUsage implements ModelUsagePort {
     },
     private readonly transactions: { run<T>(work: () => T): T },
   ) {}
-  reserve(maxCalls: number, maxUsd: number | null, reserved: number | null) {
+  reserve(maxUsd: number | null, reserved: number | null) {
     return this.transactions.run(() => {
       const usage = this.usage();
-      if (
-        usage.calls >= maxCalls ||
-        (maxUsd !== null && usage.reservedUsd + (reserved ?? 0) > maxUsd)
-      )
+      if (maxUsd !== null && usage.reservedUsd + (reserved ?? 0) > maxUsd)
         return null;
       const id = this.runtime.id();
       this.db

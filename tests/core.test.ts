@@ -369,7 +369,7 @@ test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", asy
   assert.equal(h.s.snapshot().messages.length, 2);
   h.s.close();
 });
-test("A13: call and money limits survive restart; provider failures retain reservation", async () => {
+test("A13: legacy call limits are ignored; money limits and usage survive restart", async () => {
   const h = harness(async () => {
     throw Error("provider failed");
   });
@@ -382,17 +382,18 @@ test("A13: call and money limits survive restart; provider failures retain reser
   h.ai.lastAttempt = 0;
   h.capture.frames[0].hash = "new";
   await h.ai.tick();
-  assert.equal(h.ai.state, "budget_exhausted");
+  assert.equal(h.ai.state, "model_error");
+  assert.equal(h.s.usage().calls, 2);
   h.s.ingestBatch([msg()]);
   assert.equal(h.s.snapshot().messages.length, 1);
-  assert.equal(h.s.reserve(100, 0.01, 0.02), null);
+  assert.equal(h.s.reserve(0.01, 0.02), null);
   h.s.close();
   const dir = mkdtempSync(join(tmpdir(), "mixed-budget-"));
   let s = new Store(join(dir, "test.db"));
-  assert(s.reserve(1, null, null));
+  assert(s.reserve(0.5, 0.5));
   s.close();
   s = new Store(join(dir, "test.db"));
-  assert.equal(s.reserve(1, null, null), null);
+  assert.equal(s.reserve(0.5, 0.5), null);
   s.close();
   rmSync(dir, { recursive: true, force: true });
 });

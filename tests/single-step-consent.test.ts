@@ -13,7 +13,7 @@ for (const platform of ["youtube", "chzzk"] as const) {
     let now = Date.now();
     t.mock.method(Date, "now", () => now);
     const profile = approvedProfile();
-    profile.noticeUrl = "https://cafe.naver.com/lllllrad/staff/2";
+    profile.noticeUrl = "https://cafe.naver.com/lllllrad/3";
     const p = new Participation(profile, "session"),
       store = new Store(":memory:", p);
     t.after(() => store.close());

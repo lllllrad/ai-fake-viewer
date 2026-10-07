@@ -518,8 +518,8 @@ export class Store extends EventEmitter {
   exportTranscripts() {
     return this.transcripts.export();
   }
-  reserve(maxCalls: number, maxUsd: number | null, reserved: number | null) {
-    return this.modelUsage.reserve(maxCalls, maxUsd, reserved);
+  reserve(maxUsd: number | null, reserved: number | null) {
+    return this.modelUsage.reserve(maxUsd, reserved);
   }
   settle(
     id: string,

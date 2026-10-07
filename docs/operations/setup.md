@@ -235,7 +235,15 @@ receipt is separate from `liveChatMessages.insert` notice transmission. If recei
 hits a limit and notice sending waits for that connection, the UI says so without
 claiming that the send API itself reached a limit. CHZZK User API identity lookup
 is distinguished from Chat API sending. OpenAI or Groq transcription and OpenAI Responses API
-limits are separate from platform chat. App-configured call/token budgets are
+limits are separate from platform chat. App-configured transcription/gate request and model token/cost budgets are
 identified as local limits, not provider quota. An ambiguous permission/quota
 response remains explicitly ambiguous; the app does not infer that other methods
 are usable merely because their quota failure has not been observed.
+
+## Participation policy link
+
+The current privacy-policy and participation-notice link is
+[the published policy](https://cafe.naver.com/lllllrad/3). Set both
+`privacy.policyUrl` and `privacy.noticeUrl` in local `config.yaml`;
+`config.example.yaml` includes this URL. Restart the broadcast server after changing
+the configuration so displayed policy links and platform guidance use it.

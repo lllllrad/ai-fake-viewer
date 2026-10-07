@@ -7,11 +7,7 @@ import {
 } from "../../contracts/cast-configuration.ts";
 
 /** Rehydrate private test history only. Unfinished attempts are never replayed. */
-export function restoreExperiment(
-  store: Store,
-  trace: ExperimentTrace,
-  maxCalls: number,
-) {
+export function restoreExperiment(store: Store, trace: ExperimentTrace) {
   const { session } = trace;
   const db = store.db;
   const sourceSession = session.messages[0]?.sessionId ?? session.id;
@@ -41,11 +37,7 @@ export function restoreExperiment(
           cast_size: 6,
         }),
       ),
-      JSON.stringify(
-        policySchema.parse({
-          max_live_model_calls_per_session: Math.max(300, maxCalls),
-        }),
-      ),
+      JSON.stringify(policySchema.parse({})),
       session.startedAt,
       Date.now(),
     );
@@ -125,7 +117,7 @@ export function restoreExperiment(
         text: input.text,
       });
     for (let index = 0; index < session.calls; index++) {
-      const id = store.reserve(maxCalls, null, null);
+      const id = store.reserve(null, null);
       if (!id) throw Error("Invalid saved test usage");
       store.settle(id, undefined, undefined, null);
     }

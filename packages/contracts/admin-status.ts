@@ -156,7 +156,6 @@ export const adminStatusSchema = z.object({
       outputTokens: count.nullable(),
     }),
     costEstimate: z.enum(["unavailable", "configured_prices"]),
-    maxCalls: count,
     provider,
     visualMode,
     readiness: broadcastReadinessSchema,

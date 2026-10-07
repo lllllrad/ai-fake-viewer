@@ -118,7 +118,9 @@ only the current attempt. AI remains enabled and waits for new input at the norm
 configured pace; the discarded input is not replayed automatically. Transient
 network/timeout failures may continue on fresh input, but three consecutive such
 failures stop generation. Authentication/provider failures, privacy restrictions,
-call budgets and unexpected scheduler failures still stop AI.
+monetary budgets and unexpected scheduler failures still stop AI. Generation call counts
+are recorded without a call-count ceiling; legacy `ai.maxCalls` and cast
+`max_live_model_calls_per_session` values are ignored.
 
 The admin status exposes a sanitized `ai.lastIssue` category, timestamp, explanation
 and continuation flag; the dashboard shows the explanation next to AI controls.

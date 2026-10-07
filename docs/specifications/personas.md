@@ -142,7 +142,7 @@ reduce activity; it cannot raise those shared limits.
 | Delayed publication                   | Not before 500–2500 ms after triggering evidence; generation/review may take longer    |
 | Reaction TTL                          | 45 seconds, bounded from its triggering evidence                                       |
 | Model timeout                         | 30 seconds                                                                             |
-| Live model calls                      | Lower of the cast policy's 300 calls and `ai.maxCalls`, using shared broadcast usage   |
+| Live model calls                      | Counted in shared broadcast usage, with no call-count ceiling                          |
 
 The live model contract is `say / skip / inspect`. A draft passes model review and,
 when configured, manual message review. Manual message review does not approve or

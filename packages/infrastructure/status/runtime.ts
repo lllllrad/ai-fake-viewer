@@ -224,7 +224,6 @@ export class RuntimeStatusSource {
           !config.ai.priceCheckedAt
             ? "unavailable"
             : "configured_prices",
-        maxCalls: config.ai.maxCalls,
         provider: config.ai.provider,
         visualMode: config.ai.visualMode,
         readiness: readyComponents(),

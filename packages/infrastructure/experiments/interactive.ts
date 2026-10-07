@@ -96,7 +96,6 @@ export class InteractiveExperiment {
               ? "chatgpt_subscription"
               : "openai_api",
           description: options.topic,
-          maxCalls: options.maxCalls,
           visualMode: "on_request",
         },
       }),
@@ -111,7 +110,7 @@ export class InteractiveExperiment {
       cards: pipelineCards(pipeline),
     });
     try {
-      if (restored) restoreExperiment(this.store, restored, options.maxCalls);
+      if (restored) restoreExperiment(this.store, restored);
       else cast.prepare();
     } catch (error) {
       this.store.close();
@@ -278,7 +277,6 @@ export class InteractiveExperiment {
         revision: this.pipeline.profile.revision,
         digest: this.pipeline.digest,
       },
-      maxCalls: this.options.maxCalls,
       calls: this.store.usage().calls,
       microphoneCalls: this.microphoneCalls,
       inputs: [...this.inputs],
@@ -442,23 +440,10 @@ export class ExperimentWorkspace {
       );
     }
   }
-  resume(id: string, additionalCalls = 12) {
+  resume(id: string, _legacyAdditionalCalls?: number) {
     if (this.active && !this.active.endedAt)
       throw new ExperimentError("진행 중인 테스트를 먼저 종료해 주세요.");
     const trace = structuredClone(this.read(id));
-    if (
-      !Number.isInteger(additionalCalls) ||
-      additionalCalls < 1 ||
-      additionalCalls > 100
-    )
-      throw new ExperimentError(
-        "추가 AI 호출 한도는 1~100회로 설정해 주세요.",
-        400,
-      );
-    if (trace.session.calls + additionalCalls > 10000)
-      throw new ExperimentError(
-        "누적 AI 호출 10,000회 한도입니다. 새 테스트를 시작해 주세요.",
-      );
     const pipeline = z
       .object({
         profile: pipelineProfileSchema,
@@ -492,7 +477,6 @@ export class ExperimentWorkspace {
         topic: trace.session.topic,
         provider,
         pipelineType: trace.session.pipelineType,
-        maxCalls: trace.session.calls + additionalCalls,
       },
       pipeline,
       adapter,
@@ -506,7 +490,6 @@ export class ExperimentWorkspace {
       previousEndedAt: trace.session.endedAt,
       previousModel: trace.session.model,
       model: adapter.name,
-      additionalCalls,
     });
     try {
       session.start();

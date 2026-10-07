@@ -94,10 +94,11 @@ Audio device/resampling differences remain: the test source is the browser mic,
 while the live source is configured FFmpeg input. Permission/support failures leave
 text input available. These capture adapters share downstream framing and processing.
 
-Each initial test permits 1–100 model calls (default 12), counting generation and review,
-and each run permits 300 new submitted utterances and ends after 30 minutes.
-The configured audio request budget (default 360) is cumulative across resumptions. Model requests have a 30-second timeout; speech requests use the broadcast 20-second timeout. The limits are
-call limits, not monetary guarantees. One test runs at a time. Leaving the page
+AI generation has no call-count limit in initial tests, resumed tests or CLI runs.
+Each interactive run permits 300 new submitted utterances and ends after 30 minutes.
+The configured audio request budget (default 360) is cumulative across resumptions.
+Model requests have a 30-second timeout; speech requests use the broadcast 20-second
+timeout. Usage counts remain recorded; these controls are not monetary guarantees. One test runs at a time. Leaving the page
 stops local recording but does not stop the server-side test; use **End test**.
 Ending cancels outstanding requests and prevents late replies from being
 published. No platform connector, live transcript journal, reader overlay or
@@ -107,7 +108,10 @@ The workspace has separate **Conversation**, **Per-viewer state** and **AI call 
 tabs. Microphone controls belong to the session toolbar above these tabs. Switching
 tabs preserves the same AudioWorklet and pending transcription; stopping the microphone,
 ending/changing the session, leaving the page or losing input readiness stops capture.
-The conversation text draft remains available when returning to its tab.
+The conversation text draft remains available when returning to its tab. Following
+new messages scrolls only the conversation container, never the surrounding page.
+Reading older messages suspends following until **Recent conversation** is selected
+or the operator scrolls back to the bottom.
 
 **Per-viewer state** selects a cast member and displays inspection sections supplied by
 that service pipeline's optional `inspect(context)` hook. The standard implementation reports
@@ -137,9 +141,9 @@ reopens the active test; server restart leaves saved sessions readable but does
 not automatically resume generation. An interrupted session is labeled accordingly.
 
 Use **Continue test** on an ended or interrupted session to continue the same record,
-including sessions saved before resume support. Choose 1–100 additional model calls
-(default 12); the new ceiling is calls already consumed plus this allowance, replacing
-any unused allowance. The session has a cumulative ceiling of 10,000 model calls.
+including sessions saved before resume support. No additional-call allowance is needed;
+legacy `maxCalls` and `additionalCalls` values are accepted but ignored. Old saved
+call ceilings do not prevent a session from continuing.
 Resuming preserves the session ID, original start time, transcript/message timestamps,
 message IDs, cast identities/definitions, nickname provenance, saved profile/prompts,
 and prior requests and execution records. The original provider uses its currently
@@ -323,8 +327,8 @@ Both interactive tests and CLI runs use an explicitly selected provider.
 Choose a CLI network provider explicitly:
 
 ```sh
-sh run-command.sh npm run experiment -- --provider openai_api --max-calls 6
-sh run-command.sh npm run experiment -- --provider chatgpt_subscription --max-calls 6
+sh run-command.sh npm run experiment -- --provider openai_api
+sh run-command.sh npm run experiment -- --provider chatgpt_subscription
 ```
 
 The Responses API adapter uses `OPENAI_API_KEY` and `OPENAI_MODEL` from
@@ -333,11 +337,11 @@ account using `EXPERIMENT_ENCRYPTION_KEY`. Replay never refreshes or writes that
 token file: refresh the account through the independent test server and rerun.
 There is no account/provider fallback or live-account access.
 
-`--max-calls` defaults to 12 per run and counts generation, inspection and review.
-`--total-calls` defaults to 100 across the entire command. Runs are sequential and
-model calls have a 30-second timeout. Input/output token limits use the production
-configuration defaults (24,000/500); these are not monetary spending guarantees.
-Usage limits belong to experiments separately from the broadcast session.
+The CLI has no per-run or whole-command call-count limit; `--max-calls` and
+`--total-calls` are no longer options. Runs are sequential and model calls have a
+30-second timeout. Input/output token limits use the production configuration defaults
+(24,000/500); these are not monetary spending guarantees. Test usage records remain
+separate from the broadcast session.
 
 ## Apply or roll back in the project
 
@@ -379,9 +383,9 @@ configuration, platform connectivity, model account selection or budgets.
 - [Report](../../packages/infrastructure/experiments/report.ts): escaped standalone
   comparison UI with no external assets or remote calls.
 - [CLI](../../scripts/experiment.ts): suite iteration, provider selection, whole
-  command call cap and private artifacts.
+  cumulative usage and private artifacts.
 - [Tests](../../tests/experiments.test.ts): reproducibility, silence, participation,
-  review rejection, budget exhaustion, withdrawal, prompt application and escaping.
+  review rejection, legacy call-limit compatibility, withdrawal, prompt application and escaping.
 
 Run `sh run-command.sh npm run check` and
 `sh run-command.sh npm run test:experiments:browser` after building.

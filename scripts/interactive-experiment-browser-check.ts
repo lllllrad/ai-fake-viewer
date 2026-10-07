@@ -1,5 +1,6 @@
 import "./browser-ai-service.ts";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { chromium, expect } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -93,6 +94,75 @@ try {
   await expect(
     page.getByRole("heading", { name: "AI 호출 세부사항", exact: true }),
   ).toHaveCount(0);
+  await expect(page.getByLabel("AI 호출 한도", { exact: true })).toHaveCount(0);
+  // Long synthetic conversation: new input must scroll only the chat container,
+  // never the page, and must preserve an operator reading older messages.
+  for (let i = 0; i < 16; i++)
+    experiments.active!.input(randomUUID(), `합성 스크롤 확인 ${i}`, "text");
+  await expect(page.locator(".experiment-message.own")).toHaveCount(17);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator(".experiment-log").evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+      el.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect(
+      page.getByRole("button", { name: "최근 대화로", exact: true }),
+    ).toHaveCount(0);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    experiments.active!.input(randomUUID(), `아래쪽 새 입력 ${width}`, "text");
+    await expect(
+      page
+        .locator(".experiment-message.own")
+        .filter({ hasText: `아래쪽 새 입력 ${width}` }),
+    ).toHaveCount(1);
+    assert.equal(
+      await page.evaluate(() => window.scrollY),
+      0,
+      "incoming chat must not move the document",
+    );
+    await expect
+      .poll(() =>
+        page
+          .locator(".experiment-log")
+          .evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+      )
+      .toBeLessThan(2);
+    await page.locator(".experiment-log").evaluate((el) => {
+      el.scrollTop = 0;
+      el.dispatchEvent(new Event("scroll", { bubbles: true }));
+    });
+    await expect(
+      page.getByRole("button", { name: "최근 대화로", exact: true }),
+    ).toHaveCount(1);
+    const documentTop = await page.evaluate(() => window.scrollY);
+    experiments.active!.input(
+      randomUUID(),
+      `읽는 동안 새 입력 ${width}`,
+      "text",
+    );
+    await expect(
+      page
+        .locator(".experiment-message.own")
+        .filter({ hasText: `읽는 동안 새 입력 ${width}` }),
+    ).toHaveCount(1);
+    assert.equal(
+      await page.locator(".experiment-log").evaluate((el) => el.scrollTop),
+      0,
+    );
+    assert.equal(await page.evaluate(() => window.scrollY), documentTop);
+    await page
+      .getByRole("button", { name: "최근 대화로", exact: true })
+      .click();
+    await expect
+      .poll(() =>
+        page
+          .locator(".experiment-log")
+          .evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+      )
+      .toBeLessThan(2);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page
     .locator(".experiment-personas > details > summary")
     .first()
@@ -212,7 +282,9 @@ try {
   );
   await captureUIReview(page, "experiment-resume");
   const beforeResume = structuredClone(experiments.read(sessionId).session);
-  await page.getByLabel("추가 AI 호출 한도", { exact: true }).fill("4");
+  await expect(
+    page.getByLabel("추가 AI 호출 한도", { exact: true }),
+  ).toHaveCount(0);
   await page
     .getByRole("button", { name: "이어서 테스트", exact: true })
     .click();
@@ -221,7 +293,7 @@ try {
   ).toBeEnabled();
   experiments.active!.coordinator.random = () => 0;
   assert.equal(experiments.active!.id, sessionId);
-  assert.equal(experiments.active!.snapshot().maxCalls, beforeResume.calls + 4);
+  assert.equal("maxCalls" in experiments.active!.snapshot(), false);
   assert.deepEqual(
     experiments.active!.snapshot().personas.map((p) => p.id),
     beforeResume.personas.map((p) => p.id),

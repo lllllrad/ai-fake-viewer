@@ -44,7 +44,7 @@ const statusLabel = (session: ExperimentSession) => {
       : session.state === "time_limit"
         ? "30분 한도로 종료"
         : "종료됨";
-  if (session.state === "budget_exhausted") return "AI 호출 한도 도달";
+  if (session.state === "budget_exhausted") return "비용 예산 소진";
   if (session.state !== "running") return "중지됨 · 상태 확인 필요";
   if (
     ["generating", "ai_review", "inspecting", "delaying_publication"].includes(
@@ -77,8 +77,6 @@ export function ExperimentsPage({
   );
   const providerChosen = useRef(false);
   const [pipelineType, setPipelineType] = useState("");
-  const [maxCalls, setMaxCalls] = useState(12);
-  const [additionalCalls, setAdditionalCalls] = useState(12);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -86,7 +84,6 @@ export function ExperimentsPage({
   const [showSetup, setShowSetup] = useState(false);
   const [follow, setFollow] = useState(true);
   const log = useRef<HTMLDivElement>(null);
-  const bottom = useRef<HTMLDivElement>(null);
   const selection = useRef("");
   const epoch = useRef(0);
   const mounted = useRef(true);
@@ -206,8 +203,8 @@ export function ExperimentsPage({
       ].sort((a, b) => a.at - b.at)
     : [];
   useEffect(() => {
-    if (follow && view === "conversation")
-      bottom.current?.scrollIntoView({ block: "nearest" });
+    if (follow && view === "conversation" && log.current)
+      log.current.scrollTop = log.current.scrollHeight;
   }, [entries.length, follow, view]);
   const act = async (work: () => Promise<void>) => {
     if (command.current) return;
@@ -354,7 +351,6 @@ export function ExperimentsPage({
                   body: {
                     topic,
                     provider,
-                    maxCalls,
                     pipelineType:
                       pipelineType || index?.defaultPipelineType || "standard",
                   },
@@ -423,23 +419,11 @@ export function ExperimentsPage({
                 <option value="fixture">오프라인 모의 응답</option>
               </Select>
             </div>
-            <div>
-              <label htmlFor="experiment-budget">AI 호출 한도</label>
-              <Input
-                id="experiment-budget"
-                type="number"
-                min={1}
-                max={100}
-                required
-                value={maxCalls}
-                onChange={(event) => setMaxCalls(Number(event.target.value))}
-              />
-            </div>
           </div>
           <p className="hint">
             {provider === "fixture"
               ? "모의 응답은 연결 확인용입니다. 사람다운 반응을 평가하려면 실제 AI 연결을 선택하세요."
-              : "선택한 연결로 테스트 입력을 보냅니다. 생성과 검수 모두 호출 한도에 포함됩니다. API 사용 요금이 발생할 수 있습니다."}{" "}
+              : "선택한 연결로 테스트 입력을 보냅니다. API 사용 요금이 발생할 수 있습니다."}{" "}
             한 테스트는 최대 30분입니다.
           </p>
           <Button
@@ -507,7 +491,7 @@ export function ExperimentsPage({
                     experimentSessionSchema,
                     {
                       method: "POST",
-                      body: { additionalCalls },
+                      body: {},
                       signal: lifetime.current.signal,
                     },
                   );
@@ -524,22 +508,9 @@ export function ExperimentsPage({
                 같은 대화와 시청자로 이어서 테스트합니다. 기존 AI 연결의 현재
                 계정·모델을 사용하며, 새 입력부터 반응합니다.
               </p>
-              <label htmlFor="resume-calls">추가 AI 호출 한도</label>
-              <Input
-                id="resume-calls"
-                type="number"
-                min={1}
-                max={100}
-                required
-                value={additionalCalls}
-                onChange={(event) =>
-                  setAdditionalCalls(Number(event.target.value))
-                }
-                disabled={busy || connectionBusy}
-              />
               <p className="hint">
-                재개 후 최대 30분 · 생성과 검수를 포함한 추가 호출 한도입니다.
-                기존 호출 기록은 유지됩니다.
+                재개 후 최대 30분 동안 테스트합니다. 기존 호출 기록은
+                유지됩니다.
               </p>
               {index?.activeId && (
                 <p role="status">진행 중인 다른 테스트를 먼저 종료해 주세요.</p>
@@ -570,8 +541,8 @@ export function ExperimentsPage({
             <div className="section-title">
               <h2>마이크 입력</h2>
               <span className="hint">
-                AI 호출 {session.calls}/{session.maxCalls} · 음성 전사{" "}
-                {session.microphoneCalls}/{index?.microphone.maxRequests ?? 360}
+                AI 호출 {session.calls}회 · 음성 전사 {session.microphoneCalls}/
+                {index?.microphone.maxRequests ?? 360}
               </span>
             </div>
             <MicrophoneInput
@@ -692,7 +663,6 @@ export function ExperimentsPage({
                         <p>{entry.text}</p>
                       </article>
                     ))}
-                    <div ref={bottom} />
                   </div>
                   {!follow && (
                     <Button

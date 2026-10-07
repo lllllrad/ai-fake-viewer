@@ -25,8 +25,6 @@ const { values } = parseArgs({
     provider: { type: "string", default: "fixture" },
     seed: { type: "string", default: "1" },
     repeat: { type: "string", default: "1" },
-    "max-calls": { type: "string", default: "12" },
-    "total-calls": { type: "string", default: "100" },
     persona: { type: "string", default: "0" },
     out: { type: "string" },
     help: { type: "boolean" },
@@ -40,8 +38,6 @@ if (values.help) {
   --provider fixture|openai_api|chatgpt_subscription (default: fixture, offline)
   --seed N --repeat N  Paired seeds across every profile (repeat: 1..10)
   --persona 0..5       Persona for draft mode
-  --max-calls N        Per-run model call cap (default: 12)
-  --total-calls N      Whole-command cap (default: 100)
   --out DIRECTORY     New report directory; existing directories are refused
 Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`);
 } else {
@@ -63,9 +59,7 @@ Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`)
     throw Error("Unknown provider");
   const seed = integer(values.seed, 0, 0xffffffff - 10),
     repeats = integer(values.repeat, 1, 10);
-  const maxCalls = integer(values["max-calls"], 1, 1000),
-    totalLimit = integer(values["total-calls"], 1, 1000),
-    personaIndex = integer(values.persona, 0, 5);
+  const personaIndex = integer(values.persona, 0, 5);
   const profiles = (
     values.profile ?? ["experiments/profiles/baseline.json"]
   ).map(loadPipelineProfile);
@@ -128,8 +122,6 @@ Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`)
           source,
           provider,
           mode,
-          maxCalls,
-          totalLimit,
           totalCalls,
           runs: results.length,
         },
@@ -152,10 +144,8 @@ Outputs: report.html, results.json, manifest.json. No live DB/platform writes.`)
             mode,
             provider,
             modelName: adapter.name,
-            maxCalls,
             personaIndex,
             model: async (input, signal) => {
-              if (totalCalls >= totalLimit) throw Error("budget_exhausted");
               totalCalls++;
               return adapter.model(input, signal);
             },

@@ -1,11 +1,7 @@
 import { decisionSchema } from "../../contracts/decision.ts";
 
 export interface ModelUsagePort {
-  reserve(
-    maxCalls: number,
-    maxUsd: number | null,
-    reserved: number | null,
-  ): string | null;
+  reserve(maxUsd: number | null, reserved: number | null): string | null;
   settle(
     id: string,
     input: number | undefined,
@@ -20,7 +16,6 @@ export interface ModelCallPolicy {
   priceCheckedAt?: string | null;
   maxInputTokens: number;
   maxOutputTokens: number;
-  maxCalls: number;
   maxUsd: number | null;
 }
 interface RequestEvidence {
@@ -71,7 +66,6 @@ export async function callMeteredModel<
       outputTokens * c.outputUsdPerMillion!) /
     1e6;
   const reservation = usage.reserve(
-    c.maxCalls,
     c.maxUsd,
     priced ? price(c.maxInputTokens, c.maxOutputTokens) : null,
   );

@@ -172,7 +172,8 @@ export const configSchema = z
         manualApproval: z.boolean().default(false),
         reviewDraft: z.boolean().default(true),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
-        maxCalls: z.number().int().min(1).max(10000).default(100),
+        // Legacy configuration is accepted but no longer limits calls.
+        maxCalls: z.number().optional(),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
         maxOutputTokens: z.number().int().min(200).max(2000).default(500),
         maxUsd: z.number().positive().nullable().default(null),
@@ -217,7 +218,6 @@ export const configSchema = z
         manualApproval: false,
         reviewDraft: true,
         visualMode: "continuous",
-        maxCalls: 100,
         maxInputTokens: 24000,
         maxOutputTokens: 500,
         maxUsd: null,

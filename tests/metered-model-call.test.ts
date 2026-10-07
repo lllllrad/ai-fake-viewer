@@ -12,7 +12,6 @@ const policy: ModelCallPolicy = {
   priceCheckedAt: "2026-01-01",
   maxInputTokens: 1000,
   maxOutputTokens: 100,
-  maxCalls: 3,
   maxUsd: 1,
 };
 const decision = {
@@ -59,7 +58,7 @@ test("budget rejection and prior cancellation never invoke the provider", async 
   const options = {
     input,
     signal: new AbortController().signal,
-    policy: { ...policy, maxCalls: 0 },
+    policy: { ...policy, maxUsd: 0.0001 },
     usage: store,
     now: () => 0,
     trace: () => {},
@@ -142,7 +141,7 @@ test("subscription usage never receives API monetary pricing", async (t) => {
 test("late settlement cannot mutate another broadcast's reservation", (t) => {
   const store = new Store(":memory:");
   t.after(() => store.close());
-  const id = store.reserve(3, 1, 0.5)!;
+  const id = store.reserve(1, 0.5)!;
   const session = store.sessionId;
   store.sessionId = "another-broadcast";
   store.settle(id, 10, 2, 0.001);

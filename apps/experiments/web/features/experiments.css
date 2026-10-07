@@ -55,6 +55,7 @@
 .experiment-log {
   height: clamp(220px, 34vh, 420px);
   overflow-y: auto;
+  overscroll-behavior-y: contain;
   scrollbar-color: #9ca9bd #f0f3f7;
 }
 .experiment-message {

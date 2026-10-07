@@ -124,11 +124,11 @@ test("draft mode shares review and metering while bypassing participation select
   assert.equal(result.summary.published, 0);
   assert.equal((result.drafts[0] as { kind: string }).kind, "candidate");
 });
-test("call cap includes review and prevents unreviewed publication", async () => {
+test("legacy replay call cap does not interrupt generation and review", async () => {
   const result = await runExperiment(options({ maxCalls: 1 }));
-  assert.equal(result.calls.length, 1);
-  assert.equal(result.summary.published, 0);
-  assert(result.attempts.some((a) => a.reason === "budget_exhausted"));
+  assert(result.calls.length >= 2);
+  assert(result.summary.published > 0);
+  assert(!result.attempts.some((a) => a.reason === "budget_exhausted"));
 });
 test("withdrawal removes fixture chat from later model context", async () => {
   const opt = options({ mode: "draft" });

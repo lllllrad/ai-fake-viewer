@@ -180,7 +180,7 @@ test("stop cancels in-flight work and suppresses late publication and further in
   }
 });
 
-test("call limits stop the test without fabricating a reviewed reply", async () => {
+test("legacy call limits do not stop generation or its review", async () => {
   const { service, cleanup } = workspace();
   try {
     const session = service.start({
@@ -191,11 +191,9 @@ test("call limits stop the test without fabricating a reviewed reply", async () 
     service
       .current(session.id)
       .input(randomUUID(), "게임 어떻게 할까요?", "text");
-    await until(
-      () => service.read(session.id).session.state === "budget_exhausted",
-    );
-    assert.equal(service.read(session.id).session.calls, 1);
-    assert.equal(service.read(session.id).session.messages.length, 0);
+    await until(() => service.read(session.id).session.messages.length === 1);
+    assert.equal(service.read(session.id).session.state, "running");
+    assert.equal(service.read(session.id).session.calls, 2);
   } finally {
     cleanup();
   }
@@ -418,7 +416,7 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
       const invalid = await app.inject({
         method: "POST",
         url: `/api/admin/experiments/${first.id}/resume`,
-        payload: { additionalCalls: 0 },
+        payload: { unknownSetting: 0 },
       });
       assert.equal(invalid.statusCode, 400);
       assert.deepEqual(reopened.read(first.id), original);
@@ -433,7 +431,7 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
       assert.equal(resumed.startedAt, first.startedAt);
       assert.equal(resumed.endedAt, null);
       assert.equal(resumed.calls, 2);
-      assert.equal(resumed.maxCalls, 6);
+      assert.equal("maxCalls" in resumed, false);
       assert.deepEqual(resumed.personas, original.session.personas);
       assert.deepEqual(resumed.messages, original.session.messages);
       assert.deepEqual(resumed.inputs, original.session.inputs);
@@ -477,7 +475,7 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
       );
       reopened.resume(first.id, 2);
       assert.equal(reopened.active!.snapshot().calls, 4);
-      assert.equal(reopened.active!.snapshot().maxCalls, 6);
+      assert.equal("maxCalls" in reopened.active!.snapshot(), false);
       assert.equal(reopened.active!.inputs.length, 2);
     } finally {
       await app.close();
