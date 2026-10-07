@@ -10,7 +10,7 @@ owned by [requirements](behavior.md), [participation](participation.md) and
 
 ## Operator tasks and navigation
 
-Use four task destinations within the authenticated workspace:
+Use five task destinations within the authenticated workspace:
 
 - **Live:** conversation moderation, AI enablement/stop, concise input health,
   source preview, tabbed speech/cast/anonymous context, disclosure and session end.
@@ -21,6 +21,8 @@ Use four task destinations within the authenticated workspace:
   operating-profile/notice-settings tab.
 - **Records and rights:** separate rights-request and video-inventory tabs for
   follow-up work that can outlive the broadcast.
+- **AI viewer tests:** isolated text/microphone conversation, persona inspection
+  and separately opened execution history. See [interactive tests](../development/experiments.md#interactive-viewer-tests).
 
 The live workspace is the landing page. The conversation is the main work area;
 source preview and context occupy a secondary column. The AI switch and emergency
@@ -47,9 +49,10 @@ shows progress and clears the workspace after success. Returning to login starts
 with an empty token field; credentials are never persisted in browser storage.
 
 Workspace navigation uses fragment links (`#broadcast`, `#connections`,
-`#participation`, `#records`). Existing input-detail links select their owning screen. Screens
+`#participation`, `#records`, `#experiments`). Existing input-detail links select their owning screen. Broadcast and participation screens
 retain their component lifetime while hidden: navigating must not reconnect SOOP
-or discard unfinished participation forms. The broadcast conversation, transcripts,
+or discard unfinished participation forms. The test screen unmounts when leaving
+to release the microphone; the isolated server session continues until ended. The broadcast conversation, transcripts,
 cast and pending draft review are owned by
 [BroadcastConversation](../../apps/web/src/features/workspace/BroadcastConversation.tsx).
 

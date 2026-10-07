@@ -1,3 +1,6 @@
+import { registerExperimentRoutes } from "./http/experiment-routes.ts";
+import { ExperimentWorkspace } from "../../packages/infrastructure/experiments/interactive.ts";
+import { experimentModel } from "../../packages/infrastructure/experiments/models.ts";
 import { speechApiKey } from "../../packages/infrastructure/inputs/speech-provider.ts";
 import {
   loadPipelineProfile,
@@ -66,6 +69,8 @@ interface AppOptions {
   readerToken: string;
   encryptionKey: string;
   startInputs?: boolean;
+  experimentDirectory?: string;
+  experimentSpeechRequest?: typeof fetch;
   persistReaderToken?: (token: string) => void;
   chatgptTokenPath?: string;
   chzzkTokenPath?: string;
@@ -456,6 +461,14 @@ async function assembleApp(
       apiModel: process.env.OPENAI_MODEL,
     }),
   });
+  const experiments = new ExperimentWorkspace(
+    opts.experimentDirectory ?? ".local/experiments/interactive",
+    pipeline,
+    (provider) => experimentModel(provider, pipeline, chatgpt),
+  );
+  startup.add(() => experiments.close());
+  app.addHook("onClose", async () => experiments.close());
+  registerExperimentRoutes(app, experiments, opts.experimentSpeechRequest);
   app.get("/api/admin/status", async () =>
     projectAdminStatus(statusSource.read()),
   );
@@ -604,5 +617,6 @@ async function assembleApp(
     participation,
     rights,
     resumeAiIfRequested,
+    experiments,
   };
 }

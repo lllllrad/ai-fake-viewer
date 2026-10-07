@@ -4,7 +4,65 @@ The experiment workspace runs the production persona composition and reaction
 pipeline without platform connectors or the broadcast database. It is a developer
 tool, not a new operator persona-authoring or forced-response mode.
 
-## Run and compare
+## Interactive viewer tests
+
+Open the authenticated administrator workspace and choose **AI viewer tests**
+(`/admin#experiments`). The primary surface is a conversation, with six
+automatically composed viewers and expandable persona details alongside it.
+Enter a broadcast topic, explicitly choose Responses API, Sign in with ChatGPT
+or the offline fixture provider, and start a test. Text input represents what
+the broadcaster says, entering the same speech evidence journal as microphone
+transcriptions. It is not inserted as a consented platform viewer message.
+
+The interactive session uses the production `ReactionCoordinator`, cast
+selection, participation propensity, generation, review, pacing and publication
+rules in real time. It can remain silent. It does not force every viewer to
+reply or accelerate the profile's intervals. The selected startup pipeline
+profile supplies persona definitions and prompts; this text/audio surface uses
+`on_request` visual mode and supplies no screen frames. Changing a profile still
+requires restarting the server and starting a new test.
+
+Use **Speak with microphone** to record an utterance and the recording's send
+button to submit it. Recording automatically submits at 30 seconds. Browsers
+must support MediaRecorder and grant microphone access on localhost or HTTPS.
+Each upload is limited to 4 MiB and uses OpenAI Whisper `whisper-1` with the
+server's `OPENAI_API_KEY`, independently of the selected reaction model.
+Microphone transcription is a separate paid API operation, including when
+reactions use the fixture provider or Sign in with ChatGPT. The recognized text
+appears in the conversation; raw audio is not saved. Missing microphone support,
+permission or credentials leaves text input available.
+
+Each test permits 1–100 model calls (default 12), counting generation and review,
+up to 30 transcription calls and 300 submitted utterances, and ends after 30
+minutes. Model/transcription requests have a 30-second timeout. The limits are
+call limits, not monetary guarantees. One test runs at a time. Leaving the page
+stops local recording but does not stop the server-side test; use **End test**.
+Ending cancels outstanding requests and prevents late replies from being
+published. No platform connector, live transcript journal, reader overlay or
+broadcast database receives test input or output.
+
+**Execution history** is an explicit secondary view, fetched on demand. It
+contains actual model requests and responses, diagnostic stages, participation
+and publication attempts, and the resolved profile/prompts. These are observable
+application steps, not private model reasoning. Download the full JSON record
+for separate inspection. Returning to the conversation does not trigger new
+inference.
+
+Conversation, persona and trace snapshots are privately stored in
+`.local/experiments/interactive/` with owner-only files. Reloading the browser
+reopens the active test; server restart leaves saved sessions readable but does
+not resume generation. An interrupted session is labeled accordingly. Retain at
+most 100 sessions; delete old sessions using **Delete test record**. Test records
+are independent of broadcast withdrawal, retention and session end, so use only
+your own or separately authorized inputs. Deleting a record does not delete
+downloaded copies or provider-side records. Test keys and account credentials
+are never included in records.
+
+The fixtures verify the browser's recording/upload flow with a synthetic
+microphone and mocked Whisper. They do not establish real microphone quality,
+speech recognition accuracy or real-model naturalness.
+
+## Replay and compare
 
 From the repository root:
 
@@ -138,7 +196,8 @@ Use paired seeds and several scenarios, including empty input and active viewers
 
 ## Existing model accounts
 
-Choose a network provider explicitly:
+Both interactive tests and CLI runs use an explicitly selected provider.
+Choose a CLI network provider explicitly:
 
 ```sh
 sh run-command.sh npm run experiment -- --provider openai_api --max-calls 6
@@ -185,6 +244,12 @@ configuration, platform connectivity, model account selection or budgets.
 
 - [Profile loader](../../packages/infrastructure/reactions/pipeline-profile.ts):
   strict profile validation, prompt resolution, fingerprint and cast composition.
+- [Interactive workspace](../../packages/infrastructure/experiments/interactive.ts):
+  isolated real-time sessions, bounded private history and shutdown.
+- [Interactive routes](../../apps/server/http/experiment-routes.ts):
+  administrator-only commands, text admission, bounded audio upload and trace export.
+- [Interactive UI](../../apps/web/src/features/experiments/ExperimentsPage.tsx):
+  conversation-first tests, personas and optional execution history.
 - [Runner](../../packages/infrastructure/experiments/runner.ts): isolated adapters,
   fixture ingestion and production pipeline invocation.
 - [Runtime](../../packages/infrastructure/experiments/runtime.ts): clock, delayed

@@ -1,3 +1,4 @@
+import { ExperimentError } from "../../../packages/infrastructure/experiments/interactive.ts";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { PersonaError } from "../../../packages/application/cast/errors.ts";
@@ -29,7 +30,8 @@ export function registerHttpErrors(app: FastifyInstance) {
     reply.code(validation ? 400 : status).send({
       error: validation
         ? "Invalid request fields"
-        : e instanceof AiStartError ||
+        : e instanceof ExperimentError ||
+            e instanceof AiStartError ||
             e instanceof PrivacyActionError ||
             e instanceof RightsActionError ||
             e instanceof BroadcastCommandError ||

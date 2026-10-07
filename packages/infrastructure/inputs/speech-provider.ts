@@ -43,14 +43,31 @@ export async function providerSpeech(options: {
   signal: AbortSignal;
   request: typeof fetch;
 }): Promise<string> {
+  return providerRecording({
+    ...options,
+    bytes: wavFromPcm(options.pcm),
+    mime: "audio/wav",
+    filename: "audio.wav",
+  });
+}
+export async function providerRecording(options: {
+  provider: Config["audio"]["provider"];
+  bytes: Uint8Array;
+  mime: string;
+  filename: string;
+  language: string;
+  key: string;
+  signal: AbortSignal;
+  request: typeof fetch;
+}): Promise<string> {
   const body = new FormData();
   body.set("model", speechProviders[options.provider].model);
   body.set("response_format", "json");
   if (options.language) body.set("language", options.language);
   body.set(
     "file",
-    new Blob([new Uint8Array(wavFromPcm(options.pcm))], { type: "audio/wav" }),
-    "audio.wav",
+    new Blob([new Uint8Array(options.bytes)], { type: options.mime }),
+    options.filename,
   );
   const result = await options.request(
     speechProviders[options.provider].endpoint,

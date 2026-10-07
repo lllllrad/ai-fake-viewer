@@ -31,6 +31,7 @@ export const fixtureModel: Model<Buffer> = async (input, signal) => {
 export function experimentModel(
   provider: "fixture" | "openai_api" | "chatgpt_subscription",
   pipeline: LoadedPipeline,
+  sharedAuth?: ChatgptAuth,
 ) {
   const limits = configSchema.parse({}).ai;
   if (provider === "fixture")
@@ -50,7 +51,8 @@ export function experimentModel(
       name: process.env.OPENAI_MODEL,
     };
   }
-  const auth = new ChatgptAuth(process.env.TOKEN_ENCRYPTION_KEY ?? "");
+  const auth =
+    sharedAuth ?? new ChatgptAuth(process.env.TOKEN_ENCRYPTION_KEY ?? "");
   const account = auth.active;
   if (!account?.model || !account.accessToken)
     throw Error(

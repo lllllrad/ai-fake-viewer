@@ -21,7 +21,7 @@
     "setup:check": "tsx scripts/check-local-setup.ts",
     "test:server": "tsx scripts/server-control-check.ts",
     "experiment": "tsx scripts/experiment.ts",
-    "test:experiments:browser": "tsx scripts/experiment-browser-check.ts"
+    "test:experiments:browser": "tsx scripts/experiment-browser-check.ts && tsx scripts/interactive-experiment-browser-check.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.5",

@@ -1,0 +1,172 @@
+.experiment-workspace {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+.experiment-toolbar,
+.experiment-session-heading,
+.experiment-footer {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.experiment-history {
+  flex: 1;
+  max-width: 620px;
+  min-width: 0;
+}
+.experiment-workspace label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 550;
+}
+.experiment-workspace .experiment-setup {
+  max-width: 760px;
+  display: grid;
+  gap: 12px;
+}
+.experiment-setup > .btn {
+  justify-self: start;
+}
+.experiment-settings {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 16px;
+}
+.experiment-session-heading h2 {
+  margin-bottom: 4px;
+  overflow-wrap: anywhere;
+}
+.experiment-workspace p {
+  margin-bottom: 0;
+}
+.experiment-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  gap: 20px;
+  align-items: start;
+}
+.experiment-workspace .experiment-chat {
+  padding: 0;
+  overflow: hidden;
+}
+.experiment-log {
+  height: clamp(220px, 34vh, 420px);
+  overflow-y: auto;
+  scrollbar-color: #9ca9bd #f0f3f7;
+}
+.experiment-message {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+.experiment-message.own {
+  background: var(--surface-subtle, #f0f3f7);
+}
+.experiment-message > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.experiment-message span,
+.experiment-message time {
+  font-size: 12px;
+  color: var(--muted);
+}
+.experiment-message time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.experiment-message p {
+  white-space: pre-wrap;
+}
+.experiment-empty {
+  padding: 32px 24px;
+  color: var(--muted);
+  max-width: 65ch;
+}
+.experiment-empty h3 {
+  color: var(--ink);
+}
+.experiment-composer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 12px;
+}
+.experiment-composer textarea {
+  resize: vertical;
+  max-height: 240px;
+}
+.experiment-personas details,
+.experiment-trace > details {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+.experiment-personas summary,
+.experiment-trace summary {
+  cursor: pointer;
+  font-weight: 550;
+  min-height: 32px;
+}
+.experiment-personas details p {
+  margin: 8px 0 12px;
+}
+.experiment-personas dd {
+  margin: 0 0 12px;
+  color: var(--muted);
+}
+.experiment-workspace pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 480px;
+  overflow-y: auto;
+  font-size: 12px;
+  background: #f0f3f7;
+  padding: 12px;
+  margin-top: 12px;
+}
+.experiment-workspace .experiment-trace {
+  display: grid;
+  gap: 16px;
+}
+@media (max-width: 1000px) {
+  .experiment-columns {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 520px) {
+  .experiment-settings {
+    grid-template-columns: 1fr;
+  }
+  .experiment-history {
+    flex-basis: 100%;
+  }
+  .experiment-composer,
+  .experiment-message {
+    padding: 16px;
+  }
+  .experiment-view-controls {
+    align-items: stretch;
+  }
+  .experiment-view-controls > .hint {
+    flex-basis: 100%;
+  }
+}
+
+.experiment-workspace .toolbar {
+  margin: 0;
+}
+.experiment-workspace .card {
+  margin-bottom: 0;
+}
+.experiment-personas > details > summary {
+  min-height: 44px;
+}
+.experiment-workspace .experiment-session-heading {
+  gap: 8px;
+}

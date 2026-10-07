@@ -532,7 +532,14 @@
     font-size: 12px;
     border-radius: 6px 6px 0 0;
   }
+  .workspace-nav .nav-link {
+    flex-direction: column;
+  }
+  .workspace-nav .nav-link span {
+    word-break: keep-all;
+  }
   .workspace-nav svg {
+    flex-shrink: 0;
     width: 16px;
   }
   .sidebar-footer {

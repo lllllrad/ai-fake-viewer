@@ -103,3 +103,11 @@ sh run-command.sh npm run test:browser
 ```
 
 Browser tests use synthetic fixtures on ports 33219/33220 and ignored `test-results/`. See [verification](docs/specifications/behavior.md) and [remaining acceptance](docs/specifications/behavior.md). Code lives in `apps/server`, `apps/web`, `packages` and `workers`; build after web changes.
+
+## Interactive AI viewer tests
+
+In the administrator workspace, open **AI viewer tests** to speak through a
+microphone or type to an isolated cast. Inspect their personas beside the
+conversation and open execution history only when needed. Saved tests can be
+reopened, exported and deleted independently of a broadcast.
+See [interactive tests and replay experiments](docs/development/experiments.md).

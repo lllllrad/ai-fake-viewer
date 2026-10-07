@@ -190,7 +190,7 @@ Reader and overlay messages use their own body roles for comfortable scanning. P
 
 Desktop uses a sticky full-height task sidebar (`208px`) beside a fluid main area capped at `1680px`. Main padding is `28px 32px 16px`. Live conversation takes the flexible column; contextual tools occupy a `290–340px` column, expanding to `390px` at `1600px` and above. Main gaps use the documented spacing scale.
 
-At `1150px` and below, the sidebar narrows to `178px`, main padding becomes `24px` and connection cards stack. At `900px` and below, live conversation stacks above context. At `767px` and below, the sidebar becomes a sticky top header with four task destinations, emergency AI stop and sign-out; the main area uses `20px 16px` padding and the context panels stack. Buttons and primary form targets reach a `44px` minimum height. Narrow participation grids collapse at `680px`; reader spacing adapts at `520px`.
+At `1150px` and below, the sidebar narrows to `178px`, main padding becomes `24px` and connection cards stack. At `900px` and below, live conversation stacks above context. At `767px` and below, the sidebar becomes a sticky top header with five task destinations, each with an icon above its label, emergency AI stop and sign-out; the main area uses `20px 16px` padding and the context panels stack. Buttons and primary form targets reach a `44px` minimum height. Narrow participation grids collapse at `680px`; reader spacing adapts at `520px`.
 
 The reader is centered at a maximum `820px`; its bottom toolbar stays reachable. The overlay fills the viewport, keeps the page transparent and aligns bounded message rows toward the bottom. It clips overflow for OBS output. Long labels wrap rather than expanding the workspace horizontally.
 
@@ -216,7 +216,7 @@ Bootstrap form controls and selects use white surfaces, slate outlines and a min
 
 ### Navigation
 
-The four task destinations are Live, Broadcast preparation, Participants and Records/rights, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Radix section tabs use automatic keyboard activation and a blue underline for selection; their panels remain mounted so changing sections preserves component lifetimes. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
+The five task destinations are Live, Broadcast preparation, Participants, Records/rights and AI testing, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Radix section tabs use automatic keyboard activation and a blue underline for selection; their panels remain mounted so changing sections preserves component lifetimes. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
 
 ### Status badges and alerts
 

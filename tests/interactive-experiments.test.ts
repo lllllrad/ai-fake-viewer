@@ -1,0 +1,290 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { randomUUID } from "node:crypto";
+import Fastify from "fastify";
+import { ExperimentWorkspace } from "../packages/infrastructure/experiments/interactive.ts";
+import { loadPipelineProfile } from "../packages/infrastructure/reactions/pipeline-profile.ts";
+import { fixtureModel } from "../packages/infrastructure/experiments/models.ts";
+import { registerExperimentRoutes } from "../apps/server/http/experiment-routes.ts";
+import { registerHttpErrors } from "../apps/server/http/errors.ts";
+import type { Model } from "../packages/application/reactions/model-port.ts";
+import { createApp } from "../apps/server/app.ts";
+import { configSchema } from "../packages/config.ts";
+
+const until = async (condition: () => boolean) => {
+  const deadline = Date.now() + 4000;
+  while (!condition()) {
+    if (Date.now() > deadline) throw Error("Timed out waiting for experiment");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+};
+function workspace(model: Model<Buffer> = fixtureModel) {
+  const directory = mkdtempSync(join(tmpdir(), "interactive-experiment-"));
+  const pipeline = loadPipelineProfile();
+  const service = new ExperimentWorkspace(
+    directory,
+    pipeline,
+    () => ({ model, name: "fixture" }),
+    () => 0,
+  );
+  return {
+    service,
+    directory,
+    cleanup: () => {
+      service.close();
+      rmSync(directory, { recursive: true, force: true });
+    },
+  };
+}
+
+test("interactive speech drives the production cast, records review, and survives restart as history", async () => {
+  const { service, directory, cleanup } = workspace();
+  try {
+    const session = service.start({
+      topic: "퍼즐 게임",
+      provider: "fixture",
+      maxCalls: 6,
+    });
+    assert.equal(session.personas.length, 6);
+    assert.throws(
+      () => service.start({ topic: "other", provider: "fixture", maxCalls: 6 }),
+      /먼저 종료/,
+    );
+    const inputId = randomUUID();
+    service
+      .current(session.id)
+      .input(inputId, "퍼즐 게임 처음 하는데 어떤가요?", "text");
+    service
+      .current(session.id)
+      .input(inputId, "퍼즐 게임 처음 하는데 어떤가요?", "text");
+    await until(() => service.read(session.id).session.messages.length === 1);
+    const trace = service.read(session.id);
+    assert.equal(trace.session.inputs.length, 1);
+    assert.equal(trace.session.calls, 2);
+    assert.equal(trace.calls.length, 2);
+    assert.ok(
+      trace.diagnostics.some((entry: any) => entry.event === "published"),
+    );
+    assert.match(trace.session.messages[0].text, /퍼즐 게임/);
+    service.current(session.id).stop();
+    service.close();
+    const reopened = new ExperimentWorkspace(
+      directory,
+      loadPipelineProfile(),
+      () => {
+        throw Error("No model calls on history");
+      },
+    );
+    assert.equal(reopened.list().length, 1);
+    assert.equal(reopened.read(session.id).session.messages.length, 1);
+    assert.equal(
+      reopened.read(session.id).session.inputs[0].text,
+      "퍼즐 게임 처음 하는데 어떤가요?",
+    );
+    assert.ok(reopened.read(session.id).session.endedAt);
+    assert.throws(() => reopened.current(session.id), /진행 중/);
+    reopened.delete(session.id);
+    assert.equal(reopened.list().length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("stop cancels in-flight work and suppresses late publication and further input", async () => {
+  let finish!: () => void;
+  let started = false;
+  let aborted = false;
+  const { service, cleanup } = workspace(async (input, signal) => {
+    started = true;
+    signal.addEventListener(
+      "abort",
+      () => {
+        aborted = true;
+      },
+      { once: true },
+    );
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    return fixtureModel(input, new AbortController().signal);
+  });
+  try {
+    const session = service.start({
+      topic: "게임",
+      provider: "fixture",
+      maxCalls: 6,
+    });
+    service
+      .current(session.id)
+      .input(randomUUID(), "게임 어떻게 할까요?", "text");
+    await until(() => started);
+    service.current(session.id).stop();
+    assert.equal(aborted, true);
+    finish();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(service.read(session.id).session.messages.length, 0);
+    assert.equal(service.read(session.id).calls[0].error, "canceled");
+    assert.throws(
+      () => service.current(session.id).input(randomUUID(), "late", "text"),
+      /진행 중/,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("call limits stop the test without fabricating a reviewed reply", async () => {
+  const { service, cleanup } = workspace();
+  try {
+    const session = service.start({
+      topic: "게임",
+      provider: "fixture",
+      maxCalls: 1,
+    });
+    service
+      .current(session.id)
+      .input(randomUUID(), "게임 어떻게 할까요?", "text");
+    await until(
+      () => service.read(session.id).session.state === "budget_exhausted",
+    );
+    assert.equal(service.read(session.id).session.calls, 1);
+    assert.equal(service.read(session.id).session.messages.length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test("microphone route transcribes a bounded upload and admits only current-session speech", async () => {
+  const { service, cleanup } = workspace();
+  const app = Fastify();
+  registerHttpErrors(app);
+  let seen = 0;
+  let finish: (() => void) | undefined;
+  registerExperimentRoutes(app, service, (async (url, init) => {
+    seen++;
+    assert.equal(url, "https://api.openai.com/v1/audio/transcriptions");
+    const body = init!.body as FormData;
+    assert.equal(body.get("model"), "whisper-1");
+    assert.equal((body.get("file") as File).name, "recording.webm");
+    assert.equal((body.get("file") as File).type, "audio/webm");
+    if (seen === 2)
+      await new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+    return Response.json({ text: "마이크로 전한 게임 이야기" });
+  }) as typeof fetch);
+  const prior = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "fixture-only";
+  try {
+    const session = service.start({
+      topic: "게임",
+      provider: "fixture",
+      maxCalls: 6,
+    });
+    const payload = {
+      id: randomUUID(),
+      audio: Buffer.from("fixture audio").toString("base64"),
+      mime: "audio/webm",
+    };
+    const upload = () =>
+      app.inject({
+        method: "POST",
+        url: `/api/admin/experiments/${session.id}/audio`,
+        payload,
+      });
+    assert.equal((await upload()).statusCode, 200);
+    assert.equal((await upload()).statusCode, 200);
+    assert.equal(seen, 1);
+    assert.equal(
+      service.read(session.id).session.inputs[0].source,
+      "microphone",
+    );
+    const pending = app.inject({
+      method: "POST",
+      url: `/api/admin/experiments/${session.id}/audio`,
+      payload: { ...payload, id: randomUUID() },
+    });
+    const started = pending.then((result) => result);
+    await until(() => !!finish);
+    service.current(session.id).stop();
+    finish!();
+    assert.equal((await started).statusCode, 409);
+    assert.equal(service.read(session.id).session.inputs.length, 1);
+    assert.equal(service.read(session.id).session.microphoneCalls, 2);
+  } finally {
+    if (prior === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prior;
+    await app.close();
+    cleanup();
+  }
+});
+
+test("experiment APIs require administrator auth and stay isolated from the broadcast", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "experiment-http-"));
+  const instance = await createApp(
+    configSchema.parse({ database: ":memory:" }),
+    {
+      demo: true,
+      adminToken: "a".repeat(64),
+      readerToken: "r".repeat(64),
+      encryptionKey: "e".repeat(64),
+      startInputs: false,
+      experimentDirectory: join(directory, "experiments"),
+      chatgptTokenPath: join(directory, "chatgpt"),
+      youtubeTokenPath: join(directory, "youtube"),
+      chzzkTokenPath: join(directory, "chzzk"),
+      soopTokenPath: join(directory, "soop"),
+    },
+  );
+  try {
+    const { app, store } = instance;
+    const headers = {
+      host: "127.0.0.1:3210",
+      authorization: `Bearer ${"a".repeat(64)}`,
+    };
+    assert.equal(
+      (
+        await app.inject({
+          url: "/api/admin/experiments",
+          headers: { host: headers.host },
+        })
+      ).statusCode,
+      401,
+    );
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/experiments",
+      headers,
+      payload: { topic: "개발자 테스트", provider: "fixture", maxCalls: 6 },
+    });
+    assert.equal(response.statusCode, 200);
+    const session = response.json();
+    const input = await app.inject({
+      method: "POST",
+      url: `/api/admin/experiments/${session.id}/input`,
+      headers,
+      payload: { id: randomUUID(), text: "테스트 입력" },
+    });
+    assert.equal(input.statusCode, 200);
+    assert.equal(store.transcriptRows().length, 0);
+    assert.equal(store.snapshot().messages.length, 0);
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/admin/experiments",
+      headers,
+      payload: { topic: "", provider: "arbitrary" },
+    });
+    assert.equal(invalid.statusCode, 400);
+    const trace = await app.inject({
+      url: `/api/admin/experiments/${session.id}/trace`,
+      headers,
+    });
+    assert.equal(trace.statusCode, 200);
+  } finally {
+    await instance.app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
