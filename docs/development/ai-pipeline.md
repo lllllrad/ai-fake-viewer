@@ -48,7 +48,7 @@ flowchart TD
 
 ### 1. Audio capture and transcription
 
-The configured audio source is transcribed by Groq; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](../operations/setup.md#broadcast-audio-and-transcription).
+The configured audio source is transcribed by the configured OpenAI or Groq provider; recent transcript text can enter the selected Responses API model. Session transcripts support authenticated export. Withdrawal/context invalidation clears speech history and discards in-flight results. No automatic speaker-to-viewer consent mapping is inferred. See [audio setup](../operations/setup.md#broadcast-audio-and-transcription).
 
 ### 2. Video capture and inspection
 

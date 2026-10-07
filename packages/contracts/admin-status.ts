@@ -62,6 +62,7 @@ export const adminStatusSchema = z.object({
     z.object({ api: z.string(), operation: z.string(), message: z.string() }),
   ),
   audio: z.object({
+    provider: z.enum(["groq", "openai"]).default("groq"),
     state: z.string(),
     configured: z.boolean(),
     credentialsReady: z.boolean(),

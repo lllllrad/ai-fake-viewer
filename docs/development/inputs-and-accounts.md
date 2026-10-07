@@ -160,8 +160,11 @@ response.
 
 The [speech transcription use case](../../packages/application/inputs/transcribe-speech.ts)
 owns durable request reservation, current-context checks, text normalization and
-publication outcomes. The [Groq adapter](../../packages/infrastructure/inputs/groq-speech.ts)
+publication outcomes. The [speech provider adapter](../../packages/infrastructure/inputs/speech-provider.ts)
 owns WAV encoding, multipart request fields and provider response/error parsing.
+Explicit `audio.provider` selection chooses OpenAI `whisper-1` with
+`OPENAI_API_KEY` or Groq `whisper-large-v3-turbo` with `GROQ_API_KEY`.
+Missing selection defaults to Groq for compatibility; failures never switch providers.
 The existing worker coordinator supplies cancellation, clocks and publication
 callbacks. Failed request-count persistence sends no audio and conservatively retains
 the attempted count because a throwing callback may already have committed. Late results and failures after context reset

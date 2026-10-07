@@ -87,7 +87,10 @@ export function MediaConnections({
         </section>
         <section className="card" id="audio-details">
           <div className="section-title">
-            <h3>음성 전사 · Groq</h3>
+            <h3>
+              음성 전사 ·{" "}
+              {status.audio.provider === "openai" ? "OpenAI Whisper" : "Groq"}
+            </h3>
             <span className="status">{stale ? "확인 불가" : audio.label}</span>
           </div>
           {!stale && audio.hint && <p>{audio.hint}</p>}
@@ -98,7 +101,11 @@ export function MediaConnections({
           </p>
           <p className="hint">
             방송 음성을 전사해 최근 10청크를 AI 입력에 사용합니다. config.yaml의
-            음성 입력과 GROQ_API_KEY를 설정하세요.
+            audio.url과 audio.provider,{" "}
+            {status.audio.provider === "openai"
+              ? "OPENAI_API_KEY"
+              : "GROQ_API_KEY"}
+            를 설정하세요.
           </p>
           <div className="toolbar">
             <Button

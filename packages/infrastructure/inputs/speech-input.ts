@@ -7,9 +7,9 @@ import {
   transcribeSpeech,
   type Transcript,
 } from "../../application/inputs/transcribe-speech.ts";
-import { groqSpeech } from "./groq-speech.ts";
+import { providerSpeech, speechApiKey } from "./speech-provider.ts";
 export type { Transcript } from "../../application/inputs/transcribe-speech.ts";
-export { wavFromPcm } from "./groq-speech.ts";
+export { wavFromPcm } from "./speech-provider.ts";
 
 export class Transcriber {
   allowProcessing: () => boolean = () => true;
@@ -48,7 +48,7 @@ export class Transcriber {
       this.state = "config_required";
       return;
     }
-    if (!process.env.GROQ_API_KEY) {
+    if (!speechApiKey(this.config.provider)) {
       this.state = "config_required";
       return;
     }
@@ -95,7 +95,7 @@ export class Transcriber {
       this.worker.stop();
       return;
     }
-    const key = process.env.GROQ_API_KEY;
+    const key = speechApiKey(this.config.provider);
     if (!key) return;
     const generation = this.generation;
     const contextRevision = this.contextRevision;
@@ -119,7 +119,8 @@ export class Transcriber {
           this.onRequest?.(this.requests);
         },
         request: () =>
-          groqSpeech({
+          providerSpeech({
+            provider: this.config.provider,
             pcm,
             language: this.config.language,
             key,

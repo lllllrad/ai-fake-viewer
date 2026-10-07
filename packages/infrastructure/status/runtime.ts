@@ -123,10 +123,12 @@ export class RuntimeStatusSource {
         youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
         chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
         audioState: transcriber.state,
+        audioProvider: config.audio.provider,
         modelState: scheduler.state,
         modelIssue: scheduler.lastIssue,
       }),
       audio: {
+        provider: config.audio.provider,
         state: transcriber.state,
         configured: !!config.audio.url,
         credentialsReady: credentials.speech,

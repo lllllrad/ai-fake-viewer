@@ -1,3 +1,4 @@
+import { speechApiKey } from "../../packages/infrastructure/inputs/speech-provider.ts";
 import {
   loadPipelineProfile,
   applyPipelineProfile,
@@ -445,7 +446,7 @@ async function assembleApp(
     readyComponents,
     now: () => Date.now(),
     credentials: () => ({
-      speech: !!process.env.GROQ_API_KEY,
+      speech: !!speechApiKey(config.audio.provider),
       youtube: !!(
         process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
       ),

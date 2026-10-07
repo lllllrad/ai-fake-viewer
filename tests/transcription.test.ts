@@ -22,55 +22,70 @@ import {
 
 const audioUrl = "rtmp://127.0.0.1:1935/program?user=reader&pass=private";
 
-test("Groq Whisper receives bounded WAV chunks and keeps transcript private", async () => {
-  const oldKey = process.env.GROQ_API_KEY;
-  process.env.GROQ_API_KEY = "fixture-groq-key";
-  let seen = 0;
-  const request = (async (url: string, init: RequestInit) => {
-    seen++;
-    assert.equal(url, "https://api.groq.com/openai/v1/audio/transcriptions");
-    assert.equal(init.method, "POST");
-    assert.equal(
-      (init.headers as Record<string, string>).Authorization,
-      "Bearer fixture-groq-key",
-    );
-    const body = init.body as FormData;
-    assert.equal(body.get("model"), "whisper-large-v3-turbo");
-    assert.equal(body.get("response_format"), "json");
-    assert.equal(body.get("language"), "ko");
-    const file = body.get("file") as File;
-    const bytes = Buffer.from(await file.arrayBuffer());
-    assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
-    assert.equal(bytes.readUInt32LE(24), 16000);
-    assert.equal(bytes.readUInt16LE(22), 1);
-    assert.equal(bytes.length, 44 + 320000);
-    return Response.json({ text: "화면을 봐 주세요" });
-  }) as typeof fetch;
-  try {
-    const config = configSchema.parse({
-      audio: { url: audioUrl, maxRequests: 1, language: "ko" },
-    });
-    const store = new Store(":memory:");
-    const transcription = new Transcriber(config.audio, request, (entry) =>
-      store.recordTranscript(entry),
-    );
-    transcription.state = "receiving";
-    const pcm = Buffer.alloc(320000);
-    assert.equal(wavFromPcm(pcm).length, 320044);
-    await transcription.transcribe(pcm);
-    assert.equal(seen, 1);
-    assert.equal(transcription.recent()[0]?.text, "화면을 봐 주세요");
-    assert.equal(store.transcriptRows()[0]?.text, "화면을 봐 주세요");
-    assert.equal(store.snapshot().messages.length, 0);
-    assert.equal(transcription.state, "budget_exhausted");
-    await transcription.transcribe(pcm);
-    assert.equal(seen, 1);
-    store.close();
-  } finally {
-    if (oldKey === undefined) delete process.env.GROQ_API_KEY;
-    else process.env.GROQ_API_KEY = oldKey;
-  }
-});
+for (const { provider, keyName, endpoint, model } of [
+  {
+    provider: "groq",
+    keyName: "GROQ_API_KEY",
+    endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+    model: "whisper-large-v3-turbo",
+  },
+  {
+    provider: "openai",
+    keyName: "OPENAI_API_KEY",
+    endpoint: "https://api.openai.com/v1/audio/transcriptions",
+    model: "whisper-1",
+  },
+] as const) {
+  test(`${provider} Whisper receives bounded WAV chunks and keeps transcript private`, async () => {
+    const oldKey = process.env[keyName];
+    process.env[keyName] = "fixture-groq-key";
+    let seen = 0;
+    const request = (async (url: string, init: RequestInit) => {
+      seen++;
+      assert.equal(url, endpoint);
+      assert.equal(init.method, "POST");
+      assert.equal(
+        (init.headers as Record<string, string>).Authorization,
+        "Bearer fixture-groq-key",
+      );
+      const body = init.body as FormData;
+      assert.equal(body.get("model"), model);
+      assert.equal(body.get("response_format"), "json");
+      assert.equal(body.get("language"), "ko");
+      const file = body.get("file") as File;
+      const bytes = Buffer.from(await file.arrayBuffer());
+      assert.equal(bytes.toString("ascii", 0, 4), "RIFF");
+      assert.equal(bytes.readUInt32LE(24), 16000);
+      assert.equal(bytes.readUInt16LE(22), 1);
+      assert.equal(bytes.length, 44 + 320000);
+      return Response.json({ text: "화면을 봐 주세요" });
+    }) as typeof fetch;
+    try {
+      const config = configSchema.parse({
+        audio: { provider, url: audioUrl, maxRequests: 1, language: "ko" },
+      });
+      const store = new Store(":memory:");
+      const transcription = new Transcriber(config.audio, request, (entry) =>
+        store.recordTranscript(entry),
+      );
+      transcription.state = "receiving";
+      const pcm = Buffer.alloc(320000);
+      assert.equal(wavFromPcm(pcm).length, 320044);
+      await transcription.transcribe(pcm);
+      assert.equal(seen, 1);
+      assert.equal(transcription.recent()[0]?.text, "화면을 봐 주세요");
+      assert.equal(store.transcriptRows()[0]?.text, "화면을 봐 주세요");
+      assert.equal(store.snapshot().messages.length, 0);
+      assert.equal(transcription.state, "budget_exhausted");
+      await transcription.transcribe(pcm);
+      assert.equal(seen, 1);
+      store.close();
+    } finally {
+      if (oldKey === undefined) delete process.env[keyName];
+      else process.env[keyName] = oldKey;
+    }
+  });
+}
 
 test("transcription language defaults to auto and validates code format", () => {
   assert.equal(configSchema.parse({}).audio.language, "");
@@ -538,5 +553,105 @@ test("opt-in live audio stores and exports session transcripts, then erases spee
   } finally {
     await app.close();
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("speech provider selection preserves old configurations and rejects unknown providers", () => {
+  assert.equal(configSchema.parse({}).audio.provider, "groq");
+  assert.equal(configSchema.parse({ audio: {} }).audio.provider, "groq");
+  assert.equal(
+    configSchema.safeParse({ audio: { provider: "unknown" } }).success,
+    false,
+  );
+});
+
+test("OpenAI speech requires its own API key and reports matching status", async (t) => {
+  const prior = process.env.OPENAI_API_KEY;
+  const groq = process.env.GROQ_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  process.env.GROQ_API_KEY = "fixture-other-provider";
+  t.after(() => {
+    if (prior === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prior;
+    if (groq === undefined) delete process.env.GROQ_API_KEY;
+    else process.env.GROQ_API_KEY = groq;
+  });
+  const config = configSchema.parse({
+    database: ":memory:",
+    audio: { provider: "openai", url: audioUrl },
+  });
+  const tr = new Transcriber(config.audio, async () => {
+    throw new Error("must not send without selected key");
+  });
+  tr.start();
+  assert.equal(tr.state, "config_required");
+  assert.equal(tr.child, undefined);
+  await tr.transcribe(Buffer.alloc(320));
+  assert.equal(tr.requests, 0);
+  const tokens = mkdtempSync(join(tmpdir(), "speech-provider-status-"));
+  t.after(() => rmSync(tokens, { recursive: true, force: true }));
+  const { app } = await createApp(config, {
+    chatgptTokenPath: join(tokens, "chatgpt"),
+    youtubeTokenPath: join(tokens, "youtube"),
+    chzzkTokenPath: join(tokens, "chzzk"),
+    soopTokenPath: join(tokens, "soop"),
+    demo: true,
+    adminToken: "a".repeat(64),
+    readerToken: "r".repeat(64),
+    encryptionKey: "e".repeat(64),
+    startInputs: false,
+  });
+  t.after(() => app.close());
+  const response = await app.inject({
+    method: "GET",
+    url: "/api/admin/status",
+    headers: {
+      host: `127.0.0.1:${config.port}`,
+      authorization: `Bearer ${"a".repeat(64)}`,
+    },
+  });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().audio.provider, "openai");
+  assert.equal(response.json().audio.credentialsReady, false);
+  process.env.OPENAI_API_KEY = "fixture-openai";
+  const ready = await app.inject({
+    method: "GET",
+    url: "/api/admin/status",
+    headers: {
+      host: `127.0.0.1:${config.port}`,
+      authorization: `Bearer ${"a".repeat(64)}`,
+    },
+  });
+  assert.equal(ready.json().audio.credentialsReady, true);
+});
+
+test("OpenAI speech errors retain provider scope and never fall back", async (t) => {
+  const prior = process.env.OPENAI_API_KEY;
+  process.env.OPENAI_API_KEY = "fixture-openai";
+  t.after(() => {
+    if (prior === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = prior;
+  });
+  for (const [status, state] of [
+    [401, "auth_required"],
+    [403, "auth_required"],
+    [429, "quota_blocked"],
+    [500, "provider_error"],
+  ] as const) {
+    let calls = 0;
+    const tr = new Transcriber(
+      configSchema.parse({ audio: { provider: "openai" } }).audio,
+      async (url) => {
+        calls++;
+        assert.equal(url, "https://api.openai.com/v1/audio/transcriptions");
+        return new Response("", { status });
+      },
+    );
+    tr.state = "receiving";
+    await tr.transcribe(Buffer.alloc(320));
+    assert.equal(tr.state, state);
+    assert.equal(calls, 1);
+    assert.equal(tr.requests, 1);
+    tr.stop();
   }
 });

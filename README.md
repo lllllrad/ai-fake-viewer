@@ -35,7 +35,7 @@ Copy the structure in [config.example.yaml](config.example.yaml) into ignored `c
 
 The inference interface is the **Responses API**. Choose `ai.provider: chatgpt_subscription` for **Sign in with ChatGPT** and eligible ChatGPT plan usage without an API key, or `openai_api` for an independently billed API key. Keep `ai.gate.enabled: false`. Admin provides the **Sign in with ChatGPT** flow, saved accounts and model selection; use the same ChatGPT account you use for Codex, with this app's own official sign-in. It does not read Codex CLI credential files or run Codex CLI tools.
 
-For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1` and the exact selected model slug. `OPENAI_API_KEY` and `OPENAI_MODEL` are not required. For API mode use `provider: openai_api`, `contract: API`, private `OPENAI_API_KEY` and matching `OPENAI_MODEL`. Both modes require reviewed actual processing conditions and retain consent/withdrawal guards. API region/retention claims must not be copied to a subscription profile without verification. Groq STT is opt-in; Jev and unofficial SOOP remain unavailable. The [official Sign in with ChatGPT integration](https://developers.openai.com/siwc/token-sharing-open-source) is subject to account eligibility and available models.
+For subscription mode set `privacy.processing.provider: chatgpt_subscription`, `contract: ChatGPT subscription`, `endpoint: https://api.openai.com/v1` and the exact selected model slug. `OPENAI_API_KEY` and `OPENAI_MODEL` are not required. For API mode use `provider: openai_api`, `contract: API`, private `OPENAI_API_KEY` and matching `OPENAI_MODEL`. Both modes require reviewed actual processing conditions and retain consent/withdrawal guards. API region/retention claims must not be copied to a subscription profile without verification. Speech transcription is opt-in; Jev and unofficial SOOP remain unavailable. The [official Sign in with ChatGPT integration](https://developers.openai.com/siwc/token-sharing-open-source) is subject to account eligibility and available models.
 
 ### YouTube: official OAuth, gRPC/REST and fixed notices
 
@@ -61,9 +61,9 @@ The current live profile disables capture at the processing boundary: other on-s
 
 Use the app's OBS Browser Source overlay for publication. OBS Program capture and broadcast transcription run from their configured sources without separate privacy enable switches. See [live setup](docs/operations/setup.md) for LAN reader/overlay access.
 
-## Groq speech and AI model data review
+## Speech and AI model data review
 
-Configure `audio.url` and `GROQ_API_KEY` for broadcast transcription, recent speech as AI context and authenticated transcript export. Transcripts survive restart and are cleared on withdrawal, context invalidation or broadcast end/reset. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
+Configure `audio.url`, `audio.provider: openai` and `OPENAI_API_KEY` (or `audio.provider: groq` and `GROQ_API_KEY`) for broadcast transcription, recent speech as AI context and authenticated transcript export. Transcripts survive restart and are cleared on withdrawal, context invalidation or broadcast end/reset. Downloaded exports are operator-managed copies. See [live audio setup](docs/operations/setup.md#broadcast-audio-and-transcription).
 
 ### Legacy Jev filter (disabled live)
 

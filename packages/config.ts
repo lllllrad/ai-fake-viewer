@@ -123,6 +123,7 @@ export const configSchema = z
       }),
     audio: z
       .object({
+        provider: z.enum(["groq", "openai"]).default("groq"),
         ffmpeg: z.string().default("ffmpeg"),
         url: z.string().max(1024).default(""),
         language: z
@@ -137,6 +138,7 @@ export const configSchema = z
       })
       .strict()
       .default({
+        provider: "groq",
         ffmpeg: "ffmpeg",
         url: "",
         chunkSeconds: 10,

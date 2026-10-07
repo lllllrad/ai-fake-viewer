@@ -35,6 +35,7 @@ capture:
   # Empty is supported; no mask confirmation is required.
   masks: []
 audio:
+  provider: openai # whisper-1 with OPENAI_API_KEY; groq uses GROQ_API_KEY
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
   url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
   language: ko # input language (ISO-639-1); "" for automatic detection

@@ -16,6 +16,7 @@ const { app, store, capture, scheduler } = await createApp(
     port,
     youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     database: ":memory:",
+    audio: { provider: "openai" },
     chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
     soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
   }),
@@ -172,7 +173,7 @@ try {
   await adminPage.goto(`${origin}/admin#audio-details`);
   await adminPage.reload();
   await expect(
-    adminPage.getByRole("heading", { name: "음성 전사 · Groq" }),
+    adminPage.getByRole("heading", { name: "음성 전사 · OpenAI Whisper" }),
   ).toBeFocused();
   await adminPage.goto(`${origin}/admin#program-details`);
   await expect(

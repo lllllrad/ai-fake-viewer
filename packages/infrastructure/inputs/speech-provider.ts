@@ -1,5 +1,22 @@
 import { z } from "zod";
 import { SpeechProviderError } from "../../application/inputs/transcribe-speech.ts";
+import type { Config } from "../../config.ts";
+
+const speechProviders = {
+  groq: {
+    endpoint: "https://api.groq.com/openai/v1/audio/transcriptions",
+    model: "whisper-large-v3-turbo",
+    key: "GROQ_API_KEY",
+  },
+  openai: {
+    endpoint: "https://api.openai.com/v1/audio/transcriptions",
+    model: "whisper-1",
+    key: "OPENAI_API_KEY",
+  },
+} as const;
+export function speechApiKey(provider: Config["audio"]["provider"]) {
+  return process.env[speechProviders[provider].key];
+}
 export function wavFromPcm(pcm: Buffer) {
   const header = Buffer.alloc(44);
   header.write("RIFF", 0);
@@ -17,8 +34,9 @@ export function wavFromPcm(pcm: Buffer) {
   return Buffer.concat([header, pcm]);
 }
 const responseSchema = z.object({ text: z.string().max(4000) });
-/** Existing Groq wire protocol, isolated from context lifetime and durable publication. */
-export async function groqSpeech(options: {
+/** Multipart transcription protocol shared by the explicitly selected providers. */
+export async function providerSpeech(options: {
+  provider: Config["audio"]["provider"];
   pcm: Buffer;
   language: string;
   key: string;
@@ -26,7 +44,7 @@ export async function groqSpeech(options: {
   request: typeof fetch;
 }): Promise<string> {
   const body = new FormData();
-  body.set("model", "whisper-large-v3-turbo");
+  body.set("model", speechProviders[options.provider].model);
   body.set("response_format", "json");
   if (options.language) body.set("language", options.language);
   body.set(
@@ -35,7 +53,7 @@ export async function groqSpeech(options: {
     "audio.wav",
   );
   const result = await options.request(
-    "https://api.groq.com/openai/v1/audio/transcriptions",
+    speechProviders[options.provider].endpoint,
     {
       method: "POST",
       headers: { Authorization: `Bearer ${options.key}` },

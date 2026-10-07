@@ -60,13 +60,13 @@ export function inputHealth(
     ended: "방송이 종료되었습니다.",
     budget_exhausted:
       scope === "transcription"
-        ? "Groq 음성 인식의 앱 호출 횟수 한도에 도달했습니다."
+        ? "음성 인식의 앱 호출 횟수 한도에 도달했습니다."
         : "앱에 설정한 호출 횟수 한도에 도달했습니다.",
     quota_blocked:
       scope === "chat_read"
         ? "채팅 조회·수신 API 한도에 도달했습니다."
         : scope === "transcription"
-          ? "Groq 음성 인식 API 한도에 도달했습니다."
+          ? "음성 인식 API 한도에 도달했습니다."
           : "해당 API 사용 한도에 도달했습니다.",
   };
   return {

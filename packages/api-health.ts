@@ -18,6 +18,7 @@ export function apiIssues(input: {
   youtubeSend: { state: string; failure?: ApiFailure };
   chzzkSend: { state: string; failure?: ApiFailure };
   audioState: string;
+  audioProvider?: "groq" | "openai";
   modelState: string;
   modelIssue?: { code: string };
 }) {
@@ -64,14 +65,20 @@ export function apiIssues(input: {
   }
   if (input.audioState === "budget_exhausted")
     issues.push({
-      api: "Groq Audio Transcriptions",
+      api:
+        input.audioProvider === "openai"
+          ? "OpenAI Audio Transcriptions"
+          : "Groq Audio Transcriptions",
       operation: "음성 인식",
       message:
         "앱에 설정한 전사 호출 횟수 한도(audio.maxRequests)에 도달했습니다. 채팅 조회·전송 한도와 별개입니다.",
     });
   if (input.audioState === "quota_blocked")
     issues.push({
-      api: "Groq Audio Transcriptions",
+      api:
+        input.audioProvider === "openai"
+          ? "OpenAI Audio Transcriptions"
+          : "Groq Audio Transcriptions",
       operation: "음성 인식",
       message: "음성 인식 API가 사용 한도(HTTP 429)로 요청을 거절했습니다.",
     });

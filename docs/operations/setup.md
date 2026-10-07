@@ -36,7 +36,7 @@ Choose `ai.provider: chatgpt_subscription` to use the Responses API through Sign
 
 Alternatively select `openai_api`, supply the API key/environment model and use an API contract profile with matching model/endpoint. Keep `ai.gate.enabled: false` for either service. There is no automatic fallback between the two contracts. A provider/model mismatch blocks transmission rather than requiring an API key for subscription users.
 
-Screen ingestion, broadcast audio, Groq transcription and authenticated transcript export use their configured sources. OBS can show the reader overlay. See input setup below. No screen confirmation or `programConfirmed` gate is needed.
+Screen ingestion, broadcast audio, OpenAI or Groq transcription and authenticated transcript export use their configured sources. OBS can show the reader overlay. See input setup below. No screen confirmation or `programConfirmed` gate is needed.
 
 ## 4. Connect real chat sources
 
@@ -108,10 +108,28 @@ Match the final published policy to the enabled profiles, transmitted fields, di
 
 ## Broadcast audio and transcription
 
-Configure `audio.url` and provide `GROQ_API_KEY`. No additional privacy enable flag is needed.
+Configure `audio.url` and select the speech provider independently of `ai.provider`:
+
+```yaml
+audio:
+  provider: openai
+  url: "rtmp://127.0.0.1:1935/program"
+  language: ko
+```
+
+OpenAI uses `whisper-1` through the [Audio Transcriptions API](https://developers.openai.com/api/docs/guides/speech-to-text)
+and requires a private `OPENAI_API_KEY`. Sign in with ChatGPT does not supply
+transcription credentials; no `OPENAI_MODEL` is needed for speech. The same API
+key may also be used for AI generation in API mode.
+To keep Groq, set `audio.provider: groq` and supply `GROQ_API_KEY`;
+it uses `whisper-large-v3-turbo`. Omitted `audio.provider` defaults to Groq
+for existing configuration compatibility; the example configuration selects OpenAI.
+There is no automatic provider fallback. Missing credentials for the selected
+provider require configuration even when the other provider has a key.
+No additional privacy enable flag is needed.
 Restart with `sh run-command.sh just server-restart`; the configured input starts
 automatically, and admin audio controls can stop/start it. Speech chunks use the
-existing Groq transcription adapter; recent transcripts can supply AI evidence
+selected transcription adapter; recent transcripts can supply AI evidence
 without a camera or new viewer chat. AI generation requires an enabled AI toggle, which survives restart.
 The dashboard shows the current transcript and an authenticated export link.
 
@@ -216,7 +234,7 @@ The dashboard reports API failures by provider and operation. YouTube lookup/cha
 receipt is separate from `liveChatMessages.insert` notice transmission. If receipt
 hits a limit and notice sending waits for that connection, the UI says so without
 claiming that the send API itself reached a limit. CHZZK User API identity lookup
-is distinguished from Chat API sending. Groq transcription and OpenAI Responses API
+is distinguished from Chat API sending. OpenAI or Groq transcription and OpenAI Responses API
 limits are separate from platform chat. App-configured call/token budgets are
 identified as local limits, not provider quota. An ambiguous permission/quota
 response remains explicitly ambiguous; the app does not infer that other methods
