@@ -37,7 +37,9 @@ export class SqliteAutomaticCast implements AutomaticCastRepository {
   }
   viewerNames() {
     return this.db
-      .prepare("SELECT name FROM actors_private WHERE session=?")
+      .prepare(
+        "SELECT name FROM actors_private WHERE session=? AND source<>'experiment'",
+      )
       .all(this.runtime.sessionId())
       .map((row) => String(row.name));
   }
@@ -78,6 +80,7 @@ export class SqliteAutomaticCast implements AutomaticCastRepository {
         generator: "automatic-research-composition",
         research_basis: researchBasis,
         sources: card.sources,
+        ...(card.nickname ? { nickname: card.nickname } : {}),
         validation: "schema-and-unique-name",
         human_review: false,
       };

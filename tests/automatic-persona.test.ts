@@ -40,6 +40,14 @@ test("automatic cast needs no authoring, model request or operator approval and 
   for (const card of cards) {
     assert.equal(card.provenance.research_basis, researchBasis);
     assert.equal(card.provenance.human_review, false);
+    assert.equal(
+      card.provenance.nickname.display_name,
+      card.definition.display_name_suggestion,
+    );
+    assert.equal(
+      card.provenance.nickname.persona_id,
+      card.definition.persona_id,
+    );
     assert.ok(card.definition.examples.some((e: any) => e.action === "skip"));
   }
   assert.equal(
@@ -58,6 +66,10 @@ test("automatic cast needs no authoring, model request or operator approval and 
   store = new Store(join(directory, "test.sqlite"));
   service = new PersonaService(store, undefined, config);
   assert.deepEqual(service.ensureAutomaticCast().cast, first.cast);
+  assert.deepEqual(
+    service.listCandidates(first.id).map((card) => card.provenance.nickname),
+    cards.map((card) => card.provenance.nickname),
+  );
   store.newSession();
   const next = service.ensureAutomaticCast();
   assert.notEqual(next.id, first.id);

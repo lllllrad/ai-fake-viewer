@@ -20,7 +20,8 @@ function fixture(t: TestContext) {
     transaction: (work) => store.transaction(work),
   });
   const composition = {
-    cards: automaticDefinitions,
+    cards: (topic: string, blockedNames?: readonly string[]) =>
+      automaticDefinitions(topic, undefined, blockedNames),
     researchBasis,
     id: randomUUID,
   };
@@ -82,20 +83,73 @@ test("a failed presence write rolls back every automatic cast record before retr
   assert.ok(service.ensure("Synthetic topic"));
   assert.equal(service.summary().length, 6);
 });
-test("automatic names avoid normalized viewer and cast collisions without mutating source cards", (t) => {
+test("automatic names avoid current viewer names and persist generation provenance", (t) => {
   const { store, service, composition } = fixture(t);
+  const ids = Array.from({ length: 6 }, () => randomUUID());
+  const build = (blockedNames: readonly string[] = []) => {
+    let i = 0;
+    return automaticDefinitions(
+      "Synthetic topic",
+      { index: () => 0, id: () => ids[i++] },
+      blockedNames,
+    );
+  };
+  const initial = build();
+  store.db
+    .prepare("INSERT INTO actors_private VALUES(?,?,?,?,?)")
+    .run(
+      "fixture",
+      store.sessionId,
+      "youtube",
+      "viewer",
+      initial[0].definition.display_name_suggestion,
+    );
+  composition.cards = (_topic, blockedNames) => build(blockedNames);
+  service.ensure("Synthetic topic");
+  const names = service.summary().map((member) => member.name);
+  assert.equal(new Set(names).size, 6);
+  assert(!names.includes(initial[0].definition.display_name_suggestion));
+  const metadata = store.db
+    .prepare("SELECT provenance FROM persona_versions")
+    .all()
+    .map((row) => JSON.parse(String(row.provenance)).nickname);
+  assert.equal(new Set(metadata.map((record) => record.family_key)).size, 6);
+  assert.deepEqual(
+    new Set(metadata.map((record) => record.display_name)),
+    new Set(names),
+  );
+  assert(metadata.every((record) => record.source === "synthetic"));
+  store.db
+    .prepare("INSERT INTO actors_private VALUES(?,?,?,?,?)")
+    .run(
+      "generated",
+      store.sessionId,
+      "experiment",
+      "persona-fixture",
+      names[0],
+    );
+  assert.ok(service.ensure("Same cast after its own chat"));
+  store.db
+    .prepare("UPDATE actors_private SET name=? WHERE id=?")
+    .run(names[0], "fixture");
+  assert.throws(
+    () => service.ensure("Changed topic"),
+    /NICKNAME_REVIEW_REQUIRED/,
+  );
+  assert.deepEqual(
+    service.summary().map((member) => member.name),
+    names,
+  );
+});
+test("invalid injected names fail atomically instead of adding UUID suffixes", (t) => {
+  const { service, composition } = fixture(t);
   const cards = automaticDefinitions("Synthetic topic");
   cards.forEach((card) => {
     card.definition.display_name_suggestion = "Ａ B!";
   });
-  store.db
-    .prepare("INSERT INTO actors_private VALUES(?,?,?,?,?)")
-    .run("fixture", store.sessionId, "youtube", "viewer", "ab");
   composition.cards = () => cards;
-  service.ensure("Synthetic topic");
-  const names = service.summary().map((member) => member.name);
-  assert.equal(new Set(names).size, 6);
-  assert(names.every((name) => name.startsWith("시청자")));
+  assert.throws(() => service.ensure("Synthetic topic"), /NICKNAME_COLLISION/);
+  assert.equal(service.summary().length, 0);
   assert(
     cards.every((card) => card.definition.display_name_suggestion === "Ａ B!"),
   );

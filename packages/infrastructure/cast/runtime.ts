@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Store } from "../../storage.ts";
-import { AutomaticCast } from "../../application/cast/automatic.ts";
+import {
+  AutomaticCast,
+  type AutomaticCard,
+} from "../../application/cast/automatic.ts";
 import { CastExecutionControl } from "../../application/cast/control.ts";
 import { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
 import {
@@ -15,7 +18,10 @@ export function createBroadcastCast(
   options: {
     now?: () => number;
     id?: () => string;
-    cards?: typeof automaticDefinitions;
+    cards?: (
+      topic: string,
+      blockedNames?: readonly string[],
+    ) => AutomaticCard[];
     researchBasis?: string;
   } = {},
 ) {
@@ -29,7 +35,10 @@ export function createBroadcastCast(
   };
   return new BroadcastCast(
     new AutomaticCast(new SqliteAutomaticCast(store.db, runtime), {
-      cards: options.cards ?? automaticDefinitions,
+      cards:
+        options.cards ??
+        ((topic, blockedNames) =>
+          automaticDefinitions(topic, undefined, blockedNames)),
       researchBasis: options.researchBasis ?? researchBasis,
       id: options.id ?? randomUUID,
     }),

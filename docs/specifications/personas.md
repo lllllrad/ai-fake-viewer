@@ -47,6 +47,58 @@ label means schema/name validation, not a human quality rating.
 
 Six characters are a product default, not an estimate of domestic audience proportions. Voice is selected independently of motivation. R09 informs brief reactions, omitted context and mixed formality, without assigning voice to demographic stereotypes or combining real people/chat into replicas. Examples are synthetic. The system does not inject a fixed meme dictionary or invent unverified sources/channel jokes. Silence and reduced participation during busy chat reflect design informed by R10–R13.
 
+## Stable synthetic nicknames
+
+New automatic casts use the local [nickname generator](../../packages/persona/nicknames/generator.ts)
+in both broadcasts and interactive tests. The user-supplied `./.local/nicknamegen.zip`
+provided the design and synthetic vocabulary; its referenced Python implementation
+was absent. This TypeScript implementation uses only the curated runtime materials,
+not the private research documents or example account registry. No external dictionary,
+account corpus, platform availability check or network request is involved.
+
+The starter has 823 roots across Korean common words, invented aliases, fictional
+name fragments, English words, phrases and hobbies, plus a small modifier/noun
+combination branch. Weights are editable design defaults in
+[data.ts](../../packages/domain/cast/nicknames/data.ts), not measured audience frequencies.
+Names are independent of personality, voice and broadcast topic.
+
+Generation chooses a root, then an eligible literal, approved romanization, two-set
+keyboard or initial representation. Literal roots may receive a permitted spelling,
+repetition, affix, English case/letter/leet change or rare wrapper. A final small
+suffix can reuse one fictional number token. At most two nontrivial operations are
+allowed; representation changes exclude spelling transformations, and wrappers
+exclude further suffixes. Length violations discard candidates without truncation.
+Keyboard conversion preserves Shift and compound finals, accepts NFC-normalizable
+modern Hangul, and rejects unsupported jamo. Numerals imply no age or birthdate.
+
+Names contain 1–20 NFC codepoints from Hangul syllables, ASCII letters, digits,
+underscores and periods. Collision keys use compatibility normalization, lowercase
+and removal of underscores, periods and whitespace. Generated names are limited to
+an alphabet where lowercase implements casefold; arbitrary Unicode confusable
+matching is not promised. The final cast also retains its existing stricter
+punctuation-insensitive name check. Each cast uses distinct normalized names and
+root families. Reserved roles and current external viewer names are excluded;
+exhaustion fails atomically instead of adding UUID suffixes or reusing roots.
+
+The resolved name, persona ID, root ID/family, operations, number token, synthetic
+source marker and generator/data/rules versions are saved together in the existing
+SQLite persona provenance transaction. Restarts reuse saved strings, including old
+casts created before this generator. Existing identities are never recomputed from
+a seed. A later viewer-name conflict detected during preparation returns
+`NICKNAME_REVIEW_REQUIRED` without silently renaming the cast. Generated chat does
+not block its own saved names. Broadcast deletion retains the existing cleanup
+policy; a new broadcast creates new identities rather than carrying a global roster.
+Interactive trace downloads also retain nickname provenance after the isolated
+in-memory cast closes; older traces load with an empty provenance list.
+
+Tests cover reproducibility, saved identity reuse, all modern Hangul syllables,
+representative key mappings, 1,000 distinct names/families, transformation limits,
+blocked names, exhaustion and transactional persistence. Naturalness, population
+representativeness and platform account availability remain unverified. The reserved
+word list is a minimal filter, not comprehensive abuse or impersonation detection.
+Legacy demo-only authoring and explicit manual name changes retain their existing
+contracts; the new generator owns automatic broadcast and test casts.
+
 ## Broadcast lifetime and controls
 
 The cast belongs to the broadcast, not the server process. AI off/on and process

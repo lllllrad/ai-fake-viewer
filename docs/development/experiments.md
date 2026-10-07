@@ -52,6 +52,8 @@ application steps, not private model reasoning. Download the full JSON record
 for separate inspection. Returning to the conversation does not trigger new
 inference.
 
+Automatic test casts use the same [stable synthetic nickname rules](../specifications/personas.md#stable-synthetic-nicknames) as broadcasts. Trace downloads include `personaProvenance`, including the saved name, root and transformations; older traces default this field to an empty list.
+
 Conversation, persona and trace snapshots are privately stored in
 `.local/experiments/interactive/` with owner-only files. Reloading the browser
 reopens the active test; server restart leaves saved sessions readable but does

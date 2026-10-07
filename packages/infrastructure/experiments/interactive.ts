@@ -221,6 +221,15 @@ export class InteractiveExperiment {
       pipeline: { ...this.pipeline, effectiveAi: this.coordinator.config.ai },
       calls: this.calls,
       diagnostics: this.diagnostics,
+      personaProvenance: this.store.db
+        .prepare(
+          "SELECT persona_id,provenance FROM persona_versions ORDER BY rowid",
+        )
+        .all()
+        .map((row) => ({
+          personaId: String(row.persona_id),
+          provenance: JSON.parse(String(row.provenance)),
+        })),
       attempts: this.store.db
         .prepare(
           "SELECT state,reason,result,model_manifest FROM persona_reaction_attempts ORDER BY rowid",

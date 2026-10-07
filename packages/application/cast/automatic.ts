@@ -1,4 +1,9 @@
 import {
+  nicknameKey,
+  validNickname,
+} from "../../domain/cast/nicknames/validation.ts";
+import type { NicknameIdentity } from "../../domain/cast/nicknames/types.ts";
+import {
   definitionSchema,
   type Definition,
 } from "../../contracts/persona-definition.ts";
@@ -7,6 +12,7 @@ import { ensure } from "./errors.ts";
 export interface AutomaticCard {
   definition: Definition;
   sources: readonly string[];
+  nickname?: NicknameIdentity;
 }
 export interface AutomaticCastRepository {
   transaction<T>(work: () => T): T;
@@ -21,7 +27,7 @@ export class AutomaticCast {
   constructor(
     private readonly repository: AutomaticCastRepository,
     private readonly composition: {
-      cards(topic: string): AutomaticCard[];
+      cards(topic: string, blockedNames?: readonly string[]): AutomaticCard[];
       researchBasis: string;
       id(): string;
     },
@@ -30,10 +36,19 @@ export class AutomaticCast {
     return this.repository.transaction(() => {
       ensure(!this.repository.closed(), "SESSION_CLOSED");
       const active = this.repository.active();
-      if (active) return active;
+      if (active) {
+        const blocked = new Set(this.repository.viewerNames().map(nicknameKey));
+        ensure(
+          !this.repository
+            .members()
+            .some((member) => blocked.has(nicknameKey(member.name))),
+          "NICKNAME_REVIEW_REQUIRED",
+        );
+        return active;
+      }
       const context = topic.trim() || "현재 방송";
       const cards = this.composition
-        .cards(context)
+        .cards(context, this.repository.viewerNames())
         .map((card) => ({
           ...card,
           definition: definitionSchema.parse(card.definition),
@@ -44,15 +59,27 @@ export class AutomaticCast {
         "DUPLICATE_CAST_IDENTITY",
       );
       const names = new Set(this.repository.viewerNames().map(normalizeName));
+      const families = new Set<string>();
       for (const card of cards) {
-        let suffix = 0;
-        while (
-          names.has(normalizeName(card.definition.display_name_suggestion))
-        ) {
-          ensure(suffix < 100, "NICKNAME_COLLISION");
-          card.definition.display_name_suggestion = `시청자${this.composition.id().slice(0, 12)}${suffix++}`;
+        const name = card.definition.display_name_suggestion;
+        ensure(
+          validNickname(name, this.repository.viewerNames()) &&
+            !names.has(normalizeName(name)),
+          "NICKNAME_COLLISION",
+        );
+        if (card.nickname) {
+          ensure(
+            card.nickname.persona_id === card.definition.persona_id &&
+              card.nickname.display_name === name,
+            "NICKNAME_IDENTITY_MISMATCH",
+          );
+          ensure(
+            !families.has(card.nickname.family_key),
+            "NICKNAME_FAMILY_COLLISION",
+          );
+          families.add(card.nickname.family_key);
         }
-        names.add(normalizeName(card.definition.display_name_suggestion));
+        names.add(normalizeName(name));
       }
       return this.repository.create(
         context,

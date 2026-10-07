@@ -81,5 +81,13 @@ export const experimentTraceSchema = z.object({
   ),
   diagnostics: z.array(z.unknown()),
   attempts: z.array(z.unknown()),
+  personaProvenance: z
+    .array(
+      z.object({
+        personaId: z.string().uuid(),
+        provenance: z.record(z.string(), z.unknown()),
+      }),
+    )
+    .default([]),
 });
 export type ExperimentTrace = z.infer<typeof experimentTraceSchema>;

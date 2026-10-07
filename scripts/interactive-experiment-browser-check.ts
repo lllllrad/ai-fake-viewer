@@ -76,6 +76,18 @@ try {
   await expect(
     page.getByRole("textbox", { name: "시청자에게 할 말" }),
   ).toBeEnabled();
+  const nicknames = experiments
+    .active!.snapshot()
+    .personas.map((persona) => persona.displayName);
+  assert.equal(new Set(nicknames).size, 6);
+  for (const name of nicknames) {
+    assert.match(name, /^[A-Za-z0-9가-힣_.]{1,20}$/u);
+    await expect(
+      page
+        .locator(".experiment-personas > details > summary")
+        .filter({ hasText: name }),
+    ).toBeVisible();
+  }
   experiments.active!.coordinator.random = () => 0;
   await page
     .getByRole("textbox", { name: "시청자에게 할 말" })
@@ -142,7 +154,27 @@ try {
   await captureUIReview(page, "experiment-trace");
   const downloading = page.waitForEvent("download");
   await page.getByRole("link", { name: "전체 기록 내려받기" }).click();
-  assert.equal((await downloading).suggestedFilename(), "ai-viewer-test.json");
+  const download = await downloading;
+  assert.equal(download.suggestedFilename(), "ai-viewer-test.json");
+  const stream = await download.createReadStream();
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream!) chunks.push(Buffer.from(chunk));
+  const exported = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  assert.deepEqual(
+    exported.session.personas.map(
+      (persona: { displayName: string }) => persona.displayName,
+    ),
+    nicknames,
+  );
+  assert.equal(exported.personaProvenance.length, 6);
+  assert.deepEqual(
+    new Set(
+      exported.personaProvenance.map(
+        (entry: any) => entry.provenance.nickname.display_name,
+      ),
+    ),
+    new Set(nicknames),
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   assert(
     await page.evaluate(

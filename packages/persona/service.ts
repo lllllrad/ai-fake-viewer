@@ -95,7 +95,12 @@ export class PersonaService {
         now: () => Date.now(),
         transaction: (work) => store.transaction(work),
       }),
-      { cards: automaticDefinitions, researchBasis, id: randomUUID },
+      {
+        cards: (topic, blockedNames) =>
+          automaticDefinitions(topic, undefined, blockedNames),
+        researchBasis,
+        id: randomUUID,
+      },
     );
   }
   ensureAutomaticCast() {

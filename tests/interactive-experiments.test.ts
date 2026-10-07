@@ -1,3 +1,4 @@
+import { experimentTraceSchema } from "../packages/contracts/interactive-experiment.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -80,6 +81,16 @@ test("interactive speech drives the production cast, records review, and survive
     );
     assert.equal(reopened.list().length, 1);
     assert.equal(reopened.read(session.id).session.messages.length, 1);
+    assert.equal(trace.personaProvenance.length, 6);
+    assert.deepEqual(
+      reopened.read(session.id).personaProvenance,
+      trace.personaProvenance,
+    );
+    const { personaProvenance: _omitted, ...oldTrace } = trace;
+    assert.deepEqual(
+      experimentTraceSchema.parse(oldTrace).personaProvenance,
+      [],
+    );
     assert.equal(
       reopened.read(session.id).session.inputs[0].text,
       "퍼즐 게임 처음 하는데 어떤가요?",

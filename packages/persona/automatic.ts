@@ -1,5 +1,7 @@
+import { NicknameRegistry } from "./nicknames/generator.ts";
+import type { AutomaticCard } from "../application/cast/automatic.ts";
 import { randomInt, randomUUID } from "node:crypto";
-import { definitionSchema, type Definition } from "./contracts.ts";
+import { definitionSchema } from "./contracts.ts";
 
 export const researchBasis = "real-viewer-research-v0.1";
 // Design seeds, not an empirical population distribution or actual people's profiles.
@@ -94,12 +96,16 @@ export function automaticDefinitions(
     index: (length: number) => randomInt(length),
     id: randomUUID,
   },
-): Array<{ definition: Definition; sources: readonly string[] }> {
+  blockedNames: readonly string[] = [],
+): AutomaticCard[] {
+  const names = new NicknameRegistry();
   // Voice is sampled independently of motives; research does not establish a link.
   return motives.map((seed, index) => {
     const voice = voices[runtime.index(voices.length)];
     const personaId = runtime.id();
+    const nickname = names.create(personaId, blockedNames);
     return {
+      nickname,
       sources: seed.refs,
       definition: definitionSchema.parse({
         schema_version: 1,
@@ -107,7 +113,7 @@ export function automaticDefinitions(
         definition_version: 1,
         template_revision_id: `${researchBasis}-${index + 1}@1`,
         locale: "ko-KR",
-        display_name_suggestion: `${["여울", "구름", "자갈", "나뭇잎", "물결", "노을"][index]}${personaId.slice(0, 6)}`,
+        display_name_suggestion: nickname.display_name,
         core: {
           viewing_motive: seed.motive,
           interests: [topic.slice(0, 1000)],

@@ -100,8 +100,8 @@ export function pipelineCards(
   pipeline: LoadedPipeline,
   runtime?: Parameters<typeof automaticDefinitions>[1],
 ) {
-  return (topic: string) =>
-    automaticDefinitions(topic, runtime).map((card, index) => ({
+  return (topic: string, blockedNames: readonly string[] = []) =>
+    automaticDefinitions(topic, runtime, blockedNames).map((card, index) => ({
       ...card,
       definition: definitionSchema.parse({
         ...card.definition,
