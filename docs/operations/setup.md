@@ -1,6 +1,62 @@
-# Live setup for the consent-based profile
+# Live input setup
 
 This runbook applies to the live application, including separately enabled broadcast inputs. Read the [privacy implementation and acceptance boundaries](../specifications/participation.md) before enabling real input. Actual platform approval, published policy text and provider eligibility cannot be supplied by this repository.
+
+## AI-only stream mode
+
+Use this mode when OBS or another producer already supplies a separate feed
+containing the intended screen and microphone, excluding viewer chat, donation
+messages and notifications. The app consumes the stream; it does not create an
+RTMP ingest server or configure OBS output.
+
+```yaml
+input:
+  mode: ai_stream
+  streamUrl: rtmp://STREAM_HOST:1935/live/ai
+ai:
+  provider: chatgpt_subscription # or openai_api
+  gate:
+    enabled: false
+```
+
+Use the playback URL, including the stream key/path when the media server needs
+one. RTMP and RTMPS are supported. The same URL overrides both capture and audio
+input URLs; an absent or disconnected AI feed never falls back to the public
+broadcast feed, a camera or a different audio device. Capture masks and the
+existing 10-second default transcription pipeline remain available. The first
+audio track must already contain only the intended microphone.
+
+Platform receivers, browser chat bridges and fixed consent notices are disabled
+regardless of old platform settings. Direct viewer-message ingestion is also
+rejected. The app does not require the chat participation profile or viewer
+consent commands in this mode. Select an AI account/model and the speech provider
+key normally; API-key mode uses OPENAI_MODEL at https://api.openai.com/v1.
+The third-party timing gate is unavailable.
+
+To prevent historical chat, summaries or AI state from affecting this mode,
+the app uses `database` with `.ai-stream` appended (for example,
+`data/broadcast.sqlite.ai-stream`). It preserves the original database untouched.
+Both modes retain their own session across restart; ending an AI-stream session
+erases its ordinary records, transcripts and AI state. Shared encrypted provider
+accounts and rights follow-up storage keep their existing lifetimes.
+
+A stream disconnection does not end the broadcast session automatically. Use
+the broadcast end control when finished; platform receivers are disabled and
+cannot supply their usual end-of-broadcast signal.
+
+Restart the managed server after editing YAML. Broadcast preparation opens the
+AI stream screen and does not offer chat-platform connections. The Participants
+page explains that this mode has no participation workflow; Records remains
+available for prior rights follow-ups. `npm run setup:check` checks the selected
+mode without printing the stream URL.
+
+This is input isolation, not automatic anonymization: anything still visible in
+the video or spoken into the microphone, including chat read aloud, can reach
+transcription/model providers. Operator and third-party data responsibilities
+remain separate from the disabled viewer-chat workflow.
+
+The remaining profile/receiver steps below apply to `input.mode: broadcast`
+(the backward-compatible default).
 
 ## 1. Prepare the app PC
 

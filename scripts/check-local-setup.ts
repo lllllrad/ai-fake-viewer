@@ -1,3 +1,4 @@
+import { applyInputMode } from "../packages/infrastructure/inputs/input-mode.ts";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
 import { loadConfig } from "../packages/config.ts";
@@ -15,7 +16,14 @@ const report = (label: string, ok: boolean, action: string) => {
 };
 try {
   if (existsSync(".env")) loadEnvFile(".env");
-  const config = loadConfig();
+  const config = applyInputMode(loadConfig());
+  const aiStream = config.input.mode === "ai_stream";
+  if (aiStream)
+    report(
+      "AI dedicated stream",
+      !!config.input.streamUrl,
+      "set input.streamUrl to the sanitized RTMP/RTMPS playback URL",
+    );
   const has = (name: string) => !!process.env[name]?.trim();
   for (const key of ["ADMIN_TOKEN", "READER_TOKEN", "TOKEN_ENCRYPTION_KEY"])
     report(
@@ -83,11 +91,12 @@ try {
     }
     console.log(`YouTube redirect URI: ${config.youtube.redirectUri}`);
   }
-  report(
-    "AI provider matches privacy profile",
-    config.ai.provider === config.privacy.processing.provider,
-    "select the same authentication profile in ai and privacy.processing",
-  );
+  if (!aiStream)
+    report(
+      "AI provider matches privacy profile",
+      config.ai.provider === config.privacy.processing.provider,
+      "select the same authentication profile in ai and privacy.processing",
+    );
   if (config.ai.provider === "chatgpt_subscription") {
     if (/^[a-f0-9]{64}$/i.test(encryptionKey)) {
       try {
@@ -99,9 +108,11 @@ try {
           "connect the operator account in admin",
         );
         report(
-          "Selected ChatGPT model matches profile",
+          aiStream
+            ? "Selected ChatGPT model"
+            : "Selected ChatGPT model matches profile",
           !!auth.active?.model &&
-            auth.active.model === config.privacy.processing.model,
+            (aiStream || auth.active.model === config.privacy.processing.model),
           "select an available model and match privacy.processing.model",
         );
       } catch {
@@ -115,22 +126,24 @@ try {
   } else {
     report("OpenAI API key", has("OPENAI_API_KEY"), "set OPENAI_API_KEY");
     report(
-      "API model matches profile",
+      aiStream ? "API model" : "API model matches profile",
       has("OPENAI_MODEL") &&
-        process.env.OPENAI_MODEL === config.privacy.processing.model,
+        (aiStream ||
+          process.env.OPENAI_MODEL === config.privacy.processing.model),
       "set OPENAI_MODEL and match privacy.processing.model",
     );
   }
-  if (config.privacy.testReview)
+  if (!aiStream && config.privacy.testReview)
     console.log(
       "NOTE Operator-reviewed test configuration: descriptive policy metadata is deferred, not certified. Viewer consent and account/channel restrictions remain active.",
     );
-  const issues = profileIssues(config.privacy);
-  report(
-    "Live privacy profile",
-    issues.length === 0,
-    "complete actual operator/notices/processing/publication fields in config.yaml",
-  );
+  const issues = aiStream ? [] : profileIssues(config.privacy);
+  if (!aiStream)
+    report(
+      "Live privacy profile",
+      issues.length === 0,
+      "complete actual operator/notices/processing/publication fields in config.yaml",
+    );
   for (const issue of issues) console.log(`  - ${issue}`);
   for (const platform of ["youtube", "chzzk", "soop"] as const) {
     if (
@@ -155,14 +168,17 @@ try {
       "record actual broadcaster ID, reviewed permissions, evidence and check date; do not use a nickname",
     );
   }
-  report(
-    "Notice rate review",
-    config.privacy.notices.approvedLimitConfirmed ||
-      !!config.privacy.testReview,
-    "confirm the actual permitted account/global rates before enabling notices",
-  );
+  if (!aiStream)
+    report(
+      "Notice rate review",
+      config.privacy.notices.approvedLimitConfirmed ||
+        !!config.privacy.testReview,
+      "confirm the actual permitted account/global rates before enabling notices",
+    );
   console.log(
-    "Read-only local inspection only; no provider/platform permissions were tested. Real live tests need an approved profile and fresh viewer consent. Synthetic UI/flow tests: sh run-command.sh npm run demo (mock model).",
+    aiStream
+      ? "Read-only AI stream inspection; no platform chat is enabled. Verify that the dedicated feed contains only the intended screen and microphone."
+      : "Read-only local inspection only; no provider/platform permissions were tested. Real live tests need an approved profile and fresh viewer consent. Synthetic UI/flow tests: sh run-command.sh npm run demo (mock model).",
   );
   process.exitCode = missing.length ? 1 : 0;
 } catch {

@@ -43,7 +43,7 @@ try {
     close: () => app.close(),
   });
   console.log(
-    `${demo ? "DEMO — artificial chat and frames" : "LIVE MODE — reviewed privacy profile and viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
+    `${demo ? "DEMO — artificial chat and frames" : config.input.mode === "ai_stream" ? "AI STREAM MODE — dedicated media only; platform chat disabled" : "LIVE MODE — reviewed privacy profile and viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
   );
   let stopping = false;
   const stop = async () => {

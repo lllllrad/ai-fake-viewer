@@ -2,6 +2,18 @@
 
 Reconciled with the 2026-10-06 local requirements delta, which takes precedence over the earlier `02_implementation_requirements.md` v1.0. Private input files and unavailable policy/review documents are not reproduced in the public repository. This document does not certify actual approvals, legal bases or the anonymity of particular summaries.
 
+## AI-only stream boundary
+
+`input.mode: ai_stream` is a separate input scope: one already-sanitized
+RTMP/RTMPS stream supplies the screen and microphone. It disables platform
+reception, viewer-message admission, anonymous viewer summaries and fixed consent
+notices. Chat participation profile checks are not prerequisites for this mode.
+It uses a separate broadcast database so historical consented chat and derived
+AI state cannot enter its context. Media authorization, source freshness,
+model credentials, cancellation and session-end erasure remain enforced.
+See [setup](../operations/setup.md#ai-only-stream-mode) for source assumptions.
+This mode does not certify that the actual media contains no personal data.
+
 ## Current operating boundary
 
 Live processing sends consented chat and configured broadcast inputs to the **OpenAI Responses API**, using either an API key or **Sign in with ChatGPT** for eligible ChatGPT plan usage. Authentication/contract selection is explicit. AI generation cannot automatically fall back to another provider or timing service. Platform input cannot fall back to unofficial SOOP. Configured speech transcription uses its separately configured OpenAI or Groq adapter. Screen input follows OBS Program capture configuration. Broadcast audio follows its source configuration; it is not automatically matched to individual viewer consent. Demo and legacy standalone libraries are separate from live operation.

@@ -2,6 +2,12 @@ port: 3210
 network:
   bindHost: 127.0.0.1 # set 0.0.0.0 to allow reader and overlay from another PC
   publicBaseUrl: "" # LAN mode: http://APP_PC_LAN_IP:3210
+# Separate, already-sanitized screen + microphone stream:
+# input.mode: ai_stream disables platform chat/consent notices and uses streamUrl
+# for BOTH video and audio. Leave broadcast to retain the consented-chat workflow.
+input:
+  mode: broadcast
+  streamUrl: "" # RTMP/RTMPS playback URL, e.g. rtmp://APP_SERVER:1935/live/ai
 database: data/broadcast.sqlite # private broadcast state; retained across restart, erased at broadcast end
 retentionDays: 7 # legacy utility bound, not persistent live chat retention
 youtube:
@@ -25,7 +31,7 @@ soop:
   # Register this exact callback in the SOOP developer console.
   redirectUri: http://127.0.0.1:3210/oauth/soop/callback
 capture:
-  # Capture is blocked by the live text-only privacy profile.
+  # In ai_stream mode, backend/device/url are overridden by input.streamUrl.
   ffmpeg: ffmpeg
   backend: dshow # rtmp for a separate OBS PC and a local/LAN RTMP server
   device: OBS Virtual Camera

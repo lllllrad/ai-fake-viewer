@@ -23,6 +23,10 @@ local broadcast workspace, reader and OBS overlay. Success means relevant,
 natural participation that supports the broadcast without overwhelming real chat,
 and clear operator control over inputs, generation, disclosure and session end.
 
+A separate AI-only stream mode uses a prepared screen/microphone feed without
+collecting viewer chat or requiring its participation workflow. It isolates its
+session and AI state from the consented-chat mode.
+
 ## Positioning
 
 The product combines local publication, automatically composed synthetic viewers,

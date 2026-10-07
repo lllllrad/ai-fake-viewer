@@ -20,13 +20,16 @@ export function ConnectionsPage({
   soop: ReactNode;
 }) {
   const hash = useLocationHash().slice(1);
-  const tab = ["program-details", "audio-details"].includes(hash)
-    ? "media"
-    : hash === "ai-details"
-      ? "ai"
-      : hash === "reader-links"
-        ? "output"
-        : "platforms";
+  const streamOnly = status.inputMode === "ai_stream";
+  const tab =
+    (streamOnly && !["ai-details", "reader-links"].includes(hash)) ||
+    ["program-details", "audio-details"].includes(hash)
+      ? "media"
+      : hash === "ai-details"
+        ? "ai"
+        : hash === "reader-links"
+          ? "output"
+          : "platforms";
   const paths: Record<string, string> = {
     platforms: "connection-details",
     media: "program-details",
@@ -44,9 +47,11 @@ export function ConnectionsPage({
       )}
       <div className="setup-intro">
         <p>
-          {status.demo
-            ? "데모는 인공 채팅·화면·모의 AI를 사용합니다."
-            : "필요한 입력을 연결하고 AI 계정과 OBS 출력을 확인하세요."}
+          {streamOnly
+            ? "AI 전용 스트림의 화면·마이크 음성으로 반응합니다. 시청자 채팅은 수신하지 않습니다."
+            : status.demo
+              ? "데모는 인공 채팅·화면·모의 AI를 사용합니다."
+              : "필요한 입력을 연결하고 AI 계정과 OBS 출력을 확인하세요."}
         </p>
         <a href="#broadcast">라이브로 돌아가기</a>
       </div>
@@ -57,18 +62,22 @@ export function ConnectionsPage({
           navigateWorkspaceTab(paths[value]);
         }}
         items={[
-          {
-            value: "platforms",
-            label: "채팅 플랫폼",
-            content: (
-              <PlatformConnections
-                status={status}
-                stale={stale}
-                refresh={refresh}
-                soop={soop}
-              />
-            ),
-          },
+          ...(!streamOnly
+            ? [
+                {
+                  value: "platforms",
+                  label: "채팅 플랫폼",
+                  content: (
+                    <PlatformConnections
+                      status={status}
+                      stale={stale}
+                      refresh={refresh}
+                      soop={soop}
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             value: "media",
             label: "화면·음성",

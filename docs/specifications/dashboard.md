@@ -22,6 +22,12 @@ Use four task destinations within the authenticated workspace:
 - **Records and rights:** separate rights-request and video-inventory tabs for
   follow-up work that can outlive the broadcast.
 
+In AI-only stream mode, preparation opens screen/audio and omits the platform
+tab. Media copy identifies the dedicated feed and its single YAML URL; the
+Participants destination explains that viewer-chat collection is disabled.
+Readiness checks the stream address and model, without a chat-consent profile
+requirement. Records remains available for prior rights follow-ups.
+
 The live workspace is the landing page. The conversation is the main work area;
 source preview and context occupy a secondary column. The AI switch and emergency
 stop are available above it. Source status expands inline, with links that open

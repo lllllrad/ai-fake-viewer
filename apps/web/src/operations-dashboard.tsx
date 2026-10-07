@@ -70,6 +70,7 @@ export function OperationsDashboard({
     capture: "program-details",
     audio: "audio-details",
     privacy: "privacy-panel",
+    stream: "program-details",
     model: "ai-details",
     receiver: "connection-details",
   };

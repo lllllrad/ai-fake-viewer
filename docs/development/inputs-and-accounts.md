@@ -5,6 +5,18 @@ boundaries. [Architecture](architecture.md) owns dependency rules and lifecycle;
 [participation and storage](participation-and-storage.md) owns admission and
 consent. For actual connection setup, use the [operator guide](../operations/setup.md).
 
+## Dedicated AI stream
+
+[Input mode resolution](../../packages/infrastructure/inputs/input-mode.ts) runs
+after the pipeline profile is applied. `ai_stream` binds capture and transcription
+to `input.streamUrl`, disables all chat connectors/notices and selects an isolated
+database by appending `.ai-stream`. It does not mutate the caller's configuration.
+The Store rejects non-synthetic admission and projects no human messages or
+summaries; the supervisor also rejects late/direct receiver callbacks. Model
+authorization still validates every frame, transcript and local AI message.
+The standard AI service and transcription implementation are shared with broadcasts
+and experiments. Demo continues to use synthetic inputs regardless of input mode.
+
 ## Platform composition
 
 The [platform supervisor](../../packages/infrastructure/inputs/platform-supervisor.ts)

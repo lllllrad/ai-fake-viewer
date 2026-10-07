@@ -1,3 +1,4 @@
+import { applyInputMode } from "../../packages/infrastructure/inputs/input-mode.ts";
 import { ensureAiService } from "../../packages/infrastructure/ai-service/connect.ts";
 import { speechApiKey } from "../../packages/infrastructure/inputs/speech-provider.ts";
 import {
@@ -94,12 +95,15 @@ async function assembleApp(
   startup.add(() => app.close());
   const pipeline = loadPipelineProfile(config.ai.pipelineProfile || undefined);
   config = applyPipelineProfile(structuredClone(config), pipeline);
-  const participation = opts.demo
-    ? undefined
-    : new Participation(config.privacy, "");
+  config = applyInputMode(config, !!opts.demo);
+  const aiStream = config.input.mode === "ai_stream";
+  const participation =
+    opts.demo || aiStream ? undefined : new Participation(config.privacy, "");
   const store = new Store(
     opts.demo ? ":memory:" : config.database,
     participation,
+    undefined,
+    !aiStream,
   );
   startup.add(() => store.close());
   const noticeBot = participation
@@ -122,14 +126,16 @@ async function assembleApp(
   followups.flush();
   store.on("context_invalidated", () => followups.flush());
   const privacyReady = () =>
-    !participation ||
-    (!profileIssues(config.privacy).length &&
-      config.ai.provider === config.privacy.processing.provider &&
-      !config.ai.gate.enabled &&
-      config.privacy.processing.model ===
-        (config.ai.provider === "chatgpt_subscription"
-          ? chatgpt.active?.model
-          : process.env.OPENAI_MODEL));
+    aiStream
+      ? !config.ai.gate.enabled
+      : !participation ||
+        (!profileIssues(config.privacy).length &&
+          config.ai.provider === config.privacy.processing.provider &&
+          !config.ai.gate.enabled &&
+          config.privacy.processing.model ===
+            (config.ai.provider === "chatgpt_subscription"
+              ? chatgpt.active?.model
+              : process.env.OPENAI_MODEL));
 
   const inputSessionOpen = () => !store.closed() && !participation?.ended;
   const capture = new Capture(config.capture, !!opts.demo);
@@ -178,8 +184,14 @@ async function assembleApp(
             prompts: pipeline.prompts,
           })
         : openaiModel(config.ai, {
-            endpoint: () => config.privacy.processing.endpoint,
-            model: () => config.privacy.processing.model,
+            endpoint: () =>
+              aiStream
+                ? "https://api.openai.com/v1"
+                : config.privacy.processing.endpoint,
+            model: () =>
+              aiStream
+                ? process.env.OPENAI_MODEL!
+                : config.privacy.processing.model,
             ...modelBoundary,
             prompts: pipeline.prompts,
           }),
@@ -246,6 +258,8 @@ async function assembleApp(
     projectReadiness({
       demo: !!opts.demo,
       profileReady: privacyReady(),
+      aiStream,
+      streamConfigured: !!config.input.streamUrl,
       modelReady: scheduler.providerReady(),
       screenRecent: !!capture.recent().length,
       speechState: transcriber.state,
@@ -462,6 +476,11 @@ async function assembleApp(
     projectAdminStatus(statusSource.read()),
   );
   app.post("/api/admin/consent-notices/:platform", async (req, reply) => {
+    if (aiStream)
+      return reply.code(409).send({
+        error:
+          "AI 전용 스트림 모드에서는 시청자 채팅과 동의 안내를 사용하지 않습니다.",
+      });
     const platform = z
       .enum(["youtube", "chzzk", "soop"])
       .parse((req.params as any).platform);

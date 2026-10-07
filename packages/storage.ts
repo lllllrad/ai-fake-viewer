@@ -37,7 +37,10 @@ import { SqliteConversationContext } from "./infrastructure/conversation/context
 import { SqliteTransactions } from "./infrastructure/storage/transactions.ts";
 import { SqliteParticipationSnapshots } from "./infrastructure/participation/snapshots.ts";
 import type { ParticipationService as Participation } from "./application/participation/service.ts";
-import { summaryWindowMs } from "./domain/conversation/summary.ts";
+import {
+  summarizeChat,
+  summaryWindowMs,
+} from "./domain/conversation/summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -78,6 +81,7 @@ export class Store extends EventEmitter {
       now: () => Date.now(),
       id: randomUUID,
     },
+    readonly viewerChatEnabled = true,
   ) {
     super();
     if (path !== ":memory:")
@@ -163,14 +167,18 @@ export class Store extends EventEmitter {
       {
         closed: () => this.closed(),
         admit: (message) =>
-          this.participation
-            ? this.participation.handle(message)
-            : this.referenceAdmission.handle(message),
+          !this.viewerChatEnabled
+            ? { allow: false, epoch: 0 }
+            : this.participation
+              ? this.participation.handle(message)
+              : this.referenceAdmission.handle(message),
         summary: () => {
           this.chatSummary();
         },
         claimNotices: () =>
-          this.participation ? [] : this.referenceAdmission.claimNotices(),
+          this.participation || !this.viewerChatEnabled
+            ? []
+            : this.referenceAdmission.claimNotices(),
         refreshCollisions: () => {
           if (!this.originsRevealed()) return false;
           const colliding = this.collisionNameSet();
@@ -199,7 +207,7 @@ export class Store extends EventEmitter {
       this.transactions,
       {
         sessionId: () => this.sessionId,
-        live: () => !!this.participation,
+        live: () => !!this.participation || !this.viewerChatEnabled,
         closed: () => this.closed(),
         now: () => this.runtime.now(),
         refreshSummary: () => {
@@ -216,7 +224,7 @@ export class Store extends EventEmitter {
       {
         sessionId: () => this.sessionId,
         closed: () => this.closed(),
-        live: () => !!this.participation,
+        live: () => !!this.participation || !this.viewerChatEnabled,
         id: () => this.runtime.id(),
         now: () => this.runtime.now(),
         replace: (sessionId, startedAt, closed, erase) => {
@@ -264,15 +272,17 @@ export class Store extends EventEmitter {
         sessionId: () => this.sessionId,
         closed: () => this.closed(),
         permitted: (message) =>
-          !this.participation ||
-          (message.sessionId === this.sessionId &&
-            (message.attribution === "experiment" ||
-              this.participation.allowed(
-                message.attribution,
-                message.channel,
-                message.author,
-                message.consentEpoch,
-              ))),
+          !this.viewerChatEnabled
+            ? message.attribution === "experiment"
+            : !this.participation ||
+              (message.sessionId === this.sessionId &&
+                (message.attribution === "experiment" ||
+                  this.participation.allowed(
+                    message.attribution,
+                    message.channel,
+                    message.author,
+                    message.consentEpoch,
+                  ))),
       },
     );
     this.conversationContext = new ConversationContext(
@@ -417,6 +427,7 @@ export class Store extends EventEmitter {
     return this.conversationProjection.replay(after);
   }
   chatSummary(now = this.runtime.now()) {
+    if (!this.viewerChatEnabled) return summarizeChat([]);
     return this.conversationContext.summary(now);
   }
   clearChatSummary() {

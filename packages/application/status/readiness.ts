@@ -1,6 +1,8 @@
 import type { BroadcastReadiness } from "../../contracts/readiness.ts";
 export interface ReadinessFacts {
   demo: boolean;
+  aiStream?: boolean;
+  streamConfigured?: boolean;
   profileReady: boolean;
   modelReady: boolean;
   screenRecent: boolean;
@@ -26,11 +28,21 @@ export function projectReadiness(facts: ReadinessFacts): BroadcastReadiness {
       ],
     };
   const checks = [
-    {
-      id: "privacy",
-      label: "운영 프로필 및 동의 범위",
-      ready: facts.profileReady,
-    },
+    ...(facts.aiStream
+      ? [
+          {
+            id: "stream",
+            label: "AI 전용 스트림 주소",
+            ready: !!facts.streamConfigured,
+          },
+        ]
+      : [
+          {
+            id: "privacy",
+            label: "운영 프로필 및 동의 범위",
+            ready: facts.profileReady,
+          },
+        ]),
     {
       id: "capture",
       label: "송출 화면",

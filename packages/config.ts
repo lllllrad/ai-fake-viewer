@@ -34,6 +34,13 @@ export const configSchema = z
       .strict()
       .default({ bindHost: "127.0.0.1", publicBaseUrl: "" }),
     privacy: privacyProfileSchema.default(() => privacyProfileSchema.parse({})),
+    input: z
+      .object({
+        mode: z.enum(["broadcast", "ai_stream"]).default("broadcast"),
+        streamUrl: z.string().max(1024).default(""),
+      })
+      .strict()
+      .default({ mode: "broadcast", streamUrl: "" }),
     database: z.string().default("data/broadcast.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
     youtube: z
@@ -359,7 +366,33 @@ export const configSchema = z
         path: ["ai", "gate", "enabled"],
         message: "The text-only Jev gate requires ai.visualMode: on_request",
       });
-    if (c.audio.url) {
+    if (c.input.mode === "ai_stream") {
+      if (c.ai.gate.enabled)
+        ctx.addIssue({
+          code: "custom",
+          path: ["ai", "gate", "enabled"],
+          message: "AI stream mode does not use the third-party chat gate",
+        });
+      if (c.input.streamUrl) {
+        let valid = false;
+        try {
+          const url = new URL(c.input.streamUrl);
+          valid =
+            ["rtmp:", "rtmps:"].includes(url.protocol) &&
+            !!url.hostname &&
+            !url.username &&
+            !url.password;
+        } catch {}
+        if (!valid)
+          ctx.addIssue({
+            code: "custom",
+            path: ["input", "streamUrl"],
+            message:
+              "AI stream requires an RTMP or RTMPS URL without authority credentials",
+          });
+      }
+    }
+    if (c.audio.url && c.input.mode !== "ai_stream") {
       let valid = false;
       try {
         const url = new URL(c.audio.url);
@@ -379,7 +412,7 @@ export const configSchema = z
             "Audio transcription requires an RTMP URL without authority credentials",
         });
     }
-    if (c.capture.backend === "rtmp") {
+    if (c.capture.backend === "rtmp" && c.input.mode !== "ai_stream") {
       let valid = false;
       try {
         const url = new URL(c.capture.url);

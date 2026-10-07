@@ -111,6 +111,7 @@ export class RuntimeStatusSource {
         ));
     return {
       demo: demo,
+      inputMode: config.input.mode,
       generatedAt: now,
       originsRevealed: store.originsRevealed(),
       sessionId: store.sessionId,
@@ -124,7 +125,10 @@ export class RuntimeStatusSource {
       privacy: {
         memoryOnly: demo || config.database === ":memory:",
         ready: privacyReady(),
-        issues: profileIssues(config.privacy),
+        issues:
+          config.input.mode === "ai_stream"
+            ? []
+            : profileIssues(config.privacy),
         pendingRights: rights
           .list()
           .filter((r) => !["completed", "limited"].includes(r.state)).length,

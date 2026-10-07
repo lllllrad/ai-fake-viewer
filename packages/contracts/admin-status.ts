@@ -42,6 +42,7 @@ const account = z.object({
 /** Explicit administrator projection. Unknown fields never reach the UI or escape the server. */
 export const adminStatusSchema = z.object({
   demo: z.boolean(),
+  inputMode: z.enum(["broadcast", "ai_stream"]).default("broadcast"),
   generatedAt: time,
   originsRevealed: z.boolean(),
   sessionId: z.string(),

@@ -2,6 +2,10 @@
 
 The live profile is consent-gated chat and optional broadcast-transcript and OBS Program image processing through the OpenAI Responses API, with explicitly selected API-key authentication or Sign in with ChatGPT for eligible ChatGPT plan usage. [Privacy implementation](../specifications/participation.md) owns the data-boundary requirements; [development](guide.md) owns fixture commands.
 
+The separate [AI-only stream mode](../operations/setup.md#ai-only-stream-mode)
+uses prefiltered media without viewer-chat collection or participation prerequisites.
+Its model account, admitted-media checks and AI service remain shared.
+
 ## Runtime scope and startup
 
 `createApp` uses the configured private SQLite database in live mode and an in-memory Store in demo mode. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. App startup requires the [AI service](ai-service.md). Enabling live AI additionally requires a complete profile, matching selected-service model/credentials and disabled third-party gate; missing configured media is reported through readiness. AI execution intent survives restart; the recovery loop waits for required inputs and authentication before resuming. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.

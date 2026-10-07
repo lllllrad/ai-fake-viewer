@@ -95,7 +95,10 @@ function Admin() {
       key: "participation",
       label: "참여자",
       title: "참여자 관리",
-      description: "안내 전달과 동의 상태를 확인하세요.",
+      description:
+        status?.inputMode === "ai_stream"
+          ? "AI 전용 스트림의 입력 범위를 확인하세요."
+          : "안내 전달과 동의 상태를 확인하세요.",
       Icon: Users,
     },
     {
@@ -252,20 +255,24 @@ function Admin() {
               hidden={page !== "participation" && page !== "records"}
               className="workspace-screen"
             >
-              {status.demo ? (
+              {status.demo ||
+              (status.inputMode === "ai_stream" && page !== "records") ? (
                 <section
                   id={page === "records" ? "records" : "participation"}
                   className="empty-panel"
                 >
                   <Users size={32} aria-hidden="true" />
                   <h2>
-                    {page === "records"
-                      ? "실제 방송에서 기록을 관리합니다"
-                      : "실제 방송에서 참여자를 관리합니다"}
+                    {status.inputMode === "ai_stream"
+                      ? "시청자 참여 절차를 사용하지 않습니다."
+                      : page === "records"
+                        ? "실제 방송에서 기록을 관리합니다"
+                        : "실제 방송에서 참여자를 관리합니다"}
                   </h2>
                   <p>
-                    데모에서는 인공 입력을 사용합니다. 실제 방송의 동의·권리행사
-                    관리는 실제 입력 모드에서 사용할 수 있습니다.
+                    {status.inputMode === "ai_stream"
+                      ? "AI 전용 스트림 모드는 플랫폼 채팅을 수신·저장하지 않습니다. 방송 준비에서 AI용 화면과 마이크 음성을 확인하세요."
+                      : "데모에서는 인공 입력을 사용합니다. 실제 방송의 동의·권리행사 관리는 실제 입력 모드에서 사용할 수 있습니다."}
                   </p>
                   <a href="#connections">방송 준비로 이동</a>
                 </section>

@@ -94,13 +94,14 @@ export class Supervisor {
   receive(p: string, m: unknown) {
     try {
       const parsed = incomingSchema.parse(m);
-      if (this.store.closed()) return;
+      if (this.config.input.mode === "ai_stream" || this.store.closed()) return;
       this.store.ingestion.ingest([parsed]);
     } catch {
       this.status(p, "invalid_event_rejected");
     }
   }
   start() {
+    if (this.config.input.mode === "ai_stream") return;
     if (this.platformTasks.stopping || this.store.closed()) return;
     if (this.demo) {
       if (this.demoTimer) return;
