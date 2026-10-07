@@ -57,6 +57,8 @@ export function generationIssue(error: unknown): GenerationIssue {
       "ChatGPT output too large",
       "ChatGPT response too large",
       "Invalid ChatGPT text delta",
+      "Model returned no tool call",
+      "Invalid model tool calls",
     ].includes(error.message)
   )
     return {

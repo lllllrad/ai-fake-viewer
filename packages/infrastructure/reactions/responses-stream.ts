@@ -14,6 +14,7 @@ export async function readResponsesStream(
   const reader = body.getReader(),
     decoder = new TextDecoder();
   let completed: z.infer<typeof completedResponseSchema> | undefined;
+  const completedItems = new Map<number, unknown>();
   let buffer = "",
     streamedText = "",
     size = 0,
@@ -59,13 +60,33 @@ export async function readResponsesStream(
           if (streamedText.length > 10000)
             throw Error("ChatGPT output too large");
         }
+        if (event.type === "response.output_item.done") {
+          const index = z
+            .number()
+            .int()
+            .min(0)
+            .max(63)
+            .parse(event.output_index);
+          const item = z
+            .object({ type: z.string() })
+            .passthrough()
+            .parse(event.item);
+          completedItems.set(index, item);
+        }
         if (event.type === "response.completed")
           completed = completedResponseSchema.parse(event.response);
       }
     }
     if (!completed) throw Error("ChatGPT stream ended before completion");
-    const output = responseText(completed.output) || streamedText;
-    const tools = toolMode ? responseTools(completed.output) : undefined;
+    // Some streaming responses omit the repeated output array at completion.
+    // Only completed items qualify; partial argument deltas never execute tools.
+    const items = completed.output.length
+      ? completed.output
+      : [...completedItems.entries()]
+          .sort(([a], [b]) => a - b)
+          .map(([, item]) => item);
+    const output = responseText(items) || streamedText;
+    const tools = toolMode ? responseTools(items) : undefined;
     if (toolMode && !tools?.calls.length)
       throw Error("Model returned no tool call");
     if ((!toolMode && !output) || output.length > 10000)

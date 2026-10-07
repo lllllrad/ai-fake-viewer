@@ -14,6 +14,77 @@ const completed = (
     usage,
   },
 });
+test("completed tool items survive an empty terminal output array, preserving reasoning and order", async () => {
+  const reasoning = {
+    type: "reasoning",
+    id: "rs_fixture",
+    summary: [],
+    encrypted_content: "synthetic-opaque",
+  };
+  const call = {
+    type: "function_call",
+    call_id: "call_fixture",
+    name: "wait",
+    arguments: "{}",
+  };
+  const fixture = stream([
+    encoder.encode(
+      frame({
+        type: "response.output_item.done",
+        output_index: 1,
+        item: call,
+      }) +
+        frame({
+          type: "response.output_item.done",
+          output_index: 0,
+          item: reasoning,
+        }) +
+        frame({
+          type: "response.completed",
+          response: {
+            status: "completed",
+            output: [],
+            usage: {
+              input_tokens: 12,
+              output_tokens: 4,
+              input_tokens_details: { cached_tokens: 8 },
+            },
+          },
+        }),
+    ),
+  ]);
+  const result = await readResponsesStream(
+    fixture.body,
+    new AbortController().signal,
+    true,
+  );
+  assert.deepEqual(result.toolCalls, [call]);
+  assert.deepEqual(result.continuation, [reasoning, call]);
+  assert.equal(result.cachedInputTokens, 8);
+});
+test("partial tools or completed items without response completion never qualify", async () => {
+  const call = {
+    type: "function_call",
+    call_id: "call_fixture",
+    name: "wait",
+    arguments: "{}",
+  };
+  for (const events of [
+    [
+      { type: "response.output_item.added", output_index: 0, item: call },
+      {
+        type: "response.completed",
+        response: { status: "completed", output: [] },
+      },
+    ],
+    [{ type: "response.output_item.done", output_index: 0, item: call }],
+  ]) {
+    const fixture = stream([encoder.encode(events.map(frame).join(""))]);
+    await assert.rejects(
+      readResponsesStream(fixture.body, new AbortController().signal, true),
+    );
+  }
+});
 function stream(chunks: Uint8Array[], close = true) {
   let canceled = 0;
   const body = new ReadableStream<Uint8Array>({
