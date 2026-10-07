@@ -2,8 +2,8 @@
 
 Both live broadcasting and [interactive tests](experiments.md) use the
 [independent AI service](ai-service.md). The app supplies screen/microphone evidence,
-persists state and controls publication. There is no platform-chat input or
-participant workflow.
+persists state and controls publication. There is no platform-chat input to AI or participant workflow. Platform chat is
+received in a separate presentation-only path described in [display-only chat](display-chat.md).
 
 ## Runtime ownership
 

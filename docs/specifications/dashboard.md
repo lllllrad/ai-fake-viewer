@@ -9,7 +9,7 @@ Show one AI toggle, always-available emergency stop, current readiness and actio
 model errors. Keep persistent enabled intent distinct from receiving/connecting state.
 Show dedicated video and microphone status; no platform chat aggregate remains.
 
-The conversation shows recent AI replies and hide controls. Candidate approval is
+The conversation combines recent AI replies and display-only platform chat with hide controls. Candidate approval is
 adjacent to conversation. Reference tabs contain transcripts and AI personas.
 Human-chat summary, participant activation, policy editing, consent notices and
 rights/video inventory screens are removed.
@@ -20,19 +20,21 @@ Ordinary status updates must not steal focus or reset input/action state.
 
 ## Broadcast preparation
 
-Three tabs: Screen/audio, AI account/model, Reader/OBS. Show dedicated video preview,
+Four tabs: Viewer chat, Screen/audio, AI account/model, Reader/OBS. Show dedicated video preview,
 speech provider and controls, account/model selection and public links. Do not expose
 stream keys in status or render private credentials.
 
 The default tab is Screen/audio. Old participant/rights routes fall back to Live.
-Account OAuth returns to the owning application's AI tab.
+Model OAuth returns to the owning application's AI tab; platform OAuth returns to
+Viewer chat. That tab saves source settings, connects accounts and starts/stops each
+receiver independently. SOOP reception persists across operator tabs and stops when
+the browser is closed.
 
 ## Reader and overlay
 
 Both receive the same authenticated websocket projection. The reader offers
 follow-new-chat and manual return-to-latest controls. The transparent overlay keeps
-new messages visible without administrative controls. Both identify their content
-as AI-generated chat. There is no viewer consent guidance.
+new messages visible without administrative controls. Both disclose that AI-generated chat is included. There is no viewer consent guidance.
 
 ## Accessibility and verification
 

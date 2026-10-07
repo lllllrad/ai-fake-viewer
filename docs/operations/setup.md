@@ -51,13 +51,14 @@ Sign in with ChatGPT does not supply a transcription key. The default framing is
 ## Broadcast operation
 
 Open http://127.0.0.1:3210/admin and authenticate with ADMIN_TOKEN. Broadcast
-preparation contains Screen/audio, AI account/model and Reader/OBS tabs. Verify
+preparation contains Viewer chat, Screen/audio, AI account/model and Reader/OBS tabs. Verify
 the preview and recognized speech, then enable AI from Live. Emergency stop remains
 available during other operations. Manual approval, when configured, exposes a
 candidate to publish or discard.
 
-Generated messages appear locally. No platform account, chat connection, participant
-activation, consent notice or rights-management API is provided. Reader and overlay
+Generated messages appear locally. YouTube, CHZZK and SOOP chat can appear alongside
+them through [display-only chat connections](../development/display-chat.md).
+Viewer participation, consent notices and rights-management APIs remain removed. Reader and overlay
 links use the independent reader token. Use the overlay link as an OBS Browser Source.
 LAN reader access is optional; administrator access remains loopback-only.
 
@@ -80,8 +81,8 @@ of silently enabling an alternate input path.
 
 Live storage continues to append .ai-stream to database. This preserves sessions
 created by the dedicated-stream implementation and keeps older mixed-chat databases
-unopened. Old databases, rights records, exports and platform token files are not
-automatically deleted or migrated into model context. Archive or delete them
+unopened. Old databases, rights records and exports are not automatically deleted or migrated
+into model context. Existing platform tokens may be reused by display-only connections. Archive or delete them
 separately according to your retention needs; see [storage](../development/storage.md).
 
 ## Troubleshooting and limits

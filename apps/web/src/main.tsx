@@ -217,7 +217,8 @@ function Admin() {
           </>
         )}
         <footer className="workspace-footer">
-          방송 데이터는 재시작 후 유지되고 방송 종료 시 삭제됩니다.
+          AI 대화·음성 기록은 재시작 후 유지되고 방송 종료 시 삭제됩니다. 실제
+          채팅은 재시작 시 비웁니다.
         </footer>
       </main>
     </div>

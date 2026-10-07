@@ -10,6 +10,10 @@ import { renderDemoFrame } from "../packages/infrastructure/reference/demo-frame
 import { fixtureToolModel } from "../packages/infrastructure/experiments/models.ts";
 import { captureUIReview } from "./ui-review.ts";
 
+const priorSoopId = process.env.SOOP_CLIENT_ID,
+  priorSoopSecret = process.env.SOOP_CLIENT_SECRET;
+process.env.SOOP_CLIENT_ID = "fixture-client";
+process.env.SOOP_CLIENT_SECRET = "fixture-secret";
 const dir = mkdtempSync(join(tmpdir(), "ai-stream-browser-"));
 const port = 33225,
   token = "a".repeat(64);
@@ -32,7 +36,15 @@ const runtime = await createApp(
     startInputs: false,
   },
 );
-runtime.scheduler.model = fixtureToolModel;
+runtime.displayChat.soop.token = {
+  accessToken: "fixture-token",
+  refreshToken: "fixture-refresh",
+  expiresAt: Date.now() + 3600000,
+};
+runtime.scheduler.model = async (input, signal) => {
+  assert(!JSON.stringify(input).includes("DISPLAY_ONLY"));
+  return fixtureToolModel(input, signal);
+};
 runtime.scheduler.providerReady = () => true;
 runtime.scheduler.random = () => 0;
 // Isolated synthetic media; never subscribe to the shared broadcast stream.
@@ -48,6 +60,14 @@ try {
   const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
   });
+  await context.route(
+    "https://static.sooplive.com/asset/app/chat-sdk/sooplive-chat-sdk.js",
+    (route) =>
+      route.fulfill({
+        contentType: "application/javascript",
+        body: 'window.SOOP={ChatSDK:class{setAuth(){} handleReady(f){this.ready=f} handleMessageReceived(f){this.receive=f} handleChatClosed(){} handleError(){} async connect(){this.listener=e=>this.receive("MESSAGE",e.detail);window.addEventListener("fixture-soop",this.listener);queueMicrotask(()=>this.ready())} async getRoomInfo(){return {bjId:"fixture"}} disconnect(){window.removeEventListener("fixture-soop",this.listener)}}};',
+      }),
+  );
   const page = await context.newPage();
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -64,6 +84,66 @@ try {
   ).toHaveCount(0);
   await expect(page.getByAltText("AI가 보는 전용 스트림 화면")).toBeVisible();
   await captureUIReview(page, "ai-stream");
+  await page.getByRole("tab", { name: "시청자 채팅", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "시청자 채팅", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("YouTube 채팅 수신", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("CHZZK 채팅 수신", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("SOOP 채팅 수신", { exact: true }),
+  ).toBeVisible();
+  await captureUIReview(page, "display-chat");
+  // Persist a disabled-source setting without invoking any external platform.
+  await page
+    .getByLabel("채널 ID (영상 주소가 없을 때)", { exact: true })
+    .fill("UC" + "a".repeat(22));
+  await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+  await expect(
+    page.getByText("채팅 설정을 저장했습니다.", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("SOOP 채팅 수신", { exact: true }).check();
+  await page.getByLabel("SOOP 방송 아이디", { exact: true }).fill("fixture");
+  await page.getByRole("button", { name: "설정 저장", exact: true }).click();
+  await expect(
+    page.getByText("SOOP 채팅이 연결되었습니다. 관리자 탭을 열어 두세요.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "화면·음성", exact: true }).click();
+  await page.evaluate(() =>
+    window.dispatchEvent(
+      new CustomEvent("fixture-soop", {
+        detail: {
+          userId: "fixture-viewer",
+          userNickname: "SDK 시청자",
+          message: "DISPLAY_ONLY_SDK",
+        },
+      }),
+    ),
+  );
+  await expect
+    .poll(() =>
+      runtime.display
+        .snapshot()
+        .messages.some((m) => m?.text === "DISPLAY_ONLY_SDK"),
+    )
+    .toBe(true);
+  assert.equal(runtime.store.lastSeq(), 0);
+  for (const platform of ["youtube", "chzzk", "soop"] as const)
+    runtime.display.receive({
+      platform,
+      channel: "fixture",
+      sourceId: platform,
+      author: "DISPLAY_ONLY_ID",
+      name: platform + " 시청자",
+      text: "DISPLAY_ONLY_" + platform,
+    });
+  assert.equal(runtime.store.lastSeq(), 0);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("heading", { name: "AI 전용 스트림", exact: true }),
@@ -93,13 +173,40 @@ try {
   const overlay = await context.newPage();
   await reader.goto("http://127.0.0.1:" + port + "/reader#" + "r".repeat(64));
   await overlay.goto("http://127.0.0.1:" + port + "/overlay#" + "r".repeat(64));
+  await expect(
+    reader.getByText("DISPLAY_ONLY_SDK", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    overlay.getByText("DISPLAY_ONLY_SDK", { exact: true }),
+  ).toBeVisible();
   const message = runtime.store.readerSnapshot().messages[0].text;
   await expect(reader.getByText(message, { exact: true })).toBeVisible();
   await expect(overlay.getByText(message, { exact: true })).toBeVisible();
+  for (const platform of ["youtube", "chzzk", "soop"]) {
+    await expect(
+      reader.getByText("DISPLAY_ONLY_" + platform, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      overlay.getByText("DISPLAY_ONLY_" + platform, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("DISPLAY_ONLY_" + platform, { exact: true }),
+    ).toBeVisible();
+  }
+  await page
+    .getByRole("button", { name: "youtube 시청자 채팅 숨기기", exact: true })
+    .click();
+  await expect(
+    reader.getByText("DISPLAY_ONLY_youtube", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    overlay.getByText("DISPLAY_ONLY_youtube", { exact: true }),
+  ).toHaveCount(0);
+  assert.equal(runtime.store.snapshot().messages.length, 1);
   await captureUIReview(reader, "reader");
   await captureUIReview(overlay, "overlay");
   await expect(
-    reader.getByText("AI 시청자가 생성한 채팅입니다.", { exact: false }),
+    reader.getByText("AI가 생성한 채팅이 포함되어 있습니다.", { exact: false }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "AI 긴급 중지", exact: true }).click();
@@ -114,11 +221,15 @@ try {
   assert.deepEqual(errors, []);
 
   console.log(
-    "AI stream browser PASS: dedicated media, no chat/consent setup, desktop/mobile, AI start, tool state, candidate publication, stop.",
+    "AI stream browser PASS: dedicated media, display-only platform chat, isolated AI context, desktop/mobile, AI start, tool state, candidate publication, stop.",
   );
 } finally {
   clearInterval(timer);
   await browser.close();
   await runtime.app.close();
   rmSync(dir, { recursive: true, force: true });
+  if (priorSoopId === undefined) delete process.env.SOOP_CLIENT_ID;
+  else process.env.SOOP_CLIENT_ID = priorSoopId;
+  if (priorSoopSecret === undefined) delete process.env.SOOP_CLIENT_SECRET;
+  else process.env.SOOP_CLIENT_SECRET = priorSoopSecret;
 }

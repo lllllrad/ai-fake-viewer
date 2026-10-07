@@ -22,8 +22,9 @@ control over generation and session lifetime.
 ## Positioning
 
 AI viewers are synthetic identities, not replicas or profiles of real viewers.
-Generated replies stay in the app, reader and overlay. The product does not receive
-or send native platform chat and does not manage viewer consent or rights requests.
+Generated replies stay in the app, reader and overlay. Actual YouTube, CHZZK and
+SOOP chat is received for display alongside AI messages, never for AI processing.
+The app does not send native platform chat or manage viewer consent/rights requests.
 
 ## Operating Context
 

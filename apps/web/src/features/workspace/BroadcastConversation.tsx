@@ -74,12 +74,15 @@ export function BroadcastConversation({
             </h2>
             <span className="workspace-caption">최대 30개</span>
           </div>
-          <p className="hint">숨기면 리더·OBS 화면과 AI 문맥에서 제거됩니다.</p>
+          <p className="hint">
+            실제 시청자 채팅은 표시만 하며 AI에게 전달하지 않습니다. 숨기면
+            리더·OBS 채팅창에서도 제거됩니다.
+          </p>
           {!messages.length && (
             <p className="workspace-empty">
               {closed
                 ? "방송이 종료되어 대화 기록을 비웠습니다."
-                : "AI 시청자의 반응을 기다리고 있습니다."}
+                : "시청자 채팅과 AI 반응을 기다리고 있습니다."}
             </p>
           )}
           <div className="operator-messages">

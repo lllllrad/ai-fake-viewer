@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 if (!existsSync(".env"))
   writeFileSync(
     ".env",
-    `ADMIN_TOKEN=${randomBytes(32).toString("hex")}\nREADER_TOKEN=${randomBytes(32).toString("hex")}\nTOKEN_ENCRYPTION_KEY=${randomBytes(32).toString("hex")}\nOPENAI_API_KEY=\nOPENAI_MODEL=\nGROQ_API_KEY=\n`,
+    `ADMIN_TOKEN=${randomBytes(32).toString("hex")}\nREADER_TOKEN=${randomBytes(32).toString("hex")}\nTOKEN_ENCRYPTION_KEY=${randomBytes(32).toString("hex")}\nOPENAI_API_KEY=\nOPENAI_MODEL=\nGROQ_API_KEY=\nYOUTUBE_CLIENT_ID=\nYOUTUBE_CLIENT_SECRET=\nYOUTUBE_API_KEY=\nCHZZK_CLIENT_ID=\nCHZZK_CLIENT_SECRET=\nSOOP_CLIENT_ID=\nSOOP_CLIENT_SECRET=\n`,
     { mode: 0o600 },
   );
 if (!existsSync("config.yaml"))

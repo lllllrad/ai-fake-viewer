@@ -8,7 +8,13 @@ FFmpeg performs media acquisition. YAML and Zod own configuration parsing/valida
 Model authentication uses jose and the shared authenticated-encryption file adapter.
 Provider calls use fetch. Playwright and axe are development-only browser checks.
 
-Platform-specific gRPC, Socket.IO 2, SOOP libraries, workers and vendored platform
-contracts are removed. No legacy dependency overrides remain. package-lock.json is
-the reproducible dependency record. Installation/audit status is temporal; use a
-current npm audit when evaluating dependency advisories, rather than an old report.
+Display-only YouTube streaming uses @grpc/grpc-js, @grpc/proto-loader and the
+vendored official stream contract. CHZZK runs the documented Socket.IO 2 client
+in a worker; engine.io-client and socket.io-parser overrides retain the compatible
+protocol with patched transport/parser dependencies. SOOP uses the official browser
+SDK and has no unofficial library or send adapter.
+
+Socket.IO 2 retains a legacy parseuri advisory; received session URLs are bounded,
+validated HTTPS URLs under the platform domain. Do not replace the transport with
+Socket.IO 4 without verifying platform support. package-lock.json records exact
+versions; use npm audit for current advisory status.

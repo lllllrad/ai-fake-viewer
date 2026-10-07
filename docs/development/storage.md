@@ -14,15 +14,16 @@ This continues the dedicated-stream namespace and never opens the earlier mixed-
 database. The test app has separate database/account paths. Credentials are not
 ordinary broadcast records.
 
-The input journal accepts synthetic experiment messages only. The live app exposes
-no human-message ingestion endpoint. Public projection also rejects historical
-non-synthetic rows. Session identity, evidence freshness and hidden-message checks
+The input journal accepts synthetic experiment messages only. The AI store exposes
+no human-message ingestion path. Its projection also rejects historical non-synthetic
+rows. A separate in-memory display projection merges received platform chat with
+AI replies for administrator, reader and overlay surfaces. Session identity, evidence freshness and hidden-message checks
 still apply to outgoing context and final publication.
 
 Older database files and obsolete tables in an existing dedicated-stream database
 are not automatically destroyed. They are not read by current runtime features.
 Archive/deletion of historical files, exported transcripts and backups is an operator
-action. No platform tokens or rights database are opened by the current app.
+action. The rights database is not opened. Platform tokens are used only by display adapters.
 
 ## Transactions and recovery
 

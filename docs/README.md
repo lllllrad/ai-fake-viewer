@@ -10,6 +10,7 @@
 | Developer        | [AI pipeline](development/ai-pipeline.md)                          | Input selection, inference, review, diagnostics and publication                      |
 | Developer        | [Reaction implementation](development/reactions.md)                | Cast, model ports, provider adapters, cancellation and publication ownership         |
 | Developer        | [Inputs and accounts](development/inputs-and-accounts.md)          | Media workers, model authentication and account lifetimes                            |
+| Developer        | [Display-only platform chat](development/display-chat.md)          | Receive-only connections, presentation memory and AI isolation                       |
 | Developer        | [Conversation storage](development/storage.md)                     | Transactional publication, persistence and session deletion                          |
 | Product contract | [Behavior](specifications/behavior.md)                             | Implemented requirements and known limitations                                       |
 | Product contract | [Dashboard](specifications/dashboard.md)                           | Operator controls and status presentation                                            |

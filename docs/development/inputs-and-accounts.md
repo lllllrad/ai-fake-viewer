@@ -3,7 +3,7 @@
 ## Dedicated media
 
 [Input resolution](../../packages/infrastructure/inputs/input-mode.ts) uses
-input.streamUrl for both video and audio. Live input has no platform chat or alternate
+input.streamUrl for both video and audio. AI input has no platform chat or alternate
 broadcast mode. Missing URLs remain unconfigured. Demo retains synthetic frame input.
 
 [Capture](../../packages/infrastructure/inputs/screen-input.ts) owns the FFmpeg video
@@ -41,5 +41,7 @@ plaintext or overwriting them. Replacement uses an exclusive owner-only temporar
 file, flush and rename. The [refresh owner](../../packages/application/accounts/refresh-flight.ts)
 prevents retired refreshes from changing current credentials.
 
-Broadcast and test accounts have separate paths and encryption keys. Platform account
-files from earlier versions are neither opened nor deleted by this runtime.
+Broadcast and test accounts have separate paths and encryption keys. Display-only
+platform accounts use the existing encrypted youtube.tokens, chzzk.tokens and
+soop.tokens files next to the configured live database. They are independent of
+AI model accounts. See [display-only chat](display-chat.md).

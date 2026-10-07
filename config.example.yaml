@@ -43,3 +43,17 @@ ai:
   priceCheckedAt: ""
   description: A live broadcast. React only to visible events.
   # Viewer personas are generated automatically when AI starts; no persona list is needed.
+
+# Display-only chat. UI saves override these defaults in data/display-chat.settings.json.
+displayChat:
+  youtube:
+    enabled: false
+    video: ""
+    channelId: ""
+    transport: grpc
+    restFallback: true
+  chzzk:
+    enabled: false
+  soop:
+    enabled: false
+    streamerId: ""

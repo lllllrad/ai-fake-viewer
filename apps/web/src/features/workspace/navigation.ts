@@ -9,6 +9,7 @@ export function workspacePage(hash: string): WorkspacePage {
       "audio-details",
       "ai-details",
       "connection-details",
+      "chat-details",
       "reader-links",
     ].includes(target)
   )

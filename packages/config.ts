@@ -1,3 +1,4 @@
+import { displayChatSettingsSchema } from "./contracts/display-chat.ts";
 import { z } from "zod";
 import { readFileSync, existsSync } from "node:fs";
 import { parse } from "yaml";
@@ -30,6 +31,7 @@ export const configSchema = z
       })
       .strict()
       .default({ mode: "ai_stream", streamUrl: "" }),
+    displayChat: displayChatSettingsSchema,
     database: z.string().default("data/broadcast.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
     capture: z

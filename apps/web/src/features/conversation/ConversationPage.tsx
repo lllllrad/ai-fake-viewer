@@ -103,8 +103,8 @@ export function ConversationPage() {
         </header>
       )}
       <aside className="conversation-disclosure">
-        {conversation.demo && <strong>데모 · 인공 입력 / </strong>}AI 시청자가
-        생성한 채팅입니다.
+        {conversation.demo && <strong>데모 · 인공 입력 / </strong>}AI가 생성한
+        채팅이 포함되어 있습니다.
       </aside>
       <ConversationList
         messages={conversation.messages}

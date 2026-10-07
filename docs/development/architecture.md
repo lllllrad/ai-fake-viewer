@@ -28,8 +28,10 @@ these boundaries.
 
 [createApp](../../apps/server/app.ts) resolves one media URL, opens the dedicated
 session store, connects model authentication, wires broadcast lifecycle and registers
-media/model/reader APIs. Platform receivers, SDK bridges, platform OAuth, participant
-admission, policy-profile updates, consent notices and rights workflows are removed.
+media/model/reader APIs. Display-only platform receivers, OAuth and the SOOP SDK
+bridge feed a separate in-memory presentation projection. They hold no AI store
+reference. Participant admission, policy-profile updates, consent notices and rights
+workflows remain removed. See [display-only chat](display-chat.md).
 
 BroadcastService owns operator intent, start/stop/end/new-session and shutdown.
 Stopping AI does not stop media collection. End closes the session synchronously,

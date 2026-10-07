@@ -1,3 +1,6 @@
+import { DisplayConversation } from "../../packages/infrastructure/conversation/display-conversation.ts";
+import { DisplayChatConnections } from "../../packages/infrastructure/platforms/display-chat.ts";
+import { registerDisplayChatRoutes } from "./http/routes/display-chat.ts";
 import { applyInputMode } from "../../packages/infrastructure/inputs/input-mode.ts";
 import { ensureAiService } from "../../packages/infrastructure/ai-service/connect.ts";
 import { speechApiKey } from "../../packages/infrastructure/inputs/speech-provider.ts";
@@ -30,7 +33,7 @@ import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
 import { randomBytes } from "node:crypto";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
 import type { Config } from "../../packages/config.ts";
@@ -52,6 +55,7 @@ interface AppOptions {
   startInputs?: boolean;
   persistReaderToken?: (token: string) => void;
   chatgptTokenPath?: string;
+  displayChatDirectory?: string;
 }
 
 export function createApp(config: Config, opts: AppOptions) {
@@ -77,6 +81,38 @@ async function assembleApp(
   config = applyInputMode(config, !!opts.demo);
   const store = new Store(opts.demo ? ":memory:" : config.database, !opts.demo);
   startup.add(() => store.close());
+  const display = new DisplayConversation(store);
+  startup.add(() => display.close());
+  const displayChat = new DisplayChatConnections(
+    config.displayChat,
+    opts.encryptionKey,
+    {
+      session: () => store.sessionId,
+      closed: () => store.closed(),
+      receive: (message) => display.receive(message),
+      port: config.port,
+      demo: !!opts.demo,
+      directory:
+        opts.displayChatDirectory ??
+        (!opts.demo && config.database !== ":memory:"
+          ? dirname(config.database)
+          : undefined),
+    },
+  );
+  startup.add(() => displayChat.close());
+  let displaySession = store.sessionId;
+  const syncDisplay = () => {
+    if (store.closed() || displaySession !== store.sessionId) {
+      displaySession = store.sessionId;
+      const session = displaySession;
+      void displayChat.stopAll().then(() => {
+        if (!store.closed() && session === store.sessionId)
+          displayChat.startAll();
+      });
+    }
+  };
+  store.on("event", syncDisplay);
+  store.on("reset", syncDisplay);
   const inputSessionOpen = () => !store.closed();
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
@@ -235,26 +271,11 @@ async function assembleApp(
     );
   }
   startup.add(() => cancelAuthoringJobs());
-  const readers = registerReaderStream(
-    app,
-    {
-      snapshot: () => store.readerSnapshot(),
-      event: (event) => store.readerEvent(event),
-      subscribe: (listeners) => {
-        store.on("event", listeners.event);
-        store.on("reset", listeners.reset);
-        return () => {
-          store.off("event", listeners.event);
-          store.off("reset", listeners.reset);
-        };
-      },
-    },
-    {
-      origins,
-      demo: !!opts.demo,
-      authenticate: (token) => equal(token, readerToken),
-    },
-  );
+  const readers = registerReaderStream(app, display, {
+    origins,
+    demo: !!opts.demo,
+    authenticate: (token) => equal(token, readerToken),
+  });
   startup.add(() => readers.closeAll());
   const statusSource = new RuntimeStatusSource({
     demo: !!opts.demo,
@@ -266,6 +287,7 @@ async function assembleApp(
     personas,
     chatgpt,
     readyComponents,
+    displayMessages: () => display.snapshot().messages,
     now: () => Date.now(),
     credentials: () => ({
       speech: !!speechApiKey(config.audio.provider),
@@ -293,6 +315,7 @@ async function assembleApp(
         : "Active until server restart.",
     };
   });
+  registerDisplayChatRoutes(app, displayChat);
   registerInputRoutes(app, broadcast, {
     preview: () => capture.latest(),
     transcripts: () => store.transcripts.export(),
@@ -311,7 +334,7 @@ async function assembleApp(
       .string()
       .uuid()
       .parse((req.params as any).id);
-    store.hide(id);
+    if (!display.hide(id)) store.hide(id);
     return { ok: true };
   });
   const modelAccount = new ModelAccount({
@@ -361,17 +384,27 @@ async function assembleApp(
   const shutdown = new ServerShutdown({
     cancelTimers: () => maintenance.stop(),
     cancelAuthoring: () => cancelAuthoringJobs(),
-    shutdownBroadcast: () => broadcast.shutdown(),
+    shutdownBroadcast: async () => {
+      await Promise.all([broadcast.shutdown(), displayChat.close()]);
+    },
     closeReaders: () => readers.closeAll(),
-    closeBroadcastStorage: () => store.close(),
+    closeBroadcastStorage: () => {
+      display.close();
+      store.close();
+    },
   });
   app.addHook("onClose", () => shutdown.close());
   startup.handoff(() => app.close());
-  if (opts.startInputs !== false && !store.closed()) broadcast.startInputs();
+  if (opts.startInputs !== false && !store.closed()) {
+    broadcast.startInputs();
+    displayChat.startAll();
+  }
   return {
     app,
     broadcast,
     store,
+    display,
+    displayChat,
     capture,
     scheduler,
     transcriber,

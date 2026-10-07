@@ -112,9 +112,7 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
     for (const [method, url] of [
       ["GET", "/api/admin/participation"],
       ["POST", "/api/admin/connectors/start"],
-      ["POST", "/api/admin/soop/message"],
       ["POST", "/api/admin/youtube/authorize"],
-      ["GET", "/oauth/youtube/callback"],
       ["PUT", "/api/admin/privacy/profile"],
     ] as const) {
       assert.equal(
@@ -134,10 +132,19 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
 test("AI stream speech drives the real pipeline from dedicated media and closes with normal deletion", async () => {
   const f = await fixture();
   try {
+    f.display.receive({
+      platform: "youtube",
+      channel: "fixture",
+      sourceId: "real-1",
+      author: "private-viewer",
+      name: "PRIVATE_NAME",
+      text: "PRIVATE_REAL_CHAT",
+    });
     f.scheduler.providerReady = () => true;
     f.scheduler.random = () => 0;
     f.scheduler.model = async (input, signal) => {
       assert.equal(input.messages.length, 0);
+      assert.equal(JSON.stringify(input).includes("PRIVATE"), false);
       assert.equal(input.chatSummary?.state, "insufficient_data");
       return fixtureToolModel(input, signal);
     };

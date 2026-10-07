@@ -33,7 +33,8 @@ Use explicit localized actions and confirmation for destructive session/data act
 and irreversible AI-origin disclosure. Preserve current names when disclosing origins.
 
 BOUNDARY: Interactive AI viewer tests run in a separate app on port 3211, outside live navigation. Reader/overlay use separate reader authorization; the
-transparent OBS overlay contains AI conversation only.
+transparent OBS overlay combines AI conversation and display-only platform chat.
+The producer excludes this overlay from the dedicated AI media feed.
 
 Ownership: [dashboard contract](../../docs/specifications/dashboard.md),
 [visual system](../../DESIGN.md) and [product context](../../PRODUCT.md).

@@ -1,3 +1,4 @@
+import { DisplayChatConnections } from "./DisplayChatConnections.tsx";
 import { SectionTabs } from "../../components/ui";
 import { useLocationHash, navigateWorkspaceTab } from "../workspace/navigation";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
@@ -17,15 +18,18 @@ export function ConnectionsPage({
 }) {
   const hash = useLocationHash().slice(1);
   const tab =
-    !["ai-details", "reader-links"].includes(hash) ||
-    ["program-details", "audio-details"].includes(hash)
-      ? "media"
-      : hash === "ai-details"
-        ? "ai"
-        : hash === "reader-links"
-          ? "output"
-          : "media";
+    hash === "chat-details"
+      ? "chat"
+      : !["ai-details", "reader-links"].includes(hash) ||
+          ["program-details", "audio-details"].includes(hash)
+        ? "media"
+        : hash === "ai-details"
+          ? "ai"
+          : hash === "reader-links"
+            ? "output"
+            : "media";
   const paths: Record<string, string> = {
+    chat: "chat-details",
     media: "program-details",
     ai: "ai-details",
     output: "reader-links",
@@ -54,6 +58,16 @@ export function ConnectionsPage({
           navigateWorkspaceTab(paths[value]);
         }}
         items={[
+          {
+            value: "chat",
+            label: "시청자 채팅",
+            content: (
+              <DisplayChatConnections
+                demo={status.demo}
+                closed={status.closed}
+              />
+            ),
+          },
           {
             value: "media",
             label: "화면·음성",

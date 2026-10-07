@@ -2,8 +2,10 @@
 
 Mixed Chat Studio generates synthetic viewer reactions to a dedicated screen and
 microphone stream. Publication is local to the administrator, reader and OBS overlay.
-There are no platform chat receivers/senders, platform account connections, viewer
-participation commands, policy profiles or rights-management screens.
+YouTube, CHZZK and SOOP chat can be received for display only. Actual chat and
+identities never enter AI context, selection, pacing, memory or nickname generation.
+There are no native-platform chat sends, viewer participation commands, policy
+profiles or rights-management screens.
 
 ## Input and output
 
@@ -18,7 +20,9 @@ pacing, review, evidence validation and optional operator approval constrain rep
 Model failures, input state and persistent enabled intent are distinct statuses.
 
 Generated messages contain bounded plain text, stable synthetic names and optional
-local reply references. Hide removes local publication/context. Reader tokens and
+local reply references. Actual chat is held in bounded display memory only and is
+lost on server restart or broadcast end. Hide removes display-only chat locally;
+hiding an AI message also removes dependent AI context. Reader tokens and
 administrator tokens are independent. Disclosure stops AI and reveals synthetic
 identity labels for the session.
 

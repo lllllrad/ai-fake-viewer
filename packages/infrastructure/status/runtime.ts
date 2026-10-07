@@ -44,6 +44,7 @@ interface RuntimeStatusDependencies {
   personas: Pick<BroadcastCast, "automaticSummary">;
   chatgpt: Pick<ChatgptAuth, "active" | "status">;
   readyComponents(): BroadcastReadiness;
+  displayMessages?(): ReturnType<Store["readerSnapshot"]>["messages"];
   now(): number;
   credentials(): {
     speech: boolean;
@@ -182,7 +183,9 @@ export class RuntimeStatusSource {
               : !!credentials.apiModel,
         },
       },
-      messages: store.readerSnapshot().messages,
+      messages:
+        this.dependencies.displayMessages?.() ??
+        store.readerSnapshot().messages,
     };
   }
 }

@@ -19,6 +19,9 @@ Broadcast and test apps have separate credentials, accounts and storage. Both ca
 the [independent AI service](docs/development/ai-service.md). Managed startup ensures
 that service is running; stopping an app leaves it available.
 
+Actual YouTube, CHZZK and SOOP chat can be shown alongside AI replies through
+[display-only connections](docs/development/display-chat.md), without entering AI context.
+
 ## Quick start
 
 Use the pinned Node version through [run-command.sh](run-command.sh):
