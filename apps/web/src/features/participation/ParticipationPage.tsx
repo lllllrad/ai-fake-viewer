@@ -1,3 +1,7 @@
+import { SectionTabs } from "../../components/ui";
+import { useLocationHash, navigateWorkspaceTab } from "../workspace/navigation";
+import type { ReactNode } from "react";
+import { Button } from "../../components/ui";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { StatusSession } from "../workspace/status-session.ts";
 import { participationApi } from "./api.ts";
@@ -7,7 +11,16 @@ import { RightsRequests } from "./RightsRequests.tsx";
 import { VideoInventory } from "./VideoInventory.tsx";
 import { noticeLabel } from "./labels.ts";
 import "./participation.css";
-export function ParticipationPage({ now }: { now: number }) {
+export function ParticipationPage({
+  now,
+  view,
+  noticeSettings,
+}: {
+  now: number;
+  view: "participation" | "records";
+  noticeSettings: ReactNode;
+}) {
+  const hash = useLocationHash();
   const [owner] = useState(
     () => new StatusSession(participationApi.status, 5000),
   );
@@ -20,21 +33,23 @@ export function ParticipationPage({ now }: { now: number }) {
   const stale = state.failed || !!(data && now - data.generatedAt > 10000);
   return (
     <section
-      id="privacy-panel"
+      id={view}
       className="participation-page"
       aria-label="개인정보 및 참여 관리"
     >
       <header className="participation-heading">
         <div>
-          <h2>개인정보·참여 관리</h2>
+          <h2>
+            {view === "records" ? "방송 이후 후속 조치" : "개인정보·참여 관리"}
+          </h2>
           <p>
             채팅·동의·AI 문맥은 재시작 후 복구하며 방송 종료 시 삭제합니다.
             권리행사 후속 작업은 별도로 보존합니다.
           </p>
         </div>
-        <button className="secondary" onClick={() => void owner.refresh()}>
+        <Button className="secondary" onClick={() => void owner.refresh()}>
           상태 다시 확인
-        </button>
+        </Button>
       </header>
       {stale && (
         <p role="alert">
@@ -59,34 +74,107 @@ export function ParticipationPage({ now }: { now: number }) {
               시도합니다.
             </p>
           )}
-          <section aria-label="자동 안내 상태" className="participation-health">
-            {[
-              ["SOOP", data.noticeBot],
-              ["YouTube", data.youtubeNoticeBot],
-              ["치지직", data.chzzkNoticeBot],
-            ].map(([name, value]) => (
-              <p key={name}>
-                <strong>{name} 자동 안내</strong>
-                <span>{stale ? "확인 필요" : noticeLabel(value)}</span>
-              </p>
-            ))}
-          </section>
-          <Participants
-            participants={data.participants}
-            refresh={owner.refresh}
-            stale={stale}
-          />
-          <RightsRequests
-            rows={data.rights}
-            refresh={owner.refresh}
-            stale={stale}
-          />
-          <VideoInventory
-            rows={data.videos}
-            refresh={owner.refresh}
-            stale={stale}
-          />
-          <OperatingProfile profile={data.profile} issues={data.issues} />
+          <div hidden={view !== "participation"}>
+            <SectionTabs
+              label="참여 관리 항목"
+              value={
+                hash === "#operating-profile" || hash === "#privacy-panel"
+                  ? "profile"
+                  : "participants"
+              }
+              onValueChange={(value) => {
+                navigateWorkspaceTab(
+                  value === "profile" ? "operating-profile" : "participation",
+                );
+              }}
+              items={[
+                {
+                  value: "participants",
+                  label: "현재 참여자",
+                  content: (
+                    <>
+                      <section
+                        aria-label="자동 안내 상태"
+                        className="participation-health"
+                      >
+                        {[
+                          ["SOOP", data.noticeBot],
+                          ["YouTube", data.youtubeNoticeBot],
+                          ["치지직", data.chzzkNoticeBot],
+                        ].map(([name, value]) => (
+                          <p key={name}>
+                            <strong>{name} 자동 안내</strong>
+                            <span>
+                              {stale ? "확인 필요" : noticeLabel(value)}
+                            </span>
+                          </p>
+                        ))}
+                      </section>
+                      <Participants
+                        participants={data.participants}
+                        refresh={owner.refresh}
+                        stale={stale}
+                      />
+                    </>
+                  ),
+                },
+                {
+                  value: "profile",
+                  label: "운영 프로필·안내",
+                  content: (
+                    <div id="privacy-panel">
+                      <div id="operating-profile">
+                        <OperatingProfile
+                          profile={data.profile}
+                          issues={data.issues}
+                        />
+                      </div>
+                      {noticeSettings}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+          <div hidden={view !== "records"}>
+            <SectionTabs
+              label="기록 관리 항목"
+              value={hash === "#video-inventory" ? "videos" : "rights"}
+              onValueChange={(value) => {
+                navigateWorkspaceTab(
+                  value === "videos" ? "video-inventory" : "rights-requests",
+                );
+              }}
+              items={[
+                {
+                  value: "rights",
+                  label: "권리 요청",
+                  content: (
+                    <div id="rights-requests">
+                      <RightsRequests
+                        rows={data.rights}
+                        refresh={owner.refresh}
+                        stale={stale}
+                      />
+                    </div>
+                  ),
+                },
+                {
+                  value: "videos",
+                  label: "영상·사본",
+                  content: (
+                    <div id="video-inventory">
+                      <VideoInventory
+                        rows={data.videos}
+                        refresh={owner.refresh}
+                        stale={stale}
+                      />
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
         </>
       )}
     </section>

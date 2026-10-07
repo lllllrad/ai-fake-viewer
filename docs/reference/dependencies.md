@@ -11,3 +11,12 @@ Mitigations: CHZZK is disabled by default; session URLs come only from the authe
 The unofficial SOOP dependency is separately opt-in and integrity-pinned. Its installed API was inspected; exact source commit equivalence and platform approval remain unverified. It is never substituted for the official path.
 
 No FFmpeg executable is redistributed. Browser-test Chromium is a development download, not an application runtime dependency. Node's built-in SQLite removes a third-party SQLite compilation step; clean Windows installation still needs validation.
+
+## Browser UI
+
+Bootstrap supplies packaged CSS for standard buttons, forms and navigation.
+Radix Tabs supplies keyboard navigation and tab semantics; persistent tab panels
+retain connection/form ownership. Lucide React supplies the shared icon set.
+Confirmation dialogs use the native `dialog` element to preserve the existing CSP
+without runtime stylesheet injection. All UI assets are bundled locally; there is
+no CDN dependency. `@axe-core/playwright` is a development-only browser audit tool.

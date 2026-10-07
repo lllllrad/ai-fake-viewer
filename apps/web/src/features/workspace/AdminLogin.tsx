@@ -1,3 +1,4 @@
+import { Button, Input } from "../../components/ui";
 import { useState } from "react";
 import { adminClient } from "../../lib/admin-client";
 import { useAdminActions } from "../../lib/use-admin-actions";
@@ -7,8 +8,8 @@ export function AdminLogin({ refresh }: { refresh: () => Promise<void> }) {
   const actions = useAdminActions(refresh);
   return (
     <main className="login">
-      <div className="eyebrow">MIXED CHAT / LOCAL STUDIO</div>
-      <h1>방송 운영에 연결하기</h1>
+      <p className="login-brand">Mixed Chat Studio</p>
+      <h1>방송 작업 공간에 로그인</h1>
       <p>로컬 .env 파일의 관리자 접속 토큰을 입력해 주세요.</p>
       <form
         aria-busy={actions.pending}
@@ -25,7 +26,7 @@ export function AdminLogin({ refresh }: { refresh: () => Promise<void> }) {
       >
         <label>
           관리자 접속 토큰
-          <input
+          <Input
             type="password"
             value={token}
             onChange={(event) => setToken(event.target.value)}
@@ -34,9 +35,9 @@ export function AdminLogin({ refresh }: { refresh: () => Promise<void> }) {
             required
           />
         </label>
-        <button disabled={actions.pending}>
+        <Button disabled={actions.pending}>
           {actions.pending ? "연결 중…" : "연결하기"}
-        </button>
+        </Button>
       </form>
       {actions.error && (
         <p role="alert" className="error">

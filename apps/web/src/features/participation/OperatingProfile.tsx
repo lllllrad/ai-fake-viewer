@@ -8,8 +8,8 @@ export function OperatingProfile({
   issues: string[];
 }) {
   return (
-    <details className="participation-section">
-      <summary>운영 프로필·공개 범위 확인</summary>
+    <section className="participation-section">
+      <h2>운영 프로필·공개 범위 확인</h2>
       {!!issues.length && (
         <p role="status">운영 프로필 확인 필요: {issues.join(" · ")}</p>
       )}
@@ -64,6 +64,6 @@ export function OperatingProfile({
         동의 안내와 운영자 정보는 config.yaml의 privacy에서 관리합니다.
         영상·음성 입력 상태는 방송 화면에서 확인할 수 있습니다.
       </p>
-    </details>
+    </section>
   );
 }

@@ -1,9 +1,12 @@
+import { Button, Input } from "../../components/ui";
 import { useState } from "react";
 import type { ReaderLinks as Links } from "../../../../../packages/contracts/connections.ts";
 import { connectionApi } from "./api.ts";
 import { useAdminActions } from "../../lib/use-admin-actions.ts";
 export function ReaderLinks({ refresh }: { refresh: () => Promise<void> }) {
   const [links, setLinks] = useState<Links>();
+  const [copied, setCopied] = useState("");
+  const [copyError, setCopyError] = useState("");
   const actions = useAdminActions(refresh);
   return (
     <section className="card" aria-label="리더와 OBS 연결">
@@ -22,7 +25,7 @@ export function ReaderLinks({ refresh }: { refresh: () => Promise<void> }) {
         </p>
       )}
       <div className="toolbar">
-        <button
+        <Button
           disabled={actions.busy("links")}
           onClick={() =>
             void actions.run("links", async (signal) => {
@@ -32,9 +35,9 @@ export function ReaderLinks({ refresh }: { refresh: () => Promise<void> }) {
           }
         >
           리더·OBS 링크 보기
-        </button>
+        </Button>
         {links && (
-          <button
+          <Button
             className="secondary"
             disabled={actions.busy("links")}
             onClick={() => {
@@ -53,23 +56,50 @@ export function ReaderLinks({ refresh }: { refresh: () => Promise<void> }) {
             }}
           >
             리더·OBS 링크 재발급
-          </button>
+          </Button>
         )}
       </div>
+      {copied && <p role="status">{copied}</p>}
+      {copyError && <p role="alert">{copyError}</p>}
       {links &&
         (["reader", "overlay"] as const).map((key) => (
           <div key={key}>
             <label>
               {key === "reader" ? "리더 링크" : "OBS 오버레이 링크"}
-              <input
+              <Input
                 readOnly
                 value={links[key]}
                 onFocus={(event) => event.target.select()}
               />
             </label>
-            <a href={links[key]} target="_blank" rel="noreferrer">
-              {key === "reader" ? "리더 열기" : "오버레이 열기"} ↗
-            </a>
+            <div className="toolbar">
+              <Button
+                className="secondary"
+                onClick={() => {
+                  setCopied("");
+                  setCopyError("");
+                  void navigator.clipboard
+                    .writeText(links[key])
+                    .then(() =>
+                      setCopied(
+                        key === "reader"
+                          ? "리더 링크를 복사했습니다."
+                          : "OBS 링크를 복사했습니다.",
+                      ),
+                    )
+                    .catch(() =>
+                      setCopyError(
+                        "복사할 수 없습니다. 링크를 선택해 직접 복사해 주세요.",
+                      ),
+                    );
+                }}
+              >
+                {key === "reader" ? "리더 링크 복사" : "OBS 링크 복사"}
+              </Button>
+              <a href={links[key]} target="_blank" rel="noreferrer">
+                {key === "reader" ? "리더 열기" : "오버레이 열기"} ↗
+              </a>
+            </div>
           </div>
         ))}
     </section>

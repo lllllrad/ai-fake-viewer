@@ -1,3 +1,4 @@
+import { Button } from "../../components/ui";
 import type { ReactNode } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import { inputHealth } from "../../input-health.ts";
@@ -67,7 +68,7 @@ export function PlatformConnections({
                 </p>
               )}
               <div className="toolbar">
-                <button
+                <Button
                   disabled={
                     stale ||
                     actions.busy(platform) ||
@@ -79,9 +80,9 @@ export function PlatformConnections({
                   {platform === "youtube"
                     ? "YouTube 계정 연결"
                     : "치지직 계정 연결 / 다시 인증"}
-                </button>
+                </Button>
                 {platform === "youtube" && status.setup.youtube.connected && (
-                  <button
+                  <Button
                     className="secondary"
                     disabled={actions.busy(platform)}
                     onClick={() =>
@@ -91,7 +92,7 @@ export function PlatformConnections({
                     }
                   >
                     YouTube 연결 해제
-                  </button>
+                  </Button>
                 )}
               </div>
               <details>
@@ -114,7 +115,7 @@ export function PlatformConnections({
         {soop}
       </div>
       <div className="toolbar">
-        <button
+        <Button
           disabled={stale || status.closed || actions.busy("receivers")}
           onClick={() =>
             void actions.run("receivers", (signal) =>
@@ -123,8 +124,8 @@ export function PlatformConnections({
           }
         >
           채팅 수신 시작
-        </button>
-        <button
+        </Button>
+        <Button
           className="secondary"
           disabled={actions.busy("receivers")}
           onClick={() =>
@@ -134,7 +135,7 @@ export function PlatformConnections({
           }
         >
           채팅 수신 중지
-        </button>
+        </Button>
       </div>
     </section>
   );

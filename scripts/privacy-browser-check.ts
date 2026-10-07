@@ -1,3 +1,4 @@
+import { captureUIReview } from "./ui-review.ts";
 import type { Browser } from "@playwright/test";
 import { expect } from "@playwright/test";
 import assert from "node:assert/strict";
@@ -59,7 +60,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await page.getByLabel("관리자 접속 토큰").fill(token);
     await page.getByRole("button", { name: "연결하기", exact: true }).click();
     const navigation = page.getByRole("navigation", { name: "운영 화면" });
-    await navigation.getByRole("link", { name: "참여", exact: true }).click();
+    await navigation.getByRole("link", { name: "참여자", exact: true }).click();
     const panel = page.getByRole("region", { name: "개인정보 및 참여 관리" });
     await expect(panel).toBeVisible();
     await expect(
@@ -96,7 +97,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       data.setup.soop.credentialsConfigured = true;
       await route.fulfill({ json: data });
     });
-    await navigation.getByRole("link", { name: "방송", exact: true }).click();
+    await navigation.getByRole("link", { name: "라이브", exact: true }).click();
     await page
       .getByRole("region", { name: "방송 상태 및 AI 제어" })
       .getByRole("button", { name: "상태 다시 확인" })
@@ -118,11 +119,18 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     `,
         }),
     );
-    await navigation.getByRole("link", { name: "연결", exact: true }).click();
+    await navigation
+      .getByRole("link", { name: "방송 준비", exact: true })
+      .click();
     await expect(
-      page.getByRole("button", { name: "YouTube 계정 연결", exact: true }),
+      page.getByRole("button", {
+        name: "YouTube 계정 연결",
+        exact: true,
+        includeHidden: true,
+      }),
     ).toBeEnabled();
 
+    await page.getByRole("tab", { name: "AI 계정·모델", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Sign in with ChatGPT" }),
     ).toBeVisible();
@@ -137,7 +145,11 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await aiAccount.getByRole("button", { name: "모델 목록 불러오기" }).click();
     await expect(aiAccount.getByRole("alert")).toContainText("502");
     await expect(
-      page.getByRole("button", { name: "YouTube 계정 연결", exact: true }),
+      page.getByRole("button", {
+        name: "YouTube 계정 연결",
+        exact: true,
+        includeHidden: true,
+      }),
     ).toBeEnabled();
     await page.unroute("**/api/admin/chatgpt/models");
     await page.route("**/api/admin/chatgpt/models", (route) =>
@@ -155,6 +167,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       .getByLabel("AI 모델", { exact: true })
       .selectOption("fixture-model");
     await expect.poll(() => selectedModel).toBe("fixture-model");
+    await page.getByRole("tab", { name: "채팅 플랫폼", exact: true }).click();
     await page
       .getByRole("button", { name: "SOOP 채팅 연결", exact: true })
       .click();
@@ -166,7 +179,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     await expect(chzzkConnect).toBeVisible();
     // This fixture has CHZZK disabled; configuration status and its action stay together.
     await expect(chzzkConnect).toBeDisabled();
-    await navigation.getByRole("link", { name: "참여", exact: true }).click();
+    await navigation.getByRole("link", { name: "참여자", exact: true }).click();
     assert.deepEqual(
       await page.evaluate(() => ({
         connections: (window as any).__soopConnections,
@@ -201,7 +214,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         publishedAt: undefined,
       },
     ]);
-    await panel.getByText(/참여 안내·현재 동의 상태/).click();
+
     const confirm = panel.getByRole("button", {
       name: "수신된 새 동의 명령 확인",
     });
@@ -209,6 +222,12 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
     page.once("dialog", (d) => void d.accept());
     await confirm.click();
     await expect(panel.getByText(/동의 완료/)).toBeVisible();
+    await captureUIReview(page, "participants");
+    await panel.getByLabel("참여자 검색", { exact: true }).fill("no-match");
+    await expect(
+      panel.getByText("검색 조건에 맞는 참여자가 없습니다."),
+    ).toBeVisible();
+    await panel.getByLabel("참여자 검색", { exact: true }).fill("");
     await expect(
       panel.getByRole("button", { name: "안내 전달 완료 확인" }),
     ).toHaveCount(0);
@@ -220,7 +239,9 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       .getByRole("button", { name: "14세 미만·신고 모순으로 참여 차단" })
       .click();
     await expect(panel.getByText(/철회됨 · 안내 대기/)).toBeVisible();
-    await panel.getByText(/권리행사·영상 후속 조치 \(/).click();
+    await navigation
+      .getByRole("link", { name: "기록·권리", exact: true })
+      .click();
     await panel.getByLabel("대상 계정", { exact: true }).fill("browser-viewer");
     await panel
       .getByLabel("방송 세션", { exact: true })
@@ -232,7 +253,33 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       }),
     });
     await expect(item).toBeVisible();
+
     await item.getByLabel("앱 조치 확인", { exact: true }).check();
+    const appCheck = item.getByLabel("앱 조치 확인", { exact: true });
+    await expect(appCheck).toBeChecked();
+    const checkboxBox = await appCheck.boundingBox();
+    assert(checkboxBox && checkboxBox.width >= 18 && checkboxBox.height >= 18);
+    await appCheck.focus();
+    await page.keyboard.press("Space");
+    await expect(appCheck).not.toBeChecked();
+    await item
+      .locator("label")
+      .filter({ hasText: /^앱 조치 확인$/ })
+      .click();
+    await expect(appCheck).toBeChecked();
+    await captureUIReview(page, "rights");
+    // Changing tasks retains edits and does not recreate the SOOP connection.
+    await navigation.getByRole("link", { name: "라이브", exact: true }).click();
+    await navigation
+      .getByRole("link", { name: "기록·권리", exact: true })
+      .click();
+    await expect(
+      item.getByLabel("앱 조치 확인", { exact: true }),
+    ).toBeChecked();
+    assert.equal(
+      await page.evaluate(() => (window as any).__soopConnections),
+      1,
+    );
     // Refresh must not overwrite an unfinished form.
     await panel.getByRole("button", { name: "상태 다시 확인" }).click();
     await expect(
@@ -248,7 +295,10 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       item.getByRole("button", { name: "처리 상태 저장" }),
     ).toBeDisabled();
     await expect(
-      panel.getByRole("region", { name: "자동 안내 상태" }),
+      panel.getByRole("region", {
+        name: "자동 안내 상태",
+        includeHidden: true,
+      }),
     ).toContainText("확인 필요");
     await page.unroute("**/api/admin/privacy");
     await panel.getByRole("button", { name: "상태 다시 확인" }).click();
@@ -288,7 +338,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       .getByRole("button", { name: "불필요해진 요청 정보 삭제" })
       .click();
     await expect(resolved).toHaveCount(0);
-    await panel.getByText(/영상·사본 목록/).click();
+    await page.getByRole("tab", { name: "영상·사본", exact: true }).click();
     await panel.getByLabel("영상 주소 또는 사본 위치").fill("fixture://video");
     await panel.getByLabel("방송 시각", { exact: true }).fill("2026-01-01");
     await panel.getByRole("button", { name: "영상 목록에 추가" }).click();
@@ -297,6 +347,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         exact: true,
       }),
     ).toBeVisible();
+    await captureUIReview(page, "videos");
     await page.setViewportSize({ width: 390, height: 844 });
     assert(
       await page.evaluate(
@@ -345,7 +396,7 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
       }
       assert.equal(person.state, "ACTIVE");
     };
-    await navigation.getByRole("link", { name: "방송", exact: true }).click();
+    await navigation.getByRole("link", { name: "라이브", exact: true }).click();
     message("unconsented-browser", "PC_UNCONSENTED_BODY");
     participate("withdraw-browser");
     message("withdraw-browser", "PC_WITHDRAW_VISIBLE_BODY");
@@ -421,7 +472,9 @@ export async function checkPrivacyUI(browser: Browser, dir: string) {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
-    await navigation.getByRole("link", { name: "연결", exact: true }).click();
+    await navigation
+      .getByRole("link", { name: "방송 준비", exact: true })
+      .click();
     await expect(
       page.getByRole("button", { name: "SOOP 연결 해제", exact: true }),
     ).toBeDisabled();

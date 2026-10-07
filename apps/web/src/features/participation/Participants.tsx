@@ -1,3 +1,4 @@
+import { Button, Input, Select } from "../../components/ui";
 import { useState } from "react";
 import type { ParticipantStatus } from "../../../../../packages/contracts/participation.ts";
 import { useAdminActions } from "../../lib/use-admin-actions.ts";
@@ -19,9 +20,25 @@ export function Participants({
   refresh: () => Promise<void>;
   stale: boolean;
 }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const visible = participants.filter(
+    (person) =>
+      `${person.account} ${platformName(person.platform)}`
+        .toLowerCase()
+        .includes(query.trim().toLowerCase()) &&
+      (filter === "all" ||
+        (filter === "active"
+          ? person.state === "ACTIVE"
+          : filter === "blocked"
+            ? person.age === "blocked"
+            : filter === "withdrawn"
+              ? person.state === "WITHDRAWN"
+              : !["ACTIVE", "WITHDRAWN", "ENDED"].includes(person.state))),
+  );
   return (
-    <details className="participation-section">
-      <summary>참여 안내·현재 동의 상태 ({participants.length})</summary>
+    <section className="participation-section">
+      <h2>참여 안내·현재 동의 상태 ({participants.length})</h2>
       <p>
         짧은 안내가 전달된 뒤 시청자가 새로 <strong>!동의</strong>를 입력하면
         참여합니다. 안내를 함께 볼 수 있던 시청자에게는 반복 발송하지 않지만,
@@ -37,8 +54,36 @@ export function Participants({
           아직 참여 상태가 기록된 시청자가 없습니다.
         </p>
       )}
+      <div className="filter-bar">
+        <label>
+          참여자 검색
+          <Input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="계정 또는 플랫폼"
+          />
+        </label>
+        <label>
+          참여 상태
+          <Select
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+          >
+            <option value="all">모든 상태</option>
+            <option value="active">참여 중</option>
+            <option value="waiting">동의 대기</option>
+            <option value="blocked">참여 차단</option>
+            <option value="withdrawn">철회됨</option>
+          </Select>
+        </label>
+        <span role="status">{visible.length}명 표시</span>
+      </div>
+      {!!participants.length && !visible.length && (
+        <p className="empty-state">검색 조건에 맞는 참여자가 없습니다.</p>
+      )}
       <div className="participation-list">
-        {participants.map((person) => (
+        {visible.map((person) => (
           <Participant
             key={person.id}
             person={person}
@@ -47,7 +92,7 @@ export function Participants({
           />
         ))}
       </div>
-    </details>
+    </section>
   );
 }
 function Participant({
@@ -90,7 +135,7 @@ function Participant({
         </p>
       )}
       {observed?.command === "!동의" && (
-        <button
+        <Button
           disabled={busy}
           onClick={() => {
             if (
@@ -109,12 +154,12 @@ function Participant({
           }}
         >
           수신된 새 동의 명령 확인
-        </button>
+        </Button>
       )}
       {p.notice && (
         <div className="participation-notice">
           <p>{p.notice.text}</p>
-          <button
+          <Button
             disabled={busy}
             onClick={() => {
               setCopyError("");
@@ -126,11 +171,11 @@ function Participant({
             }}
           >
             고정 안내문 복사
-          </button>
+          </Button>
           {automatic ? (
             <p className="hint">자동 발송된 안내의 전달 확인을 기다립니다.</p>
           ) : (
-            <button
+            <Button
               disabled={busy}
               onClick={() => {
                 if (
@@ -149,12 +194,12 @@ function Participant({
               }}
             >
               안내 전달 완료 확인
-            </button>
+            </Button>
           )}
         </div>
       )}
       {p.age !== "blocked" && (
-        <button
+        <Button
           className="secondary"
           disabled={busy}
           onClick={() =>
@@ -169,7 +214,7 @@ function Participant({
           }
         >
           14세 미만·신고 모순으로 참여 차단
-        </button>
+        </Button>
       )}
       {(actions.error || copyError) && (
         <p role="alert">{actions.error || copyError}</p>

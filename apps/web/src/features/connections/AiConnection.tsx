@@ -1,3 +1,4 @@
+import { Button, Select } from "../../components/ui";
 import { useState, useRef, useEffect } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import type { AvailableModel } from "../../../../../packages/contracts/connections.ts";
@@ -59,13 +60,13 @@ export function AiConnection({
       {!status.demo && status.ai.provider === "chatgpt_subscription" ? (
         <>
           <div className="toolbar">
-            <button
+            <Button
               disabled={stale || actions.busy("account")}
               onClick={() => authorize()}
             >
               Sign in with ChatGPT
-            </button>
-            <button
+            </Button>
+            <Button
               className="secondary"
               disabled={stale || actions.busy("models")}
               onClick={() =>
@@ -78,7 +79,7 @@ export function AiConnection({
               }
             >
               모델 목록 불러오기
-            </button>
+            </Button>
           </div>
           {loginUrl && (
             <p>
@@ -100,7 +101,7 @@ export function AiConnection({
                   </p>
                 </div>
                 <div className="toolbar">
-                  <button
+                  <Button
                     className="secondary"
                     disabled={
                       stale ||
@@ -118,14 +119,14 @@ export function AiConnection({
                     }
                   >
                     이 계정 사용
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     className="secondary"
                     disabled={stale || actions.busy("account")}
                     onClick={() => authorize(account.clientId)}
                   >
                     다시 인증
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
@@ -133,7 +134,7 @@ export function AiConnection({
           {!!models.length && (
             <div>
               <label htmlFor="ai-model-choice">AI 모델</label>
-              <select
+              <Select
                 id="ai-model-choice"
                 value={
                   models.some((model) => model.slug === status.ai.model)
@@ -157,11 +158,11 @@ export function AiConnection({
                     {model.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           )}
           {status.chatgpt.active && (
-            <button
+            <Button
               className="secondary"
               disabled={actions.busy("account")}
               onClick={() =>
@@ -171,7 +172,7 @@ export function AiConnection({
               }
             >
               현재 AI 계정 연결 해제
-            </button>
+            </Button>
           )}
           <p className="hint">
             계정·모델을 바꾸면 AI 생성을 중지하고 관련 문맥을 다시 확인합니다.

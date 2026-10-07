@@ -22,7 +22,13 @@ sh run-command.sh npx prettier --write README.md
 sh run-command.sh --help
 ```
 
-Browser tests serve `dist/web`, so build after web changes. Fixtures use ports `127.0.0.1:33219` and `127.0.0.1:33220`, memory databases, isolated credential paths and synthetic input. Do not run multiple browser checks on those ports simultaneously. JSON reports and screenshots go to ignored `test-results/`. These tests do not establish real broadcast compatibility or paid-model quality. Browser verification fails on page errors and CSP console diagnostics.
+Browser tests serve `dist/web`, so build after web changes. Fixtures use ports `127.0.0.1:33219` and `127.0.0.1:33220`, memory databases, isolated credential paths and synthetic input. Do not run multiple browser checks on those ports simultaneously. JSON reports and screenshots go to ignored `test-results/`. These tests do not establish real broadcast compatibility or paid-model quality. Browser verification fails on page errors and CSP console diagnostics. For the optional UI review capture and axe pass, run
+`sh run-command.sh env UI_REVIEW=1 npm run test:browser` after building. It writes
+synthetic desktop/mobile screenshots and audit JSON to ignored
+`.impeccable/review/`; `UI_REVIEW_TARGETS=platforms,media,ai` can restrict captures
+while retaining the full interaction suite. Captures wait for tab activation and
+font/paint settling. Automated contrast and layout checks do not replace physical
+device, screen-reader or real-platform acceptance.
 
 The [managed-server check](../../scripts/server-control-check.ts) runs the real
 `just` recipes in a temporary directory with a synthetic HTTP server, isolated PID

@@ -1,3 +1,4 @@
+import { Button, Input, Select } from "../../components/ui";
 import { useState } from "react";
 import {
   videoIntakeSchema,
@@ -23,8 +24,8 @@ export function VideoInventory({
   });
   const actions = useAdminActions(refresh);
   return (
-    <details className="participation-section">
-      <summary>영상·사본 목록 ({rows.length})</summary>
+    <section className="participation-section">
+      <h2>영상·사본 목록 ({rows.length})</h2>
       <p className="hint">
         후속 조치가 필요한 영상이나 사본의 위치를 기록합니다. 등록만으로 외부
         영상이 변경되지는 않습니다.
@@ -52,7 +53,7 @@ export function VideoInventory({
         <div className="participation-fields">
           <label>
             플랫폼
-            <select
+            <Select
               value={value.platform}
               onChange={(e) =>
                 setValue({
@@ -68,11 +69,11 @@ export function VideoInventory({
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             영상 주소 또는 사본 위치
-            <input
+            <Input
               required
               maxLength={500}
               value={value.url}
@@ -81,7 +82,7 @@ export function VideoInventory({
           </label>
           <label>
             방송 시각
-            <input
+            <Input
               required
               maxLength={80}
               value={value.broadcastAt}
@@ -92,7 +93,7 @@ export function VideoInventory({
           </label>
           <label>
             공개 상태
-            <select
+            <Select
               value={value.status}
               onChange={(e) =>
                 setValue({
@@ -106,18 +107,18 @@ export function VideoInventory({
                   {label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         </div>
-        <button
+        <Button
           disabled={
             stale || actions.busy("video") || !value.url || !value.broadcastAt
           }
         >
           영상 목록에 추가
-        </button>
+        </Button>
         {actions.error && <p role="alert">{actions.error}</p>}
       </form>
-    </details>
+    </section>
   );
 }

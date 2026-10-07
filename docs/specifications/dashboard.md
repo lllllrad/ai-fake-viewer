@@ -10,18 +10,33 @@ owned by [requirements](behavior.md), [participation](participation.md) and
 
 ## Operator tasks and navigation
 
-Use three clear destinations within the authenticated workspace:
+Use four task destinations within the authenticated workspace:
 
-- **Broadcast:** input health, AI enablement, conversation preview, recent speech,
-  automatic cast, disclosure and broadcast end/new-session controls.
-- **Connections:** selected platforms, account connection/reauthorization, input
-  configuration status, AI account/model and usage/diagnostics.
-- **Participation:** short guidance and individual consent status, withdrawal/age
-  controls, operating profile, rights requests and optional video follow-up.
+- **Live:** conversation moderation, AI enablement/stop, concise input health,
+  source preview, tabbed speech/cast/anonymous context, disclosure and session end.
+- **Broadcast preparation:** persistent tabs for chat platforms, screen/audio,
+  AI accounts/models and reader/OBS links. These are independent setup tasks,
+  not a mandatory wizard. Each source keeps its diagnostics with its controls.
+- **Participants:** searchable current participation states and a separate
+  operating-profile/notice-settings tab.
+- **Records and rights:** separate rights-request and video-inventory tabs for
+  follow-up work that can outlive the broadcast.
 
-The broadcast screen is the landing page. The operator must not have to expand a
-large technical settings panel to turn AI on/off or diagnose missing input.
-Navigation must retain the single SOOP browser connection and its notice loop.
+The live workspace is the landing page. The conversation is the main work area;
+source preview and context occupy a secondary column. The AI switch and emergency
+stop are available above it. Source status expands inline, with links that open
+and focus the corresponding preparation panel. Routine settings do not surround
+the conversation. Destructive data reset is under explicit data management.
+
+Desktop uses a left navigation rail. Narrow layouts use a labeled top navigation
+and stack work areas. A compact emergency stop remains in the sticky mobile
+navigation across all destinations. The UI uses shared Bootstrap buttons/forms, Radix tabs and
+native modal dialogs for disclosure and destructive session/data actions. The
+native dialog preserves focus and cancellation without injecting styles blocked
+by the existing Content Security Policy. Design tokens and component conventions
+are owned by [DESIGN.md](../../DESIGN.md).
+
+Navigation retains the single SOOP browser connection and its notice loop.
 Reader and overlay remain separate routes with separate reader authorization.
 
 The [login screen](../../apps/web/src/features/workspace/AdminLogin.tsx) owns its
@@ -32,14 +47,15 @@ shows progress and clears the workspace after success. Returning to login starts
 with an empty token field; credentials are never persisted in browser storage.
 
 Workspace navigation uses fragment links (`#broadcast`, `#connections`,
-`#participation`). Existing input-detail links select their owning screen. Screens
+`#participation`, `#records`). Existing input-detail links select their owning screen. Screens
 retain their component lifetime while hidden: navigating must not reconnect SOOP
 or discard unfinished participation forms. The broadcast conversation, transcripts,
-cast, pending draft review and lifecycle controls are owned by
+cast and pending draft review are owned by
 [BroadcastConversation](../../apps/web/src/features/workspace/BroadcastConversation.tsx).
 
 Navigation waits for the authenticated workspace to exist before scrolling to the
-selected destination and focusing its heading. Direct detail links survive reload,
+selected destination and focusing its heading. Tab-trigger interaction retains
+focus within the tab strip so consecutive arrow keys continue switching tabs. Direct detail links survive reload,
 and changing between details on the same screen still updates focus. Headings use
 programmatic focus without adding extra stops to normal Tab navigation. Routine
 status refreshes preserve the operator's current focus.
@@ -56,7 +72,7 @@ the same pending command issue one request, while emergency stop can run during
 another command. Finishing stop does not clear the remaining command's pending
 state. Signing out or losing authentication cancels pending broadcast actions.
 
-Place three input summaries together: broadcast screen, platform chat and speech
+Place three compact expandable input summaries together: broadcast screen, platform chat and speech
 transcription. Healthy inputs say only that they are healthy. Unconfigured and
 selected-but-failing inputs are visibly different. Expanding details reveals
 source/backend, recent timestamps and corrective action; raw transport codes do
@@ -71,7 +87,8 @@ and release its image URL. Retired responses cannot allocate or restore an image
 a current request failure clears the old image and remains retryable. The broadcast
 and connection views share this one preview lifetime.
 
-The primary work area contains recent permitted conversation and current speech.
+The primary work area contains recent permitted conversation. Preview and tabbed
+speech, cast and anonymous topic/mood context sit beside it.
 Show empty, waiting and failed states intentionally. Automatic AI viewers appear
 as a read-only cast overview; the operator does not create, audition or approve
 personas. Anonymous topic/mood context is secondary and can be cleared explicitly.
@@ -97,6 +114,8 @@ does not silently reopen when the page reloads or the process restarts.
 Use explicit localized action labels. A disclosure button must say what will be
 shown; a status such as “already disclosed” is not an action label. Confirm only
 destructive session/data actions and irreversible disclosure, not ordinary toggles.
+Disclosure and session end use a focused dialog with explicit consequences and
+cancel as the initial focus. Escape cancels; closing restores trigger focus.
 
 ## Connections and diagnostics
 
@@ -152,7 +171,9 @@ observed unordered command; there is no administrator activation shortcut. Faile
 or unconfirmed notice delivery cannot be marked successful by a button.
 
 Keep the operating profile readable and separate from live controls. Show missing
-configuration with a relevant action. Profile edits do not bypass real account
+configuration with a relevant action. Search and status filters narrow current
+participants without altering their participation state. Rights and video forms
+remain mounted across navigation, preserving unfinished edits. Profile edits do not bypass real account
 permissions or expand prior consent silently.
 
 Rights requests survive broadcast end independently. Distinguish application
@@ -244,3 +265,15 @@ manual candidate review, shared notice/individual consent, withdrawal and reconn
 rights completion restrictions, reader/overlay synchronization and mobile layout.
 Use synthetic inputs and mocked external adapters. Screenshots alone do not prove
 server behavior, and fixture success does not certify real platform permissions.
+
+## Validation scope and limitations
+
+Browser fixtures exercise administrator login, deep-link focus, pending commands,
+emergency stop, draft review, moderation, disclosure, close/new-session, setup tabs,
+AI model selection, reader/overlay access and participation/rights workflows on
+isolated synthetic servers. `UI_REVIEW=1 npm run test:browser` additionally captures
+desktop/mobile views and axe accessibility results under ignored
+`.impeccable/review/`. These are synthetic application checks, not acceptance of
+real provider accounts, live platform permissions, speech accuracy or OBS operation.
+The shipped theme is light for the workspace/reader and dark on a transparent
+OBS canvas; theme switching is not implemented.

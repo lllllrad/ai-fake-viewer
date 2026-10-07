@@ -1,3 +1,4 @@
+import { Button } from "../../components/ui";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import { inputHealth } from "../../input-health.ts";
 import { connectionApi } from "./api.ts";
@@ -52,7 +53,7 @@ export function MediaConnections({
             <p role="status">{status.capture.lastError}</p>
           )}
           <div className="toolbar">
-            <button
+            <Button
               disabled={stale || status.closed || actions.busy("capture")}
               onClick={() =>
                 void actions.run("capture", (signal) =>
@@ -61,8 +62,8 @@ export function MediaConnections({
               }
             >
               화면 수신 시작
-            </button>
-            <button
+            </Button>
+            <Button
               className="secondary"
               disabled={actions.busy("capture")}
               onClick={() =>
@@ -72,7 +73,7 @@ export function MediaConnections({
               }
             >
               화면 수신 중지
-            </button>
+            </Button>
           </div>
           <details>
             <summary>영상 설정 상세</summary>
@@ -100,7 +101,7 @@ export function MediaConnections({
             음성 입력과 GROQ_API_KEY를 설정하세요.
           </p>
           <div className="toolbar">
-            <button
+            <Button
               disabled={stale || status.closed || actions.busy("audio")}
               onClick={() =>
                 void actions.run("audio", (signal) =>
@@ -109,8 +110,8 @@ export function MediaConnections({
               }
             >
               음성 전사 시작
-            </button>
-            <button
+            </Button>
+            <Button
               className="secondary"
               disabled={actions.busy("audio")}
               onClick={() =>
@@ -120,7 +121,7 @@ export function MediaConnections({
               }
             >
               음성 전사 중지
-            </button>
+            </Button>
             <a
               href="/api/admin/transcripts/export"
               download="transcripts.jsonl"

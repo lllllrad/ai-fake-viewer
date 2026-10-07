@@ -1,3 +1,4 @@
+import { Button, Input } from "../../components/ui";
 import { useEffect, useRef, useState } from "react";
 import { ConversationList } from "./ConversationList.tsx";
 import { useConversation } from "./use-conversation.ts";
@@ -20,7 +21,6 @@ function ReaderAccess({
   const [value, setValue] = useState("");
   return (
     <main className="reader-access">
-      <span className="conversation-kicker">방송 채팅</span>
       <h1>대화에 연결하기</h1>
       <p>운영자가 공유한 채팅 링크를 열거나 리더 접속 토큰을 입력해 주세요.</p>
       <form
@@ -31,7 +31,7 @@ function ReaderAccess({
       >
         <label>
           리더 접속 토큰
-          <input
+          <Input
             type="password"
             value={value}
             onChange={(event) => setValue(event.target.value)}
@@ -39,7 +39,7 @@ function ReaderAccess({
             required
           />
         </label>
-        <button type="submit">채팅 열기</button>
+        <Button type="submit">채팅 열기</Button>
       </form>
       {denied && (
         <p role="alert">
@@ -95,7 +95,6 @@ export function ConversationPage() {
       {!overlay && (
         <header className="conversation-header">
           <div>
-            <span className="conversation-kicker">LIVE CONVERSATION</span>
             <h1>방송 채팅</h1>
           </div>
           <span className="conversation-connection" role="status">
@@ -128,14 +127,14 @@ export function ConversationPage() {
       {!overlay && (
         <footer className="conversation-toolbar">
           <label>
-            <input
+            <Input
               type="checkbox"
               checked={follow}
               onChange={(event) => setFollow(event.target.checked)}
             />
             새 채팅 따라가기
           </label>
-          <button
+          <Button
             type="button"
             onClick={() => {
               setFollow(true);
@@ -143,7 +142,7 @@ export function ConversationPage() {
             }}
           >
             최근 채팅으로 이동 ↓
-          </button>
+          </Button>
         </footer>
       )}
     </main>

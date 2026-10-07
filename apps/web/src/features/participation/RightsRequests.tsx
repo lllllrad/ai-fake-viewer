@@ -1,3 +1,4 @@
+import { Button, Input, Select } from "../../components/ui";
 import { useState } from "react";
 import {
   rightsUpdateSchema,
@@ -23,12 +24,12 @@ export function RightsRequests({
   ...props
 }: Props & { rows: RightsRecord[] }) {
   return (
-    <details className="participation-section">
-      <summary>
+    <section className="participation-section">
+      <h2>
         권리행사·영상 후속 조치 (
         {rows.filter((r) => !["completed", "limited"].includes(r.state)).length}
         )
-      </summary>
+      </h2>
       <p>
         앱 삭제와 외부 제공자·공개 영상·사본의 조치는 각각 확인합니다. 이 화면에
         채팅 원문이나 신분증을 입력하지 마세요.
@@ -42,7 +43,7 @@ export function RightsRequests({
         ))}
       </div>
       <RightsIntakeForm {...props} />
-    </details>
+    </section>
   );
 }
 function RightsIntakeForm({ refresh, stale }: Props) {
@@ -71,7 +72,7 @@ function RightsIntakeForm({ refresh, stale }: Props) {
         {(Object.keys(fields) as (keyof typeof fields)[]).map((key) => (
           <label key={key}>
             {fields[key]}
-            <input
+            <Input
               required={["platform", "account", "session"].includes(key)}
               value={value[key] ?? ""}
               maxLength={
@@ -90,7 +91,7 @@ function RightsIntakeForm({ refresh, stale }: Props) {
           </label>
         ))}
       </div>
-      <button
+      <Button
         disabled={
           stale ||
           actions.busy("intake") ||
@@ -99,7 +100,7 @@ function RightsIntakeForm({ refresh, stale }: Props) {
         }
       >
         요청 접수
-      </button>
+      </Button>
       {actions.error && <p role="alert">{actions.error}</p>}
     </form>
   );
@@ -152,7 +153,7 @@ function RightsItem({ row, refresh, stale }: Props & { row: RightsRecord }) {
           <legend>조치 확인 및 처리 결과</legend>
           {(Object.keys(checks) as (keyof typeof checks)[]).map((key) => (
             <label key={key} className="participation-check">
-              <input
+              <Input
                 type="checkbox"
                 checked={patch[key]}
                 onChange={(e) =>
@@ -165,7 +166,7 @@ function RightsItem({ row, refresh, stale }: Props & { row: RightsRecord }) {
           <div className="participation-fields">
             <label>
               진행 상태
-              <select
+              <Select
                 value={patch.state}
                 onChange={(e) =>
                   setDraft({
@@ -179,11 +180,11 @@ function RightsItem({ row, refresh, stale }: Props & { row: RightsRecord }) {
                     {label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               조치 결과
-              <select
+              <Select
                 value={patch.outcome}
                 onChange={(e) =>
                   setDraft({
@@ -199,23 +200,23 @@ function RightsItem({ row, refresh, stale }: Props & { row: RightsRecord }) {
                     {label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
-          <button>처리 상태 저장</button>
+          <Button>처리 상태 저장</Button>
           {draft && (
-            <button
+            <Button
               type="button"
               className="secondary"
               onClick={() => setDraft(undefined)}
             >
               편집 취소
-            </button>
+            </Button>
           )}
         </fieldset>
       </form>
       {["completed", "limited"].includes(row.state) && (
-        <button
+        <Button
           disabled={busy}
           className="secondary"
           onClick={() => {
@@ -230,7 +231,7 @@ function RightsItem({ row, refresh, stale }: Props & { row: RightsRecord }) {
           }}
         >
           불필요해진 요청 정보 삭제
-        </button>
+        </Button>
       )}
       {actions.error && <p role="alert">{actions.error}</p>}
     </article>

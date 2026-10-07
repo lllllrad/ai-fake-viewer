@@ -1,3 +1,4 @@
+import { captureUIReview } from "./ui-review.ts";
 import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -63,6 +64,7 @@ try {
   await adminPage.unroute("**/api/admin/status");
   await adminPage.getByRole("button", { name: "연결 다시 확인" }).click();
   // Authentication uses the same single-flight action ownership as workspace commands.
+  await captureUIReview(adminPage, "login");
   await adminPage.getByLabel("관리자 접속 토큰").fill("invalid-fixture");
   await adminPage
     .getByRole("button", { name: "연결하기", exact: true })
@@ -146,11 +148,26 @@ try {
     name: "운영 화면",
   });
   await workspaceNavigation
-    .getByRole("link", { name: "연결", exact: true })
+    .getByRole("link", { name: "방송 준비", exact: true })
     .focus();
   await adminPage.keyboard.press("Enter");
   await expect(
     adminPage.getByRole("heading", { name: "연결 및 입력 설정" }),
+  ).toBeFocused();
+  const setupTabs = adminPage.getByRole("tablist", { name: "방송 준비 항목" });
+  await setupTabs
+    .getByRole("tab", { name: "채팅 플랫폼", exact: true })
+    .focus();
+  await adminPage.keyboard.press("ArrowRight");
+  await expect(
+    setupTabs.getByRole("tab", { name: "화면·음성", exact: true }),
+  ).toBeFocused();
+  await expect(
+    setupTabs.getByRole("tab", { name: "화면·음성", exact: true }),
+  ).toHaveAttribute("aria-selected", "true");
+  await adminPage.keyboard.press("ArrowRight");
+  await expect(
+    setupTabs.getByRole("tab", { name: "AI 계정·모델", exact: true }),
   ).toBeFocused();
   await adminPage.goto(`${origin}/admin#audio-details`);
   await adminPage.reload();
@@ -162,11 +179,11 @@ try {
     adminPage.getByRole("heading", { name: "송출 화면 입력", exact: true }),
   ).toBeFocused();
   await workspaceNavigation
-    .getByRole("link", { name: "방송", exact: true })
+    .getByRole("link", { name: "라이브", exact: true })
     .focus();
   await adminPage.keyboard.press("Enter");
   await expect(
-    adminPage.getByRole("heading", { name: "방송 상태 및 AI 제어" }),
+    adminPage.getByRole("heading", { name: "AI 채팅 생성", exact: true }),
   ).toBeFocused();
   assert(
     (
@@ -182,11 +199,11 @@ try {
   assert(
     await adminPage.evaluate(() =>
       document
-        .querySelector("main.admin section")
+        .querySelector("#broadcast section")
         ?.classList.contains("operations-dashboard"),
     ),
   );
-  for (const heading of ["송출 화면", "실제 채팅 정보", "음성 인식 transcript"])
+  for (const heading of ["송출 화면", "실제 채팅 정보", "음성 자막"])
     await expect(
       dashboard.getByRole("heading", { name: heading }),
     ).toBeVisible();
@@ -227,7 +244,7 @@ try {
       await received;
     }
     releasePreview();
-    const previewImage = dashboard.getByAltText("송출 화면 미리보기");
+    const previewImage = adminPage.getByAltText("송출 화면 미리보기");
     await expect(previewImage).toBeVisible();
     await expect
       .poll(() =>
@@ -250,7 +267,7 @@ try {
   });
   const navigation = adminPage.getByRole("navigation", { name: "운영 화면" });
   await expect(
-    navigation.getByRole("link", { name: "방송", exact: true }),
+    navigation.getByRole("link", { name: "라이브", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(adminPage.locator("#connection-details")).not.toBeVisible();
   await adminPage.route("**/api/admin/status", async (route) => {
@@ -288,6 +305,7 @@ try {
   await expect(
     chatSummary.getByText("확인 필요", { exact: true }),
   ).toBeVisible();
+  await chatSummary.locator("summary").click();
   await expect(
     chatSummary.getByText("유튜브: 계정의 접근 권한을 확인해 주세요."),
   ).toBeVisible();
@@ -296,10 +314,10 @@ try {
     .getByRole("link", { name: "채팅 연결 및 수신 제어" })
     .click();
   await expect(
-    navigation.getByRole("link", { name: "연결", exact: true }),
+    navigation.getByRole("link", { name: "방송 준비", exact: true }),
   ).toHaveAttribute("aria-current", "page");
   await expect(adminPage.locator("#connection-details")).toBeVisible();
-  await navigation.getByRole("link", { name: "방송", exact: true }).click();
+  await navigation.getByRole("link", { name: "라이브", exact: true }).click();
   await adminPage.unroute("**/api/admin/status");
   // Missing optional and nested status fields must not crash the admin page.
   await adminPage.route("**/api/admin/status", async (route) => {
@@ -312,6 +330,13 @@ try {
     await route.fulfill({ json: body });
   });
   await dashboard.getByRole("button", { name: "상태 다시 확인" }).click();
+  await dashboard
+    .locator("article")
+    .filter({
+      has: adminPage.getByRole("heading", { name: "음성 자막", exact: true }),
+    })
+    .locator("summary")
+    .click();
   await expect(
     dashboard.getByText("최신 자막 상태를 확인할 수 없습니다"),
   ).toBeVisible();
@@ -443,6 +468,7 @@ try {
     await overlay.locator("[data-message-id]").nth(i).waitFor();
     timing.push(performance.now() - start);
   }
+  await adminPage.getByRole("tab", { name: "대화 요약", exact: true }).click();
   const summaryCard = adminPage.getByRole("region", { name: "익명 채팅 요약" });
   await expect(
     summaryCard.getByText("주제: 개발·기술", { exact: true }),
@@ -466,6 +492,9 @@ try {
       exact: true,
     }),
   ).toBeVisible();
+  await captureUIReview(adminPage, "live");
+  await captureUIReview(readerPage, "reader");
+  await captureUIReview(overlay, "overlay");
   const readerText = await readerPage
     .locator(".conversation-content p")
     .allTextContents();
@@ -498,7 +527,12 @@ try {
     .boundingBox();
   assert(notice && notice.y >= 0 && notice.y + notice.height < 1000);
   const hidden = store.snapshot().messages[4]!.id;
-  store.hide(hidden);
+  await adminPage
+    .locator(".operator-message")
+    .filter({ hasText: "[DEMO] Shared message 5 ·" })
+    .getByRole("button", { name: /채팅 숨기기/ })
+    .click();
+  assert(!store.snapshot().messages.some((message) => message?.id === hidden));
   await readerPage
     .locator(`[data-message-id="${hidden}"]`)
     .waitFor({ state: "detached" });
@@ -519,6 +553,7 @@ try {
   await aiToggle.focus();
   await adminPage.keyboard.press("Space");
   await expect(aiToggle).toHaveAttribute("aria-checked", "true");
+  await adminPage.getByRole("tab", { name: "AI 시청자", exact: true }).click();
   await expect(
     adminPage.getByRole("heading", { name: "자동 시청자 페르소나" }),
   ).toBeVisible();
@@ -565,14 +600,28 @@ try {
   await readerPage
     .getByText("[DEMO] Receiver continues after AI stop")
     .waitFor();
-  adminPage.once("dialog", (dialog) => void dialog.dismiss());
   await dashboard
     .getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" })
     .click();
+  await expect(adminPage.getByRole("alertdialog")).toBeVisible();
+  await captureUIReview(adminPage, "disclosure-dialog");
+  await expect(
+    adminPage
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "취소", exact: true }),
+  ).toBeFocused();
+  await adminPage.keyboard.press("Escape");
+  await expect(adminPage.getByRole("alertdialog")).toHaveCount(0);
+  await expect(
+    dashboard.getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" }),
+  ).toBeFocused();
   assert.equal(store.originsRevealed(), false);
-  adminPage.once("dialog", (dialog) => void dialog.accept());
   await dashboard
     .getByRole("button", { name: "AI 채팅에 ‘AI 생성’ 표시하기" })
+    .click();
+  await adminPage
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "AI 생성 표시하기", exact: true })
     .click();
   await expect(
     dashboard.getByText("AI 채팅에 ‘AI 생성’ 표시 중", { exact: true }),
@@ -628,7 +677,10 @@ try {
     accessPage.getByText("[DEMO] Receiver continues after AI stop"),
   ).toBeVisible();
   await accessPage.close();
-  await navigation.getByRole("link", { name: "연결", exact: true }).click();
+  await navigation
+    .getByRole("link", { name: "방송 준비", exact: true })
+    .click();
+  await adminPage.getByRole("tab", { name: "리더·OBS", exact: true }).click();
   const readerLinks = adminPage.getByRole("region", {
     name: "리더와 OBS 연결",
   });
@@ -643,29 +695,59 @@ try {
     path: "test-results/admin-connections.png",
     fullPage: true,
   });
-  await navigation.getByRole("link", { name: "방송", exact: true }).click();
+  await captureUIReview(adminPage, "output");
+  for (const [tab, file] of [
+    ["채팅 플랫폼", "platforms"],
+    ["화면·음성", "media"],
+    ["AI 계정·모델", "ai"],
+  ] as const) {
+    await adminPage.getByRole("tab", { name: tab, exact: true }).click();
+    await captureUIReview(adminPage, file);
+  }
+  await navigation.getByRole("link", { name: "라이브", exact: true }).click();
   await adminPage.setViewportSize({ width: 390, height: 844 });
   await adminPage.evaluate(() => scrollTo(0, 0));
   await expect(aiToggle).toBeInViewport();
   await expect(
-    dashboard.getByText("AI 채팅에 ‘AI 생성’ 표시 중", { exact: true }),
+    adminPage.getByRole("button", { name: "AI 긴급 중지" }),
   ).toBeInViewport();
   assert(
     await adminPage.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  await adminPage.evaluate(() => scrollTo(0, document.body.scrollHeight));
+  await expect(
+    adminPage.getByRole("button", { name: "AI 긴급 중지" }),
+  ).toBeInViewport();
+  await navigation
+    .getByRole("link", { name: "기록·권리", exact: true })
+    .click();
+  await expect(
+    adminPage.getByRole("button", { name: "AI 긴급 중지" }),
+  ).toBeInViewport();
+  await adminPage.getByRole("button", { name: "AI 긴급 중지" }).click();
+  await navigation.getByRole("link", { name: "라이브", exact: true }).click();
+  await adminPage.evaluate(() => scrollTo(0, 0));
   await adminPage.screenshot({
     path: "test-results/admin-mobile.png",
     fullPage: true,
   });
-  adminPage.once("dialog", (dialog) => void dialog.dismiss());
+
   await adminPage
     .getByRole("button", { name: "방송 종료", exact: true })
     .click();
-  assert.equal(store.closed(), false);
-  adminPage.once("dialog", (dialog) => void dialog.accept());
   await adminPage
+    .getByRole("alertdialog")
+    .getByRole("button", { name: "취소", exact: true })
+    .click();
+  assert.equal(store.closed(), false);
+
+  await adminPage
+    .getByRole("button", { name: "방송 종료", exact: true })
+    .click();
+  await adminPage
+    .getByRole("alertdialog")
     .getByRole("button", { name: "방송 종료", exact: true })
     .click();
   await expect(

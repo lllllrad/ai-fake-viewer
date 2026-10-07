@@ -29,8 +29,11 @@
     "@fontsource-variable/noto-sans-kr": "^5.3.0",
     "@grpc/grpc-js": "^1.14.0",
     "@grpc/proto-loader": "^0.8.0",
+    "@radix-ui/react-tabs": "^1.1.22",
+    "bootstrap": "^5.3.8",
     "fastify": "^5.6.0",
     "jose": "^6.2.12",
+    "lucide-react": "^1.52.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "sharp": "0.35.5",
@@ -40,6 +43,7 @@
     "zod": "^4.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "1.63.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.1.0",

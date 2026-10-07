@@ -1,3 +1,4 @@
+import { Button } from "../../components/ui";
 import { SoopAutoConnection } from "./auto-connection.ts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
@@ -85,7 +86,7 @@ export function SoopConnector({
         중에는 관리자 탭을 열어 두세요. 화면을 이동해도 연결은 유지됩니다.
       </p>
       <div className="toolbar">
-        <button
+        <Button
           disabled={
             stale ||
             busy ||
@@ -95,8 +96,8 @@ export function SoopConnector({
           onClick={() => void authorize()}
         >
           SOOP 계정 인증
-        </button>
-        <button
+        </Button>
+        <Button
           className="secondary"
           disabled={
             closed ||
@@ -109,8 +110,8 @@ export function SoopConnector({
           onClick={() => void connect()}
         >
           SOOP 채팅 연결
-        </button>
-        <button
+        </Button>
+        <Button
           className="secondary"
           disabled={
             connection.phase !== "connecting" &&
@@ -119,7 +120,7 @@ export function SoopConnector({
           onClick={() => void disconnect()}
         >
           SOOP 연결 해제
-        </button>
+        </Button>
       </div>
       {message && <p role="status">{message}</p>}
     </section>

@@ -19,6 +19,11 @@
 | Reference        | [Legacy persona authoring](reference/persona-authoring.md)            | Demo-only authoring, auditions and API contracts                                   |
 | Reference        | [Dependencies](reference/dependencies.md)                             | Dependency choices and constraints                                                 |
 
+[PRODUCT.md](../PRODUCT.md) records the confirmed audience, purpose and durable
+product constraints for future design work. Detailed behavior remains owned by the
+specifications above. [DESIGN.md](../DESIGN.md) records the implemented visual
+system and shared component standards.
+
 [README](../README.md) is the project entry point.
 [Example configuration](../config.example.yaml) and [schema](../packages/config.ts)
 are the configuration reference. Runtime model instructions remain in `prompts/`;
