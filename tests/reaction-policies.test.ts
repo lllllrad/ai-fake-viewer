@@ -1,3 +1,4 @@
+import { chooseCastMember } from "../services/viewer-ai/cast-selection.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -6,7 +7,6 @@ import {
   messageVersion,
 } from "../packages/domain/reactions/evidence.ts";
 import {
-  chooseCastMember,
   castPacingBlocked,
   type ReactionMember,
 } from "../packages/domain/reactions/cast-selection.ts";

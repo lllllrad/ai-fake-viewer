@@ -9,8 +9,8 @@ tool, not a new operator persona-authoring or forced-response mode.
 The live server on port 3210 does not mount the test API, serve the test UI or
 construct an experiment workspace. Tests run in a separate process and frontend
 bundle with no platform connectors, broadcast controls or live database handles.
-The production reaction, nickname, transcription and pipeline modules remain shared
-code. Unit/browser fixtures and replay reports remain isolated developer commands.
+Live and test clients use the same independent [AI service](ai-service.md).
+Nickname and transcription modules remain shared host code. Unit/browser fixtures and replay reports remain isolated developer commands.
 
 ```sh
 sh run-command.sh npm run experiments:setup
@@ -110,7 +110,7 @@ ending/changing the session, leaving the page or losing input readiness stops ca
 The conversation text draft remains available when returning to its tab.
 
 **Per-viewer state** selects a cast member and displays inspection sections supplied by
-that pipeline's optional `inspect(engine)` hook. The standard implementation reports
+that service pipeline's optional `inspect(context)` hook. The standard implementation reports
 participation settings, recent publication, per-member processing events, recorded model
 actions and pending publication decisions. These are explicit application observations
 and outputs, not inferred private model reasoning. Custom implementations choose their
@@ -169,34 +169,21 @@ speech recognition accuracy or real-model naturalness.
 
 ## Replaceable AI implementations
 
-**AI type** selects an algorithm implementation independently of **AI connection**
-(the model provider/account). The shared [implementation registry](../../packages/application/reactions/pipelines.ts)
-contains the built-in `standard` pipeline. Its `create` factory replaces the whole
-reaction engine, including observation/selection, generation/review and scheduling;
-this is not a provider adapter or a prompt-only preset. The engine implements the
-public `ReactionEngine` lifecycle contract. The `draft` entry supplies its matching
-isolated draft path. Registered implementations are trusted repository code; JSON
-selects an ID and cannot load arbitrary executable module paths.
+**AI type** selects an algorithm in the independent [AI service](ai-service.md),
+separately from **AI connection** (the app-owned provider/account). The app discovers
+IDs, labels and revisions over HTTP at startup and builds generic host adapters.
+It contains no built-in AI selection or draft/review implementation. Add algorithms
+in [service programs](../../services/viewer-ai/programs.ts), restart the service and
+restart clients to discover the new type. The UI lists metadata automatically.
 
-To add an algorithm, implement `ReactionPipeline` (`id`, `revision`, `label`,
-`description`, `create`, `draft`, and optional `inspect`) in an application module and register it alongside
-`standard`. Keep module dependencies within the application/domain boundaries.
-The test UI lists registry metadata automatically. Select it for a new test, then
-promote the same ID to live `ai.pipelineType` (or a versioned profile's
-`ai.pipelineType`) and restart the live server. No separate test implementation
-needs to be ported. The test server's `pipelineType` setting supplies its default;
-a profile's type overrides that default, and an explicit test selection wins for
-that test. Existing tests keep their chosen type until ended.
-
-Both server composition roots and replay use this registry. Draft CLI runs call
-the selected entry's `draft`, not a hardcoded baseline. Unknown IDs fail without
-fallback. Interactive snapshots retain type ID and implementation revision; old
-records default to `standard@1`. A type registration itself is not evidence of
-correct publication or consent behavior: alternate engines must preserve cancellation,
-usage accounting, evidence and publication guards, and pass the same conformance
-suite before live use. Only the existing standard algorithm ships by default;
-synthetic alternate implementations are exercised in tests, not presented as
-validated new AI behavior.
+Select a type for a new test, then promote the same ID to live `ai.pipelineType`
+(or a profile's `ai.pipelineType`). Both clients and replay invoke the same service;
+no separate test implementation needs porting. A profile overrides the test server's
+default, and an explicit test selection wins. Snapshots keep type ID and revision;
+old records default to `standard@1`. Unknown IDs and revision mismatches fail without
+fallback. Existing tests retain their type until ended. Resuming requires the same
+implementation revision. Algorithm code is trusted service code and must respect
+cancellation and host capability contracts; only `standard` ships by default.
 
 ## Replay and compare
 

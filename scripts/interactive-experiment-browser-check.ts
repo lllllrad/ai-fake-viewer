@@ -1,3 +1,4 @@
+import "./browser-ai-service.ts";
 import assert from "node:assert/strict";
 import { chromium, expect } from "@playwright/test";
 import { mkdtempSync, rmSync } from "node:fs";

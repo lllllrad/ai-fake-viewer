@@ -34,3 +34,5 @@ from unverified external assumptions. Keep validation in tests and commit
 messages. Do not add chronological verification reports or duplicate task ledgers.
 Use relative links, English prose and official API names. Run
 `sh run-command.sh npm run docs:check` after documentation changes.
+
+The [independent AI service](development/ai-service.md) owns pipeline execution and documents its API, lifecycle and implementation boundary.

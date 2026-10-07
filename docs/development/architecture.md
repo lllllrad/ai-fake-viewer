@@ -23,7 +23,8 @@ privacy enable flags; forced-reply and broadcaster test modes are removed.
 
 Keep Node, TypeScript, Fastify, React, Vite, SQLite and existing provider SDKs.
 Do not introduce a service framework, message broker, dependency injection
-container, generic repository hierarchy or a second production runtime. Prefer
+container or generic repository hierarchy. The explicitly separated AI pipeline
+service is the one additional production process; see [its boundary](ai-service.md). Prefer
 small named functions and explicit constructor dependencies.
 
 ## Dependencies and ownership
@@ -48,6 +49,7 @@ flowchart LR
 | `packages/contracts/`      | Validated HTTP/websocket/configuration DTOs used at boundaries                                        | Service instances or secrets in public DTOs                                     |
 | `apps/server/`             | Composition, HTTP security, route registration, websocket delivery and process lifecycle              | Participation rules, AI selection logic or database queries in route handlers   |
 | `apps/web/src/`            | Typed API client, session hooks, feature screens and reusable presentation components                 | Provider tokens in browser storage, server policy decisions, raw state mutation |
+| `services/viewer-ai/`      | Independently running AI selection, generation/review and inspection API                              | Provider credentials, broadcast DB, platform connections or final publication   |
 | `workers/`                 | Bounded audio/video and incompatible SDK process isolation                                            | Broadcast state or permission decisions                                         |
 
 Production composition calls the application owners and infrastructure adapters

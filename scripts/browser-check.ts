@@ -1,3 +1,4 @@
+import "./browser-ai-service.ts";
 import { captureUIReview } from "./ui-review.ts";
 import { chromium, expect } from "@playwright/test";
 import assert from "node:assert/strict";

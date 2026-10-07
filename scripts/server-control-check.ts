@@ -42,7 +42,12 @@ symlinkSync(resolve("node_modules"), join(directory, "node_modules"), "dir");
 writeFileSync(join(directory, "package.json"), '{"type":"module"}');
 writeFileSync(
   join(directory, "justfile"),
-  recipes.replace('port := "3210"', `port := "${port}"`),
+  recipes
+    .replace('port := "3210"', `port := "${port}"`)
+    .replace(
+      'entrypoint := "apps/server/main.ts"',
+      'entrypoint := "apps/server/fixture.ts"',
+    ),
 );
 writeFileSync(
   join(directory, "bin/mise"),
@@ -52,7 +57,7 @@ printf '%s\\n' "$FIXTURE_NODE"
   { mode: 0o700 },
 );
 writeFileSync(
-  join(directory, "apps/server/main.ts"),
+  join(directory, "apps/server/fixture.ts"),
   `
 import {createServer} from 'node:http';
 const server = createServer((_req, res) => {

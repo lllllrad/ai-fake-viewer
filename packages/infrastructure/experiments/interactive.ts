@@ -240,8 +240,16 @@ export class InteractiveExperiment {
     this.inputs.push({ id, text, source, at });
     this.waitingForFreshInput = false;
     this.persist();
-    // The production coordinator owns selection, silence, pacing and review.
+    // The shared host and AI service apply production selection, pacing and review.
     if (source === "text") void this.coordinator.tick();
+  }
+  async refreshInspection() {
+    try {
+      await this.implementation.refreshInspection?.(this.coordinator);
+      if (!this.disposed) this.persist();
+    } catch {
+      /* Viewing state cannot stop a test. */
+    }
   }
   private viewerStates(): ExperimentSession["viewerStates"] {
     try {

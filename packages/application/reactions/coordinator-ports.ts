@@ -13,6 +13,7 @@ import type { ReactionClock } from "./scheduling.ts";
 
 export interface ReactionConfig {
   ai: ModelCallPolicy & {
+    pipelineType?: string;
     visualMode: "continuous" | "on_request";
     contextWindowSeconds: number;
     transcriptLimit?: number;

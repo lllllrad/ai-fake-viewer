@@ -18,16 +18,18 @@ export function modelMessages(
   return [
     {
       role: "developer",
-      content: input.reviewDraft
-        ? prompts.review
-        : prompts.answer
-            .replaceAll("{{persona_style}}", input.persona.style)
-            .replaceAll(
-              "{{visual_instruction}}",
-              input.frames.length
-                ? "A video frame is present; do not request inspect again."
-                : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
-            ),
+      content:
+        input.instructions ??
+        (input.reviewDraft
+          ? prompts.review
+          : prompts.answer
+              .replaceAll("{{persona_style}}", input.persona.style)
+              .replaceAll(
+                "{{visual_instruction}}",
+                input.frames.length
+                  ? "A video frame is present; do not request inspect again."
+                  : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
+              )),
     },
     {
       role: "user",

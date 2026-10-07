@@ -1,3 +1,4 @@
+import { ensureAiService } from "../../packages/infrastructure/ai-service/connect.ts";
 import { speechApiKey } from "../../packages/infrastructure/inputs/speech-provider.ts";
 import {
   loadPipelineProfile,
@@ -88,6 +89,7 @@ async function assembleApp(
     opts.adminToken === opts.readerToken
   )
     throw Error("Generate independent credentials using npm run setup");
+  await ensureAiService();
   const app = Fastify({ logger: false, bodyLimit: 65536 });
   startup.add(() => app.close());
   const pipeline = loadPipelineProfile(config.ai.pipelineProfile || undefined);

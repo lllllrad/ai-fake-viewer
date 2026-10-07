@@ -27,7 +27,7 @@ Message revisions include both speaker and text; the coordinator hashes that
 revision into its duplicate key so edits to the same platform message remain
 eligible without retaining raw text in the key.
 
-The [cast selection policy](../../packages/domain/reactions/cast-selection.ts)
+The [service cast selection](../../services/viewer-ai/cast-selection.ts)
 owns presence boundaries, observation age, global and per-member pacing,
 activity-band caps, topic/mention weighting and probabilistic silence. It receives
 time and random draws explicitly and performs no storage, network or timer work.
@@ -35,14 +35,15 @@ Zero propensity always stays silent. Observation age includes configured pacing
 and model delay but never exceeds the context window.
 
 The [reaction coordinator](../../packages/application/reactions/coordinator.ts)
-owns the generation, review, pacing and publication workflow. Its explicit
+owns host scheduling, input admission, usage and final publication. AI selection
+and generation/review run through the [independent service](ai-service.md). Its explicit
 [ports](../../packages/application/reactions/coordinator-ports.ts) supply current
 conversation/cast state, usage and attempt storage, screen/speech evidence, and
 runtime time, timers, identifiers, hashing and sanitized provider-error mapping.
 It imports no concrete store, capture worker, provider adapter or Node runtime.
 The [Node composition](../../packages/infrastructure/reactions/scheduler.ts)
-connects those ports to the durable services. Production and tests import this
-composition directly. The same candidate and evidence guards run
+connects those ports to the durable services. Production and tests use the same service API through this
+composition. The same candidate and evidence guards run
 for automatic dispatch and manual approval.
 
 Every attempt carries broadcast/context/consent and cast revisions. Review and
@@ -79,7 +80,7 @@ late provider request tracking, never mutable participant objects or raw chat.
 The [runtime adapter](../../packages/infrastructure/reactions/model-authorization.ts)
 connects these ports to current media, consent, storage and rights follow-up owners.
 
-The [draft and review use case](../../packages/application/reactions/draft-review.ts)
+The [draft and review use case](../../services/viewer-ai/draft-review.ts)
 owns the bounded generation workflow: an initial response, at most one requested
 frame inspection, and optional independent review. It receives provider, current
 input and cancellation ports rather than storage or timer objects. Every awaited
@@ -259,4 +260,9 @@ Versioned profiles are also consumed by the live server at startup.
 
 ## AI implementation selection
 
-Live startup selects `ai.pipelineType` through the [shared registry](../../packages/application/reactions/pipelines.ts), independently of the inference provider. `standard` preserves the existing coordinator. Interactive and replay tests use the same factory and lifecycle contract; see [replacement and promotion](experiments.md#replaceable-ai-implementations). Alternate implementations are trusted code and must preserve the publication and cancellation guarantees documented here.
+Live startup discovers `ai.pipelineType` from the [independent AI service](ai-service.md),
+independently of the model provider. Interactive tests and replay use the same API.
+The [host registry](../../packages/application/reactions/pipelines.ts) contains discovered
+metadata and adapters, not algorithm implementations. The service owns selection,
+draft/review and inspection; the host retains the publication/cancellation guarantees
+above. See [replacement and promotion](experiments.md#replaceable-ai-implementations).

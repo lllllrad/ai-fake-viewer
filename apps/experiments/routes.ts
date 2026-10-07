@@ -54,10 +54,12 @@ export function registerExperimentRoutes(
   app.post("/api/admin/experiments", async (req) =>
     workspace.start(experimentStartSchema.parse(req.body)),
   );
-  app.get(
-    "/api/admin/experiments/:id",
-    async (req) => workspace.read(id(req.params)).session,
-  );
+  app.get("/api/admin/experiments/:id", async (req) => {
+    const sessionId = id(req.params);
+    if (workspace.active?.id === sessionId)
+      await workspace.active.refreshInspection();
+    return workspace.read(sessionId).session;
+  });
   app.get("/api/admin/experiments/:id/trace", async (req) =>
     workspace.read(id(req.params)),
   );
@@ -81,6 +83,7 @@ export function registerExperimentRoutes(
   app.post("/api/admin/experiments/:id/stop", async (req) => {
     const session = workspace.current(id(req.params));
     session.stop();
+    await session.refreshInspection();
     return session.snapshot();
   });
   app.delete("/api/admin/experiments/:id", async (req) => {

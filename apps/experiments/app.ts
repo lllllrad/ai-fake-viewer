@@ -1,3 +1,4 @@
+import { ensureAiService } from "../../packages/infrastructure/ai-service/connect.ts";
 import Fastify from "fastify";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
@@ -30,6 +31,7 @@ export function createExperimentApp(
     settings = experimentSettingsSchema.parse(settings);
     if (options.adminToken.length < 32)
       throw Error("Test administrator credential required");
+    await ensureAiService();
     const app = Fastify({ logger: false, bodyLimit: 65536 });
     startup.add(() => app.close());
     const auth = new ChatgptAuth(

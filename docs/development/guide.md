@@ -2,6 +2,11 @@
 
 The root [run-command.sh](../../run-command.sh) applies `mise exec --` and the available Linux browser library/font environment. [AGENTS.md](../../AGENTS.md) is the agent entry point. Do not rediscover temporary libraries or repeat long environment-variable prefixes.
 
+The AI algorithm runs in a separate [local service](ai-service.md). Managed app
+startup ensures it is running; foreground app/replay commands require starting it first.
+Browser fixtures use an ephemeral service child; unit tests explicitly preload a local
+algorithm fixture and also include real-process API integration checks.
+
 ## Routine commands
 
 ```sh

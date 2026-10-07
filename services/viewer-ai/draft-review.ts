@@ -1,7 +1,7 @@
-import type { Decision } from "../../contracts/decision.ts";
-import { prepareReview } from "../../domain/reactions/publication.ts";
-import { validateDecision } from "./validate-decision.ts";
-import { StaleModelContextError } from "./errors.ts";
+import type { Decision } from "../../packages/contracts/decision.ts";
+import { prepareReview } from "../../packages/domain/reactions/publication.ts";
+import { validateDecision } from "../../packages/application/reactions/validate-decision.ts";
+import { StaleModelContextError } from "../../packages/application/reactions/errors.ts";
 
 interface DraftInput {
   frames: Array<{ id: string }>;

@@ -1,3 +1,4 @@
+import { standardPipeline } from "./helpers/local-pipeline.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -6,7 +7,6 @@ import { join } from "node:path";
 import {
   ReactionPipelineRegistry,
   reactionPipelines,
-  standardPipeline,
 } from "../packages/application/reactions/pipelines.ts";
 import { createScheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { Store } from "../packages/storage.ts";

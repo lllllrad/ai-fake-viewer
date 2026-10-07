@@ -1,3 +1,4 @@
+import { ensureAiService } from "../ai-service/connect.ts";
 import { callMeteredModel } from "../../application/reactions/model-call.ts";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -6,7 +7,7 @@ import { Store } from "../../storage.ts";
 import { configSchema } from "../../config.ts";
 import { reactionPipelines } from "../../application/reactions/pipelines.ts";
 import { TimingGate } from "../../application/reactions/timing-gate.ts";
-import { type DraftOutcome } from "../../application/reactions/draft-review.ts";
+import { type DraftOutcome } from "../../application/reactions/program.ts";
 import { personaStyle } from "../../application/reactions/persona-style.ts";
 import type {
   Model,
@@ -46,6 +47,7 @@ export async function runExperiment(options: ExperimentOptions) {
     options.maxCalls > 1000
   )
     throw Error("Invalid call limit");
+  await ensureAiService();
   const implementation = reactionPipelines.get(
     options.pipeline.profile.ai.pipelineType ?? "standard",
   );

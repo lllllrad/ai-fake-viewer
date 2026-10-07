@@ -12,6 +12,8 @@ export interface ModelInput<Bytes extends Uint8Array = Uint8Array> {
   privacyRevision?: number;
   chatSummary?: ChatSummary;
   reviewDraft?: string;
+  /** Service-owned instructions; omitted for the shared standard prompt profile. */
+  instructions?: string;
   persona: { name: string; style: string };
   description: string;
 }

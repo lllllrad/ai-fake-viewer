@@ -128,3 +128,16 @@ test("review rendering uses its own instructions and includes the draft only as 
   assert.equal(modelContext(input).reviewDraft, input.reviewDraft);
   assert.equal(JSON.stringify(review[1]).includes(input.reviewDraft), true);
 });
+
+test("service instructions override standard and experiment profiles without entering user context", () => {
+  const input = {
+    ...fixture(),
+    instructions: "Synthetic service algorithm instructions",
+  };
+  const rendered = modelMessages(input, {
+    answer: "Unused profile",
+    review: "Unused review",
+  });
+  assert.equal(rendered[0].content, input.instructions);
+  assert.equal(JSON.stringify(rendered[1]).includes(input.instructions), false);
+});

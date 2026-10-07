@@ -12,6 +12,9 @@ default:
 server-start:
     #!/usr/bin/env bash
     set -euo pipefail
+    if [[ "{{entrypoint}}" == "apps/server/main.ts" || "{{entrypoint}}" == "apps/experiments/main.ts" ]]; then
+      just ai-service-start
+    fi
     mkdir -p .local
     if [[ -f "{{pid_file}}" ]] && kill -0 "$(cat "{{pid_file}}")" 2>/dev/null; then
       echo "Server already running (PID $(cat "{{pid_file}}"))"
@@ -108,3 +111,18 @@ experiments-status:
 
 experiments-logs:
     tail -n 100 -f .local/experiments/server.log
+
+# Independently managed AI algorithm service. Existing app and test ports stay separate.
+ai-service-start:
+    @npm run ai-service:setup
+    @just --set port "3212" --set entrypoint services/viewer-ai/main.ts --set pid_file .local/ai-service.pid --set log_file .local/ai-service.log server-start
+
+ai-service-stop:
+    @just --set port "3212" --set entrypoint services/viewer-ai/main.ts --set pid_file .local/ai-service.pid --set log_file .local/ai-service.log server-stop
+
+ai-service-restart:
+    @npm run ai-service:setup
+    @just --set port "3212" --set entrypoint services/viewer-ai/main.ts --set pid_file .local/ai-service.pid --set log_file .local/ai-service.log server-restart
+
+ai-service-status:
+    @just --set port "3212" --set entrypoint services/viewer-ai/main.ts --set pid_file .local/ai-service.pid --set log_file .local/ai-service.log server-status

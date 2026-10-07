@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateReviewedDraft } from "../packages/application/reactions/draft-review.ts";
+import { generateReviewedDraft } from "../services/viewer-ai/draft-review.ts";
 import { StaleModelContextError } from "../packages/application/reactions/errors.ts";
 const empty = {
   text: null,

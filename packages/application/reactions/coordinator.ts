@@ -9,17 +9,14 @@ import type {
 import { GenerationRecovery } from "./recovery.ts";
 import { GenerationWork } from "./generation-work.ts";
 import { ReactionSchedule } from "./scheduling.ts";
-import { generateReviewedDraft } from "./draft-review.ts";
+import { createReactionProgram, type ReactionProgram } from "./program.ts";
 import { callMeteredModel } from "./model-call.ts";
 import {
   selectEvidenceWindow,
   baselinePacingBlocked,
   messageVersion,
 } from "../../domain/reactions/evidence.ts";
-import {
-  castPacingBlocked,
-  chooseCastMember,
-} from "../../domain/reactions/cast-selection.ts";
+import { castPacingBlocked } from "../../domain/reactions/cast-selection.ts";
 import type { Model, ModelInput } from "./model-port.ts";
 import {
   evidenceProblem,
@@ -65,6 +62,7 @@ export class ReactionCoordinator<
   }
   readyCheck?: () => string[];
   preparePersonas?: () => void;
+  private selecting?: AbortController;
   private readonly work = new GenerationWork<ModelInput<Bytes>>((input) =>
     this.discardInput(input),
   );
@@ -93,7 +91,7 @@ export class ReactionCoordinator<
     return this.work.generation;
   }
   get busy() {
-    return this.work.busy;
+    return !!this.selecting || this.work.busy;
   }
   lastAttempt = 0;
   lastSpoke = 0;
@@ -140,6 +138,9 @@ export class ReactionCoordinator<
     public gate: TimingGate,
     public random: () => number,
     private readonly runtime: ReactionRuntime<Handle>,
+    readonly program: ReactionProgram = createReactionProgram(
+      config.ai.pipelineType ?? "standard",
+    ),
   ) {
     this.scheduling = new ReactionSchedule(runtime.clock, () =>
       this.schedulerFailed(),
@@ -148,6 +149,8 @@ export class ReactionCoordinator<
     store.on("reset", () => this.invalidateChatContext());
   }
   invalidateChatContext() {
+    this.selecting?.abort();
+    this.selecting = undefined;
     this.work.cancel();
     this.scheduling.cancelDispatch();
     if (this.pending) this.discardInput(this.pending.input);
@@ -189,6 +192,8 @@ export class ReactionCoordinator<
     void this.tick();
   }
   stop(state = "stopped", preserveDesired = false) {
+    this.selecting?.abort();
+    this.selecting = undefined;
     this.work.cancel();
     if (this.pending) this.discardInput(this.pending.input);
     this.scheduling.stop();
@@ -324,23 +329,43 @@ export class ReactionCoordinator<
         >["members"][number]
       | undefined;
     if (personaRuntime) {
-      const selected = chooseCastMember({
-        members: personaRuntime.members,
-        recent,
-        observation: {
-          messages,
-          transcripts,
-          frames,
-          newMessages,
-          newTranscripts,
-        },
-        now,
-        contextWindowMs: this.config.ai.contextWindowSeconds * 1000,
-        minimumPacingMs: this.config.ai.pacing.minSeconds * 1000,
-        maximumPacingMs: this.config.ai.pacing.maxSeconds * 1000,
-        policy: personaRuntime.policy,
-        random: this.random,
-      });
+      const selection = new AbortController();
+      const selectionGeneration = this.generation;
+      this.selecting = selection;
+      let selected;
+      try {
+        selected = await this.program.select(
+          {
+            members: personaRuntime.members,
+            recent,
+            observation: {
+              messages,
+              transcripts,
+              frames,
+              newMessages,
+              newTranscripts,
+            },
+            now,
+            contextWindowMs: this.config.ai.contextWindowSeconds * 1000,
+            minimumPacingMs: this.config.ai.pacing.minSeconds * 1000,
+            maximumPacingMs: this.config.ai.pacing.maxSeconds * 1000,
+            policy: personaRuntime.policy,
+            randomValues: Array.from(
+              { length: personaRuntime.members.length + 2 },
+              () => this.random(),
+            ),
+          },
+          selection.signal,
+        );
+      } finally {
+        if (this.selecting === selection) this.selecting = undefined;
+      }
+      if (
+        selection.signal.aborted ||
+        selectionGeneration !== this.generation ||
+        this.state !== "running"
+      )
+        return;
       if (!selected) {
         this.trace("cast_selection_skipped", {
           reason: "no_eligible_or_willing_member",
@@ -478,7 +503,7 @@ export class ReactionCoordinator<
       } else {
         consumeNewInput();
       }
-      const outcome = await generateReviewedDraft({
+      const outcome = await this.program.draft({
         input,
         signal,
         isCurrent: () => this.work.current(lease) && this.state === "running",

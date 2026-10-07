@@ -173,3 +173,32 @@ test("live server static dependencies exclude manual persona authoring and audit
   visit(resolve("apps/server/app.ts"));
   assert(visited.has(resolve("packages/infrastructure/cast/runtime.ts")));
 });
+
+test("app and host packages cannot import service-owned AI implementations", () => {
+  for (const file of [...sources("apps"), ...sources("packages")]) {
+    for (const specifier of dependencies(file, readFileSync(file, "utf8"))) {
+      if (!specifier.startsWith(".")) continue;
+      const target = relative(process.cwd(), resolve(dirname(file), specifier));
+      assert(
+        !target.startsWith("services/"),
+        `${file} imports AI service implementation: ${specifier}`,
+      );
+    }
+  }
+  const registry = readFileSync(
+    "packages/application/reactions/pipelines.ts",
+    "utf8",
+  );
+  assert(
+    !registry.includes("ConstructorParameters") &&
+      !registry.includes("keyof ReactionCoordinator"),
+  );
+  const host = readFileSync(
+    "packages/application/reactions/coordinator.ts",
+    "utf8",
+  );
+  assert(
+    !host.includes("generateReviewedDraft") &&
+      !host.includes("chooseCastMember"),
+  );
+});
