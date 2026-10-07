@@ -90,7 +90,7 @@ try {
     timeout: 10000,
   });
   await expect(
-    page.getByRole("heading", { name: "실행 기록", exact: true }),
+    page.getByRole("heading", { name: "AI 호출 세부사항", exact: true }),
   ).toHaveCount(0);
   await page
     .locator(".experiment-personas > details > summary")
@@ -105,10 +105,39 @@ try {
   await expect(
     page.getByRole("button", { name: "마이크 중지", exact: true }),
   ).toBeVisible();
+  let microphoneStops = 0;
+  const monitorMicrophone = (request: import("@playwright/test").Request) => {
+    if (request.url().endsWith("/audio/stop")) microphoneStops++;
+  };
+  page.on("request", monitorMicrophone);
+  await page.getByRole("tab", { name: "AI별 상태", exact: true }).click();
+  await expect(page.getByLabel("확인할 AI 시청자")).toBeVisible();
+  await expect(
+    page.getByLabel("확인할 AI 시청자").locator("option"),
+  ).toHaveCount(6);
+  await expect(
+    page.getByRole("button", { name: "마이크 중지", exact: true }),
+  ).toBeVisible();
+  await captureUIReview(page, "experiment-viewer-state");
+  await page
+    .getByRole("tab", { name: "AI 호출 세부사항", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "AI 호출 세부사항", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "마이크 중지", exact: true }),
+  ).toBeVisible();
   // Real browser audio worklet: a complete live-sized chunk is sent automatically.
   await expect
     .poll(() => experiments.active!.microphoneCalls, { timeout: 20000 })
     .toBe(1);
+  assert.equal(
+    microphoneStops,
+    0,
+    "switching tabs must not stop the microphone",
+  );
+  await page.getByRole("tab", { name: "대화 보기", exact: true }).click();
   await expect(
     page
       .locator(".experiment-message.own")
@@ -116,11 +145,13 @@ try {
   ).toBeVisible();
   assert.equal(experiments.active!.microphoneCalls, 1);
   await page.getByRole("button", { name: "마이크 중지", exact: true }).click();
+  await expect.poll(() => microphoneStops).toBe(1);
+  page.off("request", monitorMicrophone);
 
   await captureUIReview(page, "experiment-conversation");
   delete process.env[keyName];
   await page.reload();
-  await expect(page.locator(".experiment-composer")).toContainText(
+  await expect(page.locator(".experiment-microphone")).toContainText(
     `서버의 ${keyName}가 필요합니다`,
   );
   await expect(
@@ -139,14 +170,14 @@ try {
   await page.reload();
   await expect(page.locator(".experiment-message:not(.own)")).toHaveCount(1);
   await page
-    .getByRole("button", { name: "실행 기록 보기", exact: true })
+    .getByRole("tab", { name: "AI 호출 세부사항", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "실행 기록", exact: true }),
+    page.getByRole("heading", { name: "AI 호출 세부사항", exact: true }),
   ).toBeVisible();
   await page.locator(".experiment-trace > details > summary").first().click();
   await expect(
-    page.getByRole("heading", { name: "모델에 보낸 요청" }),
+    page.getByRole("heading", { name: "모델에 보낸 요청 · 프롬프트 전문" }),
   ).toBeVisible();
   await captureUIReview(page, "experiment-trace");
   const downloading = page.waitForEvent("download");

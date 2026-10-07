@@ -1,3 +1,4 @@
+import { viewerInspectionSchema } from "./reaction-inspection.ts";
 import { z } from "zod";
 import { castRuntimeSchema } from "./cast-runtime.ts";
 import { publicMessageSchema } from "./conversation.ts";
@@ -55,6 +56,7 @@ export const experimentSessionSchema = z.object({
   ),
   messages: z.array(publicMessageSchema),
   personas: castRuntimeSchema.shape.members,
+  viewerStates: z.array(viewerInspectionSchema).default([]),
 });
 export type ExperimentSession = z.infer<typeof experimentSessionSchema>;
 export const experimentIndexSchema = z.object({
@@ -94,6 +96,12 @@ export const experimentTraceSchema = z.object({
   pipeline: z.unknown(),
   calls: z.array(
     z.object({
+      id: z.string().optional(),
+      memberId: z.string().optional(),
+      personaName: z.string().optional(),
+      stage: z.string().optional(),
+      provider: z.string().optional(),
+      model: z.string().optional(),
       at: z.number(),
       elapsedMs: z.number(),
       request: z.unknown(),

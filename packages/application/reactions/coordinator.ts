@@ -44,8 +44,17 @@ export class ReactionCoordinator<
   onDiagnostic?: (
     entry: ReactionCoordinator<Bytes, Handle>["diagnostics"][number],
   ) => void;
-  private trace(event: string, details: Record<string, string | number> = {}) {
-    const entry = { at: this.runtime.now(), event, phase: this.phase, details };
+  private trace(
+    event: string,
+    details: Record<string, string | number> = {},
+    memberId?: string,
+  ) {
+    const entry = {
+      at: this.runtime.now(),
+      event,
+      phase: this.phase,
+      details: { ...details, ...(memberId ? { memberId } : {}) },
+    };
     this.diagnostics.push(entry);
     this.diagnostics = this.diagnostics.slice(-100);
     try {
@@ -342,6 +351,14 @@ export class ReactionCoordinator<
         return;
       }
       activeMember = selected.member;
+      this.trace(
+        "cast_member_selected",
+        {
+          newMessages: selected.observation.newMessages.length,
+          newTranscripts: selected.observation.newTranscripts.length,
+        },
+        activeMember.id,
+      );
       persona = selected.index;
       ({ messages, transcripts, frames, newMessages, newTranscripts } =
         selected.observation);
@@ -478,7 +495,7 @@ export class ReactionCoordinator<
           this.phase = phase;
           if (phase === "ai_review") this.reviews++;
         },
-        trace: (event, details) => this.trace(event, details),
+        trace: (event, details) => this.trace(event, details, activeMember?.id),
       });
       if (
         outcome.kind === "canceled" ||
@@ -505,7 +522,11 @@ export class ReactionCoordinator<
         ? "broadcast_closed"
         : evidenceProblem(input, d, this.currentEvidence(input, d));
       if (problem) {
-        this.trace("candidate_discarded", { reason: problem });
+        this.trace(
+          "candidate_discarded",
+          { reason: problem },
+          activeMember?.id,
+        );
         if (attemptId)
           this.store.attempts.finish(attemptId, "canceled", problem);
         return;
@@ -578,7 +599,11 @@ export class ReactionCoordinator<
       if (generation === this.generation) {
         this.rejects++;
         const { issue, details } = this.runtime.issue(error);
-        this.trace("attempt_error", { code: issue.code, ...details });
+        this.trace(
+          "attempt_error",
+          { code: issue.code, ...details },
+          activeMember?.id,
+        );
         const stopState = this.recovery.failed(issue, this.runtime.now());
         if (stopState) this.stop(stopState);
       }
@@ -595,6 +620,9 @@ export class ReactionCoordinator<
     }
   }
   async callModel(input: ModelInput<Bytes>, signal: AbortSignal) {
+    const memberId = this.store
+      .personaRuntime()
+      ?.members.find((member) => member.displayName === input.persona.name)?.id;
     return callMeteredModel({
       input,
       signal,
@@ -602,7 +630,7 @@ export class ReactionCoordinator<
       model: this.model,
       usage: this.store,
       now: () => this.runtime.now(),
-      trace: (event, details) => this.trace(event, details),
+      trace: (event, details) => this.trace(event, details, memberId),
     });
   }
   private currentEvidence(
@@ -647,7 +675,7 @@ export class ReactionCoordinator<
     if (problem) {
       this.pending = undefined;
       this.scheduling.cancelDispatch();
-      this.trace("publication_discarded", { reason: problem });
+      this.trace("publication_discarded", { reason: problem }, p.memberId);
       if (p.attemptId)
         this.store.attempts.finish(p.attemptId, "expired", problem);
       this.phase = this.state === "running" ? "waiting_for_input" : this.state;
@@ -681,7 +709,11 @@ export class ReactionCoordinator<
         attemptId: p.attemptId,
       });
       if (!canPublish) {
-        this.trace("publication_discarded", { reason: "stale_epoch_or_state" });
+        this.trace(
+          "publication_discarded",
+          { reason: "stale_epoch_or_state" },
+          p.memberId,
+        );
         this.store.attempts.finish(
           p.attemptId,
           "suppressed",
@@ -701,7 +733,11 @@ export class ReactionCoordinator<
         replyToId: d.replyToMessageId,
       });
       if (!publicMessageId) {
-        this.trace("publication_discarded", { reason: "publication_failed" });
+        this.trace(
+          "publication_discarded",
+          { reason: "publication_failed" },
+          p.memberId,
+        );
         this.store.attempts.finish(
           p.attemptId,
           "suppressed",
@@ -712,7 +748,7 @@ export class ReactionCoordinator<
       }
       this.lastSpoke = now;
       this.phase = "published_local";
-      this.trace("published");
+      this.trace("published", {}, p.memberId);
       this.personaTimes[p.persona] = now;
       this.speechTimes = this.speechTimes.filter((t) => t > now - 60000);
       this.speechTimes.push(now);
@@ -729,13 +765,17 @@ export class ReactionCoordinator<
       sourceMessageIds: p.input.messages.map((message) => message.id),
     });
     if (!published) {
-      this.trace("publication_discarded", { reason: "publication_failed" });
+      this.trace(
+        "publication_discarded",
+        { reason: "publication_failed" },
+        p.memberId,
+      );
       this.phase = "suppressed";
       return;
     }
     this.lastSpoke = now;
     this.phase = "published_local";
-    this.trace("published");
+    this.trace("published", {}, p.memberId);
     this.personaTimes[p.persona] = now;
     this.speechTimes = this.speechTimes.filter((t) => t > now - 60000);
     this.speechTimes.push(now);

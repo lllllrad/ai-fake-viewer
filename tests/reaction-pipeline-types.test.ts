@@ -46,6 +46,18 @@ test("live, interactive, replay and draft select the same alternate implementati
       };
       return engine;
     },
+    inspect: (engine) =>
+      (engine.store.personaRuntime()?.members ?? []).map((member) => ({
+        memberId: member.id,
+        status: "Synthetic state",
+        updatedAt: null,
+        sections: [
+          {
+            label: "Algorithm-specific memory",
+            value: { score: 0.7, mode: "fixture" },
+          },
+        ],
+      })),
     draft: async () => {
       drafts++;
       return { kind: "canceled" };
@@ -86,6 +98,12 @@ test("live, interactive, replay and draft select the same alternate implementati
     });
     assert.equal(session.pipelineType, "fixture-algorithm");
     assert.equal(session.pipelineRevision, 2);
+    assert.equal(session.viewerStates.length, 6);
+    assert.equal(session.viewerStates[0].status, "Synthetic state");
+    assert.deepEqual(session.viewerStates[0].sections[0].value, {
+      score: 0.7,
+      mode: "fixture",
+    });
     await workspace.active!.coordinator.tick();
     assert(ticks >= 2);
     assert.equal(creations, 2);
@@ -128,6 +146,38 @@ test("live, interactive, replay and draft select the same alternate implementati
     workspace.close();
     capture.stop();
     store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("a failed optional inspector cannot block test startup or saving", () => {
+  const directory = mkdtempSync(join(tmpdir(), "pipeline-inspection-"));
+  reactionPipelines.register({
+    ...standardPipeline,
+    id: "fixture-inspection-failure",
+    inspect() {
+      throw Error("Synthetic inspection failure");
+    },
+  });
+  const workspace = new ExperimentWorkspace(
+    directory,
+    loadPipelineProfile(),
+    () => ({ model: fixtureModel, name: "fixture" }),
+  );
+  try {
+    const session = workspace.start({
+      topic: "게임",
+      provider: "fixture",
+      maxCalls: 2,
+      pipelineType: "fixture-inspection-failure",
+    });
+    assert.equal(session.state, "running");
+    assert.deepEqual(session.viewerStates, []);
+    workspace.active!.stop();
+    assert(workspace.read(session.id).session.endedAt);
+    assert.deepEqual(workspace.read(session.id).session.viewerStates, []);
+  } finally {
+    workspace.close();
     rmSync(directory, { recursive: true, force: true });
   }
 });

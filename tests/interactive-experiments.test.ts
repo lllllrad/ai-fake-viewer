@@ -66,6 +66,39 @@ test("interactive speech drives the production cast, records review, and survive
     assert.equal(trace.session.inputs.length, 1);
     assert.equal(trace.session.calls, 2);
     assert.equal(trace.calls.length, 2);
+    assert.equal(trace.session.viewerStates.length, 6);
+    const memberId = trace.calls[0].memberId;
+    assert(memberId);
+    assert.equal(trace.calls[1].memberId, memberId);
+    assert.equal(trace.calls[0].stage, "generation");
+    assert.equal(trace.calls[1].stage, "review");
+    assert.equal(trace.calls[0].model, "fixture");
+    assert.equal(
+      trace.calls[0].personaName,
+      trace.session.personas.find((persona) => persona.id === memberId)!
+        .displayName,
+    );
+    const inspection = trace.session.viewerStates.find(
+      (state) => state.memberId === memberId,
+    )!;
+    assert.equal(
+      inspection.sections.find((section) => section.label === "최근 모델 판단")
+        ?.value,
+      "발화 선택",
+    );
+    const events = inspection.sections.find(
+      (section) => section.label === "최근 파이프라인 사건",
+    )!.value as Array<{ event: string; details: { memberId: string } }>;
+    assert(events.some((event) => event.event === "published"));
+    assert(events.every((event) => event.details.memberId === memberId));
+    const legacy = { ...trace.session };
+    delete (legacy as Partial<typeof legacy>).viewerStates;
+    assert.deepEqual(
+      experimentTraceSchema.parse({ ...trace, session: legacy }).session
+        .viewerStates,
+      [],
+    );
+
     assert.ok(
       trace.diagnostics.some((entry: any) => entry.event === "published"),
     );

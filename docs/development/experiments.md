@@ -103,12 +103,31 @@ Ending cancels outstanding requests and prevents late replies from being
 published. No platform connector, live transcript journal, reader overlay or
 broadcast database receives test input or output.
 
-**Execution history** is an explicit secondary view, fetched on demand. It
-contains actual model requests and responses, diagnostic stages, participation
-and publication attempts, and the resolved profile/prompts. These are observable
-application steps, not private model reasoning. Download the full JSON record
-for separate inspection. Returning to the conversation does not trigger new
-inference.
+The workspace has separate **Conversation**, **Per-viewer state** and **AI call details**
+tabs. Microphone controls belong to the session toolbar above these tabs. Switching
+tabs preserves the same AudioWorklet and pending transcription; stopping the microphone,
+ending/changing the session, leaving the page or losing input readiness stops capture.
+The conversation text draft remains available when returning to its tab.
+
+**Per-viewer state** selects a cast member and displays inspection sections supplied by
+that pipeline's optional `inspect(engine)` hook. The standard implementation reports
+participation settings, recent publication, per-member processing events, recorded model
+actions and pending publication decisions. These are explicit application observations
+and outputs, not inferred private model reasoning. Custom implementations choose their
+own status labels and JSON-compatible sections through `ViewerInspection`. Inspection
+must be synchronous and read-only, without model calls. Invalid or failed inspection
+produces an unavailable-state message without stopping the test. Session snapshots save
+these sections, so ended sessions remain inspectable without loading implementation code;
+older records without inspection show an explicit empty state.
+
+**AI call details** fetches the trace only while selected and refreshes every three
+seconds. Each call records the viewer ID/name, generation/review stage, provider/model,
+time, elapsed duration, complete serialized model-message prompts and response or error.
+Historical calls missing metadata are labeled as unavailable rather than guessed.
+The tab also retains diagnostic events, publication attempts and resolved profile/prompts,
+with full JSON download. Prompt details are application model messages, not a packet capture
+of provider HTTP headers, credentials or adapter transport envelopes. Inspection and tab
+changes do not initiate AI inference. Text is escaped and long content scrolls/wraps.
 
 Automatic test casts use the same [stable synthetic nickname rules](../specifications/personas.md#stable-synthetic-nicknames) as broadcasts. Trace downloads include `personaProvenance`, including the saved name, root and transformations; older traces default this field to an empty list.
 
@@ -160,7 +179,7 @@ isolated draft path. Registered implementations are trusted repository code; JSO
 selects an ID and cannot load arbitrary executable module paths.
 
 To add an algorithm, implement `ReactionPipeline` (`id`, `revision`, `label`,
-`description`, `create`, `draft`) in an application module and register it alongside
+`description`, `create`, `draft`, and optional `inspect`) in an application module and register it alongside
 `standard`. Keep module dependencies within the application/domain boundaries.
 The test UI lists registry metadata automatically. Select it for a new test, then
 promote the same ID to live `ai.pipelineType` (or a versioned profile's

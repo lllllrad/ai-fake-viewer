@@ -181,3 +181,53 @@
 .experiment-resume .form-control {
   max-width: 12rem;
 }
+
+.experiment-microphone,
+.experiment-viewer-state {
+  display: grid;
+  gap: 12px;
+}
+.experiment-viewer-state > .form-select {
+  max-width: 30rem;
+}
+.experiment-state-section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  min-width: 0;
+}
+.experiment-state-section h3 {
+  font-size: 1rem;
+}
+.experiment-view-controls {
+  margin-bottom: 16px;
+}
+.experiment-view-controls .nav-link {
+  min-height: 44px;
+}
+@media (max-width: 520px) {
+  .experiment-view-controls .nav-link {
+    padding: 10px 8px;
+    font-size: 0.875rem;
+  }
+}
+
+.experiment-state-fields {
+  margin: 12px 0 0;
+  display: grid;
+  gap: 8px;
+}
+.experiment-state-fields > div {
+  display: grid;
+  grid-template-columns: minmax(100px, 10rem) minmax(0, 1fr);
+  gap: 12px;
+}
+.experiment-state-fields dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.experiment-state-section summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}

@@ -1,3 +1,4 @@
+import { viewerInspectionSchema } from "../../contracts/reaction-inspection.ts";
 import { z } from "zod";
 import { restoreExperiment } from "./restore.ts";
 import { randomUUID, createHash } from "node:crypto";
@@ -127,6 +128,15 @@ export class InteractiveExperiment {
     });
     const model: Model<Buffer> = async (input, signal) => {
       const call: ExperimentTrace["calls"][number] = {
+        id: randomUUID(),
+        memberId: this.store
+          .personaRuntime()
+          ?.members.find((member) => member.displayName === input.persona.name)
+          ?.id,
+        personaName: input.persona.name,
+        stage: input.reviewDraft ? "review" : "generation",
+        provider: options.provider,
+        model: adapter.name,
         at: Date.now(),
         elapsedMs: 0,
         request: structuredClone(modelMessages(input, pipeline.prompts)),
@@ -233,6 +243,15 @@ export class InteractiveExperiment {
     // The production coordinator owns selection, silence, pacing and review.
     if (source === "text") void this.coordinator.tick();
   }
+  private viewerStates(): ExperimentSession["viewerStates"] {
+    try {
+      return viewerInspectionSchema
+        .array()
+        .parse(this.implementation.inspect?.(this.coordinator) ?? []);
+    } catch {
+      return [];
+    } // Inspection failures cannot stop recording or generation.
+  }
   snapshot(): ExperimentSession {
     return {
       id: this.id,
@@ -257,6 +276,7 @@ export class InteractiveExperiment {
       inputs: [...this.inputs],
       messages: [...this.messages],
       personas: this.store.personaRuntime()?.members ?? [],
+      viewerStates: this.viewerStates(),
     };
   }
   trace(): ExperimentTrace {
