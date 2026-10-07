@@ -12,6 +12,9 @@ The primary user is a Korean-speaking broadcaster operating their own stream.
 They need to follow live conversation and add natural AI participation to their
 local chat reader and OBS overlay while retaining control during the broadcast.
 Participating viewers encounter the consent guidance and the published conversation.
+The broadcaster also uses a separate development workspace to improve synthetic
+viewer behavior through text/microphone conversations, persona inspection and
+on-demand execution details.
 
 ## Product Purpose
 
@@ -34,6 +37,10 @@ Records/rights destinations. Separate reader and transparent overlay routes supp
 reading chat and publishing through an OBS Browser Source. YouTube, CHZZK and SOOP
 integrations have distinct authorization and runtime requirements; SOOP's official
 browser SDK requires the connected administrator tab to remain open.
+
+AI testing runs in its own web app with separate credentials, accounts and stored
+sessions. Broadcast and test apps call an independent local AI service; AI
+implementation changes can therefore be used in both.
 
 Operation is local, with documented private-LAN reader/overlay access. Administrator
 access remains local. Internet-facing and reverse-proxy deployment are unsupported.
@@ -64,6 +71,10 @@ Demo operation uses artificial input and no paid model.
   the operating profile; no silent provider fallback is allowed.
 - Configured broadcast media, transcription and exports follow the current input
   contracts. Preserve consent and publication checks at processing boundaries.
+- Support resuming ended test conversations with their cast and history. Keep
+  microphone capture independent of the conversation/state/call-detail tab.
+- Record generation usage without a call-count cap. Retain explicit stop, input
+  admission, token/cost controls and publication pacing.
 - Keep credentials, private configuration, raw viewer content and local research
   out of tracked files.
 
@@ -72,7 +83,9 @@ Detailed behavior and known limitations remain owned by the
 [dashboard specification](docs/specifications/dashboard.md),
 [participation specification](docs/specifications/participation.md),
 [persona specification](docs/specifications/personas.md) and
-[AI pipeline documentation](docs/development/ai-pipeline.md).
+[AI pipeline documentation](docs/development/ai-pipeline.md),
+[independent AI service](docs/development/ai-service.md) and
+[test workspace contract](docs/development/experiments.md).
 These documents govern implementation details; this record captures durable
 product intent. Latest accepted requirements take precedence over obsolete notes.
 

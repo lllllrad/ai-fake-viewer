@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-07T12:39:29.505948+00:00",
+  "generatedAt": "2026-10-07T16:46:43.416Z",
   "title": "Design System: Mixed Chat Studio",
   "extensions": {
     "colorMeta": {
@@ -307,6 +307,10 @@
       "overlay-message": {
         "displayName": "Overlay Message",
         "purpose": "OBS message text."
+      },
+      "test-headline": {
+        "displayName": "Test workspace headline",
+        "purpose": "Independent test-shell page title; 1.75rem in apps/experiments/web/shell.css."
       }
     },
     "shadows": [
@@ -333,6 +337,10 @@
         "value": "1150px"
       },
       {
+        "name": "test-columns-max",
+        "value": "1000px"
+      },
+      {
         "name": "stacked-workspace-max",
         "value": "900px"
       },
@@ -343,6 +351,10 @@
       {
         "name": "participation-stack-max",
         "value": "680px"
+      },
+      {
+        "name": "test-header-max",
+        "value": "600px"
       },
       {
         "name": "reader-narrow-max",
@@ -381,7 +393,7 @@
       "refersTo": "field",
       "description": "Labeled Bootstrap-style field.",
       "html": "<label class=\"ds-label\" for=\"ds-channel\">채널 주소<input class=\"ds-field\" id=\"ds-channel\" placeholder=\"채널 주소 입력\"></label>",
-      "css": ".ds-label{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;display:block;font-weight:550;color:var(--ink,#202a39)}.ds-field{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;display:block;width:calc(100% - 26px);min-height:28px;padding:6px 12px;margin-top:6px;border:1px solid #b7c2d1;border-radius:6px;color:var(--ink,#202a39);background:var(--surface,#fff)}.ds-field::placeholder{color:#68768a}.ds-field:focus{border-color:#86b7fe}.ds-field:focus-visible{outline:3px solid var(--accent,#175cd3);outline-offset:3px;box-shadow:none}"
+      "css": ".ds-label{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;display:block;font-weight:550;color:var(--ink,#202a39)}.ds-field{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;display:block;width:calc(100% - 26px);min-height:28px;padding:6px 12px;margin-top:6px;border:1px solid #b7c2d1;border-radius:6px;color:var(--ink,#202a39);background:var(--surface,#fff)}.ds-field::placeholder{color:#68768a}.ds-field:focus{border-color:#86b7fe}.ds-field:focus-visible{outline:3px solid var(--accent,#175cd3);outline-offset:3px;box-shadow:none}@media(max-width:767px){.ds-field{min-height:30px}}"
     },
     {
       "name": "Task navigation",
@@ -410,7 +422,7 @@
     {
       "name": "Section tabs",
       "kind": "nav",
-      "description": "Static preview of Radix tab styling; application supplies keyboard behavior.",
+      "description": "Static preview of shared section tabs. The application owns keyboard behavior and mounted-panel lifetimes; test microphone controls remain outside tabs.",
       "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"방송 준비\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">입력</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\" tabindex=\"-1\">AI 모델</button></div>",
       "css": ".ds-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line,#dce2ea)}.ds-tab{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;min-height:44px;padding:10px 16px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--muted,#596579);font-weight:550;cursor:pointer}.ds-tab[aria-selected=\"true\"]{color:var(--accent,#175cd3);border-bottom-color:var(--accent,#175cd3)}.ds-tab:hover{color:var(--accent,#175cd3);background:var(--accent-soft,#eaf1ff)}.ds-tab:focus-visible{outline:3px solid var(--accent,#175cd3);outline-offset:3px;box-shadow:none}"
     },
@@ -421,6 +433,13 @@
       "description": "Synthetic example of a dark translucent OBS message row.",
       "html": "<article class=\"ds-overlay\"><div class=\"ds-avatar\">예</div><div class=\"ds-content\"><strong class=\"ds-author\">예시 참여자</strong><p class=\"ds-message\">미리보기 대화입니다.</p></div></article>",
       "css": ".ds-overlay{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);font-size:14px;display:flex;gap:12px;background:#162133ed;color:#f7f9fc;border-radius:8px;padding:12px 14px}.ds-avatar{display:grid;place-items:center;flex:0 0 32px;width:32px;height:32px;border-radius:50%;background:#32496b;color:#e4edff;font-size:13px;font-weight:650}.ds-content{min-width:0}.ds-author{font-size:13px}.ds-message{font-size:17px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0 0}"
+    },
+    {
+      "name": "Test session microphone controls",
+      "kind": "custom",
+      "description": "Persistent session controls above the conversation, per-viewer state and call-detail tabs; usage is a count, not a generation cap.",
+      "html": "<section class=\"ds-test-controls\" aria-label=\"마이크 입력\"><div class=\"ds-test-heading\"><h2>마이크 입력</h2><span>AI 호출 2회</span></div><button type=\"button\" class=\"ds-test-microphone\">마이크로 말하기</button><p>탭을 바꿔도 계속 듣습니다.</p></section>",
+      "css": ".ds-test-controls{font-family:var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);background:var(--surface,#fff);color:var(--ink,#202a39);border:1px solid var(--line,#dce2ea);border-radius:8px;padding:20px}.ds-test-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.ds-test-heading h2{font-size:17px;font-weight:650;line-height:1.4;margin:0}.ds-test-heading span,.ds-test-controls p{font-size:13px;color:var(--muted,#596579)}.ds-test-controls p{margin:0;line-height:1.6}.ds-test-microphone{font:550 14px/1.5 var(--font-ui,\"Noto Sans KR Variable\",system-ui,sans-serif);min-height:40px;padding:6px 12px;border:1px solid #c6cfdb;border-radius:6px;background:var(--surface,#fff);color:#40516b;cursor:pointer}.ds-test-microphone:hover{background:#edf1f6;color:var(--ink,#202a39);border-color:#a7b5c8}.ds-test-microphone:active{background:#e1e8f2}.ds-test-microphone:focus-visible{outline:3px solid var(--accent,#175cd3);outline-offset:3px}.ds-test-microphone:disabled{opacity:.65;cursor:not-allowed}@media(max-width:767px){.ds-test-controls{padding:16px}.ds-test-microphone{min-height:44px}}"
     }
   ],
   "narrative": {

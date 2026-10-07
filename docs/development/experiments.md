@@ -21,7 +21,8 @@ sh run-command.sh just experiments-restart
 sh run-command.sh just experiments-stop
 ```
 
-For foreground development use `sh run-command.sh npm run experiments:start`.
+For foreground development start the AI service with `sh run-command.sh just ai-service-start`,
+then use `sh run-command.sh npm run experiments:start`.
 The default test port is 3211. If changing `config.json` to another port, pass the
 same value with `just --set experiments_port PORT experiments-start` (and the
 corresponding status/restart commands). The test administrator token is
@@ -31,8 +32,8 @@ does not log out of the other. Test PID/log files are `.local/experiments/server
 and `.local/experiments/server.log`. Existing `.local/experiments/interactive` history
 is retained without copying or rewriting it.
 
-Setup creates missing files only. It snapshots `audio.provider`, `audio.language`
-and the pipeline profile path from the existing configuration, and copies only
+Setup creates missing files only. It snapshots `audio.provider`, `audio.language`,
+`audio.chunkSeconds`, `audio.maxRequests` and the pipeline profile path from the existing configuration, and copies only
 `OPENAI_API_KEY`, `OPENAI_MODEL` and `GROQ_API_KEY` into the private test environment.
 It generates independent administrator/encryption credentials. Runtime thereafter
 reads only `.local/experiments/config.json` and `.local/experiments/.env`; live setting
@@ -51,7 +52,8 @@ test readiness and clear outdated connection errors; no manual reconnect check i
 needed. Startup errors identify the selected provider.
 The replay CLI also uses the test environment and reads that test account without
 refreshing it; run/refresh the test server account before a long CLI session.
-Offline fixture replay needs no setup, credentials or running server.
+Offline fixture replay needs no provider credentials, test-account setup or running
+test server. It still requires the local AI service.
 
 ## Interactive viewer tests
 
@@ -62,9 +64,9 @@ or the offline fixture provider, and start a test. Text input represents what
 the broadcaster says, entering the same speech evidence journal as microphone
 transcriptions. It is not inserted as a consented platform viewer message.
 
-The interactive session uses the production `ReactionCoordinator`, cast
-selection, participation propensity, generation, review, pacing and publication
-rules in real time. It can remain silent. It does not force every viewer to
+The interactive session uses the production host `ReactionCoordinator` and calls the
+AI service for cast selection, participation propensity, generation and review. Host
+pacing and publication rules apply in real time. It can remain silent. It does not force every viewer to
 reply or accelerate the profile's intervals. The selected startup pipeline
 profile supplies persona definitions and prompts; this text/audio surface uses
 `on_request` visual mode and supplies no screen frames. Changing a profile still

@@ -2,37 +2,42 @@
 version: 1
 slug: "apps-web-src-main-tsx"
 primary_target: "apps/web/src/main.tsx"
-related_targets: ["apps/web/src/features/conversation/ConversationPage.tsx"]
+related_targets:
+  [
+    "apps/web/src/features/conversation/ConversationPage.tsx",
+    "apps/web/src/features/workspace/workspace.css",
+  ]
 ---
 
 # Operator workspace and conversation surfaces
 
-Mode: Operate. Scope: administrator workspace, reader and OBS overlay.
-
-The broadcaster prepares connections, monitors permitted conversation, controls AI,
-manages participation and follows up on records. Preserve data/API contracts,
-authentication, notice delivery, component lifetimes and cancellation guards.
+Mode: Operate. Scope: live administrator workspace, reader and OBS overlay.
 
 ## Direction contract
 
-THESIS: A task-first broadcast workspace. Replace the long status/settings stack
-with live conversation beside context and separate preparation and follow-up work.
+THESIS: Put broadcast conversation and immediate AI control first; keep preparation,
+participation and records in their own destinations.
 
-OWN-WORLD: Category-standard Bootstrap controls, neutral white/slate surfaces,
-blue action/selection color, semantic state colors, Noto Sans KR, Radix tab
-keyboard behavior and native confirmation dialogs. Compact desktop density and full-width mobile work areas.
+OWN-WORLD: Category-standard Bootstrap controls, white/slate surfaces, blue actions,
+semantic state labels, Noto Sans KR, Radix keyboard behavior and native confirmations.
+Compact desktop density becomes a single work column on mobile.
 
-STORY: Prepare sources and model; open reader/OBS; monitor conversation and AI;
-resolve participation issues; close the session and handle external follow-ups.
+STORY: Prepare sources and model; open reader/OBS links; monitor permitted chat and
+AI; resolve participation issues; end the broadcast and handle rights follow-ups.
 
-FIRST VIEWPORT: Left task navigation; page title and broadcast state; compact AI
-control bar with stop and end actions; concise source status; conversation occupies
-the main column and preview/context the secondary column. On mobile, navigation
-and stop stay reachable, then one work column. Signature interaction: a blocked
-readiness item opens its exact setup panel, with focus at the relevant control area.
+FIRST VIEWPORT: Four task destinations: Live, Broadcast preparation, Participants,
+and Records/rights. The live page has a conversation column, context/preview column,
+source readiness and a persistent AI control bar. On mobile the navigation and stop
+control remain reachable. Readiness links open and focus the relevant setup panel;
+routine polling never moves focus. SOOP and unfinished forms survive live navigation.
 
-FORM: Category standard explicitly selected by the user, overriding assigned index
-3 from seed 47753c25. Code-led; no comp or aesthetic selection round. Conventional
-broadcast workspaces and Bootstrap defaults are the craft benchmark.
+FORM: Category-standard and code-led, using the implemented shared design system.
+Use explicit localized actions and confirmation for destructive session/data actions
+and irreversible AI-origin disclosure. Preserve current names when disclosing origins.
 
-FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
+BOUNDARY: Interactive AI viewer tests run in a separate app on port 3211, not a fifth
+live navigation destination. Reader/overlay use separate reader authorization; the
+transparent OBS overlay contains conversation and participation guidance only.
+
+Ownership: [dashboard contract](../../docs/specifications/dashboard.md),
+[visual system](../../DESIGN.md) and [product context](../../PRODUCT.md).

@@ -21,8 +21,11 @@ not stop the AI service. Foreground operation uses `npm run ai-service:setup` th
 `npm run ai-service:start`, both through the repository wrapper. Foreground app and
 CLI commands require the service to be running already. Startup performs a protocol
 and pipeline metadata handshake; an unavailable service fails startup rather than
-silently running an embedded implementation. A later service failure stops the
-affected AI attempt; ordinary app HTTP and conversation storage remain available.
+silently running an embedded implementation. A later selection failure stops host scheduling; a failed draft step enters the
+existing model-error path. The operator can restart AI after service recovery.
+Inspection failures retain the last cached state and do not stop a test. Ordinary
+app HTTP and conversation storage remain available. In-flight service jobs are
+transient and are not recovered after a service restart.
 
 The default shared local token is `.local/ai-service.token`, created once with
 owner-only permissions. `AI_SERVICE_URL` and `AI_SERVICE_TOKEN` override the client

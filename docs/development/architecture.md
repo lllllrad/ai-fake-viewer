@@ -1,17 +1,17 @@
-# Architecture and reconstruction contract
+# Architecture and runtime boundaries
 
-This describes the responsibility boundaries and acceptance contract for the
-reconstructed existing product. The accepted behavior is owned
+This describes the implemented responsibility boundaries and their acceptance contract. The accepted behavior is owned
 by [behavior](../specifications/behavior.md), [participation](../specifications/participation.md)
 and [personas](../specifications/personas.md). The [dashboard contract](../specifications/dashboard.md)
-defines the replacement UI. The microphone-only mode is outside this rewrite.
+defines the live UI. [Interactive tests](experiments.md) run in a separate app and
+share the AI service and speech processing with broadcasting.
 
 ## Scope and precedence
 
 Preserve the working live flows: configured screen and speech, selected platform
 chat, fixed participation notices, individual consent and withdrawal, automatic
 six-person cast, inference and review, reader/OBS overlay, account connections,
-usage limits, broadcast recovery and rights handling. Existing code is evidence
+usage accounting and cost/token limits, broadcast recovery and rights handling. Existing code is evidence
 of protocol behavior, not the architecture to preserve. A defect or obsolete
 manual-authoring experiment does not become a requirement because it has a test.
 
@@ -19,12 +19,13 @@ The latest accepted changes override older private source documents: broadcast
 state survives process restart; broadcast end destroys it; consent uses one
 short confirmed notice and one fresh command; recently observed viewers can
 share delivery; broadcaster chat is admitted automatically while own fixed notices are excluded; configured video/audio need no
-privacy enable flags; forced-reply and broadcaster test modes are removed.
+privacy enable flags; forced replies are not a live mode; interactive viewer testing belongs to the separate
+test server.
 
 Keep Node, TypeScript, Fastify, React, Vite, SQLite and existing provider SDKs.
 Do not introduce a service framework, message broker, dependency injection
 container or generic repository hierarchy. The explicitly separated AI pipeline
-service is the one additional production process; see [its boundary](ai-service.md). Prefer
+service is a separate process shared by broadcast and test apps; see [its boundary](ai-service.md). Prefer
 small named functions and explicit constructor dependencies.
 
 ## Dependencies and ownership
@@ -39,6 +40,8 @@ flowchart LR
   Root[Server composition root] --> App
   Root --> Infra
   Root --> HTTP
+  Infra --> Client[AI service HTTP client]
+  Client --> AI[Separate viewer AI process]
 ```
 
 | Location                   | Responsibility                                                                                        | Must not own                                                                    |
@@ -48,6 +51,7 @@ flowchart LR
 | `packages/infrastructure/` | SQLite repositories/migrations, credential storage, platform and inference adapters, worker processes | UI decisions, independent consent decisions, broadcast lifetime policy          |
 | `packages/contracts/`      | Validated HTTP/websocket/configuration DTOs used at boundaries                                        | Service instances or secrets in public DTOs                                     |
 | `apps/server/`             | Composition, HTTP security, route registration, websocket delivery and process lifecycle              | Participation rules, AI selection logic or database queries in route handlers   |
+| `apps/experiments/`        | Separate test server and frontend, test accounts and isolated conversation records                    | Live platform connectors, broadcast database access or live account ownership   |
 | `apps/web/src/`            | Typed API client, session hooks, feature screens and reusable presentation components                 | Provider tokens in browser storage, server policy decisions, raw state mutation |
 | `services/viewer-ai/`      | Independently running AI selection, generation/review and inspection API                              | Provider credentials, broadcast DB, platform connections or final publication   |
 | `workers/`                 | Bounded audio/video and incompatible SDK process isolation                                            | Broadcast state or permission decisions                                         |
@@ -67,8 +71,8 @@ to change; split by responsibility, not by an arbitrary line-count target.
 | Participation       | Classify commands, record delivery, accept fresh consent, block age, withdraw                | Participant state, consent epoch/version, delivery opportunity, replay protection |
 | Notice delivery     | Choose pending room guidance, reserve rate budget, send, confirm/reject result               | Confirmed delivery and rate reservations; no arbitrary text send capability       |
 | Conversation        | Admit permitted messages, edit/hide, project public state, collect model context             | Chat, opaque speaker identities and publication dependencies                      |
-| AI reactions        | Select fresh context and persona, generate, review, optionally approve, publish              | Usage reservations, attempt state, bounded sanitized diagnostics                  |
-| Cast                | Compose/reuse six synthetic viewers, select eligible members, record presence/speech         | Definitions and broadcast cast; no real-viewer profiling                          |
+| AI reactions        | Admit context, invoke AI service, meter model calls, optionally approve and publish          | Usage reservations, attempt state, bounded sanitized diagnostics                  |
+| Cast                | Compose/reuse six synthetic viewers and record presence/speech                               | Definitions and broadcast cast; no real-viewer profiling                          |
 | Inputs              | Manage configured screen, speech and selected platform adapters                              | Checkpoints and transcription usage; raw media is transient                       |
 | Accounts            | Authorize/select/forget supported accounts and model                                         | Encrypted credentials, separate from broadcast records                            |
 | Rights              | Intake, minimal follow-up, outcomes and deletion                                             | Separate rights database, retained beyond broadcast end as required               |
@@ -175,6 +179,7 @@ operator guide.
 | Platform receivers, fixed-notice transports, screen/speech workers and accounts | [Inputs and accounts](inputs-and-accounts.md)             |
 | Consent, withdrawal, conversation storage, broadcast persistence and rights     | [Participation and storage](participation-and-storage.md) |
 | Context selection, cast, generation/review, provider adapters and publication   | [Reaction implementation](reactions.md)                   |
+| AI service API, implementation registry and separate process lifecycle          | [Independent AI service](ai-service.md)                   |
 | Runtime flow, prompts, diagnostics and tuning                                   | [AI pipeline](ai-pipeline.md)                             |
 
 ## UI and contracts
@@ -187,7 +192,7 @@ The SOOP browser adapter has its own lifecycle hook and cannot be duplicated by
 page navigation. Keep server-derived eligibility distinct from presentation labels.
 
 Preserve existing reader links, OAuth callbacks and supported live administrator
-operations during cutover. Replace unstable internal DTOs deliberately and update
+operations during implementation changes. Replace unstable internal DTOs deliberately and update
 consumers/tests together. Legacy persona-authoring APIs that are blocked in live
 mode are reference material, not a second product to rebuild. Synthetic demo
 inputs remain available to exercise the actual application pipeline.
@@ -231,9 +236,9 @@ The [websocket adapter](../../apps/server/http/reader-stream.ts) owns socket and
 JSON framing and tracks both authenticated and waiting connections. Token rotation
 and server shutdown close both groups; late authentication cannot reattach them.
 
-## Reconstruction and acceptance
+## Change acceptance
 
-Implement in functional slices: lifecycle, participation/conversation/storage,
+Change the system in functional slices: lifecycle, participation/conversation/storage,
 input and account adapters, AI/cast, HTTP/status, then the replacement workspace
 and public surfaces. Update ownership documents as each target becomes real.
 Avoid two complete production implementations or unrelated speculative features.

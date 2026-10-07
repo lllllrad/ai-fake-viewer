@@ -82,7 +82,7 @@ connects these ports to current media, consent, storage and rights follow-up own
 
 The [draft and review use case](../../services/viewer-ai/draft-review.ts)
 owns the bounded generation workflow: an initial response, at most one requested
-frame inspection, and optional independent review. It receives provider, current
+frame inspection, and an optional separate review call using the same selected provider. It receives provider, current
 input and cancellation ports rather than storage or timer objects. Every awaited
 response is checked against the current execution before another request or a
 candidate can be returned. Review excludes expired background speech and rejects
@@ -93,8 +93,8 @@ publication; it does not duplicate the draft/review sequence.
 The [metered model-call use case](../../packages/application/reactions/model-call.ts)
 owns pre-request budget reservation, bounded diagnostic metadata and post-response
 usage settlement. The [SQLite usage adapter](../../packages/infrastructure/reactions/usage-sqlite.ts)
-atomically reserves call and monetary capacity within the current broadcast.
-Already-aborted requests consume no capacity. Ambiguous provider failures retain
+atomically records each call and reserves optional monetary capacity within the current
+broadcast. Generation has no call-count cap. Already-aborted requests create no reservation. Ambiguous provider failures retain
 the reservation; missing or invalid token counts cannot reduce its monetary bound.
 Sign in with ChatGPT records token usage without applying Responses API monetary
 rates. Late settlement is scoped to the broadcast that is still current. Provider
@@ -204,7 +204,8 @@ selects message IDs, pseudonymous speakers, text, transcript timestamps and fram
 references explicitly. Extra fields attached to internal objects never enter the
 model payload. Anonymous summaries are restricted to approved topic/mood labels.
 The [message renderer](../../packages/infrastructure/reactions/model-messages.ts)
-loads the answer/review prompts and encodes the selected frame bytes for the wire
+uses service-supplied `ModelInput.instructions` when present, otherwise renders the
+standard or selected profile answer/review prompts, and encodes frame bytes for the wire
 format. Application context projection does not read files or depend on a provider
 client, and image encoding handles Uint8Array views without exposing adjacent bytes.
 
@@ -254,8 +255,9 @@ terminating the process. Manual publication also cancels its queued callback.
 
 ## Experiments
 
-[Persona and pipeline experiments](experiments.md) invoke the same coordinator,
-draft/review owner and model adapters with an isolated store and injected clock.
+[Persona and pipeline experiments](experiments.md) use the same host coordinator,
+AI service API and model adapters with an isolated store and injected clock. Selection
+and draft/review execute in the service, not inside the experiment app.
 Versioned profiles are also consumed by the live server at startup.
 
 ## AI implementation selection

@@ -27,6 +27,11 @@ typography:
     fontSize: "24px"
     fontWeight: 650
     lineHeight: 1.4
+  test-headline:
+    fontFamily: '"Noto Sans KR Variable", system-ui, -apple-system, "Segoe UI", sans-serif'
+    fontSize: "28px"
+    fontWeight: 650
+    lineHeight: 1.4
   title:
     fontFamily: '"Noto Sans KR Variable", system-ui, -apple-system, "Segoe UI", sans-serif'
     fontSize: "17px"
@@ -148,7 +153,9 @@ The system uses packaged Bootstrap CSS, Radix Tabs, Lucide icons and locally pac
 The implemented sources are [global styles](apps/web/src/style.css),
 [workspace styles](apps/web/src/features/workspace/workspace.css),
 [participation styles](apps/web/src/features/participation/participation.css),
-[conversation styles](apps/web/src/features/conversation/conversation.css) and
+[conversation styles](apps/web/src/features/conversation/conversation.css),
+[test shell](apps/experiments/web/shell.css),
+[test conversation styles](apps/experiments/web/features/experiments.css) and
 [shared controls](apps/web/src/components/ui.tsx). Product intent lives in
 [PRODUCT.md](PRODUCT.md); behavior remains owned by the
 [dashboard specification](docs/specifications/dashboard.md).
@@ -194,6 +201,12 @@ At `1150px` and below, the sidebar narrows to `178px`, main padding becomes `24p
 
 The reader is centered at a maximum `820px`; its bottom toolbar stays reachable. The overlay fills the viewport, keeps the page transparent and aligns bounded message rows toward the bottom. It clips overflow for OBS output. Long labels wrap rather than expanding the workspace horizontally.
 
+The independent test workspace shares controls and tokens but has its own shell,
+with a `1600px` maximum width and `clamp(16px, 3vw, 40px)` padding. Its heading uses
+`test-headline`. The conversation/persona columns stack at `1000px`; the header and
+account actions stack at `600px`. It has no live sidebar or broadcast controls.
+See [test server ownership](docs/development/experiments.md#independent-server).
+
 ## Elevation & Depth
 
 Depth comes from a cool page background, white surfaces, pale inset blocks and thin borders. Ordinary cards have no decorative shadow. Confirmation dialogs use `0 20px 60px #10182833` over a dimmed `#18233499` backdrop. The sticky mobile navigation and reader toolbar maintain access without adding ornamental elevation.
@@ -216,7 +229,7 @@ Bootstrap form controls and selects use white surfaces, slate outlines and a min
 
 ### Navigation
 
-The four live task destinations are Live, Broadcast preparation, Participants and Records/rights, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Radix section tabs use automatic keyboard activation and a blue underline for selection; their panels remain mounted so changing sections preserves component lifetimes. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
+The four live task destinations are Live, Broadcast preparation, Participants and Records/rights, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Shared Radix section tabs use automatic keyboard activation and a blue underline for selection; `SectionTabs` keeps its panels mounted to preserve component lifetimes. The test workspace uses separate conversation, AI-state and call-detail tabs; its microphone controls stay mounted outside these tabs. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
 
 ### Status badges and alerts
 
@@ -233,6 +246,11 @@ Use the shared native modal dialog with a maximum width of `480px`, bounded view
 ### Conversation surfaces
 
 Reader rows pair a circular initial avatar with author, timestamp and text; origin labels appear when the product contract allows them. The overlay adapts this structure to translucent dark rows with larger message type. Maintain readable disclosure and guidance without turning the transparent page into a full-screen opaque panel.
+
+The test conversation follows new entries by scrolling its own log container only.
+Scrolling up suspends following; the recent-conversation action restores it. Polling
+must not move the page, steal focus or interrupt microphone recording. Ended sessions
+show the resume action without an additional-call-limit field.
 
 Bootstrap supplies short control transitions. Reduced-motion preferences remove transitions from buttons, form controls, selects and tab links. Do not add motion to routine status updates.
 
@@ -253,7 +271,3 @@ Bootstrap supplies short control transitions. Reduced-motion preferences remove 
 - **Don't** move focus during routine status refreshes.
 - **Don't** apply the light canvas background to the OBS overlay.
 - **Don't** treat generated palette ramps in the sidecar as implemented CSS tokens.
-
-## Independent test workspace
-
-The AI viewer test interface runs in its own server and frontend bundle. It retains the shared components and conversation/persona layout, with a compact test-only header, separate login and optional model-account settings. Live navigation and emergency controls remain exclusively in the broadcast workspace. See [test server ownership](docs/development/experiments.md#independent-server).

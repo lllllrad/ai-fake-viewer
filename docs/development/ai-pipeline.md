@@ -4,7 +4,7 @@ The live profile is consent-gated chat and optional broadcast-transcript and OBS
 
 ## Runtime scope and startup
 
-`createApp` uses the configured private SQLite database in live mode and an in-memory Store in demo mode. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. Startup requires a complete profile, matching selected-service model/credentials and disabled third-party gate, not audio/video. AI execution intent survives restart; the recovery loop waits for required inputs and authentication before resuming. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
+`createApp` uses the configured private SQLite database in live mode and an in-memory Store in demo mode. Live mode additionally installs Participation, blocks unapproved receiver scopes and pins the selected API or subscription adapter to the privacy profile. App startup requires the [AI service](ai-service.md). Enabling live AI additionally requires a complete profile, matching selected-service model/credentials and disabled third-party gate; missing configured media is reported through readiness. AI execution intent survives restart; the recovery loop waits for required inputs and authentication before resuming. Automatic persona creation uses local synthetic templates rather than viewer histories or operator authoring.
 
 Jev and persona authoring libraries remain standalone paths. Live video and broadcast transcription use their configured sources by default. Demo uses artificial data and a mock model.
 
@@ -34,12 +34,13 @@ flowchart TD
   B -->|Current ACTIVE generation| D[Broadcast database]
   D --> E[Filtered reader and overlay]
   D --> F[Fixed anonymous categories]
-  D --> G[Persona selection and context]
+  D --> G[Host admits context]
+  G --> S[AI service selects persona and orchestrates draft/review]
   F --> G
-  G --> H[Recheck profile and consent revision]
+  S --> H[Host rechecks profile and consent revision]
   H --> I[Responses API with selected authentication]
-  I --> J[Schema and evidence checks / optional draft review]
-  J --> K[Current generation check and local publication]
+  I --> J[AI service validates result / requests optional review]
+  J --> K[Host checks current generation and publishes locally]
   W[Withdrawal / profile change] --> L[Invalidate and cancel / remove raw and derived context]
   L --> R[Separate minimal external and video follow-up]
 ```
@@ -56,7 +57,7 @@ Configured OBS Program frames are available in live mode. Continuous mode suppli
 
 ### 3. Event selection and scheduler
 
-Enabled AI waits when no new permitted human text or enabled transcript is available; readiness alone does not guarantee generation. New permitted human text or enabled speech triggers evaluation within `ai.contextWindowSeconds`; synthetic replies alone do not trigger loops. Random pacing, global/per-character cooldown, session budgets and busy-chat suppression apply. Current message DTOs, recent synthetic replies, automatic persona style and approved fixed summaries are explicit model context. Consent revision is captured with the input. Queue, review and publication invalidation uses the existing scheduler/persona cancellation controls.
+Enabled AI waits when no new permitted human text or enabled transcript is available; readiness alone does not guarantee generation. New permitted human text or enabled speech triggers evaluation within `ai.contextWindowSeconds`; synthetic replies alone do not trigger loops. Random pacing, global/per-character cooldown, optional monetary budgets and busy-chat suppression apply. Current message DTOs, recent synthetic replies, automatic persona style and approved fixed summaries are explicit model context. Consent revision is captured with the input. Queue, review and publication invalidation uses the existing scheduler/persona cancellation controls.
 
 Reaction deduplication uses a hash of the current chat sequence and message,
 transcript and frame IDs, scoped to persona session/member. The chat sequence is
@@ -85,7 +86,7 @@ Optional manual approval adds an expiring queue. Stopping, withdrawal, removed e
 
 ## Prompt and tool inventory
 
-Default live response/review prompts live under `prompts/`; versioned [experiment profiles](experiments.md) can select alternate prompts at server startup; model serialization is in [the message renderer](../../packages/infrastructure/reactions/model-messages.ts), consent in `packages/application/participation/service.ts` and `packages/domain/participation/`, context removal/summary coordination in `packages/application/conversation/context-service.ts`, the permitted-message projection in `packages/application/conversation/projection-service.ts`, and authorization wiring in `apps/server/app.ts`. The model receives no tools or rights-queue data. For SOOP, the connected admin SDK automatically sends server-issued fixed notices after unconsented chat when guidance is needed, with pre-send account/global limits and matching broadcaster MESSAGE confirmation. YouTube and CHZZK run their fixed-notice senders on the server while receivers are active; the single notice requires a confirmed platform response. AI replies never use those senders. Fixed platform guidance is rendered from the reviewed public profile, never generated by AI or interpolated with viewer text/nicknames.
+Service-owned AI implementations may provide `ModelInput.instructions` for each request. Otherwise default live response/review prompts live under `prompts/`; versioned [experiment profiles](experiments.md) can select alternate prompts at server startup; model serialization is in [the message renderer](../../packages/infrastructure/reactions/model-messages.ts), consent in `packages/application/participation/service.ts` and `packages/domain/participation/`, context removal/summary coordination in `packages/application/conversation/context-service.ts`, the permitted-message projection in `packages/application/conversation/projection-service.ts`, and authorization wiring in `apps/server/app.ts`. The model receives no tools or rights-queue data. For SOOP, the connected admin SDK automatically sends server-issued fixed notices after unconsented chat when guidance is needed, with pre-send account/global limits and matching broadcaster MESSAGE confirmation. YouTube and CHZZK run their fixed-notice senders on the server while receivers are active; the single notice requires a confirmed platform response. AI replies never use those senders. Fixed platform guidance is rendered from the reviewed public profile, never generated by AI or interpolated with viewer text/nicknames.
 
 ## Isolated experiments
 
@@ -107,7 +108,7 @@ Use [config.example.yaml](../../config.example.yaml), [live setup](../operations
 
 ## Sign in with ChatGPT without an API key
 
-`chatgpt_subscription` uses the app's Sign in with ChatGPT account and selected model, with no API-key/environment-model requirement. The OpenAI Responses API HTTP request uses `store:false`, `stream:true` and explicit required history in `input`, with no tools/chaining. Inference succeeds only after `response.completed`; deltas alone, interrupted streams and failed/incomplete terminal events do not qualify. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local call/size and reported token limits still apply. Contract/profile mismatches stay blocked.
+`chatgpt_subscription` uses the app's Sign in with ChatGPT account and selected model, with no API-key/environment-model requirement. The OpenAI Responses API HTTP request uses `store:false`, `stream:true` and explicit required history in `input`, with no tools/chaining. Inference succeeds only after `response.completed`; deltas alone, interrupted streams and failed/incomplete terminal events do not qualify. The same current-consent guard runs before preparation and after asynchronous token refresh immediately before sending; account/model changes during refresh abort the call. Request IDs enter the same withdrawal follow-up mechanism. Subscription requests do not use API-key token counting or API USD pricing; local payload-size and reported token limits still apply; generation call counts are not capped. Contract/profile mismatches stay blocked.
 
 The explicit [operator-reviewed test configuration](../specifications/participation.md#operator-reviewed-test-configuration) can defer descriptive profile metadata during reviewed testing. Viewer consent, withdrawal, channel approval, model compatibility and actual notice limits remain required.
 

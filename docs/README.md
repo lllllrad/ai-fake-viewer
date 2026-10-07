@@ -3,9 +3,10 @@
 | Role             | Document                                                              | Purpose                                                                              |
 | ---------------- | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | Operator         | [Setup and troubleshooting](operations/setup.md)                      | OBS inputs, platform connections, accounts and operating checks                      |
-| Developer        | [Architecture and reconstruction](development/architecture.md)        | Responsibility boundaries, lifecycle, contracts and rewrite acceptance               |
+| Developer        | [Architecture and runtime boundaries](development/architecture.md)    | Responsibility boundaries, lifecycle, contracts and rewrite acceptance               |
 | Developer        | [Development guide](development/guide.md)                             | Command wrapper, runtime, browser dependencies and tests                             |
 | Developer        | [Persona and pipeline experiments](development/experiments.md)        | Interactive viewer tests, isolated replay, versioned profiles and comparison reports |
+| Developer        | [Independent AI service](development/ai-service.md)                   | Process boundary, HTTP protocol, lifecycle and algorithm registration                |
 | Developer        | [AI pipeline](development/ai-pipeline.md)                             | Input selection, inference, review, diagnostics and publication                      |
 | Developer        | [Reaction implementation](development/reactions.md)                   | Cast, model ports, provider adapters, cancellation and publication ownership         |
 | Developer        | [Inputs and accounts](development/inputs-and-accounts.md)             | Platform reception/notices, media workers, authentication and account lifetimes      |
@@ -26,7 +27,8 @@ system and shared component standards.
 
 [README](../README.md) is the project entry point.
 [Example configuration](../config.example.yaml) and [schema](../packages/config.ts)
-are the configuration reference. Runtime model instructions remain in `prompts/`;
+are the configuration reference. Standard model instructions remain in `prompts/`; service implementations can supply
+per-call instructions through the documented model port;
 third-party notices remain alongside their vendored components.
 
 Update the owning document when behavior changes and distinguish current behavior
@@ -34,5 +36,3 @@ from unverified external assumptions. Keep validation in tests and commit
 messages. Do not add chronological verification reports or duplicate task ledgers.
 Use relative links, English prose and official API names. Run
 `sh run-command.sh npm run docs:check` after documentation changes.
-
-The [independent AI service](development/ai-service.md) owns pipeline execution and documents its API, lifecycle and implementation boundary.

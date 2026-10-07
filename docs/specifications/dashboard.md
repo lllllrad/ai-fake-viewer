@@ -1,6 +1,6 @@
 # Operator workspace and conversation surfaces
 
-This defines the replacement UI for the current live feature set. The broadcast,
+This defines the implemented operator UI for the current live feature set. The broadcast,
 connections and participation destinations are implemented. The connection screen uses separate platform, media, AI account and reader-link
 components. Participation uses separate participant, operating-profile, rights-request
 and video-inventory views. The SOOP browser connection uses a dedicated controller, while server-side input
@@ -10,7 +10,7 @@ owned by [requirements](behavior.md), [participation](participation.md) and
 
 ## Operator tasks and navigation
 
-Use five task destinations within the authenticated workspace:
+Use four task destinations within the authenticated workspace:
 
 - **Live:** conversation moderation, AI enablement/stop, concise input health,
   source preview, tabbed speech/cast/anonymous context, disclosure and session end.
@@ -49,8 +49,8 @@ with an empty token field; credentials are never persisted in browser storage.
 Workspace navigation uses fragment links (`#broadcast`, `#connections`,
 `#participation`, `#records`). Existing input-detail links select their owning screen. Broadcast and participation screens
 retain their component lifetime while hidden: navigating must not reconnect SOOP
-or discard unfinished participation forms. The test screen unmounts when leaving
-to release the microphone; the isolated server session continues until ended. The broadcast conversation, transcripts,
+or discard unfinished participation forms. The independent test workspace has its own
+page and microphone lifetime; see [tests](../development/experiments.md). The broadcast conversation, transcripts,
 cast and pending draft review are owned by
 [BroadcastConversation](../../apps/web/src/features/workspace/BroadcastConversation.tsx).
 
@@ -151,7 +151,8 @@ separate from the AI switch. No silent provider fallback is allowed.
 
 For limits or denied requests, identify the actual API and operation: receive/read,
 account lookup, fixed-notice send, transcription or AI generation/review. Distinguish
-provider quota from application call/token/cost budgets. An observed read failure
+provider quota from transcription/gate request caps and generation token/cost budgets.
+Generation has no call-count cap. An observed read failure
 does not prove that the send API separately exhausted its quota.
 
 Diagnostics may expose sanitized timestamps, durations, stages, counts and reason

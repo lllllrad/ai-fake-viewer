@@ -1,6 +1,6 @@
 # Upstream contract review
 
-Historical external-document review dated 2026-10-02. This is not live-account acceptance or legal permission. Implementation decisions below describe that revision: current public messages are blinded until reveal, and viewer consent now gates storage/display/context with all supported platforms eligible after consent. The old per-platform AI-context approval configuration has been removed; see [current behavior](../../README.md#automatic-personas-and-viewer-consent).
+Historical external-document review dated 2026-10-02. This is not a current upstream verification, live-account acceptance or legal permission. The table records decisions from that revision; it is not current runtime guidance. The [current behavior contract](../specifications/behavior.md) owns consent, fixed notices, input availability and visible nicknames.
 
 | Area                 | Primary source                                                                                      | Implementation decision                                                                                          |
 | -------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -17,6 +17,6 @@ Historical external-document review dated 2026-10-02. This is not live-account a
 
 YouTube policy content and account-specific processing permissions are not resolved by a checkbox or a nonempty review reference. Image masking requires actual operator review of all layouts. At that revision, platform AI-context flags defaulted off. This no longer describes the current configuration.
 
-## Remaining behavior limits
+## Current implementation boundary
 
-No guarantee of complete replay, exact upstream timestamps across platforms, original custom badge rendering, full emote support, native moderation propagation or image-grounded truthfulness. No native chat-writing endpoint is exposed or called by application code. OAuth subscription POST requests are not chat messages.
+No guarantee of complete replay, exact upstream timestamps across platforms, original custom badge rendering, full emote support, native moderation propagation or image-grounded truthfulness. AI-generated replies stay in the local app. Official platform senders deliver only fixed participation notices; see [notice delivery](../specifications/behavior.md#platform-execution-and-notice-delivery). OAuth subscription POST requests are not chat messages.

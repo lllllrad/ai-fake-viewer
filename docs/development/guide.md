@@ -13,9 +13,10 @@ algorithm fixture and also include real-process API integration checks.
 # Documentation/configuration checks, TypeScript/Vite build and unit tests
 sh run-command.sh npm run check
 
-# Chromium checks for admin, reader and overlay
+# Chromium checks for live admin/reader/overlay and independent test workspace
 sh run-command.sh npm run build
 sh run-command.sh npm run test:browser
+sh run-command.sh npm run test:experiments:browser
 
 # Linux managed-server lifecycle check (isolated fixture, requires just)
 sh run-command.sh npm run test:server
@@ -27,11 +28,16 @@ sh run-command.sh npx prettier --write README.md
 sh run-command.sh --help
 ```
 
-Browser tests serve `dist/web`, so build after web changes. Fixtures use ports `127.0.0.1:33219` and `127.0.0.1:33220`, memory databases, isolated credential paths and synthetic input. Do not run multiple browser checks on those ports simultaneously. JSON reports and screenshots go to ignored `test-results/`. These tests do not establish real broadcast compatibility or paid-model quality. Browser verification fails on page errors and CSP console diagnostics. For the optional UI review capture and axe pass, run
+Browser tests serve `dist/web` and `dist/experiments`, so build both after web changes.
+Live fixtures use ports 33219/33220; interactive tests use 33221. Each suite starts
+its own AI service on an ephemeral loopback port, with isolated credentials and
+synthetic input. Do not run suites using the same fixed ports simultaneously. JSON reports and screenshots go to ignored `test-results/`. These tests do not establish real broadcast compatibility or paid-model quality. Browser verification fails on page errors and CSP console diagnostics. For the optional UI review capture and axe pass, run
 `sh run-command.sh env UI_REVIEW=1 npm run test:browser` after building. It writes
 synthetic desktop/mobile screenshots and audit JSON to ignored
-`.impeccable/review/`; `UI_REVIEW_TARGETS=platforms,media,ai` can restrict captures
-while retaining the full interaction suite. Captures wait for tab activation and
+`.impeccable/review/`; `UI_REVIEW_TARGETS=platforms,media,ai` can restrict live captures
+while retaining the full interaction suite. Use `UI_REVIEW=1` with
+`npm run test:experiments:browser` for test-workspace captures; target names include
+`experiment-setup`, `experiment-conversation` and `experiment-resume`. Captures wait for tab activation and
 font/paint settling. Automated contrast and layout checks do not replace physical
 device, screen-reader or real-platform acceptance.
 
@@ -60,7 +66,8 @@ The wrapper does not install packages. Linux CI uses `npx playwright install --w
 
 ## Current host browser environment
 
-Paths verified on 2026-10-05:
+The wrapper detects the following optional local bundle; these temporary paths
+are environment conveniences, not repository prerequisites:
 
 | Component        | Path                                                         |
 | ---------------- | ------------------------------------------------------------ |
@@ -124,8 +131,35 @@ Run `sh run-command.sh npm run setup:check` after editing `.env` or `config.yaml
 
 `npm run setup` creates missing local files and includes YouTube/SOOP OAuth fields for new installations. It does not overwrite existing files. Consult [.env.example](../../.env.example) for additions to an existing `.env`; keep existing API keys and encryption/access keys. YouTube automatic sending requires both client ID and client secret plus broadcaster OAuth authorization; an API key alone supports receipt only. After changing CHZZK app credentials or scopes, reconnect the broadcaster account.
 
-Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../operations/setup.md). For synthetic UI/consent/pipeline testing without a live profile, `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.
+Do not fill real-test operator identities, public notices or approval flags from synthetic fixtures. Use the actual operator's supplied data and the [live runbook](../operations/setup.md). For synthetic UI/consent/pipeline testing without a live profile, start the AI service
+with `sh run-command.sh just ai-service-start`, then `sh run-command.sh npm run demo` uses artificial chat and a mock model; it does not test real platform sending or real model inference. Ensure its configured port is not occupied by another server.
 
 ## Independent AI test server
 
 Use the [test server setup and lifecycle commands](experiments.md#independent-server) for interactive AI viewer tests. `npm run build` emits independent `dist/web` and `dist/experiments` bundles. The live server does not host the test UI or APIs.
+
+## Documentation and design maintenance
+
+Use [the documentation index](../README.md) to find the owning behavior or implementation
+guide; keep README focused on entry points and commands. Dated upstream research is
+historical evidence, not a current compatibility check. Application prompts and vendored
+notices are runtime/reference artifacts, not prose to rewrite during documentation cleanup.
+
+[PRODUCT.md](../../PRODUCT.md) records users and product constraints.
+[DESIGN.md](../../DESIGN.md) owns implemented visual tokens and conventions.
+The [design sidecar](../../.impeccable/design.json) extends those tokens with component
+previews, breakpoints and narrative; generated tonal ramps are preview aids, not CSS tokens.
+[Surface briefs](../../.impeccable/surfaces) name concrete source targets and their task flows.
+When a screen moves, update both the brief's target and related paths. Refresh the sidecar
+after formatting changes to DESIGN.md, preserving the actual CSS/component behavior.
+
+```sh
+sh run-command.sh .agents/skills/impeccable/scripts/impeccable doctor --json
+sh run-command.sh npm run docs:check
+```
+
+The Impeccable command requires the locally installed skill; it is not an npm/CI
+dependency. Its doctor checks metadata shape and freshness, not behavioral truth.
+`docs:check` checks local Markdown links/anchors, terminology and the example configuration;
+it does not fetch external pages or prove that prose matches runtime behavior. Use source
+and existing boundary tests for that comparison. Keep captures and local tool caches ignored.

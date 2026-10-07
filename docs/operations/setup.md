@@ -4,7 +4,21 @@ This runbook applies to the live application, including separately enabled broad
 
 ## 1. Prepare the app PC
 
-Use [run-command.sh](../../run-command.sh) and the [development guide](../development/guide.md). Run setup to generate independent private tokens and an encryption key; keep `.env`, `config.yaml` and credential files out of Git. Build before starting. Stop any older server using a persistent chat DB; identify and remove old chat databases/exports/backups as described in [storage and deletion](../../README.md#storage-and-deletion).
+Use [run-command.sh](../../run-command.sh) and the [development guide](../development/guide.md). Run setup to generate independent private tokens and an encryption key; keep `.env`, `config.yaml` and credential files out of Git. Build before starting. Managed startup ensures the [AI service](../development/ai-service.md)
+is available on port 3212:
+
+```sh
+sh run-command.sh npm run setup
+sh run-command.sh npm run build
+sh run-command.sh just server-start
+sh run-command.sh just server-status
+```
+
+The live workspace is on port 3210; [AI viewer tests](../development/experiments.md)
+use a separately configured server on port 3211. Foreground live/demo commands require
+starting the AI service first. Stop older managed processes before replacing them;
+identify any old databases/exports/backups using [storage and deletion](../../README.md#storage-and-deletion)
+without deleting unrelated data automatically.
 
 Review host crash/core dumps, swap, service diagnostics and backup paths. The launcher disables ordinary core dumps; that does not control every OS/service memory capture. Never record live raw input as a test artifact.
 
@@ -46,9 +60,8 @@ The official SOOP SDK automatically sends a fixed participation notice for eligi
 
 SOOP browser requests are bound to the broadcast in which the connection was
 opened. After ending a broadcast and opening another, reconnect SOOP from the
-administrator page. During the reconstruction cutover, reload existing
-administrator tabs before reconnecting; the updated client sends the required
-broadcast ID and older clients are rejected. This does not require issuing new
+administrator page. After a frontend update, reload existing administrator tabs before reconnecting;
+SOOP commands require the current broadcast ID and stale clients are rejected. This does not require issuing new
 OAuth credentials.
 
 ### YouTube OAuth and automatic notices
