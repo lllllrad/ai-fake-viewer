@@ -1,7 +1,7 @@
 import { syntheticMessage } from "./helpers/message.ts";
 import { test } from "node:test";
 import { fork } from "node:child_process";
-import { mkdtempSync, writeFileSync, chmodSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -275,20 +275,37 @@ test("text-only speech can be used without a camera and cannot invent transcript
 
 test("RTMP audio worker skips silence and forwards bounded speech PCM", async () => {
   const directory = mkdtempSync(join(tmpdir(), "mixed-audio-worker-"));
-  const executable = join(directory, "fake-ffmpeg");
+  const executable = join(directory, "fake-ffmpeg.cjs");
   writeFileSync(
     executable,
-    `#!/usr/bin/env node
-process.stdout.write(Buffer.alloc(320000));
+    `process.stdout.write(Buffer.alloc(320000));
 const voiced = Buffer.alloc(320000);
 for (let i = 0; i < voiced.length; i += 2) voiced.writeInt16LE(1000, i);
 process.stdout.write(voiced);
 setInterval(() => {}, 1000);
 `,
   );
-  chmodSync(executable, 0o700);
+  // Replace only the external executable, keeping worker IPC and PCM framing real.
+  // Windows cannot execute a POSIX shebang fixture.
+  const preload = join(directory, "spawn-fixture.cjs");
+  writeFileSync(
+    preload,
+    [
+      'const cp = require("node:child_process");',
+      "const original = cp.spawn;",
+      "cp.spawn = (file, args, options) => {",
+      '  require("node:assert/strict").equal(file, ' +
+        JSON.stringify(executable) +
+        ");",
+      '  require("node:assert/strict").ok(args.includes("pcm_s16le"));',
+      "  return original(process.execPath, [file], options);",
+      "};",
+      'require("node:module").syncBuiltinESMExports();',
+    ].join("\n"),
+  );
   const child = fork(new URL("../workers/audio.mjs", import.meta.url), [], {
     stdio: ["ignore", "ignore", "ignore", "ipc"],
+    execArgv: ["--require", preload],
   });
   try {
     const received = await new Promise<{ activities: number; pcm: Buffer }>(
@@ -296,7 +313,7 @@ setInterval(() => {}, 1000);
         let activities = 0;
         const timeout = setTimeout(
           () => reject(Error("No audio chunk received")),
-          3000,
+          10000,
         );
         child.on("message", (message: any) => {
           if (message.type === "activity") activities++;
@@ -315,8 +332,18 @@ setInterval(() => {}, 1000);
     assert.equal(received.pcm.length, 320000);
     assert.equal(received.pcm.readInt16LE(0), 1000);
   } finally {
-    child.send({ type: "stop" });
-    child.kill();
+    // Let the worker stop its own subprocess before removing fixture files.
+    if (child.exitCode === null && child.signalCode === null) {
+      await new Promise<void>((resolve) => {
+        const fallback = setTimeout(() => child.kill(), 2000);
+        child.once("exit", () => {
+          clearTimeout(fallback);
+          resolve();
+        });
+        if (child.connected) child.send({ type: "stop" });
+        else child.kill();
+      });
+    }
     rmSync(directory, { recursive: true, force: true });
   }
 });

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
-import { join, resolve, relative, dirname } from "node:path";
+import { join, resolve, relative, dirname, sep } from "node:path";
 import ts from "typescript";
 
 function sources(directory: string): string[] {
@@ -89,7 +89,9 @@ for (const [directory, allowed, external] of [
         const destination = relative(
           process.cwd(),
           resolve(dirname(file), specifier),
-        );
+        )
+          .split(sep)
+          .join("/");
         assert(
           allowed.some((prefix) => destination.startsWith(`${prefix}/`)),
           `${file}: dependency leaves its boundary: ${specifier}`,
@@ -178,7 +180,9 @@ test("app and host packages cannot import service-owned AI implementations", () 
   for (const file of [...sources("apps"), ...sources("packages")]) {
     for (const specifier of dependencies(file, readFileSync(file, "utf8"))) {
       if (!specifier.startsWith(".")) continue;
-      const target = relative(process.cwd(), resolve(dirname(file), specifier));
+      const target = relative(process.cwd(), resolve(dirname(file), specifier))
+        .split(sep)
+        .join("/");
       assert(
         !target.startsWith("services/"),
         `${file} imports AI service implementation: ${specifier}`,

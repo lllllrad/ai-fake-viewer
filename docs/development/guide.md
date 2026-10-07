@@ -62,6 +62,11 @@ sh run-command.sh npm ci
 sh run-command.sh npx playwright install chromium
 ```
 
+CI keeps build, documentation and unit checks on both Linux and Windows. Linux also
+runs the live-app and test-workspace browser suites against isolated fixtures.
+Boundary checks normalize path separators, SQLite readers close before file cleanup,
+and audio-worker fixtures use Node executables instead of platform-specific shebangs.
+
 The wrapper does not install packages. Linux CI uses `npx playwright install --with-deps chromium`, including OS dependencies; see [the workflow](../../.github/workflows/check.yml). The current host instead uses extracted libraries below. On Windows PowerShell, prepare Node and run npm scripts directly; the wrapper requires a POSIX shell.
 
 ## Current host browser environment

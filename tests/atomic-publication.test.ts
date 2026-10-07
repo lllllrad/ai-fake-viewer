@@ -65,7 +65,7 @@ test("provenance failure rolls back the message, actor and event before any noti
 test("reader notification observes committed publication and complete deduplicated provenance", (t) => {
   const { store, path, input, source } = fixture(t);
   const reader = new DatabaseSync(path);
-  t.after(() => reader.close());
+
   let observed: unknown;
   store.once("event", () => {
     observed = reader
@@ -74,11 +74,15 @@ test("reader notification observes committed publication and complete deduplicat
       )
       .all();
   });
-  const id = store.publishSynthetic(input);
-  assert.ok(id);
-  assert.deepEqual(JSON.parse(JSON.stringify(observed)), [
-    { id, source_message_id: source },
-  ]);
+  try {
+    const id = store.publishSynthetic(input);
+    assert.ok(id);
+    assert.deepEqual(JSON.parse(JSON.stringify(observed)), [
+      { id, source_message_id: source },
+    ]);
+  } finally {
+    reader.close();
+  }
 });
 
 test("a reader notification failure cannot turn a committed publication into a retry", (t) => {
