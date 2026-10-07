@@ -14,6 +14,11 @@ export const experimentStartSchema = z
   })
   .strict();
 export type ExperimentStart = z.infer<typeof experimentStartSchema>;
+export const experimentResumeSchema = z
+  .object({
+    additionalCalls: z.number().int().min(1).max(100).default(12),
+  })
+  .strict();
 export const experimentInputSchema = z
   .object({
     id: z.string().uuid(),

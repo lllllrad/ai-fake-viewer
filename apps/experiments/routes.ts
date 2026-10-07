@@ -7,6 +7,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
   experimentStartSchema,
+  experimentResumeSchema,
   experimentInputSchema,
 } from "../../packages/contracts/interactive-experiment.ts";
 import {
@@ -72,6 +73,10 @@ export function registerExperimentRoutes(
     const session = workspace.current(id(req.params));
     session.input(input.id, input.text, "text");
     return session.snapshot();
+  });
+  app.post("/api/admin/experiments/:id/resume", async (req) => {
+    const options = experimentResumeSchema.parse(req.body ?? {});
+    return workspace.resume(id(req.params), options.additionalCalls);
   });
   app.post("/api/admin/experiments/:id/stop", async (req) => {
     const session = workspace.current(id(req.params));

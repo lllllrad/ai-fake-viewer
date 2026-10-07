@@ -94,9 +94,9 @@ Audio device/resampling differences remain: the test source is the browser mic,
 while the live source is configured FFmpeg input. Permission/support failures leave
 text input available. These capture adapters share downstream framing and processing.
 
-Each test permits 1–100 model calls (default 12), counting generation and review,
-the configured audio request budget (default 360) and 300 submitted utterances, and ends after 30
-minutes. Model requests have a 30-second timeout; speech requests use the broadcast 20-second timeout. The limits are
+Each initial test permits 1–100 model calls (default 12), counting generation and review,
+and each run permits 300 new submitted utterances and ends after 30 minutes.
+The configured audio request budget (default 360) is cumulative across resumptions. Model requests have a 30-second timeout; speech requests use the broadcast 20-second timeout. The limits are
 call limits, not monetary guarantees. One test runs at a time. Leaving the page
 stops local recording but does not stop the server-side test; use **End test**.
 Ending cancels outstanding requests and prevents late replies from being
@@ -115,7 +115,29 @@ Automatic test casts use the same [stable synthetic nickname rules](../specifica
 Conversation, persona and trace snapshots are privately stored in
 `.local/experiments/interactive/` with owner-only files. Reloading the browser
 reopens the active test; server restart leaves saved sessions readable but does
-not resume generation. An interrupted session is labeled accordingly. Retain at
+not automatically resume generation. An interrupted session is labeled accordingly.
+
+Use **Continue test** on an ended or interrupted session to continue the same record,
+including sessions saved before resume support. Choose 1–100 additional model calls
+(default 12); the new ceiling is calls already consumed plus this allowance, replacing
+any unused allowance. The session has a cumulative ceiling of 10,000 model calls.
+Resuming preserves the session ID, original start time, transcript/message timestamps,
+message IDs, cast identities/definitions, nickname provenance, saved profile/prompts,
+and prior requests and execution records. The original provider uses its currently
+configured account/model; the resume event records any model change. Missing provider
+credentials or a missing/changed AI implementation revision leave the history intact.
+Another running test must be ended first.
+
+A fresh coordinator is constructed from saved history; pending requests, timers and
+unpublished replies are not resumed. Generation waits for new text or microphone input.
+Recent-context windows and publication pacing still apply, so old speech does not become
+fresh evidence and a reaction is not guaranteed for every new input. This restores
+conversation/cast context, not an exact checkpoint of algorithm-specific internal state.
+A resume grants a fresh 30-minute run and 300 new inputs; cumulative microphone usage
+is retained. A test that has exhausted its transcription budget can still resume with
+text input; start a new test for a new microphone budget.
+
+Retain at
 most 100 sessions; delete old sessions using **Delete test record**. Test records
 are independent of broadcast withdrawal, retention and session end, so use only
 your own or separately authorized inputs. Deleting a record does not delete

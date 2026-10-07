@@ -178,6 +178,41 @@ try {
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   );
+  await captureUIReview(page, "experiment-resume");
+  const beforeResume = structuredClone(experiments.read(sessionId).session);
+  await page.getByLabel("추가 AI 호출 한도", { exact: true }).fill("4");
+  await page
+    .getByRole("button", { name: "이어서 테스트", exact: true })
+    .click();
+  await expect(
+    page.getByRole("textbox", { name: "시청자에게 할 말" }),
+  ).toBeEnabled();
+  experiments.active!.coordinator.random = () => 0;
+  assert.equal(experiments.active!.id, sessionId);
+  assert.equal(experiments.active!.snapshot().maxCalls, beforeResume.calls + 4);
+  assert.deepEqual(
+    experiments.active!.snapshot().personas.map((p) => p.id),
+    beforeResume.personas.map((p) => p.id),
+  );
+  assert.deepEqual(experiments.active!.messages, beforeResume.messages);
+  await page
+    .getByRole("textbox", { name: "시청자에게 할 말" })
+    .fill("이어서 다른 퍼즐 게임에 도전해 볼까요?");
+  await page.getByRole("button", { name: "보내기", exact: true }).click();
+  await expect(
+    page
+      .locator(".experiment-message.own")
+      .filter({ hasText: "이어서 다른 퍼즐" }),
+  ).toBeVisible();
+  await expect(page.locator(".experiment-message:not(.own)")).toHaveCount(2, {
+    timeout: 15000,
+  });
+  await page.getByRole("button", { name: "테스트 종료", exact: true }).click();
+  await page.reload();
+  await expect(page.locator(".experiment-message:not(.own)")).toHaveCount(2);
+  await expect(
+    page.getByRole("button", { name: "이어서 테스트", exact: true }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "테스트 기록 삭제", exact: true })
     .click();
@@ -286,7 +321,7 @@ try {
   );
   assert.deepEqual(errors, []);
   console.log(
-    "Interactive experiments PASS: text -> AI reply, persona, recorded microphone -> mocked Whisper -> transcript, stop, reload, trace, export, deletion, isolation, mobile, account/model save -> immediate start and explicit provider preservation.",
+    "Interactive experiments PASS: text -> AI reply, persona, recorded microphone -> mocked Whisper -> transcript, stop, reload, resume -> preserved cast/history -> new reply, trace, export, deletion, isolation, mobile, account/model save -> immediate start and explicit provider preservation.",
   );
 } finally {
   await browser.close();

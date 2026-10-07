@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { restoreExperiment } from "./restore.ts";
 import { randomUUID, createHash } from "node:crypto";
 import {
   mkdirSync,
@@ -22,6 +24,7 @@ import { createBroadcastCast } from "../cast/runtime.ts";
 import {
   applyPipelineProfile,
   pipelineCards,
+  pipelineProfileSchema,
   type LoadedPipeline,
 } from "../reactions/pipeline-profile.ts";
 import { modelMessages } from "../reactions/model-messages.ts";
@@ -43,8 +46,12 @@ export class ExperimentError extends Error {
 }
 export class InteractiveExperiment {
   readonly store = new Store(":memory:");
-  readonly id = randomUUID();
-  readonly startedAt = Date.now();
+  readonly id: string;
+  readonly startedAt: number;
+  private readonly runStartedAt = Date.now();
+  private readonly priorAttempts: unknown[];
+  private readonly priorInputCount: number;
+  private waitingForFreshInput: boolean;
   endedAt: number | null = null;
   microphoneCalls = 0;
   readonly inputs: ExperimentSession["inputs"] = [];
@@ -64,7 +71,22 @@ export class InteractiveExperiment {
     readonly adapter: { model: Model<Buffer>; name: string },
     private readonly save: (trace: ExperimentTrace) => void,
     random: () => number = Math.random,
+    restored?: ExperimentTrace,
   ) {
+    this.id = restored?.session.id ?? randomUUID();
+    this.startedAt = restored?.session.startedAt ?? this.runStartedAt;
+    this.priorAttempts = structuredClone(restored?.attempts ?? []);
+    this.priorInputCount = restored?.session.inputs.length ?? 0;
+    this.waitingForFreshInput = !!restored;
+    if (restored) {
+      this.inputs.push(...structuredClone(restored.session.inputs));
+      this.messages.push(...structuredClone(restored.session.messages));
+      this.calls.push(...structuredClone(restored.calls));
+      for (const call of this.calls)
+        if (!call.result && !call.error) call.error = "canceled";
+      this.diagnostics.push(...structuredClone(restored.diagnostics));
+      this.microphoneCalls = restored.session.microphoneCalls;
+    }
     const config = applyPipelineProfile(
       configSchema.parse({
         ai: {
@@ -87,7 +109,13 @@ export class InteractiveExperiment {
     const cast = createBroadcastCast(this.store, () => options.topic, {
       cards: pipelineCards(pipeline),
     });
-    cast.prepare();
+    try {
+      if (restored) restoreExperiment(this.store, restored, options.maxCalls);
+      else cast.prepare();
+    } catch (error) {
+      this.store.close();
+      throw error;
+    }
     this.store.on("event", (event) => {
       if (event?.type === "message.added") {
         const message = this.store.publicMessage(event.payload.id);
@@ -128,7 +156,8 @@ export class InteractiveExperiment {
       false,
       () => true,
       {
-        recent: () => this.store.transcripts.recent(),
+        recent: () =>
+          this.waitingForFreshInput ? [] : this.store.transcripts.recent(),
         has: (id) => this.store.transcripts.recent().some((t) => t.id === id),
       },
       new TimingGate(config.ai.gate, {
@@ -162,7 +191,8 @@ export class InteractiveExperiment {
     this.coordinator.start();
     this.timer = setInterval(() => {
       try {
-        if (Date.now() - this.startedAt >= 30 * 60_000) this.stop("time_limit");
+        if (Date.now() - this.runStartedAt >= 30 * 60_000)
+          this.stop("time_limit");
         else if (
           this.dirty ||
           this.savedState !==
@@ -182,7 +212,7 @@ export class InteractiveExperiment {
       throw new ExperimentError(
         "진행 중인 테스트가 아닙니다. 새 테스트를 시작해 주세요.",
       );
-    if (this.inputs.length >= 300)
+    if (this.inputs.length - this.priorInputCount >= 300)
       throw new ExperimentError(
         "입력 300개 한도입니다. 테스트를 종료해 주세요.",
       );
@@ -198,6 +228,7 @@ export class InteractiveExperiment {
     if (!this.store.transcripts.record({ id, capturedAt: at, text }))
       throw new ExperimentError("입력을 저장하지 못했습니다.");
     this.inputs.push({ id, text, source, at });
+    this.waitingForFreshInput = false;
     this.persist();
     // The production coordinator owns selection, silence, pacing and review.
     if (source === "text") void this.coordinator.tick();
@@ -243,11 +274,14 @@ export class InteractiveExperiment {
           personaId: String(row.persona_id),
           provenance: JSON.parse(String(row.provenance)),
         })),
-      attempts: this.store.db
-        .prepare(
-          "SELECT state,reason,result,model_manifest FROM persona_reaction_attempts ORDER BY rowid",
-        )
-        .all(),
+      attempts: [
+        ...this.priorAttempts,
+        ...this.store.db
+          .prepare(
+            "SELECT state,reason,result,model_manifest FROM persona_reaction_attempts ORDER BY rowid",
+          )
+          .all(),
+      ],
     };
   }
   persist() {
@@ -293,7 +327,10 @@ export class ExperimentWorkspace {
   constructor(
     readonly directory: string,
     private readonly pipeline: LoadedPipeline,
-    private readonly model: (provider: ExperimentStart["provider"]) => {
+    private readonly model: (
+      provider: ExperimentStart["provider"],
+      pipeline: LoadedPipeline,
+    ) => {
       model: Model<Buffer>;
       name: string;
     },
@@ -339,19 +376,9 @@ export class ExperimentWorkspace {
       throw new ExperimentError(
         "저장된 테스트 100개 한도입니다. 이전 테스트를 삭제해 주세요.",
       );
-    let adapter: { model: Model<Buffer>; name: string };
-    try {
-      adapter = this.model(options.provider);
-    } catch {
-      throw new ExperimentError(
-        options.provider === "chatgpt_subscription"
-          ? "테스트용 AI 연결에서 Sign in with ChatGPT 계정과 모델을 선택해 주세요."
-          : options.provider === "openai_api"
-            ? "Responses API가 선택되어 있습니다. 테스트 서버의 OPENAI_API_KEY와 OPENAI_MODEL을 설정하거나 AI 연결을 Sign in with ChatGPT로 변경해 주세요."
-            : "모의 응답을 준비하지 못했습니다. 다시 시도해 주세요.",
-      );
-    }
+    const adapter = this.resolveModel(options.provider);
     this.active?.dispose();
+    this.active = undefined;
     const session = new InteractiveExperiment(
       {
         ...options,
@@ -366,6 +393,101 @@ export class ExperimentWorkspace {
       session.start();
     } catch (error) {
       session.dispose();
+      throw error;
+    }
+    this.active = session;
+    return session.snapshot();
+  }
+  private resolveModel(
+    provider: ExperimentStart["provider"],
+    pipeline = this.pipeline,
+  ) {
+    try {
+      return this.model(provider, pipeline);
+    } catch {
+      throw new ExperimentError(
+        provider === "chatgpt_subscription"
+          ? "테스트용 AI 연결에서 Sign in with ChatGPT 계정과 모델을 선택해 주세요."
+          : provider === "openai_api"
+            ? "Responses API가 선택되어 있습니다. 테스트 서버의 OPENAI_API_KEY와 OPENAI_MODEL을 설정하거나 AI 연결을 Sign in with ChatGPT로 변경해 주세요."
+            : "모의 응답을 준비하지 못했습니다. 다시 시도해 주세요.",
+      );
+    }
+  }
+  resume(id: string, additionalCalls = 12) {
+    if (this.active && !this.active.endedAt)
+      throw new ExperimentError("진행 중인 테스트를 먼저 종료해 주세요.");
+    const trace = structuredClone(this.read(id));
+    if (
+      !Number.isInteger(additionalCalls) ||
+      additionalCalls < 1 ||
+      additionalCalls > 100
+    )
+      throw new ExperimentError(
+        "추가 AI 호출 한도는 1~100회로 설정해 주세요.",
+        400,
+      );
+    if (trace.session.calls + additionalCalls > 10000)
+      throw new ExperimentError(
+        "누적 AI 호출 10,000회 한도입니다. 새 테스트를 시작해 주세요.",
+      );
+    const pipeline = z
+      .object({
+        profile: pipelineProfileSchema,
+        prompts: z.object({
+          answer: z.string().min(1),
+          review: z.string().min(1),
+        }),
+        digest: z.string(),
+      })
+      .parse(trace.pipeline);
+    let implementation: ReactionPipeline;
+    try {
+      implementation = reactionPipelines.get(trace.session.pipelineType);
+    } catch {
+      throw new ExperimentError(
+        "저장된 AI 유형이 등록되어 있지 않습니다. 구현을 복원한 뒤 다시 시도해 주세요.",
+      );
+    }
+    if (implementation.revision !== trace.session.pipelineRevision)
+      throw new ExperimentError(
+        "AI 구현 버전이 변경되었습니다. 새 테스트를 시작해 주세요.",
+      );
+    const provider = z
+      .enum(["fixture", "openai_api", "chatgpt_subscription"])
+      .parse(trace.session.provider);
+    const adapter = this.resolveModel(provider, pipeline);
+    this.active?.dispose();
+    this.active = undefined;
+    const session = new InteractiveExperiment(
+      {
+        topic: trace.session.topic,
+        provider,
+        pipelineType: trace.session.pipelineType,
+        maxCalls: trace.session.calls + additionalCalls,
+      },
+      pipeline,
+      adapter,
+      this.save,
+      this.random,
+      trace,
+    );
+    session.diagnostics.push({
+      event: "resumed",
+      at: Date.now(),
+      previousEndedAt: trace.session.endedAt,
+      previousModel: trace.session.model,
+      model: adapter.name,
+      additionalCalls,
+    });
+    try {
+      session.start();
+    } catch (error) {
+      try {
+        session.dispose();
+      } finally {
+        this.save(trace);
+      }
       throw error;
     }
     this.active = session;

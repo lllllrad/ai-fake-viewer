@@ -174,3 +174,10 @@
 .experiment-settings > div:first-child {
   grid-column: 1 / -1;
 }
+
+.experiment-resume {
+  max-width: 760px;
+}
+.experiment-resume .form-control {
+  max-width: 12rem;
+}

@@ -73,6 +73,7 @@ export function ExperimentsPage({
   const providerChosen = useRef(false);
   const [pipelineType, setPipelineType] = useState("");
   const [maxCalls, setMaxCalls] = useState(12);
+  const [additionalCalls, setAdditionalCalls] = useState(12);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -465,6 +466,62 @@ export function ExperimentsPage({
               )}
             </div>
           </div>
+          {session.endedAt && (
+            <form
+              className="card experiment-resume"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void act(async () => {
+                  const value = await adminClient.json(
+                    `experiments/${selected}/resume`,
+                    experimentSessionSchema,
+                    {
+                      method: "POST",
+                      body: { additionalCalls },
+                      signal: lifetime.current.signal,
+                    },
+                  );
+                  if (mounted.current) {
+                    setSession(value);
+                    setTrace(undefined);
+                    setView("conversation");
+                    await refreshIndex();
+                  }
+                });
+              }}
+            >
+              <p>
+                같은 대화와 시청자로 이어서 테스트합니다. 기존 AI 연결의 현재
+                계정·모델을 사용하며, 새 입력부터 반응합니다.
+              </p>
+              <label htmlFor="resume-calls">추가 AI 호출 한도</label>
+              <Input
+                id="resume-calls"
+                type="number"
+                min={1}
+                max={100}
+                required
+                value={additionalCalls}
+                onChange={(event) =>
+                  setAdditionalCalls(Number(event.target.value))
+                }
+                disabled={busy || connectionBusy}
+              />
+              <p className="hint">
+                재개 후 최대 30분 · 생성과 검수를 포함한 추가 호출 한도입니다.
+                기존 호출 기록은 유지됩니다.
+              </p>
+              {index?.activeId && (
+                <p role="status">진행 중인 다른 테스트를 먼저 종료해 주세요.</p>
+              )}
+              <Button
+                type="submit"
+                disabled={busy || connectionBusy || stale || !!index?.activeId}
+              >
+                {busy ? "재개 중…" : "이어서 테스트"}
+              </Button>
+            </form>
+          )}
           {session.issue && (
             <p className="error" role="status">
               {session.issue}
@@ -760,7 +817,7 @@ export function ExperimentsPage({
           <div className="experiment-footer">
             <p className="hint">
               {session.endedAt
-                ? "종료된 테스트입니다. 저장된 대화와 실행 기록을 다시 볼 수 있습니다."
+                ? "종료된 테스트입니다. 위에서 이어서 테스트하거나 저장된 대화와 실행 기록을 확인하세요."
                 : running
                   ? "다른 화면으로 이동해도 테스트는 계속됩니다. 마치면 테스트 종료를 눌러 주세요."
                   : "테스트가 중지되었습니다. 상태를 확인하고 테스트 종료 후 새로 시작해 주세요."}

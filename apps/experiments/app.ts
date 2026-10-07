@@ -40,7 +40,8 @@ export function createExperimentApp(
     const experiments = new ExperimentWorkspace(
       join(options.directory, "interactive"),
       pipeline,
-      (provider) => experimentModel(provider, pipeline, auth, true),
+      (provider, selectedPipeline) =>
+        experimentModel(provider, selectedPipeline, auth, true),
       undefined,
       pipeline.profile.ai.pipelineType ?? settings.pipelineType ?? "standard",
     );
