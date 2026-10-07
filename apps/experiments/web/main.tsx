@@ -112,7 +112,11 @@ function TestWorkspace() {
           {error}
         </p>
       )}
-      <details className="card test-account">
+      <details
+        className="card test-account"
+        id="ai-connection"
+        open={location.hash === "#ai-connection" || undefined}
+      >
         <summary>테스트용 AI 연결 · {active?.model || "설정 확인"}</summary>
         <p>
           Responses API와 마이크 키는 테스트 서버의 .env에서 설정합니다. Sign in

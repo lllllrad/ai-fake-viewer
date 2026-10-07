@@ -4,12 +4,21 @@ import type { ModelAccount } from "../../../../packages/application/accounts/mod
 export function registerModelAccountRoutes(
   app: FastifyInstance,
   account: ModelAccount,
+  uiReturn?: { port: number },
 ) {
+  let returnTo = uiReturn
+    ? `http://127.0.0.1:${uiReturn.port}/admin#ai-connection`
+    : undefined;
   app.post("/api/admin/chatgpt/authorize", async (req) => {
     const body = z
       .object({ clientId: z.string().optional() })
       .parse(req.body ?? {});
-    return { url: account.authorize(body.clientId) };
+    const url = account.authorize(body.clientId);
+    if (uiReturn) {
+      const host = req.hostname === "localhost" ? "localhost" : "127.0.0.1";
+      returnTo = `http://${host}:${uiReturn.port}/admin#ai-connection`;
+    }
+    return { url };
   });
   app.get("/api/admin/chatgpt/models", async () => ({
     models: await account.models(),
@@ -38,6 +47,7 @@ export function registerModelAccountRoutes(
         })
         .parse(req.query);
       await account.callback(q);
+      if (returnTo) return reply.redirect(returnTo, 303);
       return reply
         .type("text/plain; charset=utf-8")
         .send(

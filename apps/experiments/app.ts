@@ -82,6 +82,7 @@ export function createExperimentApp(
           experiments.active?.stop("chatgpt_account_changed"),
         invalidateContext() {},
       }),
+      { port: settings.port },
     );
     if (existsSync(resolve("dist/experiments"))) {
       await app.register(fastifyStatic, {

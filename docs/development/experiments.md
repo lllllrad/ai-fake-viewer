@@ -41,6 +41,8 @@ and billing budget; replace them in the test environment for separate billing.
 
 Sign in with ChatGPT must be connected separately in **Test AI connection**.
 The test server owns `.local/experiments/chatgpt.tokens` and refreshes only that file.
+Successful OAuth returns to the test UI with account settings expanded, preserving
+the original localhost/127.0.0.1 hostname. Failed callbacks do not redirect as a success.
 Changing/disconnecting a test account stops the current test, never the broadcast.
 Once a connected ChatGPT account has a selected model, new test forms default to
 Sign in with ChatGPT unless the operator explicitly chose another provider.
