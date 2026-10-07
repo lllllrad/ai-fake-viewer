@@ -156,7 +156,7 @@ test("AI stream speech drives the real pipeline from dedicated media and closes 
     for (let i = 0; i < 100 && !f.scheduler.pending; i++)
       await new Promise((resolve) => setTimeout(resolve, 10));
     assert(f.scheduler.pending, JSON.stringify(f.scheduler.diagnostics));
-    assert.equal(f.store.viewerMemory.list().length, 1);
+    assert.equal(f.store.viewerMemory.list().length, 6);
     assert.equal(f.scheduler.state, "running");
     await f.broadcast.endBroadcast();
     assert(f.store.closed());

@@ -31,6 +31,7 @@ export class SqliteViewerMemory implements ViewerMemoryStore {
     values: ViewerState,
     expires: number,
     sourceMessageIds: string[] = [],
+    kind: "initial" | "updated" = "updated",
   ) {
     const previous = this.read(member, binding);
     const state = viewerMemorySchema.parse({
@@ -41,13 +42,17 @@ export class SqliteViewerMemory implements ViewerMemoryStore {
       expiresAt: expires,
       values: viewerStateSchema.parse(values),
       sourceMessageIds,
+      kind,
     });
     // Never extend inherited context forever through repeated summarization.
-    const prior = this.db
-      .prepare(
-        "SELECT expires FROM viewer_memory WHERE session=? AND member=? AND binding=?",
-      )
-      .get(this.session(), member, binding);
+    const prior =
+      kind === "updated" && previous?.kind === "updated"
+        ? this.db
+            .prepare(
+              "SELECT expires FROM viewer_memory WHERE session=? AND member=? AND binding=?",
+            )
+            .get(this.session(), member, binding)
+        : undefined;
     state.expiresAt = Math.min(expires, Number(prior?.expires ?? expires));
     this.db
       .prepare(

@@ -40,6 +40,10 @@ export const viewerStateSchema = z
       Object.keys(state).length <= 24 && JSON.stringify(state).length <= 8000,
     "Viewer state too large",
   );
+export const initialViewerStateSchema = viewerStateSchema.refine(
+  (value) => Object.keys(value).length > 0,
+  "Pipeline must define a nonempty initial state",
+);
 export type ViewerState = z.infer<typeof viewerStateSchema>;
 export const viewerMemorySchema = z.object({
   memberId: z.string(),
@@ -48,6 +52,7 @@ export const viewerMemorySchema = z.object({
   updatedAt: z.number(),
   expiresAt: z.number(),
   values: viewerStateSchema,
+  kind: z.enum(["initial", "updated"]).default("updated"),
   sourceMessageIds: z.array(z.string()).max(80).optional(),
 });
 export type ViewerMemory = z.infer<typeof viewerMemorySchema>;

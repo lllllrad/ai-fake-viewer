@@ -13,10 +13,10 @@ import { generateReviewedDraft } from "./draft-review.ts";
 
 const stateSchema = z
   .object({
-    mood: z.string().max(160),
-    focus: z.string().max(240),
-    intent: z.string().max(240),
-    summary: z.string().max(1600),
+    mood: z.string().trim().min(1).max(160),
+    focus: z.string().trim().min(1).max(240),
+    intent: z.string().trim().min(1).max(240),
+    summary: z.string().trim().min(1).max(1600),
   })
   .strict();
 const stateProperties = Object.fromEntries(
@@ -45,7 +45,7 @@ const tool = (
 export const viewerTools: ModelTool[] = [
   tool(
     "update_state",
-    "Replace your concise observable viewer state: mood, current focus, next intent and remembered conversation summary. No hidden reasoning. Do not invent facts or retain expired evidence. Update before choosing an action when the conversation changes.",
+    "Your initialized state is supplied in viewerState; its initial values are not observed facts. Replace the complete observable viewer state: mood, current focus, next intent and remembered conversation summary. No hidden reasoning. Do not invent facts or retain expired evidence. Update before choosing an action when the conversation changes.",
     stateProperties,
   ),
   tool(

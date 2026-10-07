@@ -148,6 +148,34 @@ export class ReactionCoordinator<
     store.on("context_invalidated", () => this.invalidateChatContext());
     store.on("reset", () => this.invalidateChatContext());
   }
+  private memoryBinding(member: string) {
+    return this.runtime.hash(
+      JSON.stringify([
+        this.store.sessionId,
+        this.config.ai.pipelineType ?? "standard",
+        member,
+      ]),
+    );
+  }
+  /** Initialize every cast member before selection, and reset expired evidence to initial state. */
+  synchronizeViewerStates() {
+    if (this.store.closed()) return;
+    const memory = this.store.viewerMemory;
+    if (!memory) return;
+    const now = this.runtime.now();
+    for (const member of this.store.personaRuntime()?.members ?? []) {
+      const binding = this.memoryBinding(member.hash);
+      if (!memory.read(member.id, binding))
+        memory.write(
+          member.id,
+          binding,
+          structuredClone(this.program.initialState),
+          now + this.config.ai.contextWindowSeconds * 1000,
+          [],
+          "initial",
+        );
+    }
+  }
   invalidateChatContext() {
     this.selecting?.abort();
     this.selecting = undefined;
@@ -183,6 +211,7 @@ export class ReactionCoordinator<
           : "Set OPENAI_API_KEY and OPENAI_MODEL in .env, then restart before starting AI.",
       );
     this.preparePersonas?.();
+    this.synchronizeViewerStates();
     this.stop();
     this.recovery.success();
     this.state = "running";
@@ -229,6 +258,7 @@ export class ReactionCoordinator<
     }
   }
   private async tickOnce(now: number) {
+    this.synchronizeViewerStates();
     if (this.state !== "running") return;
     if (
       this.config.ai.visualMode === "continuous" &&
@@ -403,23 +433,32 @@ export class ReactionCoordinator<
       ? `${personaRuntime.brief.topic}. ${personaRuntime.brief.audience_intent}. ${personaRuntime.brief.public_context}`
       : c.description;
     const memoryMember = activeMember?.id ?? `reference:${persona}`;
-    const memoryBinding = this.runtime.hash(
-      JSON.stringify([
-        this.store.sessionId,
-        c.pipelineType ?? "standard",
-        activeMember?.hash ?? personaStyle,
-      ]),
+    const memoryBinding = this.memoryBinding(
+      activeMember?.hash ?? personaStyle,
     );
-    const storedMemory = this.store.viewerMemory?.read(
-      memoryMember,
-      memoryBinding,
-    );
+    const storedMemory =
+      this.store.viewerMemory?.read(memoryMember, memoryBinding) ??
+      this.store.viewerMemory?.write(
+        memoryMember,
+        memoryBinding,
+        structuredClone(this.program.initialState),
+        now + c.contextWindowSeconds * 1000,
+        [],
+        "initial",
+      );
     // Reused derived text must keep all original chat sources in current authorization
     // and publication provenance, including when the recent-message window shrinks.
     const memory = storedMemory?.sourceMessageIds?.some(
       (id) => !messages.some((message) => message.id === id),
     )
-      ? undefined
+      ? this.store.viewerMemory?.write(
+          memoryMember,
+          memoryBinding,
+          structuredClone(this.program.initialState),
+          now + c.contextWindowSeconds * 1000,
+          [],
+          "initial",
+        )
       : storedMemory;
     let input: ModelInput<Bytes> = {
       contextKey: memoryBinding,

@@ -71,6 +71,16 @@ try {
   await expect(
     page.getByRole("textbox", { name: "시청자에게 할 말" }),
   ).toBeEnabled();
+  await page.getByRole("tab", { name: "AI별 상태", exact: true }).click();
+  for (const persona of experiments.active!.snapshot().personas) {
+    await page.getByLabel("확인할 AI 시청자").selectOption(persona.id);
+    await expect(
+      page.getByRole("heading", { name: "현재 AI 상태", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("차분함", { exact: true })).toBeVisible();
+  }
+  assert.equal(experiments.active!.store.viewerMemory.list().length, 6);
+  await page.getByRole("tab", { name: "대화 보기", exact: true }).click();
   const nicknames = experiments
     .active!.snapshot()
     .personas.map((persona) => persona.displayName);

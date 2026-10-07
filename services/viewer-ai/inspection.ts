@@ -16,6 +16,8 @@ export const standardInspection = (
     const memory = engine.memories?.find(
       (state) => state.memberId === member.id,
     );
+    if (!memory)
+      throw Error("Viewer state must be initialized before inspection");
     const decision = events.findLast((event) => event.event === "model_result");
     const pending =
       engine.pending?.memberId === member.id ? engine.pending : undefined;
@@ -31,24 +33,24 @@ export const standardInspection = (
                 ? "응답 검수 중"
                 : "응답 생성 중"
               : "관찰 대기",
-      updatedAt: latest?.at ?? member.lastPublishedAt,
+      updatedAt: latest?.at ?? memory.updatedAt,
       sections: [
         {
           label: "현재 AI 상태",
-          value: memory ? memory.values : "아직 상태 업데이트가 없습니다.",
+          value: memory.values,
         },
-        ...(memory
-          ? [
-              {
-                label: "상태 업데이트",
-                value: {
-                  revision: memory.revision,
-                  updatedAt: new Date(memory.updatedAt).toISOString(),
-                  expiresAt: new Date(memory.expiresAt).toISOString(),
-                },
-              },
-            ]
-          : []),
+        {
+          label: "상태 업데이트",
+          value: {
+            "상태 출처":
+              memory.kind === "initial"
+                ? "파이프라인 초기화"
+                : "모델 상태 갱신",
+            revision: memory.revision,
+            updatedAt: new Date(memory.updatedAt).toISOString(),
+            expiresAt: new Date(memory.expiresAt).toISOString(),
+          },
+        },
         {
           label: "최근 모델 판단",
           value: decision

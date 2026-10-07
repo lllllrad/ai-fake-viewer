@@ -57,6 +57,7 @@ test("state tool writes are returned to the next model round and terminal tools 
     updatedAt: 100,
     expiresAt: 200,
     values,
+    kind: "updated",
   });
   opts.model = async (request) => {
     assert.equal(request.tools?.length, 4);
@@ -203,5 +204,27 @@ test("Responses API and ChatGPT streams accept tool-only output and account for 
     else process.env.OPENAI_API_KEY = oldKey;
     if (oldModel === undefined) delete process.env.OPENAI_MODEL;
     else process.env.OPENAI_MODEL = oldModel;
+  }
+});
+
+test("initial state cannot shorten the first observed state lifetime; later summaries do not extend it", () => {
+  let now = 100;
+  const store = new Store(":memory:", undefined, {
+    now: () => now,
+    id: () => "initial-lifetime",
+  });
+  try {
+    store.viewerMemory.write("one", "standard", state, 150, [], "initial");
+    now = 140;
+    const observed = store.viewerMemory.write("one", "standard", state, 240);
+    assert.equal(observed.kind, "updated");
+    assert.equal(observed.expiresAt, 240);
+    now = 160;
+    assert.equal(
+      store.viewerMemory.write("one", "standard", state, 300).expiresAt,
+      240,
+    );
+  } finally {
+    store.close();
   }
 });

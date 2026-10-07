@@ -235,7 +235,18 @@ export async function runExperiment(options: ExperimentOptions) {
       });
       const member = personas[options.personaIndex ?? 0];
       if (!member) throw Error("Invalid persona index");
+      for (const persona of personas)
+        if (!store.viewerMemory.read(persona.id, implementation.id))
+          store.viewerMemory.write(
+            persona.id,
+            implementation.id,
+            structuredClone(implementation.initialState),
+            runtime.now + config.ai.contextWindowSeconds * 1000,
+            [],
+            "initial",
+          );
       const input: ModelInput<Buffer> = {
+        viewerState: store.viewerMemory.read(member.id, implementation.id),
         frames:
           config.ai.visualMode === "continuous"
             ? screen.recent().slice(-1)

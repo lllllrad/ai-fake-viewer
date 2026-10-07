@@ -1,3 +1,4 @@
+import { initialViewerStateSchema } from "../../contracts/model-tools.ts";
 import type { ReactionProgram } from "../../application/reactions/program.ts";
 import { encodeWire, decodeWire } from "./wire.ts";
 export interface AiServiceConnection {
@@ -44,8 +45,13 @@ export class AiServiceClient {
       throw Error(`AI service unavailable (${response.status})`);
     return decodeWire(await response.json());
   }
-  program(id: string, revision?: number): ReactionProgram {
+  program(
+    id: string,
+    revision: number,
+    initialState: import("../../contracts/model-tools.ts").ViewerState,
+  ): ReactionProgram {
     return {
+      initialState: initialViewerStateSchema.parse(initialState),
       select: async (input, signal) => {
         const response = await this.json(
           "/v1/select",

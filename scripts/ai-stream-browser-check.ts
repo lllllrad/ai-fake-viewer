@@ -186,7 +186,7 @@ try {
       timeout: 15000,
     })
     .toBe(1);
-  assert.equal(runtime.store.viewerMemory.list().length, 1);
+  assert.equal(runtime.store.viewerMemory.list().length, 6);
   const reader = await context.newPage();
   const overlay = await context.newPage();
   await reader.goto("http://127.0.0.1:" + port + "/reader#" + "r".repeat(64));

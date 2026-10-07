@@ -51,9 +51,11 @@ export function registerExperimentRoutes(
     },
     sessions: workspace.list(),
   }));
-  app.post("/api/admin/experiments", async (req) =>
-    workspace.start(experimentStartSchema.parse(req.body)),
-  );
+  app.post("/api/admin/experiments", async (req) => {
+    workspace.start(experimentStartSchema.parse(req.body));
+    await workspace.active!.refreshInspection();
+    return workspace.active!.snapshot();
+  });
   app.get("/api/admin/experiments/:id", async (req) => {
     const sessionId = id(req.params);
     if (workspace.active?.id === sessionId)
@@ -78,7 +80,9 @@ export function registerExperimentRoutes(
   });
   app.post("/api/admin/experiments/:id/resume", async (req) => {
     experimentResumeSchema.parse(req.body ?? {});
-    return workspace.resume(id(req.params));
+    workspace.resume(id(req.params));
+    await workspace.active!.refreshInspection();
+    return workspace.active!.snapshot();
   });
   app.post("/api/admin/experiments/:id/stop", async (req) => {
     const session = workspace.current(id(req.params));

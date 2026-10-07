@@ -65,7 +65,7 @@ model-request and speech timeouts continue to apply separately.
 
 Register a `ServicePipeline` in
 [service programs](../../services/viewer-ai/programs.ts). Its `select`, `draft` and
-optional `inspect` methods belong to the AI service. The built-in `standard`
+required `inspect` methods belong to the AI service. The built-in `standard`
 implementation delegates to the service-owned selection and draft/review modules.
 Changing an algorithm does not require changing application code. Restart the AI
 service after code changes; restart clients to rediscover added types or changed
@@ -116,3 +116,26 @@ short-lived transport data and excluded from test traces and state inspection.
 See the official [function calling guide](https://developers.openai.com/api/docs/guides/function-calling),
 [conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state)
 and [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).
+
+## Required initial viewer state
+
+Each service pipeline declares a nonempty initialState object in discovery metadata
+and implements inspect. The host persists a copy for every cast member before the
+first observation or model call, bound to the broadcast, implementation and persona
+definition. The standard state contains mood, focus, intent and summary. These are
+simulation values; an initial summary states that no conversation has been observed.
+
+The same stored state is supplied to model calls and inspection. Start and resume
+refresh inspection before their HTTP response. Initialization does not invoke a model.
+Custom pipelines own their state fields and initial values rather than receiving a
+generic presentation fallback. Update tools must maintain their declared state shape;
+the standard tool rejects empty field values.
+
+Initial records are tagged initial; model tool writes are tagged updated. Initial
+records carry no observed evidence and do not shorten the first model update's
+evidence lifetime. Subsequent updates cannot extend inherited evidence expiration.
+After expiration or context invalidation, the host recreates the pipeline's initial
+state before another observation/inspection, without retaining the expired summary.
+Older saved records without a kind are treated as updated; resuming initializes any
+members that have no usable state. A disconnected inspection service remains an
+operational error; no UI-generated pretend state is substituted.

@@ -9,6 +9,7 @@ export interface ViewerMemoryStore {
     values: ViewerState,
     expires: number,
     sourceMessageIds?: string[],
+    kind?: "initial" | "updated",
   ): ViewerMemory;
   clear(): void;
 }

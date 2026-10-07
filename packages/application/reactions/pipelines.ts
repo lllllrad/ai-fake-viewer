@@ -1,3 +1,4 @@
+import { initialViewerStateSchema } from "../../contracts/model-tools.ts";
 import type { ViewerInspection } from "../../contracts/reaction-inspection.ts";
 import type { ModelInput } from "./model-port.ts";
 import type { Decision } from "../../contracts/decision.ts";
@@ -55,6 +56,7 @@ export interface ReactionEngine<
     attemptId?: string;
     notBefore?: number;
   };
+  synchronizeViewerStates(): void;
   start(): void;
   stop(reason?: string, preserveDesired?: boolean): void;
   tick(now?: number): Promise<void>;
@@ -74,6 +76,7 @@ export type PipelineArguments<Bytes extends Uint8Array, Handle> = [
   runtime: import("./coordinator-ports.ts").ReactionRuntime<Handle>,
 ];
 export interface ReactionPipeline {
+  readonly initialState: import("../../contracts/model-tools.ts").ViewerState;
   id: string;
   revision: number;
   label: string;
@@ -97,6 +100,7 @@ export class ReactionPipelineRegistry {
     for (const pipeline of pipelines) this.register(pipeline);
   }
   register(pipeline: ReactionPipeline) {
+    initialViewerStateSchema.parse(pipeline.initialState);
     if (
       !/^[a-z][a-z0-9_-]{0,63}$/.test(pipeline.id) ||
       !Number.isSafeInteger(pipeline.revision) ||

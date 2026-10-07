@@ -1,3 +1,4 @@
+import { initialViewerStateSchema } from "../../contracts/model-tools.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
 import { ReactionCoordinator } from "../../application/reactions/coordinator.ts";
@@ -30,6 +31,7 @@ export async function connectAiService(connection = aiServiceConnection()) {
           revision: z.number().int().positive(),
           label: z.string().min(1),
           description: z.string(),
+          initialState: initialViewerStateSchema,
         }),
       ),
     })
@@ -40,20 +42,27 @@ export async function connectAiService(connection = aiServiceConnection()) {
     )
       continue;
     registerReactionProgram(descriptor.id, () =>
-      client.program(descriptor.id, descriptor.revision),
+      client.program(
+        descriptor.id,
+        descriptor.revision,
+        descriptor.initialState,
+      ),
     );
     const inspection = new WeakMap<object, ViewerInspection[]>();
     reactionPipelines.register({
       ...descriptor,
       create: (...args) => new ReactionCoordinator(...args),
       draft: (options) =>
-        client.program(descriptor.id, descriptor.revision).draft(options),
+        client
+          .program(descriptor.id, descriptor.revision, descriptor.initialState)
+          .draft(options),
       inspect: (engine) =>
         (inspection.get(engine) ?? []).map((state) => ({
           ...state,
           status: engine.state === "running" ? state.status : "중지됨",
         })),
       async refreshInspection(engine) {
+        engine.synchronizeViewerStates();
         const result = await client.json(
           "/v1/inspect",
           {

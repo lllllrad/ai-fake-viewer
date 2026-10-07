@@ -10,20 +10,25 @@ const implementation = servicePipelines[0];
 registerReactionProgram("standard", () => implementation);
 export const standardPipeline: ReactionPipeline = {
   id: implementation.id,
+  initialState: implementation.initialState,
   revision: implementation.revision,
   label: implementation.label,
   description: implementation.description,
   create: (...args) => new ReactionCoordinator(...args, implementation),
   draft: (options) => implementation.draft(options),
-  inspect: (engine) =>
-    implementation.inspect?.({
-      members: engine.store.personaRuntime()?.members ?? [],
-      state: engine.state,
-      busy: engine.busy,
-      diagnostics: engine.diagnostics,
-      memories: engine.store.viewerMemory?.list() ?? [],
-      pending: engine.pending,
-    }) ?? [],
+  inspect: (engine) => {
+    engine.synchronizeViewerStates();
+    return (
+      implementation.inspect?.({
+        members: engine.store.personaRuntime()?.members ?? [],
+        state: engine.state,
+        busy: engine.busy,
+        diagnostics: engine.diagnostics,
+        memories: engine.store.viewerMemory?.list() ?? [],
+        pending: engine.pending,
+      }) ?? []
+    );
+  },
 };
 if (!reactionPipelines.list().length)
   reactionPipelines.register(standardPipeline);

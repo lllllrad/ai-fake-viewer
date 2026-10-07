@@ -1,3 +1,4 @@
+import { servicePipelines } from "../services/viewer-ai/programs.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { startAiServiceFixture } from "../scripts/ai-service-fixture.ts";
@@ -21,58 +22,64 @@ test("a separate AI process performs generation and review through host model ca
     };
     const phases: string[] = [];
     let calls = 0;
-    const outcome = await client.program("standard").draft<Buffer>({
-      input,
-      signal: new AbortController().signal,
-      isCurrent: () => true,
-      inspectAllowed: true,
-      review: true,
-      latestFrames: () => [],
-      hasTranscript: () => true,
-      model: async (request, signal) => {
-        calls++;
-        return fixtureModel(request, signal);
-      },
-      updateState: async (values) => ({
-        memberId: "fixture",
-        binding: "fixture",
-        revision: 1,
-        updatedAt: Date.now(),
-        expiresAt: Date.now() + 60000,
-        values,
-      }),
-      active() {},
-      phase: (phase) => phases.push(phase),
-      trace() {},
-    });
+    const outcome = await client
+      .program("standard", 1, servicePipelines[0].initialState)
+      .draft<Buffer>({
+        input,
+        signal: new AbortController().signal,
+        isCurrent: () => true,
+        inspectAllowed: true,
+        review: true,
+        latestFrames: () => [],
+        hasTranscript: () => true,
+        model: async (request, signal) => {
+          calls++;
+          return fixtureModel(request, signal);
+        },
+        updateState: async (values) => ({
+          memberId: "fixture",
+          binding: "fixture",
+          revision: 1,
+          updatedAt: Date.now(),
+          expiresAt: Date.now() + 60000,
+          values,
+          kind: "updated",
+        }),
+        active() {},
+        phase: (phase) => phases.push(phase),
+        trace() {},
+      });
     assert.equal(calls, 2);
     assert.equal(outcome.kind, "candidate");
     assert(phases.includes("ai_review"));
     const controller = new AbortController();
-    const canceled = client.program("standard").draft<Buffer>({
-      input,
-      signal: controller.signal,
-      isCurrent: () => !controller.signal.aborted,
-      inspectAllowed: true,
-      review: true,
-      latestFrames: () => [],
-      hasTranscript: () => true,
-      model: async (request, signal) => {
-        controller.abort();
-        return fixtureModel(request, new AbortController().signal);
-      },
-      updateState: async (values) => ({
-        memberId: "fixture",
-        binding: "fixture",
-        revision: 1,
-        updatedAt: Date.now(),
-        expiresAt: Date.now() + 60000,
-        values,
-      }),
-      active() {},
-      phase() {},
-      trace() {},
-    });
+    const canceled = client
+      .program("standard", 1, servicePipelines[0].initialState)
+      .draft<Buffer>({
+        input,
+        signal: controller.signal,
+        isCurrent: () => !controller.signal.aborted,
+        inspectAllowed: true,
+        review: true,
+        latestFrames: () => [],
+        hasTranscript: () => true,
+        model: async (request, signal) => {
+          controller.abort();
+          return fixtureModel(request, new AbortController().signal);
+        },
+        updateState: async (values) => ({
+          memberId: "fixture",
+          binding: "fixture",
+          revision: 1,
+          updatedAt: Date.now(),
+          expiresAt: Date.now() + 60000,
+          values,
+          kind: "updated",
+        }),
+        active() {},
+        phase() {},
+        trace() {},
+      });
     await assert.rejects(canceled, /abort/i);
   } finally {
     service.stop();

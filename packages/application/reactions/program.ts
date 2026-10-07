@@ -58,6 +58,7 @@ export interface SelectionResult<Bytes extends Uint8Array> {
 }
 /** AI algorithms run behind this asynchronous boundary. Host owns credentials and publication. */
 export interface ReactionProgram {
+  readonly initialState: import("../../contracts/model-tools.ts").ViewerState;
   select<Bytes extends Uint8Array>(
     input: SelectionInput<Bytes>,
     signal: AbortSignal,

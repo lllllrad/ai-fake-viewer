@@ -1,3 +1,4 @@
+import { initialViewerStateSchema } from "../../packages/contracts/model-tools.ts";
 import Fastify from "fastify";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -113,19 +114,20 @@ export function createAiService(
   }));
   app.get("/v1/pipelines", async () => ({
     protocol: 1,
-    pipelines: pipelines.map(({ id, revision, label, description }) => ({
-      id,
-      revision,
-      label,
-      description,
-    })),
+    pipelines: pipelines.map(
+      ({ id, revision, label, description, initialState }) => ({
+        id,
+        revision,
+        label,
+        description,
+        initialState: initialViewerStateSchema.parse(initialState),
+      }),
+    ),
   }));
   app.post("/v1/inspect", async (req) => {
     const body = decodeWire(req.body);
     return {
-      states:
-        pipeline(body.pipelineType, body.revision).inspect?.(body.context) ??
-        [],
+      states: pipeline(body.pipelineType, body.revision).inspect(body.context),
     };
   });
   app.post("/v1/select", async (req) => {

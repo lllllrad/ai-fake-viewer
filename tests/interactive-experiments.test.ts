@@ -56,8 +56,8 @@ test("tool-updated viewer state is inspectable, restored and reused after reopen
     );
     await until(() => service.active!.messages.length === 1);
     const saved = service.active!.trace().memories;
-    assert.equal(saved.length, 1);
-    assert.equal(saved[0].revision, 2); // Generation and review both use actual tools.
+    assert.equal(saved.length, 6);
+    assert.equal(saved.find((state) => state.kind === "updated")!.revision, 3); // Generation and review both use actual tools.
     assert(
       service
         .active!.snapshot()
@@ -595,6 +595,65 @@ test("interrupted legacy sessions use their saved prompts and receive a fresh ti
     assert.equal(reopened.active!.calls.length, 0);
   } finally {
     reopened?.close();
+    cleanup();
+  }
+});
+
+test("every viewer owns persisted initial state before any input and reinitializes expired evidence", async () => {
+  const { service, cleanup } = workspace(fixtureToolModel);
+  try {
+    const first = service.start({
+      topic: "초기 상태 테스트",
+      provider: "fixture",
+    });
+    const active = service.active!;
+    const initial = active.store.viewerMemory.list();
+    assert.equal(initial.length, first.personas.length);
+    assert.equal(first.calls, 0);
+    for (const member of first.personas) {
+      const memory = initial.find((state) => state.memberId === member.id)!;
+      assert.equal(memory.kind, "initial");
+      assert.equal(memory.revision, 1);
+      assert.deepEqual(Object.keys(memory.values).sort(), [
+        "focus",
+        "intent",
+        "mood",
+        "summary",
+      ]);
+      const section = first.viewerStates
+        .find((state) => state.memberId === member.id)!
+        .sections.find((section) => section.label === "현재 AI 상태")!;
+      assert.deepEqual(section.value, memory.values);
+    }
+    const chosen = initial[0];
+    active.store.viewerMemory.write(
+      chosen.memberId,
+      chosen.binding,
+      { mood: "과거 감정", summary: "만료된 관찰" },
+      Date.now() + 1000,
+    );
+    active.store.db
+      .prepare("UPDATE viewer_memory SET expires=0 WHERE member=?")
+      .run(chosen.memberId);
+    await active.refreshInspection();
+    const reset = active.store.viewerMemory.read(
+      chosen.memberId,
+      chosen.binding,
+    )!;
+    assert.equal(reset.kind, "initial");
+    assert.deepEqual(reset.values, chosen.values);
+    assert.equal(
+      active.store.viewerMemory.list().length,
+      first.personas.length,
+    );
+    assert.equal(active.snapshot().calls, 0);
+    service.active!.stop();
+    service.resume(first.id);
+    assert.equal(
+      service.active!.store.viewerMemory.list().length,
+      first.personas.length,
+    );
+  } finally {
     cleanup();
   }
 });

@@ -118,9 +118,12 @@ when already at the bottom. Each recent-entry button moves only its own log once
 New entries must not move the surrounding page or steal focus.
 
 **Per-viewer state** selects a cast member and displays inspection sections supplied by
-that service pipeline's optional `inspect(context)` hook. The standard implementation reports
+that service pipeline's required `inspect(context)` hook. The standard implementation reports
 participation settings, recent publication, per-member processing events, recorded model
-actions and pending publication decisions. These are explicit application observations
+actions and pending publication decisions. Every viewer has persisted pipeline-defined initial state before the first input.
+The state is reused by model calls, updated through tools, and reset to initial values
+when observed context expires. Initializing state makes no model calls.
+These are explicit application observations
 and outputs, not inferred private model reasoning. Custom implementations choose their
 own status labels and JSON-compatible sections through `ViewerInspection`. Inspection
 must be synchronous and read-only, without model calls. Invalid or failed inspection
