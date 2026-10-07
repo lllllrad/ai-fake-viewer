@@ -1,3 +1,4 @@
+import { approvedProfile } from "./privacy-fixtures.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -134,6 +135,8 @@ for (const demo of [false, true])
       assert.equal(frameReads, 1);
       const status = adminStatusSchema.parse(response.json());
       assert.equal(status.demo, demo);
+      for (const platform of ["youtube", "chzzk", "soop"] as const)
+        assert.equal(status.setup[platform].receiveApproved, demo);
       assert.equal(status.sessionId, store.sessionId);
       assert.equal(status.setup.youtube.channelId, null);
       assert.deepEqual(
@@ -191,9 +194,53 @@ for (const demo of [false, true])
       assert.equal(ended.statusCode, 200);
       const endedStatus = adminStatusSchema.parse(ended.json());
       assert.equal(endedStatus.closed, true);
+      for (const platform of ["youtube", "chzzk", "soop"] as const)
+        assert.equal(endedStatus.setup[platform].receiveApproved, demo);
       assert.deepEqual(endedStatus.audio.history, []);
     } finally {
       await app.close();
       rmSync(directory, { recursive: true, force: true });
     }
   });
+
+test("next-session receive approval survives session end and checks a known broadcast identity", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "preparation-status-"));
+  const { app, broadcast, store } = await createApp(
+    configSchema.parse({
+      database: ":memory:",
+      privacy: approvedProfile(),
+      youtube: { channelId: "fixture" },
+      soop: { streamerId: "different-account" },
+    }),
+    {
+      startInputs: false,
+      adminToken: "a".repeat(64),
+      readerToken: "r".repeat(64),
+      encryptionKey: "e".repeat(64),
+      chatgptTokenPath: join(directory, "chatgpt"),
+      youtubeTokenPath: join(directory, "youtube"),
+      chzzkTokenPath: join(directory, "chzzk"),
+      soopTokenPath: join(directory, "soop"),
+    },
+  );
+  try {
+    await broadcast.endBroadcast();
+    assert.equal(store.participation!.available("youtube", "fixture"), false);
+    const response = await app.inject({
+      url: "/api/admin/status",
+      headers: {
+        host: "127.0.0.1:3210",
+        authorization: `Bearer ${"a".repeat(64)}`,
+      },
+    });
+    assert.equal(response.statusCode, 200);
+    const status = adminStatusSchema.parse(response.json());
+    assert.equal(status.closed, true);
+    assert.equal(status.setup.youtube.receiveApproved, true);
+    assert.equal(status.setup.chzzk.receiveApproved, true);
+    assert.equal(status.setup.soop.receiveApproved, false);
+  } finally {
+    await app.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

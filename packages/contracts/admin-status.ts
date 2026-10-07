@@ -168,6 +168,7 @@ export const adminStatusSchema = z.object({
   }),
   setup: z.object({
     youtube: z.object({
+      receiveApproved: z.boolean().optional(),
       oauthConfigured: z.boolean(),
       connected: z.boolean(),
       channelId: z.string().nullable(),
@@ -180,6 +181,7 @@ export const adminStatusSchema = z.object({
       channelConfigured: z.boolean(),
     }),
     chzzk: z.object({
+      receiveApproved: z.boolean().optional(),
       enabled: z.boolean(),
       tokenConfigured: z.boolean(),
       consentNoticeEnabled: z.boolean(),
@@ -187,6 +189,7 @@ export const adminStatusSchema = z.object({
       redirectUri: z.string(),
     }),
     soop: z.object({
+      receiveApproved: z.boolean().optional(),
       mode: z.enum(["disabled", "official", "experimental_library"]),
       consentNoticeEnabled: z.boolean(),
       streamerConfigured: z.boolean(),

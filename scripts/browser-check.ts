@@ -155,6 +155,55 @@ try {
   await expect(
     adminPage.getByRole("heading", { name: "연결 및 입력 설정" }),
   ).toBeFocused();
+  // A closed session still exposes preparation, without pretending to be connected.
+  let preparationMissingToken = false;
+  await adminPage.route("**/api/admin/status", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.closed = true;
+    Object.assign(body.setup.youtube, {
+      oauthConfigured: true,
+      enabled: true,
+      connected: true,
+      credentialsConfigured: true,
+      receiveApproved: true,
+    });
+    Object.assign(body.setup.chzzk, {
+      enabled: true,
+      credentialsConfigured: true,
+      tokenConfigured: !preparationMissingToken,
+      receiveApproved: true,
+    });
+    Object.assign(body.setup.soop, {
+      mode: "official",
+      credentialsConfigured: true,
+      tokenConfigured: true,
+      streamerConfigured: true,
+      receiveApproved: true,
+    });
+    for (const platform of ["youtube", "chzzk", "soop"])
+      body.connectors[platform].state = "stopped";
+    await route.fulfill({ json: body });
+  });
+  const platformPreparation = adminPage.getByRole("region", {
+    name: "플랫폼 연결 준비",
+    exact: true,
+  });
+  await expect(
+    platformPreparation.getByText("연결 준비됨", { exact: true }),
+  ).toHaveCount(3);
+  await expect(
+    platformPreparation.getByText("중지됨", { exact: true }),
+  ).toHaveCount(0);
+  await captureUIReview(adminPage, "platform-preparation");
+  preparationMissingToken = true;
+  await expect(
+    platformPreparation.getByText("계정 연결 필요", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    platformPreparation.getByText("연결 준비됨", { exact: true }),
+  ).toHaveCount(2);
+  await adminPage.unroute("**/api/admin/status");
   const setupTabs = adminPage.getByRole("tablist", { name: "방송 준비 항목" });
   await setupTabs
     .getByRole("tab", { name: "채팅 플랫폼", exact: true })

@@ -2,7 +2,7 @@ import { Button } from "../../components/ui";
 import { SoopAutoConnection } from "./auto-connection.ts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
-import { inputHealth } from "../../input-health.ts";
+import { platformPreparation } from "../connections/platform-preparation.ts";
 import { SoopController } from "./controller.ts";
 import { browserSoopPorts } from "./browser-adapter.ts";
 import { connectionApi } from "../connections/api.ts";
@@ -50,9 +50,7 @@ export function SoopConnector({
     const timer = setInterval(sync, 1000);
     return () => clearInterval(timer);
   }, [automatic, sessionId, enabled, stale, closed, state]);
-  const health = stale
-    ? { label: "확인 불가", hint: "상태를 다시 확인해 주세요." }
-    : inputHealth(state, "chat_read");
+  const health = platformPreparation("soop", setup, state, stale, closed);
   const busy = connection.phase === "connecting" || actions.busy("authorize");
   const message = actions.error || connection.message;
   const connect = automatic.connect,

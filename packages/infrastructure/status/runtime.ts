@@ -95,6 +95,20 @@ export class RuntimeStatusSource {
     const credentials = this.dependencies.credentials();
     const speech = transcriber.recent();
     const latestFrame = capture.latest();
+    // Check next-session configuration independently of the ended session's gate.
+    const receiveApproved = (platform: string, broadcaster?: string | null) =>
+      demo ||
+      (!profileIssues(config.privacy).length &&
+        config.privacy.approvals.some(
+          (approval) =>
+            approval.platform === platform &&
+            (!broadcaster || approval.broadcaster === broadcaster) &&
+            approval.receive &&
+            approval.screenPublication &&
+            approval.externalAi &&
+            !!approval.contractReference &&
+            !!approval.checkedAt,
+        ));
     return {
       demo: demo,
       generatedAt: now,
@@ -223,6 +237,10 @@ export class RuntimeStatusSource {
       chatgpt: chatgpt.status,
       setup: {
         youtube: {
+          receiveApproved: receiveApproved(
+            "youtube",
+            youtubeAuth.channelId || config.youtube.channelId,
+          ),
           oauthConfigured: youtubeAuth.configured,
           connected: youtubeAuth.connected,
           channelId: youtubeAuth.channelId ?? null,
@@ -240,6 +258,7 @@ export class RuntimeStatusSource {
           channelConfigured: !!config.youtube.channelId,
         },
         chzzk: {
+          receiveApproved: receiveApproved("chzzk", undefined),
           enabled: config.chzzk.enabled,
           tokenConfigured: !!auth.token,
           consentNoticeEnabled: store.consentNoticeEnabled(
@@ -250,6 +269,7 @@ export class RuntimeStatusSource {
           redirectUri: config.chzzk.redirectUri,
         },
         soop: {
+          receiveApproved: receiveApproved("soop", config.soop.streamerId),
           mode: config.soop.mode,
           consentNoticeEnabled: store.consentNoticeEnabled(
             "soop",

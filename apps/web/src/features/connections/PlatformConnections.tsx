@@ -1,7 +1,7 @@
 import { Button } from "../../components/ui";
 import type { ReactNode } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
-import { inputHealth } from "../../input-health.ts";
+import { platformPreparation } from "./platform-preparation.ts";
 import { connectionApi } from "./api.ts";
 import { useAdminActions } from "../../lib/use-admin-actions.ts";
 
@@ -41,9 +41,13 @@ export function PlatformConnections({
       <div className="connection-grid">
         {(["youtube", "chzzk"] as const).map((platform) => {
           const setup = status.setup[platform],
-            health = stale
-              ? { label: "확인 불가", hint: "상태를 다시 확인해 주세요." }
-              : inputHealth(status.connectors[platform]?.state, "chat_read");
+            health = platformPreparation(
+              platform,
+              setup,
+              status.connectors[platform]?.state,
+              stale,
+              status.closed,
+            );
           const configured =
             platform === "youtube"
               ? status.setup.youtube.oauthConfigured
@@ -60,7 +64,7 @@ export function PlatformConnections({
               )}
               {!configured && (
                 <p className="hint">
-                  .env에{" "}
+                  계정 연결·재인증을 사용하려면 .env에{" "}
                   {platform === "youtube"
                     ? "YOUTUBE_CLIENT_ID·YOUTUBE_CLIENT_SECRET"
                     : "CHZZK_CLIENT_ID·CHZZK_CLIENT_SECRET"}

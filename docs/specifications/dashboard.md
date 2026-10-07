@@ -160,6 +160,19 @@ Diagnostics may expose sanitized timestamps, durations, stages, counts and reaso
 codes. They do not show raw provider responses, credentials or unconsented text.
 Transcript download and media preview require administrator authorization.
 
+### Platform preparation before receiving
+
+On Broadcast preparation, idle platform cards show readiness from configured
+credentials, account authentication, broadcast targets and the operating profile's
+receive approvals, independently of whether the previous broadcast has ended.
+They distinguish ready to connect, missing settings, missing account connection,
+missing broadcast target, missing receive approval and disabled use. Known
+connection errors and active transport state remain visible; stale status never
+claims readiness. Starting a session or chat reception attempts the connection.
+Prepared configuration is not proof of valid remote credentials, matching remote
+account permissions or an active broadcast; those are checked on connection.
+SOOP additionally requires the administrator browser tab to remain open.
+
 ## Participation and rights
 
 Describe the normal flow once: one short delivered notice and one fresh individual
