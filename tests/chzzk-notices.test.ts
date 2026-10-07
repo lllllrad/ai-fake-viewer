@@ -122,6 +122,7 @@ test("CHZZK rejects mismatched sender, missing permission and ambiguous write su
   assert.equal(f.sent.length, 0);
   f.p.profile.approvals.find((a) => a.platform === "chzzk")!.fixedNotices =
     true;
+  f.message("retry after reaction");
   await f.sender.tick(f.signal);
   assert.equal(f.sent.length, 1);
   assert.equal(f.p.get("chzzk", "fixture", "viewer")!.introDelivered, false);

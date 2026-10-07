@@ -209,6 +209,16 @@ export class ParticipationService {
         throw new PrivacyActionError(
           "안내 권한·단계·발송 제한을 확인해 주세요.",
         );
+      // One public attempt consumes the reactions of everyone already present.
+      // Persist this boundary so resets and process restarts cannot resend it.
+      for (const person of this.participants.values())
+        if (
+          person.platform === p.platform &&
+          person.broadcaster === p.broadcaster &&
+          person.state === "WAITING_CONSENT" &&
+          person.lastSeenAt <= now
+        )
+          person.lastNoticeAt = reservation.reservedAt;
       p.lastNoticeAt = reservation.reservedAt;
       return p;
     });

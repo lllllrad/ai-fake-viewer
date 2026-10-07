@@ -1,4 +1,4 @@
-import { fixedNoticeText } from "../../domain/participation/notice-text.ts";
+import { platformNoticeText } from "../../domain/participation/notice-text.ts";
 import type { ApiFailure } from "../../contracts/api-failure.ts";
 import { FixedNoticeDelivery } from "./fixed-notice-delivery.ts";
 import type { ParticipationService as Participation } from "./service.ts";
@@ -75,10 +75,7 @@ export class NoticeSender {
         first = true;
         let message: string;
         try {
-          message = fixedNoticeText(
-            next.text,
-            this.platform === "chzzk" ? 88 : 170,
-          );
+          message = platformNoticeText(next.text, this.platform);
         } catch (error) {
           bot.failed(next.id);
           throw error;

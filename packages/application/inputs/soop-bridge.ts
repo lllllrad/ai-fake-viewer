@@ -1,3 +1,4 @@
+import { platformAccountId } from "../../domain/participation/platform-identity.ts";
 export type SoopBrowserState =
   | "connecting"
   | "subscribed"
@@ -129,13 +130,14 @@ export class SoopBridge {
       throw new SoopBridgeError(
         "SOOP chat is not connected to the configured broadcast.",
       );
-    if (message.userId === settings.streamerId) {
-      this.ports.notices.echo(message.userId, message.message);
+    const author = platformAccountId("soop", message.userId);
+    if (author === settings.streamerId) {
+      this.ports.notices.echo(author, message.message);
     }
     this.ports.receive({
       platform: "soop",
       channel: settings.streamerId,
-      author: message.userId,
+      author,
       name: message.userNickname,
       text: message.message,
       sourceId: null,

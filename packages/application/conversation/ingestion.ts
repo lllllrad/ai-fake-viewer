@@ -1,3 +1,4 @@
+import { platformAccountId } from "../../domain/participation/platform-identity.ts";
 import {
   incomingSchema,
   type Incoming,
@@ -47,6 +48,7 @@ export class ConversationIngestion {
       let invalidated = false;
       for (const raw of items) {
         const message = incomingSchema.parse(raw);
+        message.author = platformAccountId(message.platform, message.author);
         const admission =
           message.platform === "experiment"
             ? { allow: true, epoch: 0 }

@@ -1,3 +1,4 @@
+import { platformAccountId } from "./platform-identity.ts";
 import type { Participant } from "./model.ts";
 export interface NoticePermission {
   participationAvailable: boolean;
@@ -11,7 +12,12 @@ export type NoticeReservation =
   | {
       allowed: false;
       history: number[];
-      reason: "stage" | "authorization" | "account_interval" | "global_limit";
+      reason:
+        | "stage"
+        | "authorization"
+        | "account_interval"
+        | "global_limit"
+        | "waiting_reaction";
     };
 
 /** Reserving a send spends a rate slot; it never proves delivery or grants consent. */
@@ -25,6 +31,8 @@ export function reserveGuidance(
   if (
     !["UNCONSENTED", "WAITING_CONSENT"].includes(participant.state) ||
     participant.age === "blocked" ||
+    platformAccountId(participant.platform, participant.author) ===
+      participant.broadcaster ||
     participant.deliveredAt !== null
   )
     return { allowed: false, history: recent, reason: "stage" };
@@ -34,6 +42,11 @@ export function reserveGuidance(
     !permission.limitsConfirmed
   )
     return { allowed: false, history: recent, reason: "authorization" };
+  if (
+    participant.lastNoticeAt > 0 &&
+    participant.lastSeenAt <= participant.lastNoticeAt
+  )
+    return { allowed: false, history: recent, reason: "waiting_reaction" };
   if (now - participant.lastNoticeAt < permission.perAccountIntervalMs)
     return { allowed: false, history: recent, reason: "account_interval" };
   if (recent.length >= permission.globalPerMinute)

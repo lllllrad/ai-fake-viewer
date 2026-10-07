@@ -89,8 +89,12 @@ export function receiveParticipantMessage(
     transition.result.epoch = participant.epoch;
     return transition;
   };
-  if (at != null && at >= context.startedAt && at <= context.now + 5000)
-    participant.lastSeenAt = Math.max(participant.lastSeenAt, at);
+  // Untimestamped live transports still represent a reaction; clock ticks do not.
+  if (at == null || (at >= context.startedAt && at <= context.now + 5000))
+    participant.lastSeenAt = Math.max(
+      participant.lastSeenAt,
+      at ?? context.now,
+    );
   if (command === "!철회") {
     if (participant.state !== "WITHDRAWN") {
       participant.epoch++;

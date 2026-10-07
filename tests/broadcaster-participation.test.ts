@@ -1,3 +1,4 @@
+import { platformAccountId } from "../packages/domain/participation/platform-identity.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
@@ -116,4 +117,39 @@ test("owner auto-admission accepts untimestamped live input but preserves availa
   );
   stale.end();
   assert.equal(stale.handle(message).allow, false);
+});
+
+test("SOOP connection suffixes share owner admission and fixed-notice exclusion", (t) => {
+  const p = new Participation(approvedProfile(), "session");
+  const store = new Store(":memory:", p);
+  t.after(() => store.close());
+  const send = (author: string, text: string) =>
+    store.ingestBatch([
+      privacyMessage(author, text, Date.now(), {
+        platform: "soop",
+        publishedAt: null,
+        sourceId: null,
+      }),
+    ]);
+  send("fixture(5)", consentNoticeText(p.profile) + " [안내 ed4639e1]");
+  assert.equal(p.participants.size, 0);
+  send("fixture(2)", "owner chat");
+  assert.equal(p.get("soop", "fixture", "fixture")?.state, "ACTIVE");
+  assert.equal(p.participants.size, 1);
+  assert.equal(store.context(["soop"]).length, 1);
+  send("fixture(5)", "!철회");
+  assert.equal(store.context(["soop"]).length, 0);
+});
+
+test("account normalization is platform-specific and does not merge lookalike identifiers", () => {
+  assert.equal(platformAccountId("soop", "viewer(2)"), "viewer");
+  for (const id of [
+    "viewer-other(2)",
+    "viewer(2)extra",
+    "viewer(admin)",
+    "viewer",
+  ])
+    assert.equal(platformAccountId("soop", id), id);
+  for (const platform of ["youtube", "chzzk"])
+    assert.equal(platformAccountId(platform, "viewer(2)"), "viewer(2)");
 });

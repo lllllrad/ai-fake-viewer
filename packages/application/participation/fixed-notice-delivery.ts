@@ -7,7 +7,7 @@ export class FixedNoticeDelivery {
     participant: string;
     epoch: number;
     stage: number;
-    revision: number;
+    version: string;
     session: string;
     expiresAt: number;
     text: string;
@@ -73,7 +73,7 @@ export class FixedNoticeDelivery {
         participant: person.id,
         epoch: person.epoch,
         stage: person.stage,
-        revision: p.revision,
+        version: p.fingerprint,
         session: p.sessionId,
         expiresAt:
           this.runtime.now() + (this.platform === "soop" ? 15000 : 900000),
@@ -97,7 +97,7 @@ export class FixedNoticeDelivery {
       !!person &&
       !p.ended &&
       p.sessionId === j.session &&
-      p.revision === j.revision &&
+      p.fingerprint === j.version &&
       person.epoch === j.epoch &&
       person.stage === j.stage &&
       person.state === "WAITING_CONSENT" &&

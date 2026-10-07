@@ -105,6 +105,8 @@ test("missing authorization and already-covered or blocked participants cannot r
     { ...participant(), age: "blocked" as const },
     { ...participant(), state: "ACTIVE" as const },
     { ...participant(), state: "WITHDRAWN" as const },
+    { ...participant(), author: "room" },
+    { ...participant(), platform: "soop", author: "room(5)" },
   ])
     assert.equal(reserveGuidance(p, [], permission, now).allowed, false);
 });

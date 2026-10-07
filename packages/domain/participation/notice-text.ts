@@ -11,6 +11,11 @@ export function fixedNoticeText(text: string, bodyBudget = 170): string {
   return `[안내] ${body}`;
 }
 
+/** Platform-specific wire limits, shared by sending and own-echo recognition. */
+export function platformNoticeText(text: string, platform: string): string {
+  return fixedNoticeText(text, platform === "chzzk" ? 88 : 170);
+}
+
 /** Content shared by delivery and own-echo suppression. */
 export function consentNoticeText(profile: {
   thirdPartyNotice: string;
@@ -31,10 +36,7 @@ export function isOwnFixedNotice(
         /^ \[안내 [a-f0-9]{8}\]$/.test(message.text.slice(text.length)))
     );
   try {
-    return (
-      message.text ===
-      fixedNoticeText(text, message.platform === "chzzk" ? 88 : 170)
-    );
+    return message.text === platformNoticeText(text, message.platform);
   } catch {
     return false;
   }

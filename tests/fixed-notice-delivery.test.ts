@@ -83,7 +83,7 @@ test("fixed notice receipt and send use identical consent binding checks", () =>
       f.participation.sessionId = "next";
     },
     (f: ReturnType<typeof fixture>) => {
-      f.participation.revision++;
+      f.participation.fingerprint = "next-profile";
     },
     (f: ReturnType<typeof fixture>) => {
       f.participation.get("soop", "fixture", "first")!.epoch++;

@@ -61,6 +61,17 @@ function fixture() {
     advance: (ms: number) => {
       now += ms;
     },
+    react: () => {
+      now++;
+      p.handle({
+        platform: "youtube",
+        channel: "fixture",
+        author: "viewer",
+        text: "again",
+        publishedAt: now,
+        sourceId: runtime.id(),
+      });
+    },
     respond: (fn: typeof response) => {
       response = fn;
     },
@@ -109,6 +120,9 @@ test("notice sender preserves scoped provider failure and waits its full retry d
   f.advance(1);
   f.respond(async () => ({ status: "delivered" }));
   await f.sender.tick(f.signal);
+  assert.equal(f.sent.length, 1);
+  f.react();
+  await f.sender.tick(f.signal);
   assert.equal(f.sent.length, 2);
   assert.equal(f.sender.failure, undefined);
 });
@@ -144,6 +158,9 @@ test("notice sender can resume a pre-insertion connection pause without granting
   assert.equal(f.sender.state, "waiting_connection");
   f.advance(60001);
   f.respond(async () => ({ status: "delivered" }));
+  await f.sender.tick(f.signal);
+  assert.equal(f.person.deliveredAt, null);
+  f.react();
   await f.sender.tick(f.signal);
   assert.notEqual(f.person.deliveredAt, null);
   assert.equal(f.person.stage, 0);

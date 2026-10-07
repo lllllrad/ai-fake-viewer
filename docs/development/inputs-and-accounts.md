@@ -45,7 +45,7 @@ session and expose unconfirmed delivery; reconnect the platform to resume.
 Expected provider failures retain their existing sender-specific backoff policy.
 The [fixed notice delivery owner](../../packages/application/participation/fixed-notice-delivery.ts)
 selects eligible waiting viewers, reserves attempts, binds one outstanding notice
-to the broadcast/profile/consent revision, and verifies delivery receipts. Time
+to the broadcast/profile and target consent generation, and verifies delivery receipts. Time
 and identifier generation are injected by composition. Sending and receipt use
 the same eligibility check; a target already covered by another confirmed notice
 cannot turn a late receipt into delivery for newer viewers. Invalidated jobs
@@ -72,7 +72,7 @@ normalizes whitespace and rejects oversized complete notices. Senders hold one
 message rather than a fragment array or progress index; the visible prefix has no
 multipart counter. Existing conservative body budgets remain 170 UTF-16 code
 units for YouTube and 88 for CHZZK. URLs and required text are never truncated.
-YouTube can reserve another attempt after pausing before insertion, while
+Both server senders require a fresh viewer reaction to reserve another attempt after a pause or failure, while
 confirmed delivery completes the job immediately.
 
 The [notice sender application service](../../packages/application/participation/notice-sender.ts)
@@ -354,3 +354,22 @@ The shared notice-text policy excludes exact own fixed-notice echoes, including
 the SOOP delivery suffix and the YouTube/CHZZK formatted prefix. SOOP still offers
 owner echoes to delivery confirmation before admission. Automatic notices cannot
 activate the broadcaster or become public chat.
+
+### Shared reaction and account identity policy
+
+All three platforms use the same participation transition, notice reservation,
+room coverage and delivery validation. Every reservation consumes the reactions
+of waiting participants already observed in that room. The persisted
+`lastSeenAt` / `lastNoticeAt` boundary prevents silent retries after failures,
+lease expiration, reconnects and process restarts. Untimestamped live messages
+use receipt time for reaction tracking; provider timestamps are not fabricated.
+Delivery is tied to the target's epoch and the profile fingerprint, so another
+participant's activation cannot invalidate a valid receipt.
+
+SOOP MESSAGE account IDs observed in live testing include numeric connection
+suffixes such as `account(5)`. The shared account normalizer removes only this
+anchored suffix for SOOP. Ingestion and the SOOP echo bridge use the same rule;
+other platforms and malformed/lookalike suffixes remain unchanged. This prevents
+connection instances from becoming separate participants or hiding owner notice
+echoes. Platform-specific wire formats, limits and receipt mechanisms remain in
+the transport layer.

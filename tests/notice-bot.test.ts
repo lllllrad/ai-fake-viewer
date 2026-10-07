@@ -177,3 +177,50 @@ test("confirmed intro is not repeated for later chat, but explicit consent and n
   message("u", "new broadcast");
   assert(bot.next(true));
 });
+
+for (const platform of ["youtube", "chzzk", "soop"] as const) {
+  test(
+    platform +
+      " never retries a room notice without a fresh viewer reaction, including after restart",
+    (t) => {
+      let now = Date.now();
+      t.mock.method(Date, "now", () => now);
+      let p = new Participation(approvedProfile(), "session");
+      let bot = new NoticeBot(p, "fixture", platform);
+      const react = (author: string, publishedAt: number | null = ++now) =>
+        p.handle(
+          privacyMessage(author, "hello", now, { platform, publishedAt }),
+        );
+      react("a");
+      react("b");
+      const first = bot.next(true)!;
+      assert(first);
+      bot.failed(first.id);
+      now += 1000000;
+      assert.equal(bot.next(true), null);
+      const snapshot = p.snapshot();
+      p = new Participation(approvedProfile(), "session");
+      p.restore(snapshot);
+      bot = new NoticeBot(p, "fixture", platform);
+      assert.equal(bot.next(true), null);
+      react("a", snapshot.startedAt); // replayed history is not a new reaction
+      assert.equal(bot.next(true), null);
+      react("b", null); // live transports without publication timestamps
+      const expired = bot.next(true)!;
+      assert(expired);
+      now += 1000000;
+      assert.equal(bot.next(true), null);
+      react("b", null);
+      const retry = bot.next(true)!;
+      assert(retry);
+      // An unrelated owner's activation must not invalidate delivery.
+      react("fixture");
+      assert(bot.echo("fixture", retry.text));
+      now += 1000000;
+      react("b");
+      assert.equal(bot.next(true), null);
+      react("new-viewer");
+      assert(bot.next(true));
+    },
+  );
+}

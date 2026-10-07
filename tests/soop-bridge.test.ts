@@ -288,3 +288,13 @@ test("HTTP rejects old broadcast scope even when the new broadcast is subscribed
     await app.close();
   }
 });
+
+test("SOOP normalizes connection suffixes before both echo confirmation and admission", () => {
+  const f = fixture();
+  f.bridge.receive(
+    { userId: "owner(5)", userNickname: "Owner", message: "notice" },
+    "broadcast",
+  );
+  assert.deepEqual(f.events[0], ["echo", "owner", "notice"]);
+  assert.equal((f.events[1] as any)[1].author, "owner");
+});
