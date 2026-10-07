@@ -1223,7 +1223,7 @@ export const seedRows: SeedRow[] = [
   ["s_eb80035ee737", "작은화분", "hobby", [], [], [], false, false],
 ];
 export const materials = {
-  version: "0.1.0",
+  version: "0.2.0",
   modifiers: [
     "느긋한",
     "조용한",
@@ -1247,7 +1247,6 @@ export const materials = {
     "구겨진",
     "오래된",
     "새로운",
-    "젖은",
     "마른",
   ],
   default_nouns: [

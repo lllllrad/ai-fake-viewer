@@ -1,3 +1,4 @@
+import { appropriateNickname } from "./safety.ts";
 import { materials, rules } from "./data.ts";
 // Generated names use only Hangul and ASCII, where lowercase is casefold.
 // The extra folds cover common compatibility forms in operator block lists.
@@ -15,6 +16,7 @@ export function validNickname(
   const name = value.normalize("NFC"),
     key = nicknameKey(name);
   return (
+    appropriateNickname(name) &&
     Array.from(name).length >= rules.limits.min_length &&
     Array.from(name).length <= rules.limits.max_length &&
     new RegExp(`^(?:${rules.limits.allowed_pattern})$`, "u").test(name) &&

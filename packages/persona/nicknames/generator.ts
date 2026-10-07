@@ -1,3 +1,4 @@
+import { appropriateNickname } from "../../domain/cast/nicknames/safety.ts";
 import {
   nicknameKey,
   validNickname,
@@ -138,8 +139,10 @@ function numberToken(random: () => number) {
   };
 }
 const pools = new Map<Kind, SeedRow[]>();
-for (const row of seedRows)
-  pools.set(row[2], [...(pools.get(row[2]) ?? []), row]);
+for (const row of seedRows) {
+  if ([row[1], ...row[3], ...row[4], ...row[5]].every(appropriateNickname))
+    pools.set(row[2], [...(pools.get(row[2]) ?? []), row]);
+}
 
 /** One registry per cast. Persist records with persona snapshots, never just a seed. */
 export class NicknameRegistry {
@@ -200,6 +203,7 @@ export class NicknameRegistry {
             ]
           : pick(pools.get(kind)!, random);
       const [id, base, , roman, initials, spellings, repeat, affix] = row;
+      if (!appropriateNickname(base)) continue;
       const family = "root:" + nicknameKey(base);
       if (this.families.has(family)) continue;
       const origins = Object.fromEntries(
@@ -302,7 +306,7 @@ export class NicknameRegistry {
         number_style: number.style,
         number_meaning: "unspecified_fictional_token_not_birthdate",
         steps,
-        generator_version: "1.0.0",
+        generator_version: "1.1.0",
         data_version: materials.version,
         rules_version: rules.version,
         source_id: "starter_curated_v1",

@@ -1,3 +1,4 @@
+import { appropriateNickname } from "../packages/domain/cast/nicknames/safety.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -191,4 +192,41 @@ test("names are independent of topic and voice for the same synthetic identities
     compose("게임", 0).map((c) => c.nickname),
     compose("요리", 2).map((c) => c.nickname),
   );
+});
+
+test("nickname policy covers prohibited roots and transformed output without blocking innocent substrings", () => {
+  for (const name of [
+    "씨발",
+    "씨.발12",
+    "병신_2",
+    "Tlqkf",
+    "fUck42",
+    "sh1t",
+    "s.h.i.t",
+    "b1tch",
+    "젖은조개",
+    "ＳＨＩＴ",
+  ]) {
+    assert.equal(appropriateNickname(name), false, name);
+    assert.equal(validNickname(name), false, name);
+  }
+  for (const name of [
+    "glass",
+    "grass",
+    "class",
+    "충전기",
+    "메트로놈",
+    "보리",
+    "조개",
+    "sigma",
+  ])
+    assert.equal(appropriateNickname(name), true, name);
+});
+test("curated source variants and all modifier/noun combinations satisfy nickname policy", () => {
+  for (const row of seedRows)
+    for (const text of [row[1], ...row[3], ...row[4], ...row[5]])
+      assert(appropriateNickname(text), text);
+  for (const modifier of materials.modifiers)
+    for (const noun of materials.default_nouns)
+      assert(appropriateNickname(modifier + noun), modifier + noun);
 });

@@ -177,3 +177,21 @@ reception require separate acceptance evidence.
 composition rules and prompts. This does not introduce operator-authored viewers.
 Existing cast snapshots survive restart; persona patches affect the next fresh
 broadcast cast. The live server and isolated runner share the same pipeline.
+
+## Nickname vocabulary filtering
+
+Generated identities use a local product policy for profanity, targeted insults,
+explicit sexual expressions and self-harm/violence phrases. Source roots and their
+approved variants are screened before selection. Completed combinations are checked
+again after keyboard/romanization, affixes, letter case, numeric substitutions and
+suffixes. Compatibility normalization and separator removal catch common disguises;
+innocent words such as glass and ordinary identity terms are not blocked by short
+English substring matches. Suggestive modifiers were removed from the combination
+data. The curated material revision is 0.2.0 and generator revision is 1.1.0.
+
+Tests audit all curated roots/variants and every modifier–noun combination, alongside
+transformation examples and a large generated cast. Rejected candidates retry under
+the existing bounded attempt policy. No real viewer chat or external moderation
+request is used. This explicit vocabulary policy is not an exhaustive language
+classifier; new slang needs reviewed policy/data changes. Persisted identities that
+fail validation require review rather than silent reassignment to a different person.
