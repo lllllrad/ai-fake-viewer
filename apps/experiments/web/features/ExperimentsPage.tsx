@@ -52,14 +52,25 @@ const statusLabel = (session: ExperimentSession) => {
     return "반응을 준비하고 있습니다";
   return "시청자들이 듣고 있습니다";
 };
-export function ExperimentsPage() {
+export function ExperimentsPage({
+  chatgptReady = false,
+  connectionKey = "",
+  connectionBusy = false,
+}: {
+  chatgptReady?: boolean;
+  connectionKey?: string;
+  connectionBusy?: boolean;
+}) {
   const [index, setIndex] = useState<z.infer<typeof experimentIndexSchema>>();
   const [selected, setSelected] = useState("");
   const [session, setSession] = useState<ExperimentSession>();
   const [trace, setTrace] = useState<ExperimentTrace>();
   const [view, setView] = useState<"conversation" | "trace">("conversation");
   const [topic, setTopic] = useState("");
-  const [provider, setProvider] = useState("openai_api");
+  const [provider, setProvider] = useState(
+    chatgptReady ? "chatgpt_subscription" : "openai_api",
+  );
+  const providerChosen = useRef(false);
   const [maxCalls, setMaxCalls] = useState(12);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -115,6 +126,16 @@ export function ExperimentsPage() {
       });
     return () => controller.abort();
   }, []);
+  useEffect(() => {
+    if (!providerChosen.current)
+      setProvider(chatgptReady ? "chatgpt_subscription" : "openai_api");
+    setError("");
+    const controller = new AbortController();
+    void refreshIndex(controller.signal).catch((error) => {
+      if (!controller.signal.aborted) setError(error.message);
+    });
+    return () => controller.abort();
+  }, [connectionKey, chatgptReady]);
   useEffect(() => {
     if (!selected) return;
     const controller = new AbortController();
@@ -255,7 +276,7 @@ export function ExperimentsPage() {
         </div>
         <Button
           className="secondary"
-          disabled={busy || !!index?.activeId}
+          disabled={busy || connectionBusy || !!index?.activeId}
           onClick={() => choose("")}
         >
           <Plus size={16} aria-hidden="true" />새 테스트
@@ -291,6 +312,7 @@ export function ExperimentsPage() {
           className="card experiment-setup"
           onSubmit={(event) => {
             event.preventDefault();
+            if (connectionBusy) return;
             void act(async () => {
               const value = await adminClient.json(
                 "experiments",
@@ -328,7 +350,11 @@ export function ExperimentsPage() {
               <Select
                 id="experiment-provider"
                 value={provider}
-                onChange={(event) => setProvider(event.target.value)}
+                onChange={(event) => {
+                  providerChosen.current = true;
+                  setProvider(event.target.value);
+                  setError("");
+                }}
               >
                 <option value="openai_api">Responses API</option>
                 <option value="chatgpt_subscription">
@@ -356,8 +382,15 @@ export function ExperimentsPage() {
               : "선택한 연결로 테스트 입력을 보냅니다. 생성과 검수 모두 호출 한도에 포함됩니다. API 사용 요금이 발생할 수 있습니다."}{" "}
             한 테스트는 최대 30분입니다.
           </p>
-          <Button type="submit" disabled={busy || !!index?.activeId}>
-            {busy ? "시작 중…" : "테스트 시작"}
+          <Button
+            type="submit"
+            disabled={busy || connectionBusy || !!index?.activeId}
+          >
+            {connectionBusy
+              ? "AI 연결 저장 중…"
+              : busy
+                ? "시작 중…"
+                : "테스트 시작"}
           </Button>
         </form>
       )}

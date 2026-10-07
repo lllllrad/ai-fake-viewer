@@ -321,7 +321,11 @@ export class ExperimentWorkspace {
       adapter = this.model(options.provider);
     } catch {
       throw new ExperimentError(
-        "AI 연결을 확인해 주세요. Responses API는 OPENAI_API_KEY와 OPENAI_MODEL, Sign in with ChatGPT는 연결된 계정과 모델이 필요합니다.",
+        options.provider === "chatgpt_subscription"
+          ? "테스트용 AI 연결에서 Sign in with ChatGPT 계정과 모델을 선택해 주세요."
+          : options.provider === "openai_api"
+            ? "Responses API가 선택되어 있습니다. 테스트 서버의 OPENAI_API_KEY와 OPENAI_MODEL을 설정하거나 AI 연결을 Sign in with ChatGPT로 변경해 주세요."
+            : "모의 응답을 준비하지 못했습니다. 다시 시도해 주세요.",
       );
     }
     this.active?.dispose();

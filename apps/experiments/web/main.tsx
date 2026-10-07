@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { z } from "zod";
 import { ExperimentsPage } from "./features/ExperimentsPage";
@@ -28,13 +28,17 @@ function TestWorkspace() {
   const [models, setModels] = useState<Array<{ slug: string; name: string }>>(
     [],
   );
+  const refreshRevision = useRef(0);
   const refresh = useCallback(async () => {
+    const revision = ++refreshRevision.current;
     try {
       const next = await adminClient.json("session", sessionSchema);
+      if (revision !== refreshRevision.current) return;
       setSession(next);
       setSignedOut(false);
       setError("");
     } catch (error) {
+      if (revision !== refreshRevision.current) return;
       if (error instanceof AdminRequestError && error.unauthorized) {
         setSignedOut(true);
         setSession(undefined);
@@ -135,6 +139,7 @@ function TestWorkspace() {
               테스트 계정
               <Select
                 disabled={busy}
+                aria-label="테스트 계정"
                 value={session.chatgpt.active || ""}
                 onChange={(event) => {
                   const clientId = event.target.value;
@@ -197,6 +202,7 @@ function TestWorkspace() {
               테스트 모델
               <Select
                 disabled={busy}
+                aria-label="테스트 모델"
                 value={active?.model || ""}
                 onChange={(event) => {
                   const slug = event.target.value;
@@ -224,7 +230,15 @@ function TestWorkspace() {
           계정이나 모델을 바꾸면 진행 중인 테스트가 종료됩니다.
         </p>
       </details>
-      <ExperimentsPage />
+      <ExperimentsPage
+        chatgptReady={!!active?.connected && !!active.model}
+        connectionKey={JSON.stringify([
+          active?.clientId,
+          active?.connected,
+          active?.model,
+        ])}
+        connectionBusy={busy}
+      />
       <footer>
         테스트 기록은 이 서버에 보관됩니다. 방송 종료와 별도로 삭제할 수
         있습니다.

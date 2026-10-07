@@ -42,6 +42,11 @@ and billing budget; replace them in the test environment for separate billing.
 Sign in with ChatGPT must be connected separately in **Test AI connection**.
 The test server owns `.local/experiments/chatgpt.tokens` and refreshes only that file.
 Changing/disconnecting a test account stops the current test, never the broadcast.
+Once a connected ChatGPT account has a selected model, new test forms default to
+Sign in with ChatGPT unless the operator explicitly chose another provider.
+Account/model saves disable test start until completion and automatically refresh
+test readiness and clear outdated connection errors; no manual reconnect check is
+needed. Startup errors identify the selected provider.
 The replay CLI also uses the test environment and reads that test account without
 refreshing it; run/refresh the test server account before a long CLI session.
 Offline fixture replay needs no setup, credentials or running server.

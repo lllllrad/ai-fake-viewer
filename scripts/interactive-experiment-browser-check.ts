@@ -177,9 +177,105 @@ try {
     page.getByRole("heading", { name: "AI 시청자와 대화하기" }),
   ).toBeVisible();
   assert.throws(() => experiments.read(sessionId), /찾을 수/);
+  // Mock only account HTTP operations; the test still runs the real fixture pipeline.
+  // No OAuth connection, model-list request or paid inference leaves this process.
+  let selectedModel: string | null = null;
+  let releaseSave: (() => void) | undefined;
+  let postedProvider = "";
+  await page.route("**/api/admin/session", async (route) =>
+    route.fulfill({
+      json: {
+        chatgpt: {
+          active: "fixture-account",
+          accounts: [
+            {
+              clientId: "fixture-account",
+              email: null,
+              connected: true,
+              model: selectedModel,
+            },
+          ],
+        },
+      },
+    }),
+  );
+  await page.route("**/api/admin/chatgpt/models", async (route) =>
+    route.fulfill({
+      json: {
+        models: [
+          { slug: "fixture-one", name: "Fixture one" },
+          { slug: "fixture-two", name: "Fixture two" },
+        ],
+      },
+    }),
+  );
+  await page.route("**/api/admin/chatgpt/select-model", async (route) => {
+    const slug = route.request().postDataJSON().slug;
+    await new Promise<void>((resolve) => {
+      releaseSave = resolve;
+    });
+    selectedModel = slug;
+    experiments.active?.stop("chatgpt_account_changed");
+    await route.fulfill({ json: { ok: true } });
+  });
+  await page.route("**/api/admin/experiments", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    const body = route.request().postDataJSON();
+    postedProvider = body.provider;
+    if (body.provider === "openai_api")
+      return route.fulfill({
+        status: 409,
+        json: {
+          error: "Responses API가 선택되어 있습니다. AI 연결을 확인해 주세요.",
+        },
+      });
+    const snapshot = experiments.start({ ...body, provider: "fixture" });
+    return route.fulfill({ json: snapshot });
+  });
+  await page.reload();
+  await page.getByLabel("방송 주제", { exact: true }).fill("연결 직후 테스트");
+  await expect(page.getByLabel("AI 연결", { exact: true })).toHaveValue(
+    "openai_api",
+  );
+  await page.getByRole("button", { name: "테스트 시작", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Responses API가 선택");
+  await page.locator(".test-account > summary").click();
+  await page.getByRole("button", { name: "모델 목록 새로고침" }).click();
+  await page
+    .getByLabel("테스트 모델", { exact: true })
+    .selectOption("fixture-one");
+  await expect(
+    page.getByRole("button", { name: "AI 연결 저장 중…" }),
+  ).toBeDisabled();
+  await expect.poll(() => !!releaseSave).toBe(true);
+  releaseSave!();
+  await expect(page.getByLabel("AI 연결", { exact: true })).toHaveValue(
+    "chatgpt_subscription",
+  );
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await page.getByRole("button", { name: "테스트 시작", exact: true }).click();
+  await expect(
+    page.getByRole("textbox", { name: "시청자에게 할 말" }),
+  ).toBeEnabled();
+  assert.equal(postedProvider, "chatgpt_subscription");
+  await page.getByRole("button", { name: "테스트 종료", exact: true }).click();
+  await page.getByRole("button", { name: "새 테스트", exact: true }).click();
+  await page.getByLabel("AI 연결", { exact: true }).selectOption("fixture");
+  releaseSave = undefined;
+  await page
+    .getByLabel("테스트 모델", { exact: true })
+    .selectOption("fixture-two");
+  await expect.poll(() => !!releaseSave).toBe(true);
+  releaseSave!();
+  await expect(
+    page.getByRole("button", { name: "테스트 시작", exact: true }),
+  ).toBeEnabled();
+  await expect(page.getByLabel("AI 연결", { exact: true })).toHaveValue(
+    "fixture",
+  );
   assert.deepEqual(errors, []);
   console.log(
-    "Interactive experiments PASS: text -> AI reply, persona, recorded microphone -> mocked Whisper -> transcript, stop, reload, trace, export, deletion, isolation, mobile.",
+    "Interactive experiments PASS: text -> AI reply, persona, recorded microphone -> mocked Whisper -> transcript, stop, reload, trace, export, deletion, isolation, mobile, account/model save -> immediate start and explicit provider preservation.",
   );
 } finally {
   await browser.close();
