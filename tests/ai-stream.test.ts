@@ -22,11 +22,6 @@ async function fixture(url = "rtmp://127.0.0.1:1935/live/synthetic-ai") {
   const config = configSchema.parse({
     database,
     input: { mode: "ai_stream", streamUrl: url },
-    capture: {
-      backend: "rtmp",
-      url: "rtmp://127.0.0.1:1935/private-broadcast",
-    },
-    audio: { url: "rtmp://127.0.0.1:1935/private-audio" },
     ai: { visualMode: "on_request" },
   });
   const runtime = await createApp(config, {
@@ -219,4 +214,22 @@ test("retired configuration sections and broadcast input mode are rejected", () 
     configSchema.safeParse({ input: { mode: "broadcast" } }).success,
     false,
   );
+});
+
+test("deferred server startup also starts enabled platform reception", async () => {
+  const f = await fixture("");
+  try {
+    f.displayChat.settings.youtube.enabled = false;
+    f.displayChat.settings.chzzk.enabled = false;
+    f.displayChat.settings.soop.enabled = true;
+    assert.equal(f.displayChat.status().platforms.soop.state, "stopped");
+    f.startInputs();
+    assert.equal(
+      f.displayChat.status().platforms.soop.state,
+      "awaiting_browser",
+    );
+    assert.equal(f.capture.state, "config_required");
+  } finally {
+    await f.close();
+  }
 });

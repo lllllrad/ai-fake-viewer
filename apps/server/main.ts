@@ -1,19 +1,24 @@
 import { loadEnvFile } from "node:process";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
-import { loadConfig } from "../../packages/config.ts";
+import {
+  loadConfig,
+  prepareConfigFile,
+  saveDisplayChatSettings,
+} from "../../packages/config-file.ts";
 import { createApp } from "./app.ts";
 import { launchServer } from "./startup.ts";
 if (existsSync(".env")) loadEnvFile(".env");
 try {
   const demo = process.argv.includes("--demo");
-  const config = loadConfig();
+  const config = demo ? loadConfig() : prepareConfigFile();
   if (demo) {
     config.database = "data/demo.sqlite";
     config.ai.visualMode = "continuous";
   }
-  const { app, store, broadcast, scheduler } = await createApp(config, {
+  const { app, startInputs, scheduler } = await createApp(config, {
     startInputs: false,
     demo,
+    persistDisplayChat: saveDisplayChatSettings,
     adminToken: process.env.ADMIN_TOKEN ?? "",
     readerToken: process.env.READER_TOKEN ?? "",
     encryptionKey: process.env.TOKEN_ENCRYPTION_KEY ?? "",
@@ -36,9 +41,7 @@ try {
   await launchServer({
     listen: () =>
       app.listen({ host: config.network.bindHost, port: config.port }),
-    startInputs: () => {
-      if (!store.closed()) broadcast.startInputs();
-    },
+    startInputs,
     close: () => app.close(),
   });
   console.log(

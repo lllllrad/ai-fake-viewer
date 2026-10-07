@@ -155,12 +155,11 @@ test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", asy
   assert.equal(h.s.snapshot().messages.length, 2);
   h.s.close();
 });
-test("A13: legacy call limits are ignored; money limits and usage survive restart", async () => {
+test("A13: AI calls remain uncapped; money limits and usage survive restart", async () => {
   const h = harness(async () => {
     throw Error("provider failed");
   });
 
-  h.c.ai.maxCalls = 1;
   await h.ai.tick();
   assert.equal(h.ai.state, "model_error");
   assert.equal(h.s.usage().calls, 1);
@@ -232,9 +231,9 @@ test("Manual approval discarded after evidence deletion and capture invalidation
 test("RTMP configuration requires a local stream URL without embedded credentials", () => {
   assert.equal(
     configSchema.parse({
-      capture: { backend: "rtmp", url: "rtmp://127.0.0.1:1935/program" },
-    }).capture.backend,
-    "rtmp",
+      input: { streamUrl: "rtmp://127.0.0.1:1935/program" },
+    }).input.streamUrl,
+    "rtmp://127.0.0.1:1935/program",
   );
   for (const url of [
     "http://127.0.0.1/program",

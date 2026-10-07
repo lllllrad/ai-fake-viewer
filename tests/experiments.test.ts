@@ -48,7 +48,6 @@ function options(
     provider: "fixture",
     modelName: "fixture",
     model: fixtureModel,
-    maxCalls: 12,
     ...overrides,
   };
 }
@@ -124,8 +123,8 @@ test("draft mode shares review and metering while bypassing participation select
   assert.equal(result.summary.published, 0);
   assert.equal((result.drafts[0] as { kind: string }).kind, "candidate");
 });
-test("legacy replay call cap does not interrupt generation and review", async () => {
-  const result = await runExperiment(options({ maxCalls: 1 }));
+test("replay generation and review remain uncapped", async () => {
+  const result = await runExperiment(options({}));
   assert(result.calls.length >= 2);
   assert(result.summary.published > 0);
   assert(!result.attempts.some((a) => a.reason === "budget_exhausted"));

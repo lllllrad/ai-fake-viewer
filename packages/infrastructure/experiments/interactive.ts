@@ -440,7 +440,7 @@ export class ExperimentWorkspace {
       );
     }
   }
-  resume(id: string, _legacyAdditionalCalls?: number) {
+  resume(id: string) {
     if (this.active && !this.active.endedAt)
       throw new ExperimentError("진행 중인 테스트를 먼저 종료해 주세요.");
     const trace = structuredClone(this.read(id));

@@ -92,11 +92,10 @@ test("interactive speech drives the production cast, records review, and survive
     const session = service.start({
       topic: "퍼즐 게임",
       provider: "fixture",
-      maxCalls: 6,
     });
     assert.equal(session.personas.length, 6);
     assert.throws(
-      () => service.start({ topic: "other", provider: "fixture", maxCalls: 6 }),
+      () => service.start({ topic: "other", provider: "fixture" }),
       /먼저 종료/,
     );
     const inputId = randomUUID();
@@ -204,7 +203,6 @@ test("stop cancels in-flight work and suppresses late publication and further in
     const session = service.start({
       topic: "게임",
       provider: "fixture",
-      maxCalls: 6,
     });
     service
       .current(session.id)
@@ -231,7 +229,6 @@ test("legacy call limits do not stop generation or its review", async () => {
     const session = service.start({
       topic: "게임",
       provider: "fixture",
-      maxCalls: 1,
     });
     service
       .current(session.id)
@@ -304,7 +301,6 @@ for (const { provider, keyName, endpoint, model, language } of [
       const session = service.start({
         topic: "게임",
         provider: "fixture",
-        maxCalls: 6,
       });
       const pcm = Buffer.alloc(320000);
       for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(500, i);
@@ -389,7 +385,7 @@ test("experiment APIs require administrator auth and stay isolated from the broa
       method: "POST",
       url: "/api/admin/experiments",
       headers,
-      payload: { topic: "개발자 테스트", provider: "fixture", maxCalls: 6 },
+      payload: { topic: "개발자 테스트", provider: "fixture" },
     });
     assert.equal(response.statusCode, 200);
     const session = response.json();
@@ -428,7 +424,6 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
     const first = service.start({
       topic: "퍼즐 게임",
       provider: "fixture",
-      maxCalls: 2,
     });
     service.active!.input(
       randomUUID(),
@@ -468,7 +463,7 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
       const response = await app.inject({
         method: "POST",
         url: `/api/admin/experiments/${first.id}/resume`,
-        payload: { additionalCalls: 4 },
+        payload: {},
       });
       assert.equal(response.statusCode, 200, response.body);
       const resumed = response.json();
@@ -518,7 +513,7 @@ test("resume restores the same cast, conversation, profile and cumulative usage 
       assert(
         reopened.read(first.id).attempts.length > original.attempts.length,
       );
-      reopened.resume(first.id, 2);
+      reopened.resume(first.id);
       assert.equal(reopened.active!.snapshot().calls, 4);
       assert.equal("maxCalls" in reopened.active!.snapshot(), false);
       assert.equal(reopened.active!.inputs.length, 2);
@@ -538,14 +533,12 @@ test("failed reconnect and another active test never alter saved sessions", () =
     const first = service.start({
       topic: "게임",
       provider: "fixture",
-      maxCalls: 2,
     });
     service.active!.stop();
     const original = structuredClone(service.read(first.id));
     const other = service.start({
       topic: "다른 게임",
       provider: "fixture",
-      maxCalls: 2,
     });
     assert.throws(() => service.resume(first.id), /먼저 종료/);
     assert.equal(service.active!.id, other.id);
@@ -569,7 +562,6 @@ test("interrupted legacy sessions use their saved prompts and receive a fresh ti
     const first = service.start({
       topic: "게임",
       provider: "fixture",
-      maxCalls: 2,
     });
     const trace = structuredClone(service.read(first.id));
     service.close();

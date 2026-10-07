@@ -91,7 +91,7 @@ export class RuntimeStatusSource {
       audio: {
         provider: config.audio.provider,
         state: transcriber.state,
-        configured: !!config.audio.url,
+        configured: !!config.input.streamUrl,
         credentialsReady: credentials.speech,
         requests: transcriber.requests,
         maxRequests: config.audio.maxRequests,
@@ -104,16 +104,13 @@ export class RuntimeStatusSource {
       },
       capture: {
         state: capture.state,
-        configured:
-          config.capture.backend === "rtmp"
-            ? !!config.capture.url
-            : !!config.capture.device,
+        configured: !!config.input.streamUrl,
         lastFrameAt: latestFrame?.capturedAt ?? null,
         dimensions: capture.dimensions,
         lastError: capture.lastError,
         ffmpeg: config.capture.ffmpeg,
-        backend: config.capture.backend,
-        device: config.capture.backend === "rtmp" ? "" : config.capture.device,
+        backend: "rtmp",
+        device: "",
         lastFrameAgeMs: latestFrame
           ? Math.max(0, now - latestFrame!.capturedAt)
           : null,

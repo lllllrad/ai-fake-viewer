@@ -54,11 +54,7 @@ export function MediaConnections({
               <p>최근 송출 화면을 기다리고 있습니다.</p>
             )}
           </div>
-          <p>
-            {status.capture.backend === "rtmp"
-              ? "OBS에서 설정된 주소로 송출을 시작하세요."
-              : "OBS 가상 카메라를 Program 출력으로 시작하세요."}
-          </p>
+          <p>OBS에서 설정된 주소로 송출을 시작하세요.</p>
           {status.capture.lastError && !stale && (
             <p role="status">{status.capture.lastError}</p>
           )}
@@ -92,7 +88,6 @@ export function MediaConnections({
               {status.capture.dimensions || "해상도 확인 중"}
             </p>
             <p>최근 1분 {status.capture.framesInLastMinute}프레임</p>
-            {status.capture.device && <p>장치: {status.capture.device}</p>}
           </details>
         </section>
         <section className="card" id="audio-details">

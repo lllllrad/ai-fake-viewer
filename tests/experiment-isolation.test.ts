@@ -147,7 +147,7 @@ test("live and test apps have disjoint routes, credentials, cookies and lifetime
         url: "/api/admin/experiments",
         method: "POST",
         headers: testHeaders,
-        payload: { topic: "독립 테스트", provider: "fixture", maxCalls: 2 },
+        payload: { topic: "독립 테스트", provider: "fixture" },
       })
     ).json();
     assert.equal(session.personas.length, 6);

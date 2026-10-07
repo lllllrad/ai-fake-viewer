@@ -77,8 +77,8 @@ export function registerExperimentRoutes(
     return session.snapshot();
   });
   app.post("/api/admin/experiments/:id/resume", async (req) => {
-    const options = experimentResumeSchema.parse(req.body ?? {});
-    return workspace.resume(id(req.params), options.additionalCalls);
+    experimentResumeSchema.parse(req.body ?? {});
+    return workspace.resume(id(req.params));
   });
   app.post("/api/admin/experiments/:id/stop", async (req) => {
     const session = workspace.current(id(req.params));

@@ -12,17 +12,10 @@ export const experimentStartSchema = z
       .string()
       .regex(/^[a-z][a-z0-9_-]{0,63}$/)
       .optional(),
-    // Accepted for older clients; ignored.
-    maxCalls: z.number().optional(),
   })
   .strict();
 export type ExperimentStart = z.infer<typeof experimentStartSchema>;
-export const experimentResumeSchema = z
-  .object({
-    // Accepted for older clients; ignored.
-    additionalCalls: z.number().optional(),
-  })
-  .strict();
+export const experimentResumeSchema = z.object({}).strict();
 export const experimentInputSchema = z
   .object({
     id: z.string().uuid(),

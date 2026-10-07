@@ -357,9 +357,9 @@ test("T10/A10/A19: Responses receives real image bytes, structured output and no
     else process.env.OPENAI_MODEL = oldModel;
   }
 });
-for (const legacyFlag of [undefined, false, true])
+for (const masked of [false, true])
   test(
-    `A17: capture starts and masks frames with programConfirmed=${legacyFlag}`,
+    `A17: dedicated stream capture with masking=${masked}`,
     { skip: process.platform === "win32" },
     async () => {
       const dir = mkdtempSync(join(tmpdir(), "mixed-capture-"));
@@ -387,17 +387,13 @@ for (const legacyFlag of [undefined, false, true])
       const config = configSchema.parse({
         capture: {
           ffmpeg: fake,
-          backend: "rtmp",
-          url: "rtmp://127.0.0.1:1935/program",
-          ...(legacyFlag === undefined ? {} : { programConfirmed: legacyFlag }),
-          masks:
-            legacyFlag === undefined
-              ? []
-              : [{ x: 0, y: 0, width: 0.5, height: 1 }],
+          masks: !masked ? [] : [{ x: 0, y: 0, width: 0.5, height: 1 }],
         },
       });
-      assert.equal(Object.hasOwn(config.capture, "programConfirmed"), false);
-      const capture = new Capture(config.capture);
+      const capture = new Capture({
+        ...config.capture,
+        url: "rtmp://127.0.0.1:1935/program",
+      });
       capture.start();
       const child = capture.child;
       assert.ok(
@@ -427,9 +423,7 @@ for (const legacyFlag of [undefined, false, true])
           .toBuffer({ resolveWithObject: true });
         const pixel = (x: number, y: number) =>
           data[(y * info.width + x) * info.channels];
-        assert(
-          legacyFlag === undefined ? pixel(10, 50) > 240 : pixel(10, 50) < 10,
-        );
+        assert(!masked ? pixel(10, 50) > 240 : pixel(10, 50) < 10);
         assert(pixel(90, 50) > 240);
         assert.equal(frame.sourceWidth, 100);
         const args = JSON.parse(readFileSync(argsFile, "utf8"));

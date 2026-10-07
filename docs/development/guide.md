@@ -69,6 +69,26 @@ and audio-worker fixtures use Node executables instead of platform-specific sheb
 
 The wrapper does not install packages. Linux CI uses `npx playwright install --with-deps chromium`, including OS dependencies; see [the workflow](../../.github/workflows/check.yml). The current host instead uses extracted libraries below. On Windows PowerShell, prepare Node and run npm scripts directly; the wrapper requires a POSIX shell.
 
+## Configuration ownership
+
+The live server reads config.yaml. Platform connection controls update its displayChat
+section directly; see [platform settings and migration](display-chat.md#setup-and-operation).
+The private file must be writable for UI saves. Demo and isolated in-memory apps do
+not write the live configuration.
+
+The ai section remains active: provider, pipeline selection/profile, reaction pacing,
+context/token limits, optional API cost budget, review, visual policy and broadcast
+description are consumed by the host and independent AI service. Removing this section
+would restore defaults, not disable AI. Automatic live cast generation supplies viewers;
+the ai.personas fallback is used by standalone coordinator/replay fixtures.
+
+Video and audio use only input.streamUrl. Capture backend/device selectors, separate
+capture/audio URLs, mask acknowledgement and the AI call-count limit have been removed.
+Live startup removes those obsolete keys from an existing YAML file before validating
+the current schema. Current configuration rejects them outside this startup migration.
+Keep input.streamUrl intact when upgrading; obsolete URLs never become a fallback.
+Test-workspace configuration and model credentials retain their separate storage.
+
 ## Current host browser environment
 
 The wrapper detects the following optional local bundle; these temporary paths

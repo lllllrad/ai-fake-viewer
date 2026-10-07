@@ -36,7 +36,7 @@ export class Capture {
   generation = 0;
   lastError = "";
   constructor(
-    public config: Config["capture"],
+    public config: Config["capture"] & { url?: string },
     public demo = false,
   ) {}
   start() {
@@ -44,12 +44,9 @@ export class Capture {
       this.state = "session_closed";
       return;
     }
-    if (
-      !this.demo &&
-      !(this.config.backend === "rtmp" ? this.config.url : this.config.device)
-    ) {
+    if (!this.demo && !this.config.url) {
       this.state = "config_required";
-      this.lastError = "Configure a capture source in config.yaml.";
+      this.lastError = "Configure a input.streamUrl in config.yaml.";
       return;
     }
     if (this.child || this.timer) return;
@@ -81,12 +78,12 @@ export class Capture {
         error: () => {
           this.state = "failed";
           this.context.discard();
-          this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and capture device/RTMP URL.`;
+          this.lastError = `Could not start FFmpeg (${this.config.ffmpeg}). Check the binary path and AI stream URL.`;
         },
         exit: (code, signal) => {
           this.state = "failed";
           this.context.discard();
-          this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, capture device/RTMP URL, and FFmpeg availability.`;
+          this.lastError = `FFmpeg capture process exited (code ${code ?? "unknown"}, signal ${signal ?? "none"}). Check OBS Program output, AI stream URL, and FFmpeg availability.`;
           if (++this.failures <= 5) {
             this.state = "reconnecting";
             this.worker.retry(Math.min(30000, 1000 * 2 ** this.failures), () =>

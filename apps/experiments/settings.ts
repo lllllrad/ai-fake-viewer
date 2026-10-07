@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
-import { loadConfig } from "../../packages/config.ts";
+import { loadConfig } from "../../packages/config-file.ts";
 export const experimentSettingsSchema = z
   .object({
     port: z.number().int().min(1024).max(65535).default(3211),

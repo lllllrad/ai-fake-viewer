@@ -3,7 +3,9 @@
 Mixed Chat Studio generates synthetic viewer reactions to a dedicated screen and
 microphone stream. Publication is local to the administrator, reader and OBS overlay.
 YouTube, CHZZK and SOOP chat reception defaults on for display only. Explicit saved
-opt-outs are preserved; accounts and channel configuration are still required. Actual chat and
+opt-outs are preserved; accounts and channel configuration are still required.
+Platform UI saves persist non-secret IDs, targets and receive settings in config.yaml.
+OAuth tokens and developer credentials remain separate from configuration. Actual chat and
 identities never enter AI context, selection, pacing, memory or nickname generation.
 There are no native-platform chat sends, viewer participation commands, policy
 profiles or rights-management screens.

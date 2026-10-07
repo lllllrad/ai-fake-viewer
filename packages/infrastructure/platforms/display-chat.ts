@@ -1,12 +1,5 @@
 import { randomUUID } from "node:crypto";
 import { fork } from "node:child_process";
-import {
-  readFileSync,
-  existsSync,
-  mkdirSync,
-  writeFileSync,
-  renameSync,
-} from "node:fs";
 import { join } from "node:path";
 import {
   displayChatSettingsSchema,
@@ -64,15 +57,10 @@ export class DisplayChatConnections {
       port: number;
       demo: boolean;
       directory?: string;
+      persist?: (settings: DisplayChatSettings) => void;
     },
   ) {
-    const file =
-      ports.directory && join(ports.directory, "display-chat.settings.json");
-    this.settings = displayChatSettingsSchema.parse(
-      file && existsSync(file)
-        ? JSON.parse(readFileSync(file, "utf8"))
-        : settings,
-    );
+    this.settings = displayChatSettingsSchema.parse(settings);
     const directory =
       ports.directory ?? join(".local", "ephemeral-display-" + randomUUID());
     this.youtube = new YoutubeAuth(key, join(directory, "youtube.tokens"));
@@ -257,15 +245,9 @@ export class DisplayChatConnections {
     const next = displayChatSettingsSchema.parse(raw);
     this.changing = true;
     try {
+      this.ports.persist?.(next);
       await this.stopAll();
       if (this.disposed) return;
-      if (this.ports.directory) {
-        mkdirSync(this.ports.directory, { recursive: true, mode: 0o700 });
-        const file = join(this.ports.directory, "display-chat.settings.json"),
-          temp = file + ".tmp";
-        writeFileSync(temp, JSON.stringify(next), { mode: 0o600 });
-        renameSync(temp, file);
-      }
       this.settings = next;
     } finally {
       this.changing = false;

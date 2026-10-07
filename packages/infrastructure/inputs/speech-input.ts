@@ -34,7 +34,7 @@ export class Transcriber {
   onRequest?: (count: number) => void;
   transcripts: Transcript[] = [];
   constructor(
-    public config: Config["audio"],
+    public config: Config["audio"] & { url?: string },
     public request: typeof fetch = fetch,
     public onTranscript?: (entry: Transcript) => boolean,
   ) {}

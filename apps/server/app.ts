@@ -56,6 +56,7 @@ interface AppOptions {
   persistReaderToken?: (token: string) => void;
   chatgptTokenPath?: string;
   displayChatDirectory?: string;
+  persistDisplayChat?: (settings: Config["displayChat"]) => void;
 }
 
 export function createApp(config: Config, opts: AppOptions) {
@@ -92,6 +93,7 @@ async function assembleApp(
       receive: (message) => display.receive(message),
       port: config.port,
       demo: !!opts.demo,
+      persist: opts.demo ? undefined : opts.persistDisplayChat,
       directory:
         opts.displayChatDirectory ??
         (!opts.demo && config.database !== ":memory:"
@@ -114,9 +116,14 @@ async function assembleApp(
   store.on("event", syncDisplay);
   store.on("reset", syncDisplay);
   const inputSessionOpen = () => !store.closed();
-  const capture = new Capture(config.capture, !!opts.demo);
-  const transcriber = new Transcriber(config.audio, fetch, (entry) =>
-    store.transcripts.record(entry),
+  const capture = new Capture(
+    { ...config.capture, url: config.input.streamUrl },
+    !!opts.demo,
+  );
+  const transcriber = new Transcriber(
+    { ...config.audio, url: config.input.streamUrl },
+    fetch,
+    (entry) => store.transcripts.record(entry),
   );
   transcriber.transcripts = store.transcripts.recent();
   transcriber.requests = Number(store.checkpoint("audio:requests") ?? 0);
@@ -395,12 +402,15 @@ async function assembleApp(
   });
   app.addHook("onClose", () => shutdown.close());
   startup.handoff(() => app.close());
-  if (opts.startInputs !== false && !store.closed()) {
+  const startInputs = () => {
+    if (store.closed()) return;
     broadcast.startInputs();
     displayChat.startAll();
-  }
+  };
+  if (opts.startInputs !== false) startInputs();
   return {
     app,
+    startInputs,
     broadcast,
     store,
     display,

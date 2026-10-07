@@ -30,7 +30,6 @@ try {
     provider: "fixture",
     modelName: "fixture",
     model: fixtureModel,
-    maxCalls: 4,
   });
   const other = structuredClone(result);
   other.pipeline.profile.id = "comparison";

@@ -144,9 +144,9 @@ reopens the active test; server restart leaves saved sessions readable but does
 not automatically resume generation. An interrupted session is labeled accordingly.
 
 Use **Continue test** on an ended or interrupted session to continue the same record,
-including sessions saved before resume support. No additional-call allowance is needed;
-legacy `maxCalls` and `additionalCalls` values are accepted but ignored. Old saved
-call ceilings do not prevent a session from continuing.
+including sessions saved before resume support. Start and resume requests have no
+call-count allowance fields. Resume accepts an empty object; unsupported request
+fields are rejected. Historical saved call ceilings do not prevent continuation.
 Resuming preserves the session ID, original start time, transcript/message timestamps,
 message IDs, cast identities/definitions, nickname provenance, saved profile/prompts,
 and prior requests and execution records. The original provider uses its currently

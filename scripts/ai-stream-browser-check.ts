@@ -1,9 +1,13 @@
 import "./browser-ai-service.ts";
 import assert from "node:assert/strict";
 import { chromium, expect } from "@playwright/test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import {
+  loadConfig,
+  saveDisplayChatSettings,
+} from "../packages/config-file.ts";
 import { configSchema } from "../packages/config.ts";
 import { createApp } from "../apps/server/app.ts";
 import { renderDemoFrame } from "../packages/infrastructure/reference/demo-frame.ts";
@@ -15,6 +19,8 @@ const priorSoopId = process.env.SOOP_CLIENT_ID,
 process.env.SOOP_CLIENT_ID = "fixture-client";
 process.env.SOOP_CLIENT_SECRET = "fixture-secret";
 const dir = mkdtempSync(join(tmpdir(), "ai-stream-browser-"));
+const configPath = join(dir, "config.yaml");
+writeFileSync(configPath, "{}\n");
 const port = 33225,
   token = "a".repeat(64);
 const runtime = await createApp(
@@ -39,6 +45,8 @@ const runtime = await createApp(
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(dir, "chatgpt"),
     startInputs: false,
+    persistDisplayChat: (settings) =>
+      saveDisplayChatSettings(settings, configPath),
   },
 );
 runtime.displayChat.soop.token = {
@@ -111,6 +119,10 @@ try {
   await expect(
     page.getByText("채팅 설정을 저장했습니다.", { exact: true }),
   ).toBeVisible();
+  assert.equal(
+    loadConfig(configPath).displayChat.youtube.channelId,
+    "UC" + "a".repeat(22),
+  );
   await page.getByLabel("SOOP 채팅 수신", { exact: true }).check();
   await page.getByLabel("SOOP 방송 아이디", { exact: true }).fill("fixture");
   await page.getByRole("button", { name: "설정 저장", exact: true }).click();
@@ -119,6 +131,7 @@ try {
       exact: true,
     }),
   ).toBeVisible();
+  assert.equal(loadConfig(configPath).displayChat.soop.streamerId, "fixture");
   await page.getByRole("tab", { name: "화면·음성", exact: true }).click();
   await page.evaluate(() =>
     window.dispatchEvent(

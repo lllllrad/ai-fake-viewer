@@ -1,7 +1,5 @@
 import { displayChatSettingsSchema } from "./contracts/display-chat.ts";
 import { z } from "zod";
-import { readFileSync, existsSync } from "node:fs";
-import { parse } from "yaml";
 const rect = z
   .object({
     x: z.number().min(0).max(1),
@@ -37,23 +35,12 @@ export const configSchema = z
     capture: z
       .object({
         ffmpeg: z.string().default("ffmpeg"),
-        backend: z
-          .enum(["dshow", "v4l2", "avfoundation", "rtmp"])
-          .default("dshow"),
-        device: z.string().default("OBS Virtual Camera"),
-        url: z.string().max(1024).default(""),
         intervalMs: z.number().int().min(1000).max(5000).default(3000),
-        // Accept old configs, but do not use this redundant acknowledgement.
-        programConfirmed: z.boolean().optional(),
         masks: z.array(rect).max(30).default([]),
       })
       .strict()
-      .transform(({ programConfirmed: _legacy, ...capture }) => capture)
       .default({
         ffmpeg: "ffmpeg",
-        backend: "dshow",
-        device: "OBS Virtual Camera",
-        url: "",
         intervalMs: 3000,
         masks: [],
       }),
@@ -61,7 +48,6 @@ export const configSchema = z
       .object({
         provider: z.enum(["groq", "openai"]).default("groq"),
         ffmpeg: z.string().default("ffmpeg"),
-        url: z.string().max(1024).default(""),
         language: z
           .string()
           .regex(
@@ -76,7 +62,6 @@ export const configSchema = z
       .default({
         provider: "groq",
         ffmpeg: "ffmpeg",
-        url: "",
         chunkSeconds: 10,
         maxRequests: 360,
         language: "",
@@ -107,8 +92,6 @@ export const configSchema = z
         manualApproval: z.boolean().default(false),
         reviewDraft: z.boolean().default(true),
         visualMode: z.enum(["continuous", "on_request"]).default("continuous"),
-        // Legacy configuration is accepted but no longer limits calls.
-        maxCalls: z.number().optional(),
         maxInputTokens: z.number().int().min(1000).max(100000).default(24000),
         maxOutputTokens: z.number().int().min(200).max(2000).default(500),
         maxUsd: z.number().positive().nullable().default(null),
@@ -217,46 +200,6 @@ export const configSchema = z
           });
       }
     }
-    if (c.audio.url && c.input.mode !== "ai_stream") {
-      let valid = false;
-      try {
-        const url = new URL(c.audio.url);
-        valid =
-          ["rtmp:", "rtmps:"].includes(url.protocol) &&
-          !!url.hostname &&
-          !url.username &&
-          !url.password;
-      } catch {
-        /* invalid URL */
-      }
-      if (!valid)
-        ctx.addIssue({
-          code: "custom",
-          path: ["audio", "url"],
-          message:
-            "Audio transcription requires an RTMP URL without authority credentials",
-        });
-    }
-    if (c.capture.backend === "rtmp" && c.input.mode !== "ai_stream") {
-      let valid = false;
-      try {
-        const url = new URL(c.capture.url);
-        valid =
-          ["rtmp:", "rtmps:"].includes(url.protocol) &&
-          !!url.hostname &&
-          !url.username &&
-          !url.password;
-      } catch {
-        /* invalid URL */
-      }
-      if (!valid)
-        ctx.addIssue({
-          code: "custom",
-          path: ["capture", "url"],
-          message:
-            "RTMP capture requires an rtmp:// or rtmps:// URL without embedded credentials",
-        });
-    }
     if (c.ai.provider === "chatgpt_subscription" && c.ai.maxUsd !== null)
       ctx.addIssue({
         code: "custom",
@@ -278,8 +221,3 @@ export const configSchema = z
       ctx.addIssue({ code: "custom", message: "Persona names must be unique" });
   });
 export type Config = z.infer<typeof configSchema>;
-export function loadConfig() {
-  return configSchema.parse(
-    existsSync("config.yaml") ? parse(readFileSync("config.yaml", "utf8")) : {},
-  );
-}

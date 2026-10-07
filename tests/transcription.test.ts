@@ -63,7 +63,7 @@ for (const { provider, keyName, endpoint, model } of [
     }) as typeof fetch;
     try {
       const config = configSchema.parse({
-        audio: { provider, url: audioUrl, maxRequests: 1, language: "ko" },
+        audio: { provider, maxRequests: 1, language: "ko" },
       });
       const store = new Store(":memory:");
       const transcription = new Transcriber(config.audio, request, (entry) =>
@@ -460,7 +460,7 @@ test("OpenAI speech requires its own API key and reports matching status", async
   });
   const config = configSchema.parse({
     database: ":memory:",
-    audio: { provider: "openai", url: audioUrl },
+    audio: { provider: "openai" },
   });
   const tr = new Transcriber(config.audio, async () => {
     throw new Error("must not send without selected key");

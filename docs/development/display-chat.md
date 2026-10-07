@@ -23,13 +23,23 @@ and the configured server port. Successful callbacks return to /admin#chat-detai
 YouTube authorization requests youtube.readonly; existing broader read-capable
 tokens do not enable any sending code.
 
-config.yaml's displayChat section supplies defaults. All three platforms default to
-enabled; explicit saved disabled flags remain opt-outs. Accounts and channel targets
-are still required before reception can start. UI saves override those
-defaults in display-chat.settings.json beside the live database. Encrypted platform
-tokens use the existing provider token files in that directory. Stopping reception
-does not disconnect the account or stop AI. Platform end/disconnect does not end the
-broadcast session. Enabled server receivers start again after server restart or a
+config.yaml's displayChat section is the single source of platform settings. All three
+platforms default to enabled; explicit disabled flags remain opt-outs. UI saves write
+YouTube video/channel targets, SOOP broadcaster ID, receive flags and transport settings
+directly to this YAML file, preserving unrelated settings and comments. Saves validate
+the complete file and replace it atomically with owner-only permissions; a failed save
+keeps the current runtime settings. Manual file edits take effect after server restart.
+Accounts and channel targets are still required before reception can start.
+
+On the first live startup after upgrading, the server migrates the previously effective
+display-chat.settings.json beside the database into config.yaml, then removes the old
+file only after successful persistence. Its saved values win during this one-time
+migration, including disabled flags. Invalid legacy data aborts migration without
+overwriting either source. Subsequent starts use YAML only.
+
+Developer credentials stay in .env; OAuth tokens remain encrypted in provider token
+files beside the database and are never written into YAML. Stopping reception does
+not disconnect accounts or stop AI. Enabled receivers restart with the server or a
 new broadcast. Explicit broadcast end closes all receivers.
 
 SOOP uses its official browser SDK: keep one administrator tab open. Navigation

@@ -1,7 +1,7 @@
 import { applyInputMode } from "../packages/infrastructure/inputs/input-mode.ts";
 import { existsSync } from "node:fs";
 import { loadEnvFile } from "node:process";
-import { loadConfig } from "../packages/config.ts";
+import { loadConfig } from "../packages/config-file.ts";
 import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts";
 
 // Read-only: no token refresh or provider calls.

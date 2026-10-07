@@ -5,6 +5,7 @@ dist/
 .env.*
 !.env.example
 config.yaml
+config.yaml.*.tmp
 data/
 *.log
 playwright-report/

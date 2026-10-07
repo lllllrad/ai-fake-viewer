@@ -94,7 +94,6 @@ test("live, interactive, replay and draft select the same alternate implementati
     const session = workspace.start({
       topic: "합성 테스트",
       provider: "fixture",
-      maxCalls: 2,
     });
     assert.equal(session.pipelineType, "fixture-algorithm");
     assert.equal(session.pipelineRevision, 2);
@@ -113,7 +112,6 @@ test("live, interactive, replay and draft select the same alternate implementati
         workspace.start({
           topic: "Unknown",
           provider: "fixture",
-          maxCalls: 2,
           pipelineType: "missing",
         }),
       /등록되지 않은/,
@@ -133,7 +131,6 @@ test("live, interactive, replay and draft select the same alternate implementati
       provider: "fixture",
       modelName: "fixture",
       model: fixtureModel,
-      maxCalls: 2,
     };
     const replay = await runExperiment({ ...options, mode: "replay" });
     assert.equal(replay.calls.length, 0);
@@ -168,7 +165,6 @@ test("a failed optional inspector cannot block test startup or saving", () => {
     const session = workspace.start({
       topic: "게임",
       provider: "fixture",
-      maxCalls: 2,
       pipelineType: "fixture-inspection-failure",
     });
     assert.equal(session.state, "running");

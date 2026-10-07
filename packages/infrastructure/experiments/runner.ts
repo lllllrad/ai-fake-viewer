@@ -38,7 +38,6 @@ export interface ExperimentOptions {
   modelName: string;
   model: Model<Buffer>;
   /** Legacy callers may pass this; generation no longer has a call-count cap. */
-  maxCalls?: number;
   personaIndex?: number;
 }
 /** Synthetic evidence only. No platform connectors, live DB, or account writes. */

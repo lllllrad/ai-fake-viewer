@@ -4,13 +4,6 @@ import type { Config } from "../../config.ts";
 export function applyInputMode(source: Config, demo = false): Config {
   const config = structuredClone(source);
   if (demo) return config;
-  config.capture = {
-    ...config.capture,
-    backend: "rtmp",
-    device: "",
-    url: config.input.streamUrl,
-  };
-  config.audio = { ...config.audio, url: config.input.streamUrl };
   if (config.database !== ":memory:") config.database += ".ai-stream";
   return config;
 }
