@@ -29,7 +29,8 @@ const { app, experiments } = await createExperimentApp(
     speechRequest: (async (url, init) => {
       assert.equal(url, endpoint);
       const file = (init!.body as FormData).get("file") as File;
-      assert(file.size > 0);
+      assert.equal(file.name, "audio.wav");
+      assert.equal(file.size, 44 + 16000 * 2 * 10);
       return Response.json({ text: "이 퍼즐 게임 다음에는 무엇을 해볼까요?" });
     }) as typeof fetch,
   },
@@ -98,15 +99,20 @@ try {
   await page
     .getByRole("button", { name: "마이크로 말하기", exact: true })
     .click();
-  await expect(page.getByRole("button", { name: /녹음 전송/ })).toBeVisible();
-  await page.waitForTimeout(700);
-  await page.getByRole("button", { name: /녹음 전송/ }).click();
+  await expect(
+    page.getByRole("button", { name: "마이크 중지", exact: true }),
+  ).toBeVisible();
+  // Real browser audio worklet: a complete live-sized chunk is sent automatically.
+  await expect
+    .poll(() => experiments.active!.microphoneCalls, { timeout: 20000 })
+    .toBe(1);
   await expect(
     page
       .locator(".experiment-message.own")
       .filter({ hasText: "다음에는 무엇을" }),
   ).toBeVisible();
   assert.equal(experiments.active!.microphoneCalls, 1);
+  await page.getByRole("button", { name: "마이크 중지", exact: true }).click();
 
   await captureUIReview(page, "experiment-conversation");
   delete process.env[keyName];

@@ -376,3 +376,5 @@ other platforms and malformed/lookalike suffixes remain unchanged. This prevents
 connection instances from becoming separate participants or hiding owner notice
 echoes. Platform-specific wire formats, limits and receipt mechanisms remain in
 the transport layer.
+
+Browser test microphones and the FFmpeg audio worker use the same [PCM framing and silence policy](../../packages/domain/inputs/pcm-chunks.ts) and [Transcriber](../../packages/infrastructure/inputs/speech-input.ts). See the [interactive test contract](experiments.md#interactive-viewer-tests) for source-adapter differences and continuous microphone controls.

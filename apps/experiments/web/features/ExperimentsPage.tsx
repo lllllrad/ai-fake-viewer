@@ -464,7 +464,7 @@ export function ExperimentsPage({
             </Button>
             <span className="hint">
               AI 호출 {session.calls}/{session.maxCalls} · 음성 전사{" "}
-              {session.microphoneCalls}/30
+              {session.microphoneCalls}/{index?.microphone.maxRequests ?? 360}
             </span>
           </div>
           {view === "conversation" ? (
@@ -553,17 +553,33 @@ export function ExperimentsPage({
                   <div className="toolbar">
                     <MicrophoneInput
                       key={session.id}
-                      disabled={!running || stale || !index?.microphoneReady}
+                      disabled={
+                        !running ||
+                        stale ||
+                        !index?.microphoneReady ||
+                        session.microphoneCalls >=
+                          (index?.microphone.maxRequests ?? 360)
+                      }
+                      chunkSeconds={index?.microphone.chunkSeconds ?? 10}
+                      stop={async () => {
+                        await adminClient.request(
+                          `experiments/${session.id}/audio/stop`,
+                          { method: "POST" },
+                        );
+                      }}
                       onError={setError}
-                      send={async (audio, mime) => {
+                      send={async (pcm, capturedAt, signal) => {
                         const currentId = selection.current;
                         const value = await audioClient.json(
                           `experiments/${currentId}/audio`,
                           experimentSessionSchema,
                           {
                             method: "POST",
-                            body: { id: crypto.randomUUID(), audio, mime },
-                            signal: lifetime.current.signal,
+                            body: { id: crypto.randomUUID(), pcm, capturedAt },
+                            signal: AbortSignal.any([
+                              signal,
+                              lifetime.current.signal,
+                            ]),
                           },
                         );
                         if (
@@ -588,7 +604,7 @@ export function ExperimentsPage({
                     {!index
                       ? "음성 전사 설정을 확인하고 있습니다."
                       : index.microphoneReady
-                        ? `녹음 전송을 누르면 ${index.microphone.label}로 전사합니다. 최대 30초이며 원본 음성은 저장하지 않습니다.`
+                        ? `방송과 같이 ${index.microphone.chunkSeconds}초 단위로 ${index.microphone.label}에 전사합니다. 무음과 전사 중 들어온 청크는 건너뛰며, 중지 시 남은 음성은 버립니다. 원본 음성은 저장하지 않습니다.`
                         : `마이크 전사에는 서버의 ${index.microphone.keyName}가 필요합니다. 텍스트로도 테스트할 수 있습니다.`}
                   </p>
                 </form>

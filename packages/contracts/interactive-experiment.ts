@@ -55,6 +55,8 @@ export const experimentIndexSchema = z.object({
     model: z.string(),
     keyName: z.enum(["GROQ_API_KEY", "OPENAI_API_KEY"]),
     language: z.string(),
+    chunkSeconds: z.number(),
+    maxRequests: z.number(),
   }),
   sessions: z.array(
     experimentSessionSchema.pick({

@@ -203,8 +203,8 @@ for (const { provider, keyName, endpoint, model, language } of [
         (init!.headers as Record<string, string>).Authorization,
         "Bearer fixture-only",
       );
-      assert.equal((body.get("file") as File).name, "recording.webm");
-      assert.equal((body.get("file") as File).type, "audio/webm");
+      assert.equal((body.get("file") as File).name, "audio.wav");
+      assert.equal((body.get("file") as File).type, "audio/wav");
       if (seen === 2)
         await new Promise<void>((resolve) => {
           finish = resolve;
@@ -230,10 +230,12 @@ for (const { provider, keyName, endpoint, model, language } of [
         provider: "fixture",
         maxCalls: 6,
       });
+      const pcm = Buffer.alloc(320000);
+      for (let i = 0; i < pcm.length; i += 2) pcm.writeInt16LE(500, i);
       const payload = {
         id: randomUUID(),
-        audio: Buffer.from("fixture audio").toString("base64"),
-        mime: "audio/webm",
+        pcm: pcm.toString("base64"),
+        capturedAt: Date.now(),
       };
       const upload = () =>
         app.inject({

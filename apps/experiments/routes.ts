@@ -1,3 +1,7 @@
+import { Transcriber } from "../../packages/infrastructure/inputs/speech-input.ts";
+import { readAudioEvent } from "../../packages/infrastructure/inputs/worker-events.ts";
+import { speechInPcm } from "../../packages/domain/inputs/pcm-chunks.ts";
+import type { InteractiveExperiment } from "../../packages/infrastructure/experiments/interactive.ts";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
@@ -8,9 +12,8 @@ import {
   ExperimentWorkspace,
   ExperimentError,
 } from "../../packages/infrastructure/experiments/interactive.ts";
-import type { Config } from "../../packages/config.ts";
+import { configSchema, type Config } from "../../packages/config.ts";
 import {
-  providerRecording,
   speechApiKey,
   speechProviderInfo,
 } from "../../packages/infrastructure/inputs/speech-provider.ts";
@@ -18,20 +21,30 @@ import {
 export function registerExperimentRoutes(
   app: FastifyInstance,
   workspace: ExperimentWorkspace,
-  audio: Pick<Config["audio"], "provider" | "language">,
+  audio: Pick<Config["audio"], "provider" | "language"> &
+    Partial<Pick<Config["audio"], "chunkSeconds" | "maxRequests">>,
   request: typeof fetch = fetch,
 ) {
   const speech = speechProviderInfo(audio.provider);
   const id = (params: unknown) =>
     z.object({ id: z.string().uuid() }).parse(params).id;
-  const microphone = new Set<string>();
+  const audioConfig = configSchema.parse({ audio }).audio;
+  const microphones = new WeakMap<
+    InteractiveExperiment,
+    { transcriber: Transcriber; seen: Set<string> }
+  >();
   app.get("/api/admin/experiments", async () => ({
     activeId:
       workspace.active && !workspace.active.endedAt
         ? workspace.active.id
         : null,
     microphoneReady: !!speechApiKey(audio.provider),
-    microphone: { ...speech, language: audio.language },
+    microphone: {
+      ...speech,
+      language: audio.language,
+      chunkSeconds: audioConfig.chunkSeconds,
+      maxRequests: audioConfig.maxRequests,
+    },
     sessions: workspace.list(),
   }));
   app.post("/api/admin/experiments", async (req) =>
@@ -66,81 +79,94 @@ export function registerExperimentRoutes(
     workspace.delete(id(req.params));
     return { ok: true };
   });
+  app.post("/api/admin/experiments/:id/audio/stop", async (req) => {
+    const session = workspace.current(id(req.params));
+    microphones.get(session)?.transcriber.stop();
+    return { ok: true };
+  });
   app.post(
     "/api/admin/experiments/:id/audio",
-    { bodyLimit: 6 * 1024 * 1024 },
+    { bodyLimit: 1500000 },
     async (req) => {
       const session = workspace.current(id(req.params));
       session.assertOpen();
       const input = z
         .object({
           id: z.string().uuid(),
-          mime: z.enum(["audio/webm", "audio/mp4", "audio/wav"]),
-          audio: z
-            .string()
-            .min(4)
-            .max(5600000)
-            .regex(/^[A-Za-z0-9+/]+={0,2}$/),
+          capturedAt: z.number().int().nonnegative(),
+          pcm: z.string().min(4).max(1280000),
         })
         .strict()
         .parse(req.body);
-      if (session.inputs.some((entry) => entry.id === input.id))
-        return session.snapshot();
-      if (microphone.has(session.id))
+      const frame = readAudioEvent(
+        { type: "audio", capturedAt: input.capturedAt, pcm: input.pcm },
+        audioConfig.chunkSeconds,
+      );
+      if (
+        !frame ||
+        frame.type !== "audio" ||
+        Math.abs(Date.now() - frame.capturedAt) > 30000
+      )
         throw new ExperimentError(
-          "음성을 전사 중입니다. 완료 후 다시 말해 주세요.",
+          "방송과 같은 길이의 최신 PCM 음성 청크가 필요합니다.",
+          400,
         );
-      const key = speechApiKey(audio.provider);
-      if (!key)
+      if (!speechApiKey(audio.provider))
         throw new ExperimentError(
           `마이크 전사에는 서버의 ${speech.keyName}가 필요합니다.`,
         );
-      if (session.microphoneCalls >= 30)
-        throw new ExperimentError(
-          "마이크 전사 30회 한도입니다. 새 테스트를 시작해 주세요.",
+      let microphone = microphones.get(session);
+      if (!microphone) {
+        const transcriber = new Transcriber(audioConfig, request, (entry) => {
+          session.input(entry.id, entry.text, "microphone", entry.capturedAt);
+          return true;
+        });
+        transcriber.requests = session.microphoneCalls;
+        transcriber.allowProcessing = () =>
+          !session.abort.signal.aborted &&
+          !session.endedAt &&
+          session.coordinator.state === "running";
+        transcriber.onRequest = (count) => {
+          session.microphoneCalls = count;
+          session.persist();
+        };
+        session.abort.signal.addEventListener(
+          "abort",
+          () => transcriber.stop(),
+          { once: true },
         );
-      const bytes = Buffer.from(input.audio, "base64");
-      if (bytes.length > 4 * 1024 * 1024)
-        throw new ExperimentError("녹음은 4 MiB 이하로 보내 주세요.", 413);
-      microphone.add(session.id);
-      try {
-        session.microphoneCalls++;
-        session.persist();
-        const extension = input.mime.split("/")[1];
-        const text = (
-          await providerRecording({
-            provider: audio.provider,
-            bytes,
-            mime: input.mime,
-            filename: "recording." + extension,
-            language: audio.language,
-            key,
-            request,
-            signal: AbortSignal.any([
-              session.abort.signal,
-              AbortSignal.timeout(30000),
-            ]),
-          })
-        ).trim();
-        if (!text)
-          throw new ExperimentError(
-            "인식된 말이 없습니다. 다시 녹음하거나 텍스트로 입력해 주세요.",
-          );
-        if (text.length > 2000)
-          throw new ExperimentError(
-            "인식된 말이 너무 깁니다. 짧게 나누어 말해 주세요.",
-          );
-        session.input(input.id, text, "microphone");
-        return session.snapshot();
-      } catch (error) {
-        if (error instanceof ExperimentError) throw error;
+        transcriber.startPcm();
+        microphone = { transcriber, seen: new Set() };
+        microphones.set(session, microphone);
+      }
+      if (microphone.seen.has(input.id)) return session.snapshot();
+      if (session.microphoneCalls >= audioConfig.maxRequests)
         throw new ExperimentError(
-          `음성 전사에 실패했습니다. ${speech.label} 키·한도와 연결을 확인하거나 텍스트로 입력해 주세요.`,
+          `마이크 전사 ${audioConfig.maxRequests}회 한도입니다. 새 테스트를 시작해 주세요.`,
+        );
+      // Like the live transcriber, skip chunks arriving during an upstream request; no backlog.
+      microphone.seen.add(input.id);
+      if (microphone.seen.size > 1000)
+        microphone.seen.delete(microphone.seen.values().next().value!);
+      if (!speechInPcm(frame.pcm) || microphone.transcriber.busy)
+        return session.snapshot();
+      if (microphone.transcriber.state === "stopped")
+        microphone.transcriber.startPcm();
+      await microphone.transcriber.transcribe(frame.pcm, frame.capturedAt);
+      session.assertOpen();
+      if (
+        [
+          "auth_required",
+          "quota_blocked",
+          "provider_error",
+          "storage_error",
+        ].includes(microphone.transcriber.state)
+      )
+        throw new ExperimentError(
+          `${speech.label} 전사에 실패했습니다. 테스트 서버의 키·한도와 저장 상태를 확인해 주세요.`,
           502,
         );
-      } finally {
-        microphone.delete(session.id);
-      }
+      return session.snapshot();
     },
   );
 }

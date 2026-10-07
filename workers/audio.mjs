@@ -1,9 +1,11 @@
 import { spawn } from "node:child_process";
 
 let ffmpeg;
-let buffer = Buffer.alloc(0);
-const sampleRate = 16000;
-const bytesPerSample = 2;
+import {
+  PcmChunks,
+  speechSampleRate,
+} from "../packages/domain/inputs/pcm-chunks.ts";
+const sampleRate = speechSampleRate;
 
 process.on("message", (message) => {
   if (message.type === "stop") {
@@ -12,7 +14,7 @@ process.on("message", (message) => {
   }
   if (message.type !== "start" || ffmpeg) return;
   const { ffmpeg: executable, url, chunkSeconds } = message.config;
-  const chunkBytes = sampleRate * bytesPerSample * chunkSeconds;
+  const chunks = new PcmChunks(chunkSeconds);
   ffmpeg = spawn(
     executable,
     [
@@ -40,25 +42,16 @@ process.on("message", (message) => {
   ffmpeg.on("error", () => process.exit(1));
   ffmpeg.on("exit", () => process.exit(1));
   ffmpeg.stdout.on("data", (data) => {
-    buffer = Buffer.concat([buffer, data]);
-    while (buffer.length >= chunkBytes) {
-      const chunk = buffer.subarray(0, chunkBytes);
-      buffer = buffer.subarray(chunkBytes);
-      let energy = 0;
-      for (let i = 0; i < chunk.length; i += 2) {
-        const sample = chunk.readInt16LE(i);
-        energy += sample * sample;
-      }
-      const rms = Math.sqrt(energy / (chunkBytes / 2));
-      process.send?.({ type: "activity", capturedAt: Date.now() });
-      if (rms > 140)
+    for (const chunk of chunks.push(data)) {
+      const capturedAt = Date.now();
+      process.send?.({ type: "activity", capturedAt });
+      if (chunk.speech)
         process.send?.({
           type: "audio",
-          capturedAt: Date.now(),
-          pcm: chunk.toString("base64"),
+          capturedAt,
+          pcm: Buffer.from(chunk.pcm).toString("base64"),
         });
     }
-    if (buffer.length > chunkBytes * 2) buffer = buffer.subarray(-chunkBytes);
   });
 });
 process.on("disconnect", () => {

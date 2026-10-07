@@ -38,6 +38,22 @@ export class Transcriber {
     public request: typeof fetch = fetch,
     public onTranscript?: (entry: Transcript) => boolean,
   ) {}
+  /** Browser PCM uses the same admission, budgets, cancellation and publication as FFmpeg input. */
+  startPcm() {
+    if (!this.allowProcessing()) {
+      this.state = "privacy_blocked";
+      return;
+    }
+    if (!speechApiKey(this.config.provider)) {
+      this.state = "config_required";
+      return;
+    }
+    if (this.requests >= this.config.maxRequests) {
+      this.state = "budget_exhausted";
+      return;
+    }
+    this.state = "listening";
+  }
   start() {
     if (!this.allowProcessing()) {
       this.state = "privacy_blocked";

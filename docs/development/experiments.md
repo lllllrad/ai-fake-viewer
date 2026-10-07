@@ -70,23 +70,33 @@ profile supplies persona definitions and prompts; this text/audio surface uses
 `on_request` visual mode and supplies no screen frames. Changing a profile still
 requires restarting the server and starting a new test.
 
-Use **Speak with microphone** to record an utterance and the recording's send
-button to submit it. Recording automatically submits at 30 seconds. Browsers
-must support MediaRecorder and grant microphone access on localhost or HTTPS.
-Each upload is limited to 4 MiB and shares the broadcast transcription adapter
-and the test configuration's `audio.provider` / `audio.language` settings. OpenAI uses `whisper-1`
-with `OPENAI_API_KEY`; Groq uses `whisper-large-v3-turbo` with `GROQ_API_KEY`.
-The selected transcription provider is independent of the reaction model.
-The microphone status and key guidance follow that provider; there is no fallback
-to another provider's key. An empty language enables automatic detection.
-Microphone transcription is a separate paid API operation, including when
-reactions use the fixture provider or Sign in with ChatGPT. The recognized text
-appears in the conversation; raw audio is not saved. Missing microphone support,
-permission or credentials leaves text input available.
+Use **Speak with microphone** to continuously capture audio until **Stop microphone**.
+The browser uses an AudioWorklet in a mono 16 kHz context and emits signed 16-bit
+PCM chunks. It calls the same `PcmChunks` framing/RMS code as the broadcast FFmpeg
+worker. The server calls the same `Transcriber`, `transcribeSpeech` and provider
+adapter as broadcasting: default 10-second chunks (configurable 10–30 seconds),
+RMS greater than 140, one request in flight with new chunks discarded while busy,
+20-second transcription timeout, a shared 1,000-character transcript limit and
+capture-end timestamps preserved through publication. Microphone transcripts use
+the normal coordinator polling cadence; text input remains an immediate stimulus.
+
+The test configuration copies `audio.chunkSeconds` and `audio.maxRequests` at setup
+in addition to provider/language. Existing test settings use the broadcast defaults
+when those fields are absent. OpenAI uses `whisper-1` with `OPENAI_API_KEY`; Groq
+uses `whisper-large-v3-turbo` with `GROQ_API_KEY`. Empty language enables detection.
+Transcription is independently billable even with fixture reactions. No provider
+fallback occurs. Full chunks send automatically; silence makes no provider call.
+Stopping discards the partial chunk and cancels in-flight transcription; there is
+no short-recording flush or backlog replay. Raw PCM is not persisted.
+
+Browsers must support AudioWorklet and microphone access on localhost or HTTPS.
+Audio device/resampling differences remain: the test source is the browser mic,
+while the live source is configured FFmpeg input. Permission/support failures leave
+text input available. These capture adapters share downstream framing and processing.
 
 Each test permits 1–100 model calls (default 12), counting generation and review,
-up to 30 transcription calls and 300 submitted utterances, and ends after 30
-minutes. Model/transcription requests have a 30-second timeout. The limits are
+the configured audio request budget (default 360) and 300 submitted utterances, and ends after 30
+minutes. Model requests have a 30-second timeout; speech requests use the broadcast 20-second timeout. The limits are
 call limits, not monetary guarantees. One test runs at a time. Leaving the page
 stops local recording but does not stop the server-side test; use **End test**.
 Ending cancels outstanding requests and prevents late replies from being
@@ -112,7 +122,7 @@ your own or separately authorized inputs. Deleting a record does not delete
 downloaded copies or provider-side records. Test keys and account credentials
 are never included in records.
 
-The fixtures verify the browser's recording/upload flow with a synthetic
+The fixtures verify the browser's continuous PCM/upload flow with a synthetic
 microphone and mocked transcription providers. They do not establish real microphone quality,
 speech recognition accuracy or real-model naturalness.
 

@@ -10,12 +10,19 @@ export const experimentSettingsSchema = z
     audio: z
       .object({
         provider: z.enum(["groq", "openai"]).default("groq"),
+        chunkSeconds: z.number().int().min(10).max(30).default(10),
+        maxRequests: z.number().int().min(1).max(10000).default(360),
         language: z
           .string()
           .regex(/^(?:[a-z]{2})?$/)
           .default(""),
       })
-      .default({ provider: "groq", language: "" }),
+      .default({
+        provider: "groq",
+        language: "",
+        chunkSeconds: 10,
+        maxRequests: 360,
+      }),
     pipelineProfile: z.string().default(""),
   })
   .strict();
@@ -39,6 +46,8 @@ export function setupExperiments(directory = experimentDirectory) {
         experimentSettingsSchema.parse({
           audio: {
             provider: config.audio.provider,
+            chunkSeconds: config.audio.chunkSeconds,
+            maxRequests: config.audio.maxRequests,
             language: config.audio.language,
           },
           pipelineProfile: config.ai.pipelineProfile,

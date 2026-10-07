@@ -180,16 +180,20 @@ export class InteractiveExperiment {
         "입력 300개 한도입니다. 테스트를 종료해 주세요.",
       );
   }
-  input(id: string, text: string, source: "text" | "microphone") {
+  input(
+    id: string,
+    text: string,
+    source: "text" | "microphone",
+    at = Date.now(),
+  ) {
     this.assertOpen();
     if (this.inputs.some((input) => input.id === id)) return;
-    const at = Date.now();
     if (!this.store.transcripts.record({ id, capturedAt: at, text }))
       throw new ExperimentError("입력을 저장하지 못했습니다.");
     this.inputs.push({ id, text, source, at });
     this.persist();
     // The production coordinator owns selection, silence, pacing and review.
-    void this.coordinator.tick();
+    if (source === "text") void this.coordinator.tick();
   }
   snapshot(): ExperimentSession {
     return {
