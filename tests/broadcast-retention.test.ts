@@ -1,14 +1,9 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "../packages/storage.ts";
-import { Participation } from "../packages/infrastructure/participation/runtime.ts";
-import { approvedProfile } from "./privacy-fixtures.ts";
 import { initializeBroadcastDatabase } from "../packages/infrastructure/storage/initialize.ts";
 function fixture(t: TestContext, live = false) {
-  const store = new Store(
-    ":memory:",
-    live ? new Participation(approvedProfile(), "") : undefined,
-  );
+  const store = new Store(":memory:", live);
   t.after(() => store.close());
   return store;
 }
@@ -66,16 +61,13 @@ test("retention removes expired audit-only data and older session markers withou
     0,
   );
 });
-test("retention rollback restores summaries and content and sends no premature reset", (t) => {
+test("retention rollback restores content and sends no premature reset", (t) => {
   const store = fixture(t);
   store.transcripts.record({
     id: "speech",
     text: "Synthetic expired speech",
     capturedAt: 1,
   });
-  store.db
-    .prepare("INSERT INTO chat_context_summaries VALUES(?, '{}',1,0)")
-    .run(store.sessionId);
   store.db.exec(
     "CREATE TRIGGER fail_retention BEFORE DELETE ON transcripts BEGIN SELECT RAISE(ABORT,'fixture failure'); END;",
   );
@@ -83,7 +75,6 @@ test("retention rollback restores summaries and content and sends no premature r
   store.on("reset", () => resets++);
   assert.throws(() => store.retention.purge(100), /fixture failure/);
   assert.equal(store.transcripts.count(), 1);
-  assert(store.db.prepare("SELECT 1 FROM chat_context_summaries").get());
   assert.equal(resets, 0);
   store.db.exec("DROP TRIGGER fail_retention;");
   assert.equal(store.retention.purge(100), true);

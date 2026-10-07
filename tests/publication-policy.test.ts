@@ -20,7 +20,6 @@ function fixture() {
   const input = {
     messages: [{ id: "human", text: "original" }],
     frames: [],
-    privacyRevision: 2,
   };
   const candidate = {
     generation: 3,
@@ -34,7 +33,6 @@ function fixture() {
     frames: new Set<string>(),
     transcripts: new Set<string>(),
     recentVideo: false,
-    privacyRevision: 2,
     generation: 3,
     sessionId: "broadcast",
     now: 99,
@@ -103,7 +101,6 @@ test("publication binds a candidate to the broadcast, generation, running state 
     [{ sessionId: "next" }, "broadcast_changed"],
     [{ generation: 4 }, "generation_changed"],
     [{ now: 100 }, "candidate_expired"],
-    [{ privacyRevision: 3 }, "privacy_changed"],
   ] as const)
     assert.equal(
       publicationProblem(candidate, { ...current, ...patch }),

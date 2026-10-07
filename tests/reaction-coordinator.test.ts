@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ReactionCoordinator } from "../packages/application/reactions/coordinator.ts";
-import { TimingGate } from "../packages/application/reactions/timing-gate.ts";
 import { configSchema } from "../packages/config.ts";
 import { Store } from "../packages/storage.ts";
 
@@ -38,10 +37,7 @@ test("the application coordinator uses its clock for generation, pacing and cand
     false,
     () => true,
     { recent: () => [chunk], has: (id) => id === chunk.id },
-    new TimingGate(config.ai.gate, {
-      ensureReady: () => assert.fail("Disabled gate must not run"),
-      evaluate: async () => assert.fail("Disabled gate must not run"),
-    }),
+
     () => 0,
     {
       now: () => now,

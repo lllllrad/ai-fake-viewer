@@ -12,7 +12,7 @@ export class SqliteIncomingMessages implements IncomingRepository {
       id(): string;
     },
   ) {}
-  write(message: ValidatedIncoming, consentEpoch: number): number | undefined {
+  write(message: ValidatedIncoming): number | undefined {
     const session = this.runtime.sessionId();
     const prior =
       message.sourceId !== null
@@ -46,7 +46,7 @@ export class SqliteIncomingMessages implements IncomingRepository {
     const sequence = this.event(session, "message.added", id, now);
     this.database
       .prepare(
-        "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,seq,consent_epoch) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO messages(id,session,actor,platform,channel,source_id,published,received,text,reply,seq) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
       )
       .run(
         id,
@@ -60,7 +60,6 @@ export class SqliteIncomingMessages implements IncomingRepository {
         message.text,
         message.replyToId,
         sequence,
-        consentEpoch,
       );
     return sequence;
   }

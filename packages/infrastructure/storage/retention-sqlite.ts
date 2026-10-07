@@ -11,11 +11,6 @@ export class SqliteRetention implements RetentionRepository {
       .get()!.n;
     this.database
       .prepare(
-        "DELETE FROM chat_context_summaries WHERE expires<? OR session IN (SELECT id FROM sessions WHERE closed<?)",
-      )
-      .run(input.now, input.before);
-    this.database
-      .prepare(
         "DELETE FROM persona_publication_outbox WHERE attempt_id IN (SELECT id FROM persona_reaction_attempts WHERE session_id IN (SELECT id FROM persona_sessions WHERE source_session=? ) AND started_at<?)",
       )
       .run(input.sessionId, input.before);
@@ -98,21 +93,6 @@ export class SqliteRetention implements RetentionRepository {
     );
     this.database
       .prepare("DELETE FROM transcripts WHERE captured<?")
-      .run(input.before);
-    this.database
-      .prepare(
-        "DELETE FROM viewer_consents WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-      )
-      .run(input.before);
-    this.database
-      .prepare(
-        "DELETE FROM consent_notice_targets WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-      )
-      .run(input.before);
-    this.database
-      .prepare(
-        "DELETE FROM consent_notice_state WHERE session IN (SELECT id FROM sessions WHERE closed<?)",
-      )
       .run(input.before);
     this.database
       .prepare(

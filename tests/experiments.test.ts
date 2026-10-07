@@ -130,22 +130,6 @@ test("legacy replay call cap does not interrupt generation and review", async ()
   assert(result.summary.published > 0);
   assert(!result.attempts.some((a) => a.reason === "budget_exhausted"));
 });
-test("withdrawal removes fixture chat from later model context", async () => {
-  const opt = options({ mode: "draft" });
-  opt.scenario.events = [
-    {
-      kind: "chat",
-      atMs: 1000,
-      author: "fixture-user",
-      text: "erase-this-fixture",
-    },
-    { kind: "withdraw", atMs: 2000, author: "fixture-user" },
-    { kind: "speech", atMs: 3000, text: "현재 설명입니다." },
-  ];
-  const result = await runExperiment(opt);
-  assert(result.calls.length > 0);
-  assert(!JSON.stringify(result.calls).includes("erase-this-fixture"));
-});
 test("transcript limit applies to actual model inputs", async () => {
   const opt = options({ mode: "draft" });
   opt.scenario.durationMs = 15000;
@@ -337,7 +321,6 @@ test("server composition consumes the same versioned profile without modifying s
     );
     const config = configSchema.parse({
       database: ":memory:",
-      privacy: { rightsDatabase: ":memory:" },
       ai: { pipelineProfile: path },
     });
     const instance = await createApp(config, {
@@ -347,9 +330,6 @@ test("server composition consumes the same versioned profile without modifying s
       readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(dir, "chatgpt"),
-      chzzkTokenPath: join(dir, "chzzk"),
-      youtubeTokenPath: join(dir, "youtube"),
-      soopTokenPath: join(dir, "soop"),
     });
     try {
       assert.equal(instance.scheduler.config.ai.transcriptLimit, 3);

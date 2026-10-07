@@ -8,11 +8,6 @@ interface CastMember {
   motive: string;
   participation: string;
 }
-interface Summary {
-  state: string;
-  topics: string[];
-  atmosphere: string[];
-}
 interface Transcript {
   id: string;
   capturedAt: number;
@@ -22,7 +17,6 @@ export function BroadcastConversation({
   preview,
   messages,
   cast,
-  summary,
   transcripts,
   pending,
   closed,
@@ -33,7 +27,6 @@ export function BroadcastConversation({
   preview: string;
   messages: ConversationMessage[];
   cast: CastMember[];
-  summary?: Summary;
   transcripts: Transcript[];
   pending?: { text: string | null } | null;
   closed: boolean;
@@ -81,14 +74,12 @@ export function BroadcastConversation({
             </h2>
             <span className="workspace-caption">최대 30개</span>
           </div>
-          <p className="hint">
-            숨기면 이 앱과 AI 문맥에서 제거됩니다. 원래 플랫폼에는 남습니다.
-          </p>
+          <p className="hint">숨기면 리더·OBS 화면과 AI 문맥에서 제거됩니다.</p>
           {!messages.length && (
             <p className="workspace-empty">
               {closed
                 ? "방송이 종료되어 대화 기록을 비웠습니다."
-                : "동의한 시청자의 채팅과 AI 반응을 기다리고 있습니다."}
+                : "AI 시청자의 반응을 기다리고 있습니다."}
             </p>
           )}
           <div className="operator-messages">
@@ -203,39 +194,6 @@ export function BroadcastConversation({
                       </div>
                     </details>
                   )}
-                </section>
-              ),
-            },
-            {
-              value: "summary",
-              label: "대화 요약",
-              content: (
-                <section className="card" aria-label="익명 채팅 요약">
-                  <h2>채팅 분위기·주제 요약</h2>
-                  <p className="hint">
-                    여러 참여자의 공통 주제와 분위기만 보관하며 원문·닉네임은
-                    포함하지 않습니다.
-                  </p>
-                  {summary?.state === "available" ? (
-                    <>
-                      <p>
-                        주제: {summary.topics.join(" · ") || "공통 주제 없음"}
-                      </p>
-                      <p>
-                        분위기:{" "}
-                        {summary.atmosphere.join(" · ") || "공통 표현 없음"}
-                      </p>
-                    </>
-                  ) : (
-                    <p>공통 분위기를 요약할 채팅이 아직 부족합니다.</p>
-                  )}
-                  <Button
-                    className="secondary"
-                    disabled={busy || stale}
-                    onClick={() => onAction("chat-summary/clear")}
-                  >
-                    채팅 요약 초기화
-                  </Button>
                 </section>
               ),
             },

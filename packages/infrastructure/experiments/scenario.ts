@@ -14,24 +14,9 @@ export const scenarioSchema = z
           z.object({ kind: z.literal("speech"), atMs, text }).strict(),
           z
             .object({
-              kind: z.literal("chat"),
-              atMs,
-              author: z.string().min(1).max(100),
-              text,
-            })
-            .strict(),
-          z
-            .object({
               kind: z.literal("frame"),
               atMs,
               file: z.string().min(1).max(1024),
-            })
-            .strict(),
-          z
-            .object({
-              kind: z.literal("withdraw"),
-              atMs,
-              author: z.string().min(1).max(100),
             })
             .strict(),
         ]),

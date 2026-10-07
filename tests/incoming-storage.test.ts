@@ -35,7 +35,7 @@ test("source identity deduplicates empty IDs and legitimate edits retain the ori
     1,
   );
 });
-test("an existing platform message cannot change authors or create an orphan actor", (t) => {
+test("an existing synthetic message cannot change authors or create an orphan actor", (t) => {
   const store = fixture(t);
   store.ingestBatch([message()]);
   assert.equal(
@@ -64,7 +64,7 @@ test("hidden messages cannot be revived and missing source IDs represent separat
     2,
   );
 });
-test("outer rollback removes input, summary, checkpoint and deferred reader notifications", (t) => {
+test("outer rollback removes input, checkpoint and deferred reader notifications", (t) => {
   const store = fixture(t);
   let events = 0;
   store.on("event", () => events++);
@@ -80,10 +80,6 @@ test("outer rollback removes input, summary, checkpoint and deferred reader noti
   assert.equal(events, 0);
   assert.equal(store.snapshot().messages.length, 0);
   assert.equal(store.checkpoint("cursor"), undefined);
-  assert.equal(
-    store.db.prepare("SELECT COUNT(*) n FROM chat_context_summaries").get()!.n,
-    0,
-  );
   assert.equal(
     store.db.prepare("SELECT COUNT(*) n FROM actors_private").get()!.n,
     0,
@@ -104,7 +100,7 @@ test("a failed connector checkpoint rolls back all messages in its batch", (t) =
   assert.equal(store.snapshot().messages.length, 0);
   assert.equal(store.lastSeq(), 0);
 });
-test("closed broadcasts neither accept input nor create summaries or checkpoints", (t) => {
+test("closed broadcasts neither accept input nor create checkpoints", (t) => {
   const store = fixture(t);
   store.closeSession();
   assert.deepEqual(
@@ -112,10 +108,6 @@ test("closed broadcasts neither accept input nor create summaries or checkpoints
     [],
   );
   assert.equal(store.checkpoint("cursor"), undefined);
-  assert.equal(
-    store.db.prepare("SELECT COUNT(*) n FROM chat_context_summaries").get()!.n,
-    0,
-  );
 });
 test("one failed reader notification does not suppress later committed messages", (t) => {
   const store = fixture(t);

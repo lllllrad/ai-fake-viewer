@@ -14,10 +14,10 @@ function fixture(t: TestContext) {
     store.close();
     rmSync(directory, { recursive: true, force: true });
   });
-  store.grantConsent("youtube", "fixture", "viewer");
+
   store.ingestBatch([
     {
-      platform: "youtube",
+      platform: "experiment",
       channel: "fixture",
       author: "viewer",
       name: "Viewer",
@@ -51,7 +51,9 @@ test("provenance failure rolls back the message, actor and event before any noti
   assert.equal(store.snapshot().messages.length, 1);
   assert.equal(
     store.db
-      .prepare("SELECT 1 FROM actors_private WHERE source='experiment'")
+      .prepare(
+        "SELECT 1 FROM actors_private WHERE source='experiment' AND author='persona-fixture'",
+      )
       .get(),
     undefined,
   );

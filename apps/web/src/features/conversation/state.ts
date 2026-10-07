@@ -10,7 +10,6 @@ export interface ConversationState {
   messages: ConversationMessage[];
   closed: boolean;
   demo: boolean;
-  noticeAt: number | null;
 }
 export function emptyConversation(): ConversationState {
   return {
@@ -19,7 +18,6 @@ export function emptyConversation(): ConversationState {
     messages: [],
     closed: false,
     demo: false,
-    noticeAt: null,
   };
 }
 export function decodeConversationPacket(
@@ -47,16 +45,13 @@ export function receiveConversation(
             .slice(-300),
       closed: packet.closed,
       demo: packet.demo,
-      noticeAt: null,
     };
-  if (packet.type === "consent_notice")
-    return state.closed ? state : { ...state, noticeAt: packet.occurredAt };
   const event = packet.event;
   if (event.sessionId !== state.sessionId || event.seq <= state.sequence)
     return state;
   const next = { ...state, sequence: event.seq };
   if (event.type === "session.closed")
-    return { ...next, closed: true, messages: [], noticeAt: null };
+    return { ...next, closed: true, messages: [] };
   if (state.closed) return next;
   if (event.type === "message.hidden")
     return {

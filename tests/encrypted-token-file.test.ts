@@ -15,10 +15,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { EncryptedTokenFile } from "../packages/infrastructure/accounts/encrypted-token-file.ts";
-import { platformTokenSchema } from "../packages/contracts/account-tokens.ts";
-import { SoopAuth } from "../packages/infrastructure/accounts/soop-auth.ts";
-import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
-import { YoutubeAuth } from "../packages/infrastructure/accounts/youtube-auth.ts";
+import { z } from "zod";
+const tokenSchema = z.object({
+  accessToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+  expiresAt: z.number().nonnegative(),
+});
 
 const key = "a".repeat(64);
 const token = {
@@ -40,7 +42,7 @@ function fixture(t: { after(fn: () => void): void }) {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const path = join(dir, "tokens");
   const file = new EncryptedTokenFile(key, path, (value) =>
-    platformTokenSchema.parse(value),
+    tokenSchema.parse(value),
   );
   return { dir, path, file };
 }
@@ -128,39 +130,3 @@ test("wrong keys, tampering, truncated files and invalid plaintext fail closed",
     assert.equal(existsSync(f.path), true);
   }
 });
-for (const [name, Constructor] of [
-  ["CHZZK", ChzzkAuth],
-  ["SOOP", SoopAuth],
-  ["YouTube", YoutubeAuth],
-] as const) {
-  test(
-    name +
-      " retains existing credentials across reload and rejects invalid persisted state",
-    (t) => {
-      const f = fixture(t);
-      const value =
-        name === "YouTube"
-          ? {
-              ...token,
-              channelId: "fixture-channel",
-              clientId: "fixture-client",
-            }
-          : token;
-      writeFileSync(f.path, legacyEnvelope(value));
-      assert.doesNotThrow(() => new Constructor(key, f.path));
-      writeFileSync(
-        f.path,
-        legacyEnvelope({ accessToken: "MALFORMED_PRIVATE_STATE" }),
-      );
-      assert.throws(
-        () => new Constructor(key, f.path),
-        (error) => {
-          assert(error instanceof Error);
-          assert.match(error.message, /Stored .* credentials/);
-          assert(!error.message.includes("MALFORMED_PRIVATE_STATE"));
-          return true;
-        },
-      );
-    },
-  );
-}

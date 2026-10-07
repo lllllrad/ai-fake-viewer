@@ -74,9 +74,6 @@ function fixture() {
       startSpeech: () => {
         events.push("speech.start");
       },
-      startChat: () => {
-        events.push("chat.start");
-      },
       start: () => {
         events.push("inputs.start");
       },
@@ -86,11 +83,8 @@ function fixture() {
       stopScreen: () => {
         events.push("screen.stop");
       },
-      stopSpeech: () => {
+      stopSpeech: async () => {
         events.push("speech.stop");
-      },
-      stopChat: async () => {
-        events.push("chat.stop");
       },
     },
   };
@@ -112,7 +106,7 @@ function deferred() {
 
 test("shutdown owns reentrant cancellation and drains all inputs even if AI stop fails", async () => {
   const f = fixture(),
-    chat = deferred();
+    speech = deferred();
   f.service.enableAi();
   let reentrant: Promise<void> | undefined;
   f.dependencies.ai.stop = (reason, preserve) => {
@@ -121,9 +115,9 @@ test("shutdown owns reentrant cancellation and drains all inputs even if AI stop
     reentrant = f.service.shutdown();
     throw new Error("Fixture AI stop failure");
   };
-  f.dependencies.inputs.stopChat = () => {
-    f.events.push("chat.stop");
-    return chat.promise;
+  f.dependencies.inputs.stopSpeech = () => {
+    f.events.push("speech.stop");
+    return speech.promise;
   };
   const closing = f.service.shutdown();
   const rejected = assert.rejects(closing, (error: unknown) => {
@@ -133,7 +127,7 @@ test("shutdown owns reentrant cancellation and drains all inputs even if AI stop
   });
   assert.equal(reentrant, closing);
   assert.equal(f.service.shutdown(), closing);
-  for (const input of ["screen", "speech", "chat"])
+  for (const input of ["screen", "speech"])
     assert.equal(
       f.events.filter((event) => event === `${input}.stop`).length,
       1,
@@ -141,7 +135,7 @@ test("shutdown owns reentrant cancellation and drains all inputs even if AI stop
   assert.throws(() => f.service.startInputs(), BroadcastCommandError);
   assert.equal(f.state.requested, true);
   assert.equal(f.state.closed, false);
-  chat.resolve();
+  speech.resolve();
   await rejected;
   assert.equal(f.service.shutdown(), closing);
 });
@@ -163,15 +157,15 @@ test("AI enable/disable controls intent without stopping input collection", () =
 
 test("broadcast end closes synchronously while input teardown drains; starts cannot revive it", async () => {
   const f = fixture(),
-    chat = deferred();
-  f.dependencies.inputs.stopChat = () => chat.promise;
+    speech = deferred();
+  f.dependencies.inputs.stopSpeech = () => speech.promise;
   f.service.enableAi();
   const ended = f.service.endBroadcast();
   assert.equal(f.state.closed, true);
   assert.equal(f.state.running, false);
   assert.throws(() => f.service.enableAi(), BroadcastCommandError);
   assert.equal(f.service.recoverAi(), false);
-  chat.resolve();
+  speech.resolve();
   await ended;
   assert.throws(() => f.service.startInputs(), /방송이 종료/);
   assert.equal(f.events.filter((e) => e === "end").length, 1);
@@ -189,7 +183,7 @@ test("shutdown preserves intent and session, disallows restart, and drains once"
   assert.equal(f.state.closed, false);
   assert.equal(f.state.requested, true);
   assert.equal(f.events.includes("cast.disarm"), false);
-  assert.equal(f.events.filter((e) => e === "chat.stop").length, 1);
+  assert.equal(f.events.filter((e) => e === "speech.stop").length, 1);
   assert.throws(() => f.service.enableAi(), /서버를 종료/);
   assert.equal(f.service.recoverAi(), false);
 });
@@ -212,8 +206,8 @@ test("restart recovery waits without changing enabled intent, then resumes once"
 for (const interrupt of ["end", "shutdown", "stop"] as const) {
   test(`delayed new broadcast cannot override a newer ${interrupt} command`, async () => {
     const f = fixture(),
-      chat = deferred();
-    f.dependencies.inputs.stopChat = () => chat.promise;
+      speech = deferred();
+    f.dependencies.inputs.stopSpeech = () => speech.promise;
     const creating = f.service.newBroadcast();
     const interruption =
       interrupt === "end"
@@ -221,7 +215,7 @@ for (const interrupt of ["end", "shutdown", "stop"] as const) {
         : interrupt === "shutdown"
           ? f.service.shutdown()
           : f.service.stopInputs();
-    chat.resolve();
+    speech.resolve();
     await interruption;
     assert.equal(await creating, false);
     assert.equal(f.state.broadcast, 1);
@@ -235,12 +229,12 @@ test("new broadcast and reset wait for adapters, preserve ordering and keep AI d
   assert.equal(await f.service.newBroadcast(), true);
   assert.equal(f.state.broadcast, 2);
   assert.equal(f.state.requested, false);
-  assert(f.events.indexOf("chat.stop") < f.events.indexOf("new"));
+  assert(f.events.indexOf("speech.stop") < f.events.indexOf("new"));
   f.service.enableAi();
   assert.equal(await f.service.eraseData(), true);
   assert.equal(f.state.requested, false);
   assert(f.events.includes("cast.cancel"));
-  assert(f.events.lastIndexOf("chat.stop") < f.events.indexOf("erase"));
+  assert(f.events.lastIndexOf("speech.stop") < f.events.indexOf("erase"));
 });
 
 test("a failing adapter cannot prevent stopping the other inputs or closing the broadcast", async () => {
@@ -251,7 +245,7 @@ test("a failing adapter cannot prevent stopping the other inputs or closing the 
   await assert.rejects(f.service.endBroadcast(), /Input shutdown failed/);
   assert.equal(f.state.closed, true);
   assert(f.events.includes("speech.stop"));
-  assert(f.events.includes("chat.stop"));
+  assert(f.events.includes("speech.stop"));
 });
 
 test("disclosure stops AI and preserves independent collection", () => {
@@ -272,25 +266,25 @@ test("a failed durable end still stops inputs and reports failure instead of cla
   await assert.rejects(f.service.endBroadcast(), /storage unavailable/);
   assert.equal(f.state.running, false);
   assert.equal(f.state.closed, false);
-  for (const event of ["screen.stop", "speech.stop", "chat.stop"])
+  for (const event of ["screen.stop", "speech.stop", "speech.stop"])
     assert(f.events.includes(event));
 });
 
-for (const input of ["screen", "speech", "chat"] as const) {
+for (const input of ["screen", "speech"] as const) {
   test(`${input} start obeys closed, shutdown and adapter-draining boundaries`, async () => {
     const f = fixture(),
-      chat = deferred();
+      speech = deferred();
     f.service.startInput(input);
     assert(f.events.includes(`${input}.start`));
-    f.dependencies.inputs.stopChat = () => chat.promise;
-    const stopping = f.service.stopInput("chat");
+    f.dependencies.inputs.stopSpeech = () => speech.promise;
+    const stopping = f.service.stopInput("speech");
     assert.throws(
       () => f.service.startInput(input),
       (error: unknown) =>
         error instanceof BroadcastCommandError &&
         error.code === "inputs_stopping",
     );
-    chat.resolve();
+    speech.resolve();
     await stopping;
     await f.service.endBroadcast();
     assert.throws(
@@ -310,28 +304,28 @@ for (const input of ["screen", "speech", "chat"] as const) {
 }
 test("individual and whole-pipeline stops share a pending adapter shutdown", async () => {
   const f = fixture(),
-    chat = deferred();
+    speech = deferred();
   let calls = 0;
-  f.dependencies.inputs.stopChat = () => {
+  f.dependencies.inputs.stopSpeech = () => {
     calls++;
-    return chat.promise;
+    return speech.promise;
   };
-  const individual = f.service.stopInput("chat");
+  const individual = f.service.stopInput("speech");
   const all = f.service.stopInputs();
   assert.equal(calls, 1);
   assert.throws(() => f.service.startInputs(), BroadcastCommandError);
-  chat.resolve();
+  speech.resolve();
   await Promise.all([individual, all]);
-  f.service.startInput("chat");
-  assert(f.events.includes("chat.start"));
+  f.service.startInput("speech");
+  assert(f.events.includes("speech.start"));
 });
 test("an individual stop supersedes a pending new-broadcast command", async () => {
   const f = fixture(),
-    chat = deferred();
-  f.dependencies.inputs.stopChat = () => chat.promise;
+    speech = deferred();
+  f.dependencies.inputs.stopSpeech = () => speech.promise;
   const creating = f.service.newBroadcast();
   const stopping = f.service.stopInput("speech");
-  chat.resolve();
+  speech.resolve();
   await stopping;
   assert.equal(await creating, false);
   assert.equal(f.state.broadcast, 1);
@@ -367,7 +361,7 @@ test("input HTTP routes preserve media responses and enforce broadcast command c
     /application\/x-ndjson/,
   );
   assert.equal(JSON.parse(transcript.body).text, "SYNTHETIC");
-  for (const path of ["capture", "audio", "connectors"]) {
+  for (const path of ["capture", "audio"]) {
     assert.equal(
       (await app.inject({ method: "POST", url: `/api/admin/${path}/start` }))
         .statusCode,
@@ -380,7 +374,7 @@ test("input HTTP routes preserve media responses and enforce broadcast command c
     );
   }
   await f.service.endBroadcast();
-  for (const path of ["capture", "audio", "connectors"])
+  for (const path of ["capture", "audio"])
     assert.equal(
       (await app.inject({ method: "POST", url: `/api/admin/${path}/start` }))
         .statusCode,
@@ -391,7 +385,7 @@ test("input HTTP routes preserve media responses and enforce broadcast command c
 test("configuration change drains inputs and holds the start barrier until installation finishes", async () => {
   const f = fixture(),
     stopped = deferred();
-  f.dependencies.inputs.stopChat = () => stopped.promise;
+  f.dependencies.inputs.stopSpeech = () => stopped.promise;
   let applied = false;
   const change = f.service.reconfigureInputs(() => {
     assert.throws(() => f.service.startInputs(), BroadcastCommandError);
@@ -408,7 +402,7 @@ test("configuration change drains inputs and holds the start barrier until insta
 test("broadcast end supersedes a pending configuration installation", async () => {
   const f = fixture(),
     stopped = deferred();
-  f.dependencies.inputs.stopChat = () => stopped.promise;
+  f.dependencies.inputs.stopSpeech = () => stopped.promise;
   let applied = false;
   const change = f.service.reconfigureInputs(() => {
     applied = true;
@@ -423,7 +417,7 @@ test("broadcast end supersedes a pending configuration installation", async () =
 test("only the newest configuration installs after shared input teardown", async () => {
   const f = fixture(),
     stopped = deferred();
-  f.dependencies.inputs.stopChat = () => stopped.promise;
+  f.dependencies.inputs.stopSpeech = () => stopped.promise;
   const installed: number[] = [];
   const first = f.service.reconfigureInputs(() => {
     installed.push(1);

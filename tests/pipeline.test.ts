@@ -8,10 +8,9 @@ import { createApp } from "../apps/server/app.ts";
 
 test("broadcast end turns off AI and clears its restart intent", async () => {
   const directory = mkdtempSync(join(tmpdir(), "pipeline-end-"));
-  const { app, store, scheduler, supervisor } = await createApp(
+  const { app, store, scheduler, broadcast } = await createApp(
     configSchema.parse({
       database: ":memory:",
-      privacy: { rightsDatabase: ":memory:" },
       ai: { visualMode: "on_request" },
     }),
     {
@@ -21,15 +20,12 @@ test("broadcast end turns off AI and clears its restart intent", async () => {
       readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(directory, "chatgpt.tokens"),
-      youtubeTokenPath: join(directory, "youtube.tokens"),
-      chzzkTokenPath: join(directory, "chzzk.tokens"),
-      soopTokenPath: join(directory, "soop.tokens"),
     },
   );
   try {
     scheduler.state = "running";
     store.setAiDesiredRunning(true);
-    supervisor.status("youtube", "ended");
+    await broadcast.endBroadcast();
     assert.equal(scheduler.state, "broadcast_ended");
     assert.equal(store.aiDesiredRunning(), false);
   } finally {
@@ -40,25 +36,20 @@ test("broadcast end turns off AI and clears its restart intent", async () => {
 
 test("global AI toggle arms the live persona and reveal disarms it with persisted status", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "pipeline-controls-"));
-  const { app, store, scheduler, capture, transcriber, supervisor } =
-    await createApp(
-      configSchema.parse({
-        database: ":memory:",
-        privacy: { rightsDatabase: ":memory:" },
-        ai: { visualMode: "on_request" },
-      }),
-      {
-        demo: true,
-        startInputs: false,
-        adminToken: "a".repeat(64),
-        readerToken: "r".repeat(64),
-        encryptionKey: "e".repeat(64),
-        chatgptTokenPath: join(directory, "chatgpt.tokens"),
-        youtubeTokenPath: join(directory, "youtube.tokens"),
-        chzzkTokenPath: join(directory, "chzzk.tokens"),
-        soopTokenPath: join(directory, "soop.tokens"),
-      },
-    );
+  const { app, store, scheduler, capture, transcriber } = await createApp(
+    configSchema.parse({
+      database: ":memory:",
+      ai: { visualMode: "on_request" },
+    }),
+    {
+      demo: true,
+      startInputs: false,
+      adminToken: "a".repeat(64),
+      readerToken: "r".repeat(64),
+      encryptionKey: "e".repeat(64),
+      chatgptTokenPath: join(directory, "chatgpt.tokens"),
+    },
+  );
   const headers = {
     host: "127.0.0.1:3210",
     authorization: `Bearer ${"a".repeat(64)}`,
@@ -74,7 +65,6 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
     assert.equal(store.aiDesiredRunning(), true);
     const videoStop = t.mock.method(capture, "stop", () => {});
     const audioStop = t.mock.method(transcriber, "stop", () => {});
-    const chatStop = t.mock.method(supervisor, "stop", async () => {});
     response = await app.inject({
       method: "POST",
       url: "/api/admin/ai/stop",
@@ -85,7 +75,6 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
     assert.equal(store.personaRuntime()?.armed, false);
     assert.equal(videoStop.mock.callCount(), 0);
     assert.equal(audioStop.mock.callCount(), 0);
-    assert.equal(chatStop.mock.callCount(), 0);
     response = await app.inject({
       method: "POST",
       url: "/api/admin/ai/start",
@@ -114,12 +103,11 @@ test("global AI toggle arms the live persona and reveal disarms it with persiste
   }
 });
 
-test("live privacy profile blocks unconfigured AI and never restores running intent", async (t) => {
+test("missing dedicated stream blocks AI and never restores running intent", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "privacy-start-"));
   const env = await createApp(
     configSchema.parse({
       database: ":memory:",
-      privacy: { rightsDatabase: ":memory:" },
       ai: { provider: "openai_api" },
     }),
     {
@@ -128,9 +116,6 @@ test("live privacy profile blocks unconfigured AI and never restores running int
       readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(directory, "chatgpt"),
-      youtubeTokenPath: join(directory, "youtube.tokens"),
-      chzzkTokenPath: join(directory, "chzzk"),
-      soopTokenPath: join(directory, "soop"),
     },
   );
   try {
@@ -149,7 +134,7 @@ test("live privacy profile blocks unconfigured AI and never restores running int
     env.capture.start();
     env.transcriber.start();
     assert.equal(env.capture.allowProcessing(), true);
-    assert.notEqual(env.capture.state, "privacy_blocked");
+    assert.notEqual(env.capture.state, "session_closed");
     assert.equal(env.transcriber.allowProcessing(), true);
     assert.equal(env.transcriber.state, "config_required");
   } finally {

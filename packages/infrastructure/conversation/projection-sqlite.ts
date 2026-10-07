@@ -7,7 +7,7 @@ import type {
 } from "../../application/conversation/projection-ports.ts";
 
 const columns =
-  "m.id,m.session,m.actor,m.platform,m.channel,m.text,m.reply,m.received,m.seq,m.consent_epoch,a.name,a.author";
+  "m.id,m.session,m.actor,m.platform,m.channel,m.text,m.reply,m.received,m.seq,a.name,a.author";
 function message(
   row: Record<string, SQLOutputValue>,
 ): StoredConversationMessage {
@@ -21,7 +21,6 @@ function message(
     replyToId: row.reply === null ? null : String(row.reply),
     displayTime: Number(row.received),
     seq: Number(row.seq),
-    consentEpoch: Number(row.consent_epoch),
     displayName: String(row.name),
     author: String(row.author),
   };

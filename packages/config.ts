@@ -1,4 +1,3 @@
-import { privacyProfileSchema } from "./privacy-profile.ts";
 import { z } from "zod";
 import { readFileSync, existsSync } from "node:fs";
 import { parse } from "yaml";
@@ -14,15 +13,6 @@ const rect = z
     (r) => r.x + r.width <= 1 && r.y + r.height <= 1,
     "Mask must fit inside the image",
   );
-const gateSchema = z
-  .object({
-    enabled: z.boolean().default(false),
-    model: z.string().trim().min(1).max(100).default("jev-latest"),
-    threshold: z.number().min(0).max(1).default(0.8),
-    maxRequests: z.number().int().min(1).max(10000).default(360),
-    timeoutMs: z.number().int().min(100).max(10000).default(3000),
-  })
-  .strict();
 export const configSchema = z
   .object({
     port: z.number().int().min(1024).max(65535).default(3210),
@@ -33,78 +23,15 @@ export const configSchema = z
       })
       .strict()
       .default({ bindHost: "127.0.0.1", publicBaseUrl: "" }),
-    privacy: privacyProfileSchema.default(() => privacyProfileSchema.parse({})),
     input: z
       .object({
-        mode: z.enum(["broadcast", "ai_stream"]).default("broadcast"),
+        mode: z.literal("ai_stream").default("ai_stream"),
         streamUrl: z.string().max(1024).default(""),
       })
       .strict()
-      .default({ mode: "broadcast", streamUrl: "" }),
+      .default({ mode: "ai_stream", streamUrl: "" }),
     database: z.string().default("data/broadcast.sqlite"),
     retentionDays: z.number().int().min(1).max(7).default(7),
-    youtube: z
-      .object({
-        redirectUri: z
-          .string()
-          .url()
-          .default("http://127.0.0.1:3210/oauth/youtube/callback"),
-        enabled: z.boolean().default(false),
-        consentNoticeEnabled: z.boolean().default(false),
-        video: z.string().default(""),
-        channelId: z.string().default(""),
-        transport: z.enum(["grpc", "rest"]).default("grpc"),
-        restFallback: z.boolean().default(true),
-      })
-      .strict()
-      .default({
-        redirectUri: "http://127.0.0.1:3210/oauth/youtube/callback",
-        enabled: false,
-        consentNoticeEnabled: false,
-        video: "",
-        channelId: "",
-        transport: "grpc",
-        restFallback: true,
-      }),
-    chzzk: z
-      .object({
-        enabled: z.boolean().default(false),
-        consentNoticeEnabled: z.boolean().default(false),
-        redirectUri: z
-          .string()
-          .url()
-          .default("http://127.0.0.1:3210/oauth/chzzk/callback"),
-      })
-      .strict()
-      .default({
-        enabled: false,
-        consentNoticeEnabled: false,
-        redirectUri: "http://127.0.0.1:3210/oauth/chzzk/callback",
-      }),
-    soop: z
-      .object({
-        mode: z
-          .enum(["disabled", "official", "experimental_library"])
-          .default("disabled"),
-        consentNoticeEnabled: z.boolean().default(false),
-        experimentalConsent: z.boolean().default(false),
-        streamerId: z
-          .string()
-          .regex(/^[a-zA-Z0-9_-]*$/)
-          .default(""),
-        redirectUri: z
-          .string()
-          .url()
-          .default("http://127.0.0.1:3210/oauth/soop/callback"),
-      })
-      .strict()
-      .default({
-        mode: "disabled",
-        consentNoticeEnabled: false,
-        experimentalConsent: false,
-        streamerId: "",
-        redirectUri: "http://127.0.0.1:3210/oauth/soop/callback",
-      }),
     capture: z
       .object({
         ffmpeg: z.string().default("ffmpeg"),
@@ -157,7 +84,6 @@ export const configSchema = z
         provider: z
           .enum(["chatgpt_subscription", "openai_api"])
           .default("openai_api"),
-        gate: gateSchema.default(() => gateSchema.parse({})),
         pacing: z
           .object({
             minSeconds: z.number().int().min(20).max(600).default(35),
@@ -216,7 +142,6 @@ export const configSchema = z
       .strict()
       .default({
         provider: "openai_api",
-        gate: gateSchema.parse({}),
         pacing: { minSeconds: 35, maxSeconds: 95 },
         pipelineType: "standard",
         pipelineProfile: "",
@@ -246,96 +171,6 @@ export const configSchema = z
   })
   .strict()
   .superRefine((c, ctx) => {
-    try {
-      const callback = new URL(c.youtube.redirectUri);
-      const validPath = callback.pathname === "/oauth/youtube/callback";
-      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
-      const validProtocol =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" && loopback);
-      const validPort =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" &&
-          loopback &&
-          callback.port === String(c.port));
-      if (
-        !validPath ||
-        !validProtocol ||
-        !validPort ||
-        callback.username ||
-        callback.password ||
-        callback.search ||
-        callback.hash
-      )
-        ctx.addIssue({
-          code: "custom",
-          path: ["youtube", "redirectUri"],
-          message:
-            "YouTube redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
-        });
-    } catch {
-      /* handled by URL schema */
-    }
-    try {
-      const callback = new URL(c.chzzk.redirectUri);
-      const validPath = callback.pathname === "/oauth/chzzk/callback";
-      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
-      const validProtocol =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" && loopback);
-      const validPort =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" &&
-          loopback &&
-          callback.port === String(c.port));
-      if (
-        !validPath ||
-        !validProtocol ||
-        !validPort ||
-        callback.username ||
-        callback.password ||
-        callback.search ||
-        callback.hash
-      )
-        ctx.addIssue({
-          code: "custom",
-          path: ["chzzk", "redirectUri"],
-          message:
-            "CHZZK redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
-        });
-    } catch {
-      /* handled by URL schema */
-    }
-    try {
-      const callback = new URL(c.soop.redirectUri);
-      const validPath = callback.pathname === "/oauth/soop/callback";
-      const loopback = ["127.0.0.1", "localhost"].includes(callback.hostname);
-      const validProtocol =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" && loopback);
-      const validPort =
-        callback.protocol === "https:" ||
-        (callback.protocol === "http:" &&
-          loopback &&
-          callback.port === String(c.port));
-      if (
-        !validPath ||
-        !validProtocol ||
-        !validPort ||
-        callback.username ||
-        callback.password ||
-        callback.search ||
-        callback.hash
-      )
-        ctx.addIssue({
-          code: "custom",
-          path: ["soop", "redirectUri"],
-          message:
-            "SOOP redirectUri must be the callback path on loopback HTTP or a public HTTPS origin, without credentials, query, or fragment",
-        });
-    } catch {
-      /* handled by URL schema */
-    }
     if (c.network.bindHost === "0.0.0.0") {
       let valid = false;
       try {
@@ -360,19 +195,7 @@ export const configSchema = z
             "LAN mode requires an HTTP base URL with this port and a non-loopback host",
         });
     }
-    if (c.ai.gate.enabled && c.ai.visualMode !== "on_request")
-      ctx.addIssue({
-        code: "custom",
-        path: ["ai", "gate", "enabled"],
-        message: "The text-only Jev gate requires ai.visualMode: on_request",
-      });
     if (c.input.mode === "ai_stream") {
-      if (c.ai.gate.enabled)
-        ctx.addIssue({
-          code: "custom",
-          path: ["ai", "gate", "enabled"],
-          message: "AI stream mode does not use the third-party chat gate",
-        });
       if (c.input.streamUrl) {
         let valid = false;
         try {

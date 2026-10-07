@@ -181,7 +181,7 @@ test("observation eligibility includes pacing and model delay but never exceeds 
   fixture.contextWindowMs = 40000;
   assert.equal(chooseCastMember(fixture), undefined);
 });
-test("baseline and cast pacing enforce global and activity-band limits independently", () => {
+test("baseline and cast pacing enforce their global limits independently", () => {
   assert.equal(baselinePacingBlocked(15, [], 100000), false);
   assert.equal(baselinePacingBlocked(16, [], 100000), true);
   assert.equal(baselinePacingBlocked(0, [99997, 99998, 99999], 100000), true);
@@ -193,10 +193,7 @@ test("baseline and cast pacing enforce global and activity-band limits independe
     now: 100000,
     lastSpoke: 0,
     policy: {
-      global_hard_cap_messages_per_window: 6,
-      upstream_activity_bands: [
-        { min_messages: 0, max_messages: null, ai_cap_messages_per_window: 1 },
-      ],
+      global_hard_cap_messages_per_window: 1,
     },
   };
   assert.equal(castPacingBlocked(input), true);

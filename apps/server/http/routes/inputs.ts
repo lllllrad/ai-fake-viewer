@@ -13,7 +13,6 @@ export function registerInputRoutes(
   for (const [path, input] of [
     ["capture", "screen"],
     ["audio", "speech"],
-    ["connectors", "chat"],
   ] as const) {
     app.post(`/api/admin/${path}/start`, async () => {
       broadcast.startInput(input);

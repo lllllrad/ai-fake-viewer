@@ -73,7 +73,6 @@ export class BroadcastService {
     const adapters = this.dependencies.inputs;
     if (input === "screen") adapters.startScreen();
     else if (input === "speech") adapters.startSpeech();
-    else adapters.startChat();
   }
 
   stopInput(input: BroadcastInput) {
@@ -89,11 +88,7 @@ export class BroadcastService {
     let stopping: Promise<void>;
     try {
       stopping = Promise.resolve(
-        input === "screen"
-          ? adapters.stopScreen()
-          : input === "speech"
-            ? adapters.stopSpeech()
-            : adapters.stopChat(),
+        input === "screen" ? adapters.stopScreen() : adapters.stopSpeech(),
       );
     } catch (error) {
       stopping = Promise.reject(error);
@@ -112,7 +107,6 @@ export class BroadcastService {
     const stopping = Promise.allSettled([
       this.stopAdapter("screen"),
       this.stopAdapter("speech"),
-      this.stopAdapter("chat"),
     ]).then((results) => {
       const failures = results.filter(
         (r): r is PromiseRejectedResult => r.status === "rejected",

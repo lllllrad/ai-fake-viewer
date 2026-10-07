@@ -7,9 +7,7 @@ import { ChatgptAuth } from "../packages/infrastructure/accounts/chatgpt-auth.ts
 import { chatgptModel } from "../packages/infrastructure/reactions/chatgpt-model.ts";
 import { modelMessages } from "../packages/infrastructure/reactions/model-messages.ts";
 import { configSchema } from "../packages/config.ts";
-import { profileIssues } from "../packages/privacy-profile.ts";
 import { createApp } from "../apps/server/app.ts";
-import { approvedProfile } from "./privacy-fixtures.ts";
 function authFixture(path: string) {
   const auth: any = new ChatgptAuth("e".repeat(64), path);
   auth.data.active = "fixture";
@@ -30,12 +28,6 @@ function authFixture(path: string) {
   auth.save();
   return auth;
 }
-function profile() {
-  const p = approvedProfile();
-  p.processing.provider = "chatgpt_subscription";
-  p.processing.contract = "ChatGPT subscription";
-  return p;
-}
 test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or OPENAI_MODEL", async () => {
   const dir = mkdtempSync(join(tmpdir(), "subscription-live-"));
   const key = process.env.OPENAI_API_KEY,
@@ -45,8 +37,8 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
   authFixture(join(dir, "chatgpt"));
   const env = await createApp(
     configSchema.parse({
+      input: { streamUrl: "rtmp://127.0.0.1/fixture" },
       database: ":memory:",
-      privacy: profile(),
       ai: { provider: "chatgpt_subscription", visualMode: "on_request" },
     }),
     {
@@ -55,9 +47,6 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
       readerToken: "r".repeat(64),
       encryptionKey: "e".repeat(64),
       chatgptTokenPath: join(dir, "chatgpt"),
-      youtubeTokenPath: join(dir, "youtube.tokens"),
-      soopTokenPath: join(dir, "soop"),
-      chzzkTokenPath: join(dir, "chzzk"),
     },
   );
   const headers = {
@@ -97,16 +86,7 @@ test("live ChatGPT subscription is ready and can start without OPENAI_API_KEY or
     else process.env.OPENAI_MODEL = model;
   }
 });
-test("subscription contract and endpoint cannot silently inherit the API-only profile", () => {
-  const p = profile();
-  assert.deepEqual(profileIssues(p), []);
-  p.processing.contract = "API";
-  assert(profileIssues(p).some((x) => x.includes("불일치")));
-  p.processing.contract = "ChatGPT subscription";
-  p.processing.endpoint = "https://eu.api.openai.com/v1";
-  assert(profileIssues(p).some((x) => x.includes("endpoint")));
-});
-test("subscription rechecks consent after asynchronous token refresh and records request IDs", async () => {
+test("subscription rechecks context after asynchronous token refresh and records request IDs", async () => {
   const dir = mkdtempSync(join(tmpdir(), "subscription-boundary-"));
   const auth = authFixture(join(dir, "tokens"));
   const input: any = {
@@ -149,6 +129,7 @@ test("subscription rechecks consent after asynchronous token refresh and records
   }) as typeof fetch;
   const run = chatgptModel(
     configSchema.parse({
+      input: { streamUrl: "rtmp://127.0.0.1/fixture" },
       database: ":memory:",
       ai: { provider: "chatgpt_subscription" },
     }).ai,
@@ -156,7 +137,7 @@ test("subscription rechecks consent after asynchronous token refresh and records
     request,
     {
       authorize: () => {
-        if (!allowed) throw Error("withdrawn");
+        if (!allowed) throw Error("context invalidated");
       },
       requestId: (id) => ids.push(id),
     },
@@ -169,7 +150,10 @@ test("subscription rechecks consent after asynchronous token refresh and records
       allowed = false;
       return "synthetic-token";
     };
-    await assert.rejects(run(input, new AbortController().signal), /withdrawn/);
+    await assert.rejects(
+      run(input, new AbortController().signal),
+      /context invalidated/,
+    );
     assert.equal(calls, 1);
   } finally {
     rmSync(dir, { recursive: true, force: true });

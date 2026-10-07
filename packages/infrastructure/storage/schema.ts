@@ -13,12 +13,8 @@ export function migrateBroadcastSchema(database: DatabaseSync) {
  CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
- CREATE TABLE IF NOT EXISTS chat_context_summaries(session TEXT PRIMARY KEY,payload TEXT NOT NULL,expires INTEGER NOT NULL,cutoff INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS ai_message_context(message_id TEXT NOT NULL,source_message_id TEXT NOT NULL,PRIMARY KEY(message_id,source_message_id));
  CREATE INDEX IF NOT EXISTS ai_message_context_source ON ai_message_context(source_message_id);
- CREATE TABLE IF NOT EXISTS viewer_consents(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author TEXT NOT NULL,granted INTEGER NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(session,platform,channel,author));
- CREATE TABLE IF NOT EXISTS consent_notice_targets(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,author_hash TEXT NOT NULL,state TEXT NOT NULL,last_notice INTEGER,PRIMARY KEY(session,platform,channel,author_hash));
- CREATE TABLE IF NOT EXISTS consent_notice_state(session TEXT NOT NULL,platform TEXT NOT NULL,channel TEXT NOT NULL,last_notice INTEGER NOT NULL,PRIMARY KEY(session,platform,channel));
  CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,session TEXT,type TEXT,target TEXT,at INTEGER,payload TEXT);
  CREATE TABLE IF NOT EXISTS connector_checkpoints(key TEXT PRIMARY KEY,value TEXT);
  CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,session TEXT,at INTEGER,reserved REAL,input INTEGER,output INTEGER,status TEXT);
@@ -41,10 +37,6 @@ export function migrateBroadcastSchema(database: DatabaseSync) {
  CREATE TABLE IF NOT EXISTS persona_reviews(id TEXT PRIMARY KEY,evaluation_id TEXT NOT NULL,version_id TEXT NOT NULL,reviewer TEXT NOT NULL,decision TEXT NOT NULL,created INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS persona_audit(id INTEGER PRIMARY KEY,session_id TEXT,at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,prior_revision INTEGER,new_revision INTEGER,reason TEXT);
 `);
-  if (!tableInfo(database, "messages").some((c) => c.name === "consent_epoch"))
-    database.exec(
-      "ALTER TABLE messages ADD COLUMN consent_epoch INTEGER NOT NULL DEFAULT 0",
-    );
   const attemptColumns = tableInfo(database, "persona_reaction_attempts").map(
     (c) => c.name,
   );

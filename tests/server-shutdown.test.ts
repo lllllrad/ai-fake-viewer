@@ -34,17 +34,8 @@ test("server shutdown cancels work immediately and drains inputs before closing 
     closeReaders: () => {
       events.push("readers");
     },
-    flushFollowups: () => {
-      events.push("flush");
-    },
     closeBroadcastStorage: () => {
       events.push("broadcast-storage");
-    },
-    closeRightsStorage: () => {
-      events.push("rights-storage");
-    },
-    clearFollowups: () => {
-      events.push("followups");
     },
   });
   const closing = shutdown.close();
@@ -59,10 +50,7 @@ test("server shutdown cancels work immediately and drains inputs before closing 
     "authoring",
     "inputs",
     "readers",
-    "flush",
     "broadcast-storage",
-    "rights-storage",
-    "followups",
   ]);
 });
 
@@ -77,10 +65,7 @@ test("each failed cleanup is reported after every resource has been attempted", 
     cancelAuthoring: () => fail("authoring"),
     shutdownBroadcast: async () => fail("inputs"),
     closeReaders: () => fail("readers"),
-    flushFollowups: () => fail("flush"),
     closeBroadcastStorage: () => fail("broadcast-storage"),
-    closeRightsStorage: () => fail("rights-storage"),
-    clearFollowups: () => fail("followups"),
   });
   const closing = shutdown.close();
   await assert.rejects(closing, (error: unknown) => {
@@ -89,7 +74,7 @@ test("each failed cleanup is reported after every resource has been attempted", 
       error.errors.map((entry: Error) => entry.message),
       events,
     );
-    assert.equal(error.errors.length, 8);
+    assert.equal(error.errors.length, 5);
     return true;
   });
   assert.equal(shutdown.close(), closing);
@@ -98,14 +83,11 @@ test("each failed cleanup is reported after every resource has been attempted", 
     "authoring",
     "inputs",
     "readers",
-    "flush",
     "broadcast-storage",
-    "rights-storage",
-    "followups",
   ]);
 });
 
-test("the HTTP app closes rights storage even when broadcast storage close reports failure", async (t) => {
+test("the HTTP app reports storage failure after stopping generation", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "server-shutdown-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const env = await createApp(configSchema.parse({}), {
@@ -115,24 +97,14 @@ test("the HTTP app closes rights storage even when broadcast storage close repor
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(dir, "chatgpt"),
-    youtubeTokenPath: join(dir, "youtube"),
-    chzzkTokenPath: join(dir, "chzzk"),
-    soopTokenPath: join(dir, "soop"),
   });
   t.after(() => env.app.close().catch(() => {}));
-  let rightsClosed = 0;
   const closeStore = env.store.close.bind(env.store);
-  const closeRights = env.rights.close.bind(env.rights);
   t.mock.method(env.store, "close", () => {
     closeStore();
     throw new Error("Fixture storage close failure");
   });
-  t.mock.method(env.rights, "close", () => {
-    rightsClosed++;
-    closeRights();
-  });
   await assert.rejects(env.app.close(), /Server resource shutdown failed/);
-  assert.equal(rightsClosed, 1);
   assert.equal(env.scheduler.state, "server_shutdown");
   assert.throws(() => env.store.db.prepare("SELECT 1"));
 });

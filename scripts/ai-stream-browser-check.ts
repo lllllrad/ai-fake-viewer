@@ -16,15 +16,11 @@ const port = 33225,
 const runtime = await createApp(
   configSchema.parse({
     port,
-    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
-    chzzk: { redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback` },
-    soop: { redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback` },
     database: ":memory:",
     input: {
       mode: "ai_stream",
       streamUrl: "rtmp://127.0.0.1:1935/synthetic-ai",
     },
-    privacy: { rightsDatabase: join(dir, "rights.sqlite") },
     ai: { manualApproval: true },
   }),
   {
@@ -33,9 +29,6 @@ const runtime = await createApp(
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(dir, "chatgpt"),
-    youtubeTokenPath: join(dir, "youtube"),
-    chzzkTokenPath: join(dir, "chzzk"),
-    soopTokenPath: join(dir, "soop"),
     startInputs: false,
   },
 );
@@ -81,13 +74,8 @@ try {
     ),
   );
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await nav.getByRole("link", { name: "참여자", exact: true }).click();
-  await expect(
-    page.getByRole("heading", {
-      name: "시청자 참여 절차를 사용하지 않습니다.",
-    }),
-  ).toBeVisible();
   await nav.getByRole("link", { name: "라이브", exact: true }).click();
+  assert.equal(await nav.getByRole("link").count(), 2);
   const toggle = page.getByRole("switch", { name: "AI 채팅 생성 사용" });
   await expect(toggle).toBeEnabled();
   await toggle.click();
@@ -101,9 +89,30 @@ try {
     })
     .toBe(1);
   assert.equal(runtime.store.viewerMemory.list().length, 1);
+  const reader = await context.newPage();
+  const overlay = await context.newPage();
+  await reader.goto("http://127.0.0.1:" + port + "/reader#" + "r".repeat(64));
+  await overlay.goto("http://127.0.0.1:" + port + "/overlay#" + "r".repeat(64));
+  const message = runtime.store.readerSnapshot().messages[0].text;
+  await expect(reader.getByText(message, { exact: true })).toBeVisible();
+  await expect(overlay.getByText(message, { exact: true })).toBeVisible();
+  await captureUIReview(reader, "reader");
+  await captureUIReview(overlay, "overlay");
+  await expect(
+    reader.getByText("AI 시청자가 생성한 채팅입니다.", { exact: false }),
+  ).toBeVisible();
+
   await page.getByRole("button", { name: "AI 긴급 중지", exact: true }).click();
   await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await nav.getByRole("link", { name: "방송 준비", exact: true }).click();
+  await page.getByRole("tab", { name: "AI 계정·모델", exact: true }).click();
+  await captureUIReview(page, "ai");
+  await page.getByRole("tab", { name: "리더·OBS", exact: true }).click();
+  await captureUIReview(page, "output");
+  await page.getByRole("button", { name: "로그아웃", exact: true }).click();
+  await expect(page.getByLabel("관리자 접속 토큰")).toBeVisible();
   assert.deepEqual(errors, []);
+
   console.log(
     "AI stream browser PASS: dedicated media, no chat/consent setup, desktop/mobile, AI start, tool state, candidate publication, stop.",
   );

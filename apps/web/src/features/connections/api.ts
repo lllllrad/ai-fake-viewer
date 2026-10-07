@@ -5,11 +5,7 @@ import {
   modelListSchema,
 } from "../../../../../packages/contracts/connections.ts";
 export const connectionApi = {
-  authorize: (
-    provider: "youtube" | "chzzk" | "soop" | "chatgpt",
-    signal: AbortSignal,
-    clientId?: string,
-  ) =>
+  authorize: (provider: "chatgpt", signal: AbortSignal, clientId?: string) =>
     adminClient.json(`${provider}/authorize`, authorizationLinkSchema, {
       method: "POST",
       body: clientId ? { clientId } : {},

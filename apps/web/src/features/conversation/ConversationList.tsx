@@ -1,9 +1,6 @@
 import type { ConversationMessage } from "../../../../../packages/contracts/conversation.ts";
 const labels: Record<string, string> = {
   experiment: "AI 생성",
-  youtube: "YouTube",
-  chzzk: "치지직",
-  soop: "SOOP",
 };
 const time = new Intl.DateTimeFormat("ko-KR", {
   hour: "2-digit",

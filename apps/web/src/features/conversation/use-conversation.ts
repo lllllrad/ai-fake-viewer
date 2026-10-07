@@ -66,13 +66,5 @@ export function useConversation(token: string) {
       socket?.close();
     };
   }, [token]);
-  useEffect(() => {
-    if (conversation.noticeAt === null) return;
-    const timer = setTimeout(
-      () => setConversation((state) => ({ ...state, noticeAt: null })),
-      12000,
-    );
-    return () => clearTimeout(timer);
-  }, [conversation.noticeAt]);
   return { conversation, connection };
 }

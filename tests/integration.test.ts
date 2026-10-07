@@ -1,4 +1,3 @@
-import { approvedProfile, activateFixture } from "./privacy-fixtures.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { once } from "node:events";
@@ -11,7 +10,6 @@ import sharp from "sharp";
 import WebSocket from "ws";
 import { createApp } from "../apps/server/app.ts";
 import { configSchema } from "../packages/config.ts";
-import { runYoutube } from "../packages/infrastructure/platforms/youtube-receiver.ts";
 import { Store } from "../packages/storage.ts";
 import { openaiModel } from "../packages/infrastructure/reactions/responses-api.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
@@ -39,20 +37,8 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
   const publicBaseUrl = `http://192.168.50.10:${port}`;
   const c = configSchema.parse({
     port,
-    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     network: { bindHost: "0.0.0.0", publicBaseUrl },
     database: ":memory:",
-    privacy: { rightsDatabase: ":memory:" },
-    chzzk: {
-      enabled: false,
-      redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
-    },
-    soop: {
-      mode: "disabled",
-      experimentalConsent: false,
-      streamerId: "",
-      redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback`,
-    },
   });
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-lan-test-"));
   const { app } = await createApp(c, {
@@ -60,9 +46,6 @@ test("LAN overlay links work while administrator and OAuth routes stay local", a
     readerToken: reader,
     encryptionKey,
     chatgptTokenPath: join(chatgptDir, "tokens"),
-    youtubeTokenPath: join(chatgptDir, "youtube.tokens"),
-    chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
-    soopTokenPath: join(chatgptDir, "soop.tokens"),
     startInputs: false,
   });
   try {
@@ -108,29 +91,14 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
   const chatgptDir = mkdtempSync(join(tmpdir(), "chatgpt-api-test-"));
   const c = configSchema.parse({
     port,
-    youtube: { redirectUri: `http://127.0.0.1:${port}/oauth/youtube/callback` },
     database: ":memory:",
-    privacy: approvedProfile(),
-    chzzk: {
-      enabled: false,
-      redirectUri: `http://127.0.0.1:${port}/oauth/chzzk/callback`,
-    },
-    soop: {
-      mode: "experimental_library",
-      experimentalConsent: false,
-      streamerId: "fixture",
-      redirectUri: `http://127.0.0.1:${port}/oauth/soop/callback`,
-    },
   });
-  const { app, store, supervisor } = await createApp(c, {
+  const { app, store } = await createApp(c, {
     adminToken: admin,
     readerToken: reader,
     encryptionKey,
     startInputs: false,
     chatgptTokenPath: join(chatgptDir, "tokens"),
-    youtubeTokenPath: join(chatgptDir, "youtube.tokens"),
-    chzzkTokenPath: join(chatgptDir, "chzzk.tokens"),
-    soopTokenPath: join(chatgptDir, "soop.tokens"),
   });
   await app.listen({ port, host: "127.0.0.1" });
   const host = `127.0.0.1:${port}`;
@@ -214,8 +182,7 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       url: "/api/admin/chzzk/authorize",
       headers: authHeaders,
     });
-    assert.equal(chzzkSetup.statusCode, 409);
-    assert.match(chzzkSetup.json().error, /chzzk.enabled/);
+    assert.equal(chzzkSetup.statusCode, 404);
 
     assert.equal(
       (
@@ -241,9 +208,6 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
         .statusCode,
       403,
     );
-    supervisor.start();
-    assert.equal(supervisor.children.size, 0);
-    assert.equal(supervisor.children.size, 0);
     const streams: any[][] = [[], []];
     for (let i = 0; i < 2; i++) {
       const ws = new WebSocket(`ws://${host}/stream`, {
@@ -255,10 +219,9 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
       ws.send(JSON.stringify({ type: "auth", token: reader, afterSeq: 0 }));
     }
     await waitFor(() => streams.every((s) => s.length === 1));
-    activateFixture(store, "private-actor", (ms) => (now += ms));
     store.ingestBatch([
       {
-        platform: "youtube",
+        platform: "experiment",
         channel: "fixture",
         author: "private-actor",
         name: "Viewer",
@@ -303,97 +266,6 @@ test("A05, A11, A12, A18: authenticated API and two identical public streams", a
     for (const ws of sockets) ws.terminate();
     await app.close();
     rmSync(chatgptDir, { recursive: true, force: true });
-  }
-});
-test("T04/A19: REST pacing honors upstream interval; read-only outbound methods", async () => {
-  const oldFetch = globalThis.fetch,
-    oldKey = process.env.YOUTUBE_API_KEY;
-  process.env.YOUTUBE_API_KEY = "fixture-key";
-  const requests: { url: string; method: string; at: number }[] = [];
-  const controller = new AbortController();
-  let batches = 0;
-  globalThis.fetch = (async (url: any, init: any) => {
-    requests.push({
-      url: String(url),
-      method: init?.method ?? "GET",
-      at: Date.now(),
-    });
-    if (String(url).includes("/videos?"))
-      return Response.json({
-        items: [{ liveStreamingDetails: { activeLiveChatId: "fixture-chat" } }],
-      });
-    batches++;
-    if (batches === 2) controller.abort();
-    return Response.json({
-      items: [],
-      nextPageToken: "fixture-token",
-      pollingIntervalMillis: 1100,
-    });
-  }) as any;
-  const s = new Store(":memory:");
-  try {
-    await runYoutube(
-      { video: "abcdefghijk", transport: "rest", restFallback: true },
-      s,
-      controller.signal,
-      () => {},
-    );
-    assert.equal(batches, 2);
-    assert(requests[2].at - requests[1].at >= 1100);
-    assert(requests.every((r) => r.method === "GET"));
-    assert(requests[2].url.includes("pageToken=fixture-token"));
-  } finally {
-    globalThis.fetch = oldFetch;
-    if (oldKey === undefined) delete process.env.YOUTUBE_API_KEY;
-    else process.env.YOUTUBE_API_KEY = oldKey;
-    s.close();
-  }
-});
-test("YouTube channel ID resolves its active live chat automatically", async () => {
-  const oldFetch = globalThis.fetch;
-  const oldKey = process.env.YOUTUBE_API_KEY;
-  process.env.YOUTUBE_API_KEY = "fixture-key";
-  const requests: string[] = [];
-  const controller = new AbortController();
-  let polls = 0;
-  globalThis.fetch = (async (url: any) => {
-    const parsed = new URL(String(url));
-    requests.push(parsed.toString());
-    if (parsed.pathname.endsWith("/search"))
-      return Response.json({
-        items: [{ id: { kind: "youtube#video", videoId: "abcdefghijk" } }],
-      });
-    if (parsed.pathname.endsWith("/videos"))
-      return Response.json({
-        items: [{ liveStreamingDetails: { activeLiveChatId: "channel-chat" } }],
-      });
-    polls++;
-    if (polls === 2) controller.abort();
-    return Response.json({ items: [], pollingIntervalMillis: 1000 });
-  }) as any;
-  const store = new Store(":memory:");
-  try {
-    await runYoutube(
-      {
-        video: "",
-        channelId: "UC1234567890123456789012",
-        transport: "rest",
-        restFallback: true,
-      },
-      store,
-      controller.signal,
-      () => {},
-    );
-    assert.equal(polls, 2);
-    assert(requests[0].includes("eventType=live"));
-    assert(requests[0].includes("channelId=UC1234567890123456789012"));
-    assert(requests[1].includes("id=abcdefghijk"));
-    assert(requests[2].includes("liveChatId=channel-chat"));
-  } finally {
-    globalThis.fetch = oldFetch;
-    if (oldKey === undefined) delete process.env.YOUTUBE_API_KEY;
-    else process.env.YOUTUBE_API_KEY = oldKey;
-    store.close();
   }
 });
 
@@ -574,80 +446,3 @@ for (const legacyFlag of [undefined, false, true])
       }
     },
   );
-test("A15–A16: isolated Socket.IO 2 worker receives CHAT, stays idle and can crash independently", async () => {
-  const { WebSocketServer } = await import("ws");
-  const server = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  await once(server, "listening");
-  const port = (server.address() as any).port;
-  const received: any[] = [];
-  const outbound: string[] = [];
-  server.on("connection", (socket) => {
-    socket.on("message", (m) => {
-      outbound.push(m.toString());
-      if (m.toString() === "2") socket.send("3");
-    });
-    socket.send(
-      "0" +
-        JSON.stringify({
-          sid: "fixture",
-          upgrades: [],
-          pingInterval: 25000,
-          pingTimeout: 5000,
-        }),
-    );
-    socket.send("40");
-    socket.send(
-      "42" +
-        JSON.stringify([
-          "SYSTEM",
-          { type: "connected", data: { sessionKey: "fixture-session" } },
-        ]),
-    );
-    socket.send(
-      "42" +
-        JSON.stringify([
-          "CHAT",
-          {
-            channelId: "fixture-channel",
-            senderChannelId: "fixture-viewer",
-            profile: { nickname: "Fixture" },
-            content: "Read-only fixture",
-            messageTime: Date.now(),
-          },
-        ]),
-    );
-  });
-  const child = fork(new URL("../workers/chzzk.cjs", import.meta.url), [], {
-    execArgv: [],
-    env: workerEnv(),
-    stdio: ["ignore", "ignore", "ignore", "ipc"],
-  });
-  const s = new Store(":memory:");
-  try {
-    child.on("message", (m) => received.push(m));
-    child.send({ type: "connect", url: `http://127.0.0.1:${port}` });
-    await waitFor(() => received.some((m) => m.type === "CHAT"));
-    await new Promise((r) => setTimeout(r, 150));
-    assert.equal(child.exitCode, null);
-    assert.equal(received.filter((m) => m.type === "SYSTEM").length, 1);
-    assert(!outbound.some((m) => m.startsWith("42")));
-    child.kill();
-    await once(child, "exit");
-    s.grantConsent("youtube", "fixture", "fixture");
-    s.ingestBatch([
-      {
-        platform: "youtube",
-        channel: "fixture",
-        author: "fixture",
-        name: "Viewer",
-        text: "Other connector survives",
-      },
-    ]);
-    assert.equal(s.snapshot().messages.length, 1);
-  } finally {
-    if (child.exitCode === null && !child.killed) child.kill();
-    for (const client of server.clients) client.terminate();
-    await new Promise<void>((r) => server.close(() => r()));
-    s.close();
-  }
-});

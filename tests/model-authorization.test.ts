@@ -6,7 +6,6 @@ import {
   type ModelAuthorizationSource,
 } from "../packages/application/reactions/model-authorization.ts";
 import { StaleModelContextError } from "../packages/application/reactions/errors.ts";
-import { SqliteModelAudience } from "../packages/infrastructure/reactions/model-audience.ts";
 import { Store } from "../packages/storage.ts";
 function fixture() {
   const frame = { id: "frame", capturedAt: 10, bytes: new Uint8Array([1, 2]) };
@@ -15,15 +14,10 @@ function fixture() {
   const audience = { participantId: "participant", epoch: 1 };
   const attached: unknown[] = [];
   const source: ModelAuthorizationSource = {
-    profileReady: () => true,
     sessionOpen: () => true,
-    revision: () => 2,
     frame: () => frame,
     transcripts: () => [speech],
     message: () => message,
-    audience: () => [audience],
-    recordRequest: (id, request) => attached.push([id, request]),
-    followup: (id, epoch, request) => attached.push([id, epoch, request]),
   };
   const input: AuthorizationInput = structuredClone({
     frames: [frame],
@@ -31,7 +25,6 @@ function fixture() {
     newMessages: [message],
     transcripts: [speech],
     newTranscripts: [speech],
-    privacyRevision: 2,
   });
   return {
     source,
@@ -42,7 +35,6 @@ function fixture() {
   };
 }
 for (const changed of [
-  "revision",
   "closed",
   "frame_bytes",
   "frame_time",
@@ -55,7 +47,6 @@ for (const changed of [
   test(`provider reauthorization rejects stale ${changed} evidence`, () => {
     const f = fixture();
     f.service.authorize(f.input);
-    if (changed === "revision") f.source.revision = () => 3;
     if (changed === "closed") f.source.sessionOpen = () => false;
     if (changed === "frame_bytes") f.input.frames[0].bytes[1] = 3;
     if (changed === "frame_time") f.input.frames[0].capturedAt++;
@@ -70,84 +61,11 @@ for (const changed of [
     if (changed === "removed") f.source.message = () => undefined;
     assert.throws(() => f.service.authorize(f.input), StaleModelContextError);
   });
-test("request tracking retains authorized primitive identity and epoch after mutable context is cleared", () => {
+test("closed empty context cannot initiate provider work", () => {
   const f = fixture();
-  f.service.authorize(f.input);
-  f.audience.epoch = 2;
-  f.input.messages = [];
-  f.input.newMessages = [];
-  f.service.requestId("request", f.input);
-  assert.deepEqual(f.attached, [
-    ["participant", "request"],
-    ["participant", 1, "request"],
-  ]);
-  f.service.requestId("unknown", { ...f.input });
-  assert.equal(f.attached.length, 2);
-});
-test("profile rejection and closed empty context cannot initiate provider work", () => {
-  const f = fixture();
-  f.source.profileReady = () => false;
-  assert.throws(() => f.service.authorize(f.input));
-  f.source.profileReady = () => true;
   f.source.sessionOpen = () => false;
   assert.throws(
-    () => f.service.authorize({ privacyRevision: 2, frames: [], messages: [] }),
+    () => f.service.authorize({ frames: [], messages: [] }),
     StaleModelContextError,
   );
-});
-test("audience lookup respects platform, channel, visibility and broadcast identity", (t) => {
-  const store = new Store(":memory:");
-  t.after(() => store.close());
-  for (const channel of ["one", "two"]) {
-    store.grantConsent("youtube", channel, "same-account");
-    store.ingestBatch([
-      {
-        platform: "youtube",
-        channel,
-        author: "same-account",
-        name: "Fixture",
-        text: channel,
-        sourceId: "fixture",
-      },
-    ]);
-  }
-  const messages = store
-    .snapshot()
-    .messages.filter((message) => message !== null);
-  const participants = [
-    {
-      id: "one",
-      epoch: 1,
-      platform: "youtube",
-      broadcaster: "one",
-      author: "same-account",
-    },
-    {
-      id: "two",
-      epoch: 3,
-      platform: "youtube",
-      broadcaster: "two",
-      author: "same-account",
-    },
-    {
-      id: "other-platform",
-      epoch: 1,
-      platform: "chzzk",
-      broadcaster: "one",
-      author: "same-account",
-    },
-  ];
-  const reader = new SqliteModelAudience(store.db, {
-    sessionId: () => store.sessionId,
-    participants: () => participants,
-  });
-  assert.deepEqual(reader.read([messages[0].id, messages[0].id]), [
-    { participantId: "one", epoch: 1 },
-  ]);
-  store.hide(messages[0].id);
-  assert.deepEqual(reader.read([messages[0].id]), []);
-  store.db
-    .prepare("UPDATE messages SET session='foreign' WHERE id=?")
-    .run(messages[1].id);
-  assert.deepEqual(reader.read([messages[1].id]), []);
 });

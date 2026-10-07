@@ -1,4 +1,4 @@
-/** Broadcast-scoped storage. Credentials and rights records are deliberately absent. */
+/** Broadcast-scoped storage. Credentials are deliberately absent. */
 export interface BroadcastRepository {
   closed(): boolean;
   aiRequested(): boolean;
@@ -21,18 +21,16 @@ export interface CastControl {
   cancelJobs(): void;
 }
 
-export type BroadcastInput = "screen" | "speech" | "chat";
+export type BroadcastInput = "screen" | "speech";
 
-/** Adapter starts are idempotent; stopping chat resolves after callbacks have drained. */
+/** Adapter starts are idempotent. */
 export interface BroadcastInputs {
   startScreen(): void;
   startSpeech(): void;
-  startChat(): void;
   start(): void;
   prepareForAi(): void;
   stopScreen(): void;
   stopSpeech(): void;
-  stopChat(): Promise<void>;
 }
 
 export interface BroadcastDependencies {

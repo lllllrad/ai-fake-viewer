@@ -2,7 +2,7 @@
 
 The AI implementation runs in a separate Node process on local port 3212. The live
 server (3210), test server (3211) and replay CLI are API clients. They never import
-service implementation modules. Application code owns input admission, consent,
+service implementation modules. Application code owns input admission,
 credentials, usage reservations, cancellation, pacing limits and final publication.
 The service owns AI viewer selection, generation/review orchestration and per-viewer
 inspection. This is process separation with an HTTP API, not an in-process plugin.
@@ -100,7 +100,7 @@ pacing and final host publication still apply.
 The host persists state in `viewer_memory`; it supplies current state alongside
 the existing recent conversation on the next invocation. State expires within the
 configured context window, without sliding an inherited summary indefinitely.
-State is reused only while its original chat sources are still present in the current authorized message window, so publication provenance continues to cover those sources. Context invalidation, withdrawal, reset and broadcast close clear derived state.
+State is reused only while its original chat sources are still present in the current authorized message window, so publication provenance continues to cover those sources. Context invalidation, reset and broadcast close clear derived state.
 Restarting only the AI service preserves host state; in-flight jobs are canceled.
 
 Provider requests use strict Responses API function schemas, `store:false` and a

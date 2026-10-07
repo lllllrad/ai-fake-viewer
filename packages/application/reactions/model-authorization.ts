@@ -1,8 +1,4 @@
 import { StaleModelContextError } from "./errors.ts";
-export interface AuthorizedAudience {
-  participantId: string;
-  epoch: number;
-}
 interface SpeechEvidence {
   id: string;
   text: string;
@@ -14,7 +10,6 @@ interface FrameEvidence {
   bytes: Uint8Array;
 }
 export interface AuthorizationInput {
-  privacyRevision?: number;
   frames: FrameEvidence[];
   transcripts?: SpeechEvidence[];
   newTranscripts?: SpeechEvidence[];
@@ -22,34 +17,16 @@ export interface AuthorizationInput {
   newMessages?: Array<{ id: string; text: string }>;
 }
 export interface ModelAuthorizationSource {
-  profileReady(): boolean;
   sessionOpen(): boolean;
-  revision(): number | undefined;
   frame(id: string): FrameEvidence | undefined;
   transcripts(): readonly SpeechEvidence[];
   message(id: string): { text: string } | undefined;
-  audience(messageIds: string[]): AuthorizedAudience[];
-  recordRequest(participantId: string, requestId: string): void;
-  followup(
-    participantId: string,
-    authorizedEpoch: number,
-    requestId: string,
-  ): void;
 }
-/** Rechecks the exact outgoing context at each provider boundary; retains only audience IDs. */
+/** Rechecks the exact outgoing context at each provider boundary; rejects stale evidence. */
 export class ModelAuthorization {
-  private readonly audiences = new WeakMap<object, AuthorizedAudience[]>();
   constructor(private readonly source: ModelAuthorizationSource) {}
   readonly authorize = (input: AuthorizationInput) => {
-    if (!this.source.profileReady())
-      throw new Error(
-        "현재 운영 프로필·동의 범위에서 외부 AI 처리가 허용되지 않습니다.",
-      );
-    if (
-      !this.source.sessionOpen() ||
-      input.privacyRevision !== this.source.revision()
-    )
-      throw new StaleModelContextError();
+    if (!this.source.sessionOpen()) throw new StaleModelContextError();
     const speech = new Map(
       this.source.transcripts().map((chunk) => [chunk.id, chunk]),
     );
@@ -80,21 +57,6 @@ export class ModelAuthorization {
       const current = this.source.message(message.id);
       if (!current || current.text !== message.text)
         throw new StaleModelContextError();
-    }
-    this.audiences.set(
-      input,
-      this.source
-        .audience([...new Set(messages.map((message) => message.id))])
-        .map((audience) => ({
-          participantId: audience.participantId,
-          epoch: audience.epoch,
-        })),
-    );
-  };
-  readonly requestId = (id: string, input: AuthorizationInput) => {
-    for (const audience of this.audiences.get(input) ?? []) {
-      this.source.recordRequest(audience.participantId, id);
-      this.source.followup(audience.participantId, audience.epoch, id);
     }
   };
 }

@@ -95,12 +95,8 @@ test("withdrawn messages disappear immediately and a current snapshot cannot res
   ]);
 });
 
-test("closed broadcasts clear messages and guidance and reject delayed additions", () => {
-  const notice = receiveConversation(initial(), {
-    type: "consent_notice",
-    occurredAt: 1_000,
-  });
-  const closed = receiveConversation(notice, {
+test("closed broadcasts clear messages and reject delayed additions", () => {
+  const closed = receiveConversation(initial(), {
     type: "event",
     event: {
       type: "session.closed",
@@ -111,12 +107,7 @@ test("closed broadcasts clear messages and guidance and reject delayed additions
     },
   });
   assert.equal(closed.closed, true);
-  assert.equal(closed.noticeAt, null);
   assert.deepEqual(receiveConversation(closed, added(3)).messages, []);
-  assert.equal(
-    receiveConversation(closed, { type: "consent_notice", occurredAt: 2_000 }),
-    closed,
-  );
   assert.deepEqual(
     receiveConversation(initial(), {
       ...snapshot(),

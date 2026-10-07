@@ -152,7 +152,6 @@ The system uses packaged Bootstrap CSS, Radix Tabs, Lucide icons and locally pac
 
 The implemented sources are [global styles](apps/web/src/style.css),
 [workspace styles](apps/web/src/features/workspace/workspace.css),
-[participation styles](apps/web/src/features/participation/participation.css),
 [conversation styles](apps/web/src/features/conversation/conversation.css),
 [test shell](apps/experiments/web/shell.css),
 [test conversation styles](apps/experiments/web/features/experiments.css) and
@@ -229,7 +228,7 @@ Bootstrap form controls and selects use white surfaces, slate outlines and a min
 
 ### Navigation
 
-The four live task destinations are Live, Broadcast preparation, Participants and Records/rights, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Shared Radix section tabs use automatic keyboard activation and a blue underline for selection; `SectionTabs` keeps its panels mounted to preserve component lifetimes. The test workspace uses separate conversation, AI-state and call-detail tabs; its microphone controls stay mounted outside these tabs. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
+The two live task destinations are Live and Broadcast preparation, rendered in Korean. Active navigation uses a pale blue surface and stronger blue text. Shared Radix section tabs use automatic keyboard activation and a blue underline for selection; `SectionTabs` keeps its panels mounted to preserve component lifetimes. The test workspace uses separate conversation, AI-state and call-detail tabs; its microphone controls stay mounted outside these tabs. Tab-driven navigation retains tab focus. Readiness deep links open the relevant setup area and move focus to it. Routine status updates do not move focus.
 
 ### Status badges and alerts
 

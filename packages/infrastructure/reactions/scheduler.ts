@@ -5,8 +5,6 @@ import {
 import { randomUUID, createHash } from "node:crypto";
 import { ReactionCoordinator } from "../../application/reactions/coordinator.ts";
 export { AiStartError } from "../../application/reactions/coordinator.ts";
-import { TimingGate } from "../../application/reactions/timing-gate.ts";
-import { TypeSafeTimingGate } from "./typesafe-gate.ts";
 import { generationIssue, ModelRequestError } from "../../model-errors.ts";
 import type { Store } from "../../storage.ts";
 import type { Capture } from "../inputs/screen-input.ts";
@@ -29,7 +27,6 @@ export class Scheduler extends ReactionCoordinator<Buffer, NodeJS.Timeout> {
     providerReady: () => boolean = () =>
       !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
     transcriber?: Transcriber,
-    gate = new TimingGate(config.ai.gate, new TypeSafeTimingGate()),
     random: () => number = () => Math.random(),
   ) {
     super(
@@ -40,7 +37,7 @@ export class Scheduler extends ReactionCoordinator<Buffer, NodeJS.Timeout> {
       demo,
       providerReady,
       transcriber,
-      gate,
+
       random,
       {
         now: () => Date.now(),
@@ -80,7 +77,6 @@ export function createScheduler(
   providerReady: () => boolean = () =>
     !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
   transcriber?: Transcriber,
-  gate = new TimingGate(config.ai.gate, new TypeSafeTimingGate()),
   random: () => number = () => Math.random(),
 ): BroadcastScheduler {
   const engine = reactionPipelines.create<Buffer, NodeJS.Timeout>(
@@ -92,7 +88,7 @@ export function createScheduler(
     demo,
     providerReady,
     transcriber,
-    gate,
+
     random,
     {
       now: Date.now,

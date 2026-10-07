@@ -20,7 +20,6 @@ export interface ReactionConfig {
     pacing: { minSeconds: number; maxSeconds: number };
     personas: Array<{ name: string; style: string }>;
     description: string;
-    gate: { enabled: boolean };
     reviewDraft: boolean;
     manualApproval: boolean;
   };
@@ -28,7 +27,6 @@ export interface ReactionConfig {
 export interface ReactionStore extends ModelUsagePort {
   readonly sessionId: string;
   readonly viewerMemory?: import("./viewer-memory.ts").ViewerMemoryStore;
-  readonly participation?: { revision: number };
   readonly attempts: ReactionAttempts;
   readonly dispatch: CastDispatch;
   on(event: "context_invalidated" | "reset", listener: () => void): unknown;

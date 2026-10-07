@@ -5,15 +5,9 @@ import type { Store } from "../../storage.ts";
 import type { Capture } from "../inputs/screen-input.ts";
 import type { Transcriber } from "../inputs/speech-input.ts";
 import type { Scheduler } from "../reactions/scheduler.ts";
-import type { Supervisor } from "../inputs/platform-supervisor.ts";
 import type { BroadcastCast } from "../../application/cast/broadcast-cast.ts";
-import type { RightsService } from "../../application/rights/service.ts";
 import type { ChatgptAuth } from "../accounts/chatgpt-auth.ts";
-import type { YoutubeAuth } from "../accounts/youtube-auth.ts";
-import type { ChzzkAuth } from "../accounts/chzzk-auth.ts";
-import type { SoopAuth } from "../accounts/soop-auth.ts";
 import { apiIssues } from "../../api-health.ts";
-import { profileIssues } from "../../privacy-profile.ts";
 
 interface RuntimeStatusDependencies {
   demo: boolean;
@@ -24,11 +18,9 @@ interface RuntimeStatusDependencies {
     | "sessionId"
     | "closed"
     | "aiDesiredRunning"
-    | "chatSummary"
     | "transcriptCount"
     | "transcriptRows"
     | "usage"
-    | "consentNoticeEnabled"
     | "readerSnapshot"
   >;
   capture: Pick<
@@ -46,25 +38,15 @@ interface RuntimeStatusDependencies {
     | "reviews"
     | "lastInput"
     | "pending"
-    | "gate"
     | "skips"
     | "rejects"
   >;
-  supervisor: Pick<Supervisor, "states" | "youtubeNotices" | "chzzkNotices">;
   personas: Pick<BroadcastCast, "automaticSummary">;
-  rights: Pick<RightsService, "list">;
   chatgpt: Pick<ChatgptAuth, "active" | "status">;
-  youtubeAuth: Pick<YoutubeAuth, "configured" | "connected" | "channelId">;
-  auth: Pick<ChzzkAuth, "token">;
-  soopAuth: Pick<SoopAuth, "token">;
-  privacyReady(): boolean;
   readyComponents(): BroadcastReadiness;
   now(): number;
   credentials(): {
     speech: boolean;
-    youtube: boolean;
-    chzzk: boolean;
-    soop: boolean;
     apiKey: boolean;
     apiModel?: string;
   };
@@ -81,34 +63,14 @@ export class RuntimeStatusSource {
       capture,
       transcriber,
       scheduler,
-      supervisor,
       personas,
-      rights,
       chatgpt,
-      youtubeAuth,
-      auth,
-      soopAuth,
-      privacyReady,
       readyComponents,
     } = this.dependencies;
     const now = this.dependencies.now();
     const credentials = this.dependencies.credentials();
     const speech = transcriber.recent();
     const latestFrame = capture.latest();
-    // Check next-session configuration independently of the ended session's gate.
-    const receiveApproved = (platform: string, broadcaster?: string | null) =>
-      demo ||
-      (!profileIssues(config.privacy).length &&
-        config.privacy.approvals.some(
-          (approval) =>
-            approval.platform === platform &&
-            (!broadcaster || approval.broadcaster === broadcaster) &&
-            approval.receive &&
-            approval.screenPublication &&
-            approval.externalAi &&
-            !!approval.contractReference &&
-            !!approval.checkedAt,
-        ));
     return {
       demo: demo,
       inputMode: config.input.mode,
@@ -116,30 +78,10 @@ export class RuntimeStatusSource {
       originsRevealed: store.originsRevealed(),
       sessionId: store.sessionId,
       closed: store.closed(),
-      broadcastEnded: Object.values(supervisor.states).some(
-        (connector) => connector.state === "ended",
-      ),
       aiDesiredRunning: store.aiDesiredRunning(),
       personas: personas.automaticSummary(),
-      chatSummary: store.chatSummary(),
-      privacy: {
-        memoryOnly: demo || config.database === ":memory:",
-        ready: privacyReady(),
-        issues:
-          config.input.mode === "ai_stream"
-            ? []
-            : profileIssues(config.privacy),
-        pendingRights: rights
-          .list()
-          .filter((r) => !["completed", "limited"].includes(r.state)).length,
-      },
       retentionDays: config.retentionDays,
-      connectors: supervisor.states,
       apiIssues: apiIssues({
-        youtubeRead: supervisor.states.youtube,
-        chzzkRead: supervisor.states.chzzk,
-        youtubeSend: supervisor.youtubeNotices ?? { state: "disabled" },
-        chzzkSend: supervisor.chzzkNotices ?? { state: "disabled" },
         audioState: transcriber.state,
         audioProvider: config.audio.provider,
         modelState: scheduler.state,
@@ -204,20 +146,6 @@ export class RuntimeStatusSource {
               expires: scheduler.pending.expires,
             }
           : null,
-        gate: {
-          enabled: config.ai.gate.enabled,
-          state: demo
-            ? "demo_bypass"
-            : config.ai.gate.enabled
-              ? scheduler.gate.state
-              : "disabled",
-          requests: scheduler.gate.requests,
-          maxRequests: config.ai.gate.maxRequests,
-          filtered: scheduler.gate.filtered,
-          errors: scheduler.gate.errors,
-          probability: scheduler.gate.probability,
-          suppressThreshold: config.ai.gate.threshold,
-        },
         skips: scheduler.skips,
         rejects: scheduler.rejects,
         usage: store.usage(),
@@ -239,50 +167,6 @@ export class RuntimeStatusSource {
       },
       chatgpt: chatgpt.status,
       setup: {
-        youtube: {
-          receiveApproved: receiveApproved(
-            "youtube",
-            youtubeAuth.channelId || config.youtube.channelId,
-          ),
-          oauthConfigured: youtubeAuth.configured,
-          connected: youtubeAuth.connected,
-          channelId: youtubeAuth.channelId ?? null,
-          redirectUri: config.youtube.redirectUri,
-          noticeState: supervisor.youtubeNotices?.state ?? "disabled",
-          enabled: config.youtube.enabled,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "youtube",
-            config.youtube.consentNoticeEnabled,
-          ),
-          credentialsConfigured: !!(
-            youtubeAuth.connected || credentials.youtube
-          ),
-          videoConfigured: !!config.youtube.video,
-          channelConfigured: !!config.youtube.channelId,
-        },
-        chzzk: {
-          receiveApproved: receiveApproved("chzzk", undefined),
-          enabled: config.chzzk.enabled,
-          tokenConfigured: !!auth.token,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "chzzk",
-            config.chzzk.consentNoticeEnabled,
-          ),
-          credentialsConfigured: !!credentials.chzzk,
-          redirectUri: config.chzzk.redirectUri,
-        },
-        soop: {
-          receiveApproved: receiveApproved("soop", config.soop.streamerId),
-          mode: config.soop.mode,
-          consentNoticeEnabled: store.consentNoticeEnabled(
-            "soop",
-            config.soop.consentNoticeEnabled,
-          ),
-          streamerConfigured: !!config.soop.streamerId,
-          credentialsConfigured: !!credentials.soop,
-          tokenConfigured: !!soopAuth.token,
-          redirectUri: config.soop.redirectUri,
-        },
         audio: {
           credentialsConfigured: credentials.speech,
         },

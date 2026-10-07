@@ -3,7 +3,6 @@ import { SqliteConnectorCheckpoints } from "./infrastructure/storage/connector-c
 import { ConversationIdentities } from "./application/conversation/identity-service.ts";
 import { SqliteConversationIdentities } from "./infrastructure/conversation/identity-sqlite.ts";
 import { ConversationIngestion } from "./application/conversation/ingestion.ts";
-import { ReferenceAdmission } from "./infrastructure/participation/reference-admission.ts";
 import { SqliteIncomingMessages } from "./infrastructure/conversation/incoming-sqlite.ts";
 import { BroadcastRetention } from "./application/broadcast/retention.ts";
 import { SqliteRetention } from "./infrastructure/storage/retention-sqlite.ts";
@@ -22,8 +21,6 @@ import type {
 import { TranscriptJournal } from "./application/inputs/transcript-journal.ts";
 import { SqliteTranscripts } from "./infrastructure/inputs/transcripts-sqlite.ts";
 import type { Transcript } from "./contracts/transcript.ts";
-import { SqliteFollowupQueue } from "./infrastructure/rights/followup-queue.ts";
-import { enqueueWithdrawal } from "./application/rights/withdrawal-followups.ts";
 import { SqliteModelUsage } from "./infrastructure/reactions/usage-sqlite.ts";
 import {
   LocalPublicationService,
@@ -35,12 +32,7 @@ import { SqliteConversationProjection } from "./infrastructure/conversation/proj
 import { ConversationContext } from "./application/conversation/context-service.ts";
 import { SqliteConversationContext } from "./infrastructure/conversation/context-sqlite.ts";
 import { SqliteTransactions } from "./infrastructure/storage/transactions.ts";
-import { SqliteParticipationSnapshots } from "./infrastructure/participation/snapshots.ts";
-import type { ParticipationService as Participation } from "./application/participation/service.ts";
-import {
-  summarizeChat,
-  summaryWindowMs,
-} from "./domain/conversation/summary.ts";
+import { emptyChatSummary } from "./domain/conversation/summary.ts";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
@@ -57,7 +49,6 @@ export class Store extends EventEmitter {
   readonly checkpoints: SqliteConnectorCheckpoints;
   readonly identities: ConversationIdentities;
   readonly ingestion: ConversationIngestion;
-  private readonly referenceAdmission: ReferenceAdmission;
   private readonly incomingMessages: SqliteIncomingMessages;
   readonly retention: BroadcastRetention;
   readonly lifetime: BroadcastLifetime;
@@ -65,9 +56,7 @@ export class Store extends EventEmitter {
   readonly dispatch: CastDispatch;
   readonly attempts: ReactionAttempts;
   readonly transcripts: TranscriptJournal;
-  readonly rightsFollowups: SqliteFollowupQueue;
   private readonly transactions: SqliteTransactions;
-  private readonly participationSnapshots: SqliteParticipationSnapshots;
   private readonly conversationContext: ConversationContext;
   private readonly conversationProjection: ConversationProjection;
   private readonly modelUsage: SqliteModelUsage;
@@ -76,12 +65,11 @@ export class Store extends EventEmitter {
   readerCollisionNames = new Set<string>();
   constructor(
     path: string,
-    public participation?: Participation,
+    private readonly live = false,
     private readonly runtime: { now(): number; id(): string } = {
       now: () => Date.now(),
       id: randomUUID,
     },
-    readonly viewerChatEnabled = true,
   ) {
     super();
     if (path !== ":memory:")
@@ -127,16 +115,12 @@ export class Store extends EventEmitter {
       closed: () => this.closed(),
       now: () => this.runtime.now(),
     });
-    this.rightsFollowups = new SqliteFollowupQueue(this.db);
-    this.participationSnapshots = new SqliteParticipationSnapshots(this.db);
     this.transactions = new SqliteTransactions(this.db, () => {
       const sessionId = this.sessionId;
       const names = new Set(this.readerCollisionNames);
-      const restoreParticipation = this.participation?.checkpoint();
       return () => {
         this.sessionId = sessionId;
         this.readerCollisionNames = names;
-        restoreParticipation?.();
       };
     });
     this.identities = new ConversationIdentities(
@@ -156,29 +140,11 @@ export class Store extends EventEmitter {
         },
       },
     );
-    this.referenceAdmission = new ReferenceAdmission(this.db, {
-      sessionId: () => this.sessionId,
-      now: () => this.runtime.now(),
-      erase: (ids, sequences) => this.eraseChatContext(ids, sequences),
-    });
     this.ingestion = new ConversationIngestion(
       this.incomingMessages,
       this.transactions,
       {
         closed: () => this.closed(),
-        admit: (message) =>
-          !this.viewerChatEnabled
-            ? { allow: false, epoch: 0 }
-            : this.participation
-              ? this.participation.handle(message)
-              : this.referenceAdmission.handle(message),
-        summary: () => {
-          this.chatSummary();
-        },
-        claimNotices: () =>
-          this.participation || !this.viewerChatEnabled
-            ? []
-            : this.referenceAdmission.claimNotices(),
         refreshCollisions: () => {
           if (!this.originsRevealed()) return false;
           const colliding = this.collisionNameSet();
@@ -194,9 +160,6 @@ export class Store extends EventEmitter {
         publish: (sequence) => {
           this.emit("event", this.publicEvent(sequence));
         },
-        notice: (notice) => {
-          this.emit("consent_notice", notice);
-        },
         reset: () => {
           this.emit("reset");
         },
@@ -207,7 +170,7 @@ export class Store extends EventEmitter {
       this.transactions,
       {
         sessionId: () => this.sessionId,
-        live: () => !!this.participation || !this.viewerChatEnabled,
+        live: () => this.live,
         closed: () => this.closed(),
         now: () => this.runtime.now(),
         refreshSummary: () => {
@@ -224,19 +187,12 @@ export class Store extends EventEmitter {
       {
         sessionId: () => this.sessionId,
         closed: () => this.closed(),
-        live: () => !!this.participation || !this.viewerChatEnabled,
+        live: () => this.live,
         id: () => this.runtime.id(),
         now: () => this.runtime.now(),
         replace: (sessionId, startedAt, closed, erase) => {
           this.sessionId = sessionId;
           if (erase) this.readerCollisionNames.clear();
-          if (this.participation) {
-            if (erase) this.participation.end();
-            this.participation.sessionId = sessionId;
-            this.participation.startedAt = startedAt;
-            this.participation.ended = closed;
-          }
-          this.saveParticipation();
         },
         reset: () => {
           this.emit("reset");
@@ -271,36 +227,14 @@ export class Store extends EventEmitter {
       {
         sessionId: () => this.sessionId,
         closed: () => this.closed(),
-        permitted: (message) =>
-          !this.viewerChatEnabled
-            ? message.attribution === "experiment"
-            : !this.participation ||
-              (message.sessionId === this.sessionId &&
-                (message.attribution === "experiment" ||
-                  this.participation.allowed(
-                    message.attribution,
-                    message.channel,
-                    message.author,
-                    message.consentEpoch,
-                  ))),
+        permitted: (message) => message.attribution === "experiment",
       },
     );
     this.conversationContext = new ConversationContext(
       new SqliteConversationContext(this.db),
       {
         sessionId: () => this.sessionId,
-        liveParticipation: () => !!this.participation,
         now: () => this.runtime.now(),
-        lastSequence: () => this.lastSeq(),
-        permittedRows: (now, cutoff) =>
-          (this.snapshot().messages.filter(Boolean) as PublicMessage[])
-            .filter(
-              (message) =>
-                message.attribution !== "experiment" &&
-                message.displayTime > now - summaryWindowMs &&
-                message.seq > cutoff,
-            )
-            .map((message) => ({ actor: message.actorId, text: message.text })),
         refreshIdentityNames: () => {
           this.readerCollisionNames = this.collisionNameSet();
         },
@@ -314,54 +248,8 @@ export class Store extends EventEmitter {
       },
       this.transactions,
     );
-    if (this.participation) {
-      this.participation.sessionId = this.sessionId;
-      try {
-        const saved = this.participationSnapshots.read();
-        if (saved) this.participation.restore(saved);
-      } catch (error) {
-        this.db.close();
-        throw error;
-      }
-      this.participation.bindPersistence({
-        run: (work) => this.transaction(work),
-        save: () => this.saveParticipation(),
-        eraseContext: (participant, followup) => {
-          if (followup)
-            enqueueWithdrawal(
-              this.rightsFollowups,
-              {
-                participantId: participant.id,
-                epoch: participant.epoch,
-                platform: participant.platform,
-                account: participant.author,
-                session: this.sessionId,
-                broadcaster: participant.broadcaster,
-                published: participant.published,
-                requestIds: participant.requestIds,
-              },
-              randomUUID,
-            );
-          this.revokeParticipant(
-            participant.platform,
-            participant.broadcaster,
-            participant.author,
-          );
-        },
-        afterCommit: (effect) => this.transactions.afterCommit(effect),
-      });
-      this.saveParticipation();
-    }
     if (this.originsRevealed())
       this.readerCollisionNames = this.collisionNameSet();
-  }
-  saveParticipation() {
-    if (this.participation)
-      this.participationSnapshots.save(this.participation.snapshot());
-  }
-  grantConsent(platform: string, channel: string, author: string) {
-    if (this.participation) throw Error("참여자의 직접 동의가 필요합니다.");
-    this.referenceAdmission.grant(platform, channel, author);
   }
   transaction<T>(fn: () => T): T {
     return this.transactions.run(fn);
@@ -387,11 +275,6 @@ export class Store extends EventEmitter {
   }
   ingestBatch(items: Incoming[], checkpoint?: { key: string; value: string }) {
     return this.ingestion.ingest(items, checkpoint);
-  }
-  pendingConsentNotice(platform: string, channel: string) {
-    return (
-      !this.participation && this.referenceAdmission.pending(platform, channel)
-    );
   }
   publicMessage(id: string): PublicMessage | null {
     return this.conversationProjection.message(id);
@@ -426,12 +309,8 @@ export class Store extends EventEmitter {
   replay(after: number) {
     return this.conversationProjection.replay(after);
   }
-  chatSummary(now = this.runtime.now()) {
-    if (!this.viewerChatEnabled) return summarizeChat([]);
-    return this.conversationContext.summary(now);
-  }
-  clearChatSummary() {
-    return this.conversationContext.clearSummary();
+  chatSummary() {
+    return emptyChatSummary();
   }
   cancelChatContextAttempts() {
     this.conversationContext.cancelPendingAttempts();
@@ -439,14 +318,8 @@ export class Store extends EventEmitter {
   recordAiContext(messageId: string, sourceIds: string[]) {
     this.conversationContext.recordDependencies(messageId, sourceIds);
   }
-  private eraseChatContext(ids: string[], sequences: number[]) {
-    sequences.push(...this.conversationContext.erase(ids));
-  }
   hide(id: string) {
     this.conversationContext.hide(id);
-  }
-  revokeParticipant(platform: string, channel: string, author: string) {
-    this.conversationContext.revoke(platform, channel, author);
   }
   context(allowed: string[]) {
     return (this.snapshot().messages.filter(Boolean) as PublicMessage[])
@@ -477,22 +350,6 @@ export class Store extends EventEmitter {
           )
           .get() as any
       )?.value === "1"
-    );
-  }
-  consentNoticeEnabled(platform: string, defaultValue = false) {
-    const value = this.db
-      .prepare("SELECT value FROM runtime_flags WHERE key=?")
-      .get(`consent_notice:${platform}`) as any;
-    return value ? value.value === "1" : defaultValue;
-  }
-  setConsentNoticeEnabled(platform: string, enabled: boolean) {
-    this.db
-      .prepare(
-        "INSERT INTO runtime_flags(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-      )
-      .run(`consent_notice:${platform}`, enabled ? "1" : "0");
-    this.audit(
-      `consent_notice.${platform}.${enabled ? "enabled" : "disabled"}`,
     );
   }
   setAiDesiredRunning(value: boolean) {
@@ -553,8 +410,6 @@ export class Store extends EventEmitter {
     return this.modelUsage.usage();
   }
   close() {
-    this.saveParticipation();
-    this.participation?.bindPersistence(undefined);
     this.db.close();
   }
   personaRuntime() {

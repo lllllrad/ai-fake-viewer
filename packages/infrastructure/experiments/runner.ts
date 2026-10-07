@@ -6,7 +6,6 @@ import sharp from "sharp";
 import { Store } from "../../storage.ts";
 import { configSchema } from "../../config.ts";
 import { reactionPipelines } from "../../application/reactions/pipelines.ts";
-import { TimingGate } from "../../application/reactions/timing-gate.ts";
 import { type DraftOutcome } from "../../application/reactions/program.ts";
 import { personaStyle } from "../../application/reactions/persona-style.ts";
 import type {
@@ -135,12 +134,7 @@ export async function runExperiment(options: ExperimentOptions) {
     false,
     () => true,
     speech,
-    new TimingGate(config.ai.gate, {
-      ensureReady() {},
-      async evaluate() {
-        throw Error("Timing provider is disabled in experiments");
-      },
-    }),
+
     runtime.random,
     {
       now: () => runtime.now,
@@ -159,22 +153,6 @@ export async function runExperiment(options: ExperimentOptions) {
         capturedAt: runtime.now,
         text: event.text,
       });
-    if (event.kind === "chat") {
-      store.grantConsent("youtube", "fixture", event.author);
-      store.ingestBatch([
-        {
-          platform: "youtube",
-          channel: "fixture",
-          author: event.author,
-          name: event.author,
-          text: event.text,
-          sourceId: runtime.id(),
-          publishedAt: runtime.now,
-        },
-      ]);
-    }
-    if (event.kind === "withdraw")
-      store.revokeParticipant("youtube", "fixture", event.author);
     if (event.kind === "frame") {
       const bytes = readFileSync(resolve(options.directory, event.file));
       if (bytes.length > 4 * 1024 * 1024)
@@ -250,9 +228,9 @@ export async function runExperiment(options: ExperimentOptions) {
         windowMs: config.ai.contextWindowSeconds * 1000,
         transcriptLimit: config.ai.transcriptLimit,
         recent: store.snapshot().messages,
-        messages: store.context(["youtube"]),
+        messages: store.context(["experiment"]),
         transcripts: speech.recent(),
-        allowedPlatforms: ["youtube"],
+        allowedPlatforms: ["experiment"],
         processedTranscriptIds: new Set(),
         processedMessageVersions: new Map(),
       });

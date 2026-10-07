@@ -14,7 +14,6 @@ export function MediaConnections({
   stale: boolean;
   refresh: () => Promise<void>;
 }) {
-  const streamOnly = status.inputMode === "ai_stream";
   const actions = useAdminActions(refresh),
     audio = inputHealth(status.audio.state, "transcription");
   const fresh =
@@ -23,19 +22,18 @@ export function MediaConnections({
     status.capture.lastFrameAgeMs <= 10000;
   return (
     <section className="connection-group" aria-label="영상과 음성 입력">
-      <h2>{streamOnly ? "AI 전용 스트림" : "영상과 음성 입력"}</h2>
+      <h2>AI 전용 스트림</h2>
       <p className="hint">
-        {streamOnly
-          ? "시청자 채팅·후원 알림을 제외한 화면과 마이크 음성만 포함된 별도 스트림을 사용하세요. 플랫폼 연결이나 시청자 동의 안내는 사용하지 않습니다."
-          : "설정한 입력은 수신 즉시 AI가 참고할 수 있습니다."}
+        시청자 채팅·후원 알림을 제외한 화면과 마이크 음성만 포함된 별도 스트림을
+        사용하세요.
       </p>
-      {streamOnly && (
+      {
         <p>
           config.yaml의 input.streamUrl에 AI 전용 RTMP/RTMPS 재생 주소를
           설정하세요. 화면과 음성은 같은 주소에서 수신하며, 방송 전체 스트림으로
           자동 전환하지 않습니다.
         </p>
-      )}
+      }
       {actions.error && (
         <p role="alert" className="error">
           {actions.error}
@@ -44,19 +42,14 @@ export function MediaConnections({
       <div className="connection-grid media-connections">
         <section className="card" id="program-details">
           <div className="section-title">
-            <h3>{streamOnly ? "AI용 화면 입력" : "송출 화면 입력"}</h3>
+            <h3>AI용 화면 입력</h3>
             <span className="status">
               {stale ? "확인 불가" : fresh ? "정상" : "확인 필요"}
             </span>
           </div>
           <div className="preview">
             {fresh && preview ? (
-              <img
-                src={preview}
-                alt={
-                  streamOnly ? "AI가 보는 전용 스트림 화면" : "현재 송출 화면"
-                }
-              />
+              <img src={preview} alt="AI가 보는 전용 스트림 화면" />
             ) : (
               <p>최근 송출 화면을 기다리고 있습니다.</p>
             )}
@@ -117,9 +110,9 @@ export function MediaConnections({
               : status.audio.latestText || "인식된 음성을 기다리고 있습니다."}
           </p>
           <p className="hint">
-            {streamOnly
-              ? "AI 전용 스트림의 마이크 음성을 전사합니다. 마이크에 들어온 소리는 모두 포함될 수 있습니다. config.yaml의 input.streamUrl과 audio.provider, "
-              : "방송 음성을 전사해 최근 10청크를 AI 입력에 사용합니다. config.yaml의 audio.url과 audio.provider, "}
+            AI 전용 스트림의 마이크 음성을 전사합니다. 마이크에 들어온 소리는
+            모두 포함될 수 있습니다. config.yaml의 input.streamUrl과
+            audio.provider,
             {status.audio.provider === "openai"
               ? "OPENAI_API_KEY"
               : "GROQ_API_KEY"}

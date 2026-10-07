@@ -24,7 +24,6 @@ function fixture() {
         seq: 1,
         author: "PRIVATE_ACCOUNT",
         channel: "PRIVATE_CHANNEL",
-        consentEpoch: 7,
       },
     ],
     [
@@ -41,7 +40,6 @@ function fixture() {
         seq: 2,
         author: "PRIVATE_AI_ACCOUNT",
         channel: "PRIVATE_CHANNEL",
-        consentEpoch: 0,
       },
     ],
   ]);

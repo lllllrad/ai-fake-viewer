@@ -27,11 +27,6 @@ export interface ReactionPolicy {
   rolling_window_ms?: number;
   global_hard_cap_messages_per_window?: number;
   minimum_global_gap_ms?: number;
-  upstream_activity_bands?: Array<{
-    min_messages: number;
-    max_messages: number | null;
-    ai_cap_messages_per_window: number;
-  }>;
   max_observation_age_ms?: number;
   model_timeout_ms?: number;
   persona_cooldown_ms?: number;
@@ -46,24 +41,13 @@ export function castPacingBlocked(input: {
 }) {
   const { recent, speechTimes, now, lastSpoke, policy } = input;
   const window = policy.rolling_window_ms ?? 60000;
-  const count = (synthetic: boolean) =>
+  const cap = policy.global_hard_cap_messages_per_window ?? 6;
+  return (
     recent.filter(
       (message) =>
-        (message.attribution === "experiment") === synthetic &&
+        message.attribution === "experiment" &&
         message.displayTime >= now - window,
-    ).length;
-  const upstream = count(false);
-  const band = (policy.upstream_activity_bands ?? []).find(
-    (band) =>
-      upstream >= band.min_messages &&
-      (band.max_messages === null || upstream <= band.max_messages),
-  );
-  const cap = Math.min(
-    policy.global_hard_cap_messages_per_window ?? 6,
-    band?.ai_cap_messages_per_window ?? 6,
-  );
-  return (
-    count(true) >= cap ||
+    ).length >= cap ||
     speechTimes.filter((at) => at > now - window).length >= cap ||
     now - lastSpoke < (policy.minimum_global_gap_ms ?? 5000)
   );

@@ -1,8 +1,7 @@
 import { z } from "zod";
-export const platforms = ["youtube", "chzzk", "soop"] as const;
 export const incomingSchema = z
   .object({
-    platform: z.enum([...platforms, "experiment"]),
+    platform: z.literal("experiment"),
     channel: z.string().min(1).max(256),
     author: z.string().min(1).max(256),
     name: z.string().min(1).max(120),

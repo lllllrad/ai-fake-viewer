@@ -1,6 +1,5 @@
 import { loadEnvFile } from "node:process";
 import { existsSync, readFileSync, writeFileSync, renameSync } from "node:fs";
-import { SessionProfileMismatchError } from "../../packages/privacy-profile.ts";
 import { loadConfig } from "../../packages/config.ts";
 import { createApp } from "./app.ts";
 import { launchServer } from "./startup.ts";
@@ -43,7 +42,7 @@ try {
     close: () => app.close(),
   });
   console.log(
-    `${demo ? "DEMO — artificial chat and frames" : config.input.mode === "ai_stream" ? "AI STREAM MODE — dedicated media only; platform chat disabled" : "LIVE MODE — reviewed privacy profile and viewer consent required"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
+    `${demo ? "DEMO — artificial chat and frames" : "AI STREAM — dedicated screen and microphone"}\nAdmin: http://127.0.0.1:${config.port}/admin\nUse ADMIN_TOKEN from .env to sign in. Public links are available in admin. Ctrl+C stops the server.`,
   );
   let stopping = false;
   const stop = async () => {
@@ -60,8 +59,7 @@ try {
   process.on("SIGINT", () => void stop());
   process.on("SIGTERM", () => void stop());
 } catch (e) {
-  if (e instanceof SessionProfileMismatchError) console.error(e.message);
-  else if (e && typeof e === "object" && "issues" in e)
+  if (e && typeof e === "object" && "issues" in e)
     console.error(
       "Configuration invalid:",
       (e as any).issues

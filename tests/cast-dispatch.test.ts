@@ -7,7 +7,6 @@ import {
 import { Store } from "../packages/storage.ts";
 import { createBroadcastCast } from "../packages/infrastructure/cast/runtime.ts";
 const activity = (): DispatchActivity => ({
-  upstream: 0,
   synthetic: 0,
   reservations: 1,
   globalGapCount: 0,
@@ -38,22 +37,7 @@ test("dispatch preserves cooldown, inflight, consecutive speaker and evidence ga
   ])
     assert.equal(dispatchAllowed({}, { ...activity(), ...change }), false);
 });
-test("dispatch uses upstream activity bands and Unicode-normalized long-text deduplication", () => {
-  assert.equal(
-    dispatchAllowed(
-      {
-        upstream_activity_bands: [
-          {
-            min_messages: 0,
-            max_messages: null,
-            ai_cap_messages_per_window: 0,
-          },
-        ],
-      },
-      activity(),
-    ),
-    false,
-  );
+test("dispatch uses Unicode-normalized long-text deduplication", () => {
   assert.equal(
     dispatchAllowed(
       {},
@@ -156,4 +140,16 @@ test("dispatch write failure rolls back without moving or reviving the attempt",
   f.store.attempts.finish(f.input.id, "canceled", "fixture stop");
   assert.equal(f.store.dispatch.claim(f.claim), false);
   assert.equal(f.state(), "canceled");
+});
+
+test("saved platform activity bands are discarded when reading a legacy policy", async () => {
+  const { policySchema } =
+    await import("../packages/contracts/cast-configuration.ts");
+  const policy = policySchema.parse({
+    upstream_activity_bands: [
+      { min_messages: 0, max_messages: null, ai_cap_messages_per_window: 0 },
+    ],
+  });
+  assert.equal("upstream_activity_bands" in policy, false);
+  assert.equal(dispatchAllowed(policy, activity()), true);
 });

@@ -12,7 +12,6 @@ export interface ReactionEngine<
   capture: import("./coordinator-ports.ts").ReactionScreen<Bytes>;
   config: import("./coordinator-ports.ts").ReactionConfig;
   transcriber: import("./coordinator-ports.ts").ReactionSpeech | undefined;
-  gate: import("./timing-gate.ts").TimingGate;
   model: import("./model-port.ts").Model<Bytes>;
   providerReady(): boolean;
   random(): number;
@@ -71,7 +70,6 @@ export type PipelineArguments<Bytes extends Uint8Array, Handle> = [
   demo: boolean,
   providerReady: () => boolean,
   transcriber: import("./coordinator-ports.ts").ReactionSpeech | undefined,
-  gate: import("./timing-gate.ts").TimingGate,
   random: () => number,
   runtime: import("./coordinator-ports.ts").ReactionRuntime<Handle>,
 ];

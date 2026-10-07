@@ -1,14 +1,6 @@
-import {
-  Radio,
-  SlidersHorizontal,
-  Users,
-  FolderCheck,
-  MessagesSquare,
-  LogOut,
-} from "lucide-react";
-import { Button, Input, StatusBadge } from "./components/ui";
+import { Radio, SlidersHorizontal, MessagesSquare, LogOut } from "lucide-react";
+import { Button, StatusBadge } from "./components/ui";
 import { AdminLogin } from "./features/workspace/AdminLogin";
-import { SoopConnector } from "./features/soop/SoopConnector";
 import { ConnectionsPage } from "./features/connections/ConnectionsPage";
 import "./style.css";
 import { BroadcastConversation } from "./features/workspace/BroadcastConversation";
@@ -19,7 +11,6 @@ import { useAdminActions } from "./lib/use-admin-actions";
 import { useAdminSession } from "./features/workspace/use-admin-session";
 import { usePreview } from "./features/workspace/use-preview";
 import { ConversationPage } from "./features/conversation/ConversationPage";
-import { ParticipationPage } from "./features/participation/ParticipationPage";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { OperationsDashboard } from "./operations-dashboard";
@@ -90,23 +81,6 @@ function Admin() {
       title: "방송 준비",
       description: "입력부터 AI 모델, OBS 출력까지 연결을 준비하세요.",
       Icon: SlidersHorizontal,
-    },
-    {
-      key: "participation",
-      label: "참여자",
-      title: "참여자 관리",
-      description:
-        status?.inputMode === "ai_stream"
-          ? "AI 전용 스트림의 입력 범위를 확인하세요."
-          : "안내 전달과 동의 상태를 확인하세요.",
-      Icon: Users,
-    },
-    {
-      key: "records",
-      label: "기록·권리",
-      title: "기록·권리 요청",
-      description: "방송 이후에도 필요한 요청과 외부 영상 조치를 관리하세요.",
-      Icon: FolderCheck,
     },
   ] as const;
   const current = pages.find((item) => item.key === page)!;
@@ -219,7 +193,6 @@ function Admin() {
               <BroadcastConversation
                 messages={status.messages}
                 cast={status.personas ?? []}
-                summary={status.chatSummary}
                 transcripts={status.audio.history}
                 pending={status.ai.pending}
                 closed={status.closed}
@@ -239,84 +212,7 @@ function Admin() {
                 stale={stale}
                 preview={preview}
                 refresh={refresh}
-                soop={
-                  <SoopConnector
-                    closed={status.closed}
-                    sessionId={status.sessionId}
-                    stale={stale}
-                    setup={status.setup.soop}
-                    state={status.connectors.soop?.state ?? "unknown"}
-                    refresh={refresh}
-                  />
-                }
               />
-            </div>
-            <div
-              hidden={page !== "participation" && page !== "records"}
-              className="workspace-screen"
-            >
-              {status.demo ||
-              (status.inputMode === "ai_stream" && page !== "records") ? (
-                <section
-                  id={page === "records" ? "records" : "participation"}
-                  className="empty-panel"
-                >
-                  <Users size={32} aria-hidden="true" />
-                  <h2>
-                    {status.inputMode === "ai_stream"
-                      ? "시청자 참여 절차를 사용하지 않습니다."
-                      : page === "records"
-                        ? "실제 방송에서 기록을 관리합니다"
-                        : "실제 방송에서 참여자를 관리합니다"}
-                  </h2>
-                  <p>
-                    {status.inputMode === "ai_stream"
-                      ? "AI 전용 스트림 모드는 플랫폼 채팅을 수신·저장하지 않습니다. 방송 준비에서 AI용 화면과 마이크 음성을 확인하세요."
-                      : "데모에서는 인공 입력을 사용합니다. 실제 방송의 동의·권리행사 관리는 실제 입력 모드에서 사용할 수 있습니다."}
-                  </p>
-                  <a href="#connections">방송 준비로 이동</a>
-                </section>
-              ) : (
-                <ParticipationPage
-                  now={now}
-                  view={page === "records" ? "records" : "participation"}
-                  noticeSettings={
-                    <section className="panel">
-                      <h2>리더·오버레이 참여 안내</h2>
-                      <p className="hint">
-                        플랫폼 심사 확인 후 활성화하세요. 동의 전 채팅 차단은
-                        항상 유지됩니다.
-                      </p>
-                      <div className="toolbar">
-                        {(["youtube", "chzzk", "soop"] as const).map(
-                          (platform) => (
-                            <label className="check-label" key={platform}>
-                              <Input
-                                type="checkbox"
-                                checked={
-                                  status.setup[platform].consentNoticeEnabled
-                                }
-                                disabled={busy || stale}
-                                onChange={(event) =>
-                                  void action(`consent-notices/${platform}`, {
-                                    enabled: event.target.checked,
-                                  })
-                                }
-                              />
-                              {platform === "youtube"
-                                ? "YouTube"
-                                : platform === "chzzk"
-                                  ? "치지직"
-                                  : "SOOP"}{" "}
-                              동의 안내
-                            </label>
-                          ),
-                        )}
-                      </div>
-                    </section>
-                  }
-                />
-              )}
             </div>
           </>
         )}

@@ -21,9 +21,6 @@ test("live and test apps have disjoint routes, credentials, cookies and lifetime
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(directory, "live-chatgpt"),
-    youtubeTokenPath: join(directory, "youtube"),
-    chzzkTokenPath: join(directory, "chzzk"),
-    soopTokenPath: join(directory, "soop"),
   });
   const testApp = await createExperimentApp(
     experimentSettingsSchema.parse({}),

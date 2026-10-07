@@ -19,7 +19,6 @@ import {
   type ReactionEngine,
   type ReactionPipeline,
 } from "../../application/reactions/pipelines.ts";
-import { TimingGate } from "../../application/reactions/timing-gate.ts";
 import type { Model } from "../../application/reactions/model-port.ts";
 import { createBroadcastCast } from "../cast/runtime.ts";
 import {
@@ -174,12 +173,7 @@ export class InteractiveExperiment {
           this.waitingForFreshInput ? [] : this.store.transcripts.recent(),
         has: (id) => this.store.transcripts.recent().some((t) => t.id === id),
       },
-      new TimingGate(config.ai.gate, {
-        ensureReady() {},
-        async evaluate() {
-          throw Error("Timing disabled");
-        },
-      }),
+
       random,
       {
         now: Date.now,

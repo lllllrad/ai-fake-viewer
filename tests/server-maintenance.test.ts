@@ -120,9 +120,6 @@ test("the HTTP server survives a recovery read failure and cancels maintenance b
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(dir, "chatgpt"),
-    youtubeTokenPath: join(dir, "youtube"),
-    chzzkTokenPath: join(dir, "chzzk"),
-    soopTokenPath: join(dir, "soop"),
   });
   t.after(() => env.app.close());
   let reads = 0;

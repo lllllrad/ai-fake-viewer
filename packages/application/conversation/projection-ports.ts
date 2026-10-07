@@ -7,7 +7,6 @@ import type {
 export interface StoredConversationMessage extends ConversationMessage {
   author: string;
   channel: string;
-  consentEpoch: number;
 }
 export interface StoredConversationEvent extends PublicEvent {
   target: string | null;

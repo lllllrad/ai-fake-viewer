@@ -41,7 +41,7 @@ export class Capture {
   ) {}
   start() {
     if (!this.allowProcessing()) {
-      this.state = "privacy_blocked";
+      this.state = "session_closed";
       return;
     }
     if (

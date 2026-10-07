@@ -1,6 +1,5 @@
 import type { ReactionPolicy } from "./cast-selection.ts";
 export interface DispatchActivity {
-  upstream: number;
   synthetic: number;
   reservations: number;
   globalGapCount: number;
@@ -23,15 +22,7 @@ export function dispatchAllowed(
   policy: ReactionPolicy & { max_inflight_per_session?: number },
   activity: DispatchActivity,
 ) {
-  const band = (policy.upstream_activity_bands ?? []).find(
-    (b) =>
-      activity.upstream >= b.min_messages &&
-      (b.max_messages === null || activity.upstream <= b.max_messages),
-  );
-  const cap = Math.min(
-    policy.global_hard_cap_messages_per_window ?? 6,
-    band?.ai_cap_messages_per_window ?? 6,
-  );
+  const cap = policy.global_hard_cap_messages_per_window ?? 6;
   const consecutiveLimit =
     policy.max_consecutive_messages_from_one_persona ?? 2;
   if (

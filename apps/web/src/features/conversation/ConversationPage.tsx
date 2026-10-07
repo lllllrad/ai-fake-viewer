@@ -103,15 +103,9 @@ export function ConversationPage() {
         </header>
       )}
       <aside className="conversation-disclosure">
-        {conversation.demo && <strong>데모 · 인공 입력 / </strong>}실시간 채팅과
-        AI 시청자의 반응이 함께 표시됩니다.
+        {conversation.demo && <strong>데모 · 인공 입력 / </strong>}AI 시청자가
+        생성한 채팅입니다.
       </aside>
-      {conversation.noticeAt !== null && (
-        <aside className="conversation-guidance" role="status">
-          안내를 확인한 뒤 <strong>!동의</strong>를 입력하면 이후 채팅이
-          표시됩니다. 철회하려면 <strong>!철회</strong>를 입력하세요.
-        </aside>
-      )}
       <ConversationList
         messages={conversation.messages}
         overlay={overlay}

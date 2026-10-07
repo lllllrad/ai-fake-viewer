@@ -8,127 +8,77 @@ web
 
 ## Users
 
-The primary user is a Korean-speaking broadcaster operating their own stream.
-They need to follow live conversation and add natural AI participation to their
-local chat reader and OBS overlay while retaining control during the broadcast.
-Participating viewers encounter the consent guidance and the published conversation.
-The broadcaster also uses a separate development workspace to improve synthetic
-viewer behavior through text/microphone conversations, persona inspection and
-on-demand execution details.
+A Korean-speaking broadcaster operating their own stream and improving AI viewer
+behavior. They need natural synthetic reactions, clear input/model status, immediate
+control and a reader/OBS overlay. A separate test workspace supports text/microphone
+conversations, persona inspection and optional execution detail.
 
 ## Product Purpose
 
-Mixed Chat Studio combines permitted live chat with synthetic AI viewers in a
-local broadcast workspace, reader and OBS overlay. Success means relevant,
-natural participation that supports the broadcast without overwhelming real chat,
-and clear operator control over inputs, generation, disclosure and session end.
-
-A separate AI-only stream mode uses a prepared screen/microphone feed without
-collecting viewer chat or requiring its participation workflow. It isolates its
-session and AI state from the consented-chat mode.
+Mixed Chat Studio creates synthetic viewer reactions from a dedicated screen and
+microphone feed. Success means relevant, natural participation and clear operator
+control over generation and session lifetime.
 
 ## Positioning
 
-The product combines local publication, automatically composed synthetic viewers,
-and participation controls scoped to each broadcast. AI replies stay inside the
-app's conversation surfaces; platform senders deliver fixed participation notices,
-not generated replies. Personas do not replicate or profile real viewers.
+AI viewers are synthetic identities, not replicas or profiles of real viewers.
+Generated replies stay in the app, reader and overlay. The product does not receive
+or send native platform chat and does not manage viewer consent or rights requests.
 
 ## Operating Context
 
-The broadcaster uses a browser workspace with Live, Broadcast preparation, Participants and
-Records/rights destinations. Separate reader and transparent overlay routes support
-reading chat and publishing through an OBS Browser Source. YouTube, CHZZK and SOOP
-integrations have distinct authorization and runtime requirements; SOOP's official
-browser SDK requires the connected administrator tab to remain open.
+Live and Broadcast preparation are the two operator destinations. Separate reader
+and transparent overlay routes support publishing through an OBS Browser Source.
+The producer supplies an already prepared RTMP/RTMPS stream containing the intended
+screen and microphone. The app consumes the feed and applies optional capture masks.
 
-AI testing runs in its own web app with separate credentials, accounts and stored
-sessions. Broadcast and test apps call an independent local AI service; AI
-implementation changes can therefore be used in both.
-
-Operation is local, with documented private-LAN reader/overlay access. Administrator
-access remains local. Internet-facing and reverse-proxy deployment are unsupported.
-Demo operation uses artificial input and no paid model.
+The independent test app has separate credentials, accounts and sessions. Both apps
+call the same AI service and share speech processing. Operation is local, with optional
+private-LAN reader access. Administrator access remains local.
 
 ## Capabilities and Constraints
 
-- Compose six synthetic viewers automatically, without operator persona authoring
-  or real-viewer profiling. Keep the cast for the broadcast, including restarts;
-  permit silence and reduce AI activity when real chat is busy.
-- Require the documented operating profile, platform permissions and individual
-  participation conditions. Ordinary unconsented viewer text must not reach public
-  display, storage or AI context. Fixed notice delivery alone does not grant consent.
-- Use one fresh informed consent command after confirmed guidance, with the
-  documented age self-declaration and broadcast-account exception. Operators cannot
-  bypass participation requirements by directly activating a viewer.
-- Withdrawal removes raw and identifiable derived context, cancels dependent work
-  and prevents late publication. External provider records and published video
-  require separate follow-up; local deletion does not promise remote deletion.
-- Preserve broadcast state across process restarts. Explicit broadcast end deletes
-  ordinary session data; a new broadcast starts with fresh participation and AI
-  disabled. Credentials and unresolved rights requests have separate lifetimes.
-- Keep AI stop available and disclose input or model failures clearly. Disclosure
-  stops generation and reveals origins irreversibly for that broadcast, preserving
-  real nicknames and synthetic names.
-- Use the Responses API with explicitly selected Sign in with ChatGPT or API-key
-  authentication. Account/model eligibility and processing conditions must match
-  the operating profile; no silent provider fallback is allowed.
-- Configured broadcast media, transcription and exports follow the current input
-  contracts. Preserve consent and publication checks at processing boundaries.
-- Support resuming ended test conversations with their cast and history. Keep
-  microphone capture independent of the conversation/state/call-detail tab.
-- Record generation usage without a call-count cap. Retain explicit stop, input
-  admission, token/cost controls and publication pacing.
-- Keep credentials, private configuration, raw viewer content and local research
-  out of tracked files.
+- Compose six persistent synthetic viewers with stable generated nicknames.
+- Preserve silence, pacing and evidence-bound reactions; more replies are not inherently better.
+- Use one dedicated media URL without fallback to a public broadcast or another device.
+- Keep AI stop available and distinguish enabled intent from current input/model readiness.
+- Preserve live state across restart. End erases ordinary records; new sessions start disabled.
+- Keep model accounts and test histories separate from broadcast data.
+- Support Sign in with ChatGPT and API-key authentication through the Responses API,
+  with independent OpenAI/Groq speech credentials and no provider fallback.
+- Support resuming ended test conversations and keep microphone capture outside tabs.
+- Expose AI state and full test call details separately from normal conversation.
+- Reuse bounded state/context and support replaceable algorithms through the AI service.
+- Keep private credentials, configuration, media and local research out of tracked files.
 
-Detailed behavior and known limitations remain owned by the
-[current behavior contract](docs/specifications/behavior.md),
-[dashboard specification](docs/specifications/dashboard.md),
-[participation specification](docs/specifications/participation.md),
-[persona specification](docs/specifications/personas.md) and
-[AI pipeline documentation](docs/development/ai-pipeline.md),
-[independent AI service](docs/development/ai-service.md) and
-[test workspace contract](docs/development/experiments.md).
-These documents govern implementation details; this record captures durable
-product intent. Latest accepted requirements take precedence over obsolete notes.
+Current behavior is owned by [behavior](docs/specifications/behavior.md),
+[dashboard](docs/specifications/dashboard.md), [personas](docs/specifications/personas.md),
+[AI pipeline](docs/development/ai-pipeline.md), [AI service](docs/development/ai-service.md)
+and [test workspace](docs/development/experiments.md).
 
 ## Brand Commitments
 
-Prefer category-standard interfaces, established UI libraries and familiar operating
-patterns. Clarity and task efficiency take precedence over visual experimentation.
-Screen organization is replaceable; preserve product capabilities and data/API
-contracts rather than incidental navigation or inconvenient interactions.
-
-Preserve the product name Mixed Chat Studio and Korean application UI localization.
-Tracked documentation remains English. Use the official names **Sign in with
-ChatGPT** and **Responses API**, and preserve exact configuration/API identifiers.
+Prefer category-standard interfaces and established libraries. Clarity, familiar
+controls and efficient tasks take precedence over visual experiments. Preserve the
+Mixed Chat Studio name and Korean UI. Tracked documentation is English and uses
+the official names Sign in with ChatGPT and Responses API.
 
 ## Evidence on Hand
 
-The repository contains the implemented browser surfaces in `apps/web`, current
-[product contracts](docs/README.md), synthetic fixtures in `fixtures` and automated
-tests in `tests`. The [operations guide](docs/operations/setup.md) documents setup
-and remaining live acceptance responsibilities. Automated fixtures do not establish
-real platform approval, actual notice delivery, provider eligibility, external
-deletion or real-model naturalness. Do not invent such evidence or expose private
-research as public product proof.
+The implementation, current contracts and synthetic tests document behavior.
+Automated checks do not establish real source masking, microphone isolation,
+provider eligibility or subjective AI naturalness. Do not expose private research
+as public proof or fabricate real-provider validation.
 
 ## Product Principles
 
-- Support the broadcaster's live task with clear status and immediate control.
-- Let synthetic participation respond to available evidence and leave room for
-  real conversation; more replies are not inherently better.
-- Treat consent, withdrawal and session boundaries as product behavior throughout
-  every conversation surface and processing stage.
-- Separate persisted operator intent from current readiness, and local actions
-  from external outcomes.
-- Keep routine operation understandable; reveal technical details when they help
-  diagnose or resolve a problem.
+- Make live input, generation and publication state understandable.
+- Preserve session and account boundaries across asynchronous work.
+- Keep detailed execution inspection optional and separate from conversation.
+- Distinguish local actions from external outcomes.
 
 ## Accessibility & Inclusion
 
-Preserve Korean-language readability, keyboard navigation and meaningful focus
-behavior. Routine status updates must not steal focus. Keep explicit action labels,
-usable pending/error states and clear distinctions between missing configuration,
-waiting input and failure, as specified in the dashboard contract.
+Use Korean-readable typography, keyboard navigation and predictable focus.
+Routine polling must not steal focus. Preserve clear empty, loading, pending,
+stale and failure states and mobile access to emergency stop.

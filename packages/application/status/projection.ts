@@ -11,13 +11,6 @@ export function projectAdminStatus(input: AdminStatus): AdminStatus {
     ...status,
     messages: [],
     personas: [],
-    chatSummary: {
-      version: 1,
-      state: "insufficient_data",
-      topics: [],
-      atmosphere: [],
-      activity: "unknown",
-    },
     audio: {
       ...status.audio,
       history: [],

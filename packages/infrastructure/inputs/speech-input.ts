@@ -41,7 +41,7 @@ export class Transcriber {
   /** Browser PCM uses the same admission, budgets, cancellation and publication as FFmpeg input. */
   startPcm() {
     if (!this.allowProcessing()) {
-      this.state = "privacy_blocked";
+      this.state = "session_closed";
       return;
     }
     if (!speechApiKey(this.config.provider)) {
@@ -56,7 +56,7 @@ export class Transcriber {
   }
   start() {
     if (!this.allowProcessing()) {
-      this.state = "privacy_blocked";
+      this.state = "session_closed";
       return;
     }
     if (this.child) return;

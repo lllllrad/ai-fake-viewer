@@ -29,7 +29,6 @@ function fixture() {
       type: "message.hidden",
       payload: { id: "removed" },
     }),
-    noticeEnabled: () => true,
     subscribe: (next) => {
       subscriptions++;
       listeners = next;
@@ -172,44 +171,4 @@ test("heartbeat tracks pong and removes dead reader listeners and timers", () =>
   assert.equal(f.counts().terminated, 1);
   assert.equal(f.counts().removals, 1);
   assert.equal(f.timers.size, 0);
-});
-test("reset uses current broadcast state and disabled notices never reach the reader", () => {
-  const f = fixture();
-  f.auth();
-  f.source.snapshot = () => ({
-    type: "snapshot",
-    sessionId: "next",
-    lastSeq: 0,
-    messages: [],
-    identities: [],
-    closed: true,
-  });
-  f.listeners().reset();
-  assert.equal((f.packets[1] as { sessionId: string }).sessionId, "next");
-  f.source.noticeEnabled = () => false;
-  f.listeners().notice({
-    platform: "youtube",
-    channel: "fixture",
-    occurredAt: 10,
-  });
-  assert.equal(f.packets.length, 2);
-  f.session.dispose();
-});
-
-test("disposed notice callbacks never read storage and broken closes do not escape publishers", () => {
-  const f = fixture();
-  f.auth();
-  const listeners = f.listeners();
-  f.transport.close = () => {
-    throw new Error("fixture close failure");
-  };
-  f.transport.send = () => {
-    throw new Error("fixture send failure");
-  };
-  assert.doesNotThrow(listeners.reset);
-  f.source.noticeEnabled = () => {
-    assert.fail("disposed listener must not query storage");
-  };
-  listeners.notice({ platform: "youtube", channel: "fixture", occurredAt: 10 });
-  assert.equal(f.counts().removals, 1);
 });

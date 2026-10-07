@@ -1,20 +1,16 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { BroadcastLifetimeRepository } from "../../application/broadcast/lifetime.ts";
 
-/** Broadcast records are disposable; durable rights follow-ups and account tokens are not. */
+/** Broadcast records are disposable; account tokens are not. */
 export class SqliteBroadcastLifetime implements BroadcastLifetimeRepository {
   constructor(private readonly database: DatabaseSync) {}
   erase() {
     this.database.exec(
       `
       DELETE FROM viewer_memory;
-      DELETE FROM chat_context_summaries;
       DELETE FROM ai_message_context;
       DELETE FROM messages;
       DELETE FROM actors_private;
-      DELETE FROM viewer_consents;
-      DELETE FROM consent_notice_targets;
-      DELETE FROM consent_notice_state;
       DELETE FROM events;
       DELETE FROM connector_checkpoints;
       DELETE FROM model_usage;
@@ -34,7 +30,7 @@ export class SqliteBroadcastLifetime implements BroadcastLifetimeRepository {
       DELETE FROM persona_sessions;
       DELETE FROM persona_versions WHERE json_extract(provenance,'$.session_id') IS NOT NULL;
       DELETE FROM sessions;
-      DELETE FROM runtime_flags WHERE key='ai_desired_running' OR key LIKE 'consent_notice:%';
+      DELETE FROM runtime_flags WHERE key='ai_desired_running';
       `,
     );
   }

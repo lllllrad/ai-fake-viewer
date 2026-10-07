@@ -57,7 +57,6 @@ export const conversationPacketSchema = z.discriminatedUnion("type", [
     demo: z.boolean().default(false),
   }),
   z.object({ type: z.literal("event"), event: conversationEventSchema }),
-  z.object({ type: z.literal("consent_notice"), occurredAt: timestamp }),
 ]);
 export type ConversationPacket = z.infer<typeof conversationPacketSchema>;
 

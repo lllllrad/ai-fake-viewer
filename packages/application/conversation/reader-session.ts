@@ -3,19 +3,12 @@ import {
   type PublicEvent,
 } from "../../contracts/conversation.ts";
 import type { ConversationSnapshot } from "./projection-ports.ts";
-export interface ReaderNotice {
-  platform: string;
-  channel: string;
-  occurredAt: number;
-}
 export interface ReaderSource {
   snapshot(): ConversationSnapshot;
   event(event: PublicEvent): PublicEvent;
-  noticeEnabled(notice: ReaderNotice): boolean;
   subscribe(listeners: {
     event(event: PublicEvent): void;
     reset(): void;
-    notice(notice: ReaderNotice): void;
   }): () => void;
 }
 export interface ReaderTransport {
@@ -74,19 +67,6 @@ export class ReaderSession {
           event: this.source.event(event),
         })),
       reset: () => this.reset(),
-      notice: (notice) => {
-        if (this.disposed) return;
-        try {
-          if (this.source.noticeEnabled(notice))
-            this.deliver(() => ({
-              type: "consent_notice",
-              platform: notice.platform,
-              occurredAt: notice.occurredAt,
-            }));
-        } catch {
-          this.close(1011);
-        }
-      },
     });
   }
   private reset() {

@@ -3,10 +3,7 @@ interface ServerShutdownDependencies {
   cancelAuthoring(): void;
   shutdownBroadcast(): Promise<void>;
   closeReaders(): void;
-  flushFollowups(): void;
   closeBroadcastStorage(): void;
-  closeRightsStorage(): void;
-  clearFollowups(): void;
 }
 
 /** Drain inputs before closing storage; one failed cleanup cannot skip another resource. */
@@ -45,10 +42,7 @@ export class ServerShutdown {
       failures.push(error);
     }
     attempt(() => d.closeReaders());
-    attempt(() => d.flushFollowups());
     attempt(() => d.closeBroadcastStorage());
-    attempt(() => d.closeRightsStorage());
-    attempt(() => d.clearFollowups());
     if (failures.length)
       throw new AggregateError(failures, "Server resource shutdown failed");
   }

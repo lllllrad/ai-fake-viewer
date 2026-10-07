@@ -3,39 +3,15 @@ network:
   bindHost: 127.0.0.1 # set 0.0.0.0 to allow reader and overlay from another PC
   publicBaseUrl: "" # LAN mode: http://APP_PC_LAN_IP:3210
 # Separate, already-sanitized screen + microphone stream:
-# input.mode: ai_stream disables platform chat/consent notices and uses streamUrl
-# for BOTH video and audio. Leave broadcast to retain the consented-chat workflow.
+# The playback URL supplies BOTH video and audio.
 input:
-  mode: broadcast
+  mode: ai_stream
   streamUrl: "" # RTMP/RTMPS playback URL, e.g. rtmp://APP_SERVER:1935/live/ai
 database: data/broadcast.sqlite # private broadcast state; retained across restart, erased at broadcast end
-retentionDays: 7 # legacy utility bound, not persistent live chat retention
-youtube:
-  redirectUri: http://127.0.0.1:3210/oauth/youtube/callback
-  enabled: false
-  consentNoticeEnabled: false
-  channelId: "" # optional UC channel ID for active-live discovery
-  video: ""
-  transport: grpc
-  restFallback: true
-chzzk:
-  enabled: false
-  consentNoticeEnabled: false
-  # Register this exact URL in the CHZZK developer console. For a public HTTPS callback, replace only the origin.
-  redirectUri: http://127.0.0.1:3210/oauth/chzzk/callback
-soop:
-  mode: disabled
-  consentNoticeEnabled: false
-  experimentalConsent: false
-  streamerId: ""
-  # Register this exact callback in the SOOP developer console.
-  redirectUri: http://127.0.0.1:3210/oauth/soop/callback
+retentionDays: 7 # cleanup bound for closed/reference sessions
 capture:
-  # In ai_stream mode, backend/device/url are overridden by input.streamUrl.
+  # Live video always uses input.streamUrl.
   ffmpeg: ffmpeg
-  backend: dshow # rtmp for a separate OBS PC and a local/LAN RTMP server
-  device: OBS Virtual Camera
-  url: "" # when backend is rtmp: rtmp://127.0.0.1:1935/program
   intervalMs: 3000
   # Optional normalized rectangles, applied before preview and upload.
   # Empty is supported; no mask confirmation is required.
@@ -43,7 +19,6 @@ capture:
 audio:
   provider: openai # whisper-1 with OPENAI_API_KEY; groq uses GROQ_API_KEY
   ffmpeg: ffmpeg # use scripts/ffmpeg-docker.sh on a Linux app PC with Docker
-  url: "" # private RTMP APP_READ_URL from data/rtmp-urls.txt
   language: ko # input language (ISO-639-1); "" for automatic detection
   chunkSeconds: 10
   maxRequests: 360
@@ -52,12 +27,6 @@ ai:
   manualApproval: false # publish locally without human review
   reviewDraft: true # run a second model pass over each proposed reply
   visualMode: on_request # AI requests a masked frame only when needed; continuous retains old behavior
-  gate:
-    enabled: false # legacy/demo only; must remain false for live privacy profile
-    model: jev-latest
-    threshold: 0.8 # suppress only when Jev is sure timing is bad
-    maxRequests: 360 # per process; separate from answer-model calls
-    timeoutMs: 3000
   pacing:
     minSeconds: 35
     maxSeconds: 95
@@ -74,44 +43,3 @@ ai:
   priceCheckedAt: ""
   description: A live broadcast. React only to visible events.
   # Viewer personas are generated automatically when AI starts; no persona list is needed.
-
-# Fill only from this operator's actual approvals, public notices and API settings.
-# Empty/unconfirmed defaults intentionally block live collection/AI.
-privacy:
-  # Optional only after an actual operator review for live testing; see docs/operations/setup.md.
-  # testReview:
-  #   reference: <actual review record>
-  #   checkedAt: <ISO UTC timestamp>
-  operator: ""
-  officer: ""
-  contact: ""
-  policyUrl: https://cafe.naver.com/lllllrad/3
-  noticeUrl: https://cafe.naver.com/lllllrad/3
-  policyVersion: ""
-  noticeVersion: ""
-  overseasBasis: unconfirmed # A or B only after actual review
-  collectionNotice: ""
-  publicationNotice: "" # live, recording, VOD, edits, original-name reveal, actual retention
-  overseasNotice: "" # actual countries, provider, period, grounds, refusal consequences
-  thirdPartyNotice: "" # separate step if applicable
-  processing:
-    provider: openai_api
-    contract: API # ChatGPT subscription when provider is chatgpt_subscription
-    model: "" # API: OPENAI_MODEL; subscription: selected account model slug
-    endpoint: "" # approved OpenAI /v1 endpoint; never silently falls back
-    countries: []
-    subprocessors: ""
-    retention: ""
-    evidenceUrl: ""
-    checkedAt: ""
-    accountSettingsVerified: false
-    dataSharingDisabled: false
-    noticeMatchesConfiguration: false
-  publications: [] # entries: platform, channel, url, retention, countries, reviewed, noticeMatches
-  approvals: [] # entries: platform, broadcaster, receive, fixedNotices, screenPublication, externalAi, contractReference, checkedAt
-  notices:
-    perAccountIntervalMs: 30000
-    globalPerMinute: 2
-    approvedLimitConfirmed: false
-    botUserIds: []
-  rightsDatabase: data/rights.sqlite # only minimal exceptional requests and video inventory

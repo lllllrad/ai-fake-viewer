@@ -468,7 +468,7 @@ test("generation and review receive the latest ten transcript chunks", async (t)
   }
 });
 
-test("an edited platform message is new evidence even when its source identifier is unchanged", async (t) => {
+test("synthetic chat edits alone do not trigger a reaction loop", async (t) => {
   let now = Date.now();
   t.mock.method(Date, "now", () => now);
   const config = configSchema.parse({
@@ -493,7 +493,7 @@ test("an edited platform message is new evidence even when its source identifier
   );
   scheduler.state = "running";
   const message = {
-    platform: "youtube" as const,
+    platform: "experiment" as const,
     channel: "fixture",
     author: "viewer",
     name: "Viewer",
@@ -501,18 +501,16 @@ test("an edited platform message is new evidence even when its source identifier
     text: "SYNTHETIC_FIRST",
   };
   try {
-    store.grantConsent(message.platform, message.channel, message.author);
     store.ingestBatch([message]);
     await scheduler.tick(now);
-    assert.deepEqual(inputs, ["SYNTHETIC_FIRST"]);
+    assert.deepEqual(inputs, []);
     now += 21000;
     store.ingestBatch([{ ...message, text: "SYNTHETIC_EDITED" }]);
     await scheduler.tick(now);
-    assert.deepEqual(inputs, ["SYNTHETIC_FIRST", "SYNTHETIC_EDITED"]);
-    assert.match(scheduler.lastHash, /^[a-f0-9]{64}$/);
+    assert.deepEqual(inputs, []);
     now += 21000;
     await scheduler.tick(now);
-    assert.equal(inputs.length, 2);
+    assert.equal(inputs.length, 0);
   } finally {
     scheduler.stop();
     store.close();

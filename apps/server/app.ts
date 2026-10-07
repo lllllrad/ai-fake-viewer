@@ -16,18 +16,9 @@ import {
   equal,
 } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
 import { limitModelConcurrency } from "../../packages/application/reactions/model-concurrency.ts";
-import { ParticipationAdministration } from "../../packages/application/participation/administration.ts";
-import { registerParticipationRoutes } from "./http/routes/participation.ts";
-import { ProfileUpdate } from "../../packages/application/participation/profile-update.ts";
-import { registerProfileRoutes } from "./http/routes/profile.ts";
-import { SoopBridge } from "../../packages/application/inputs/soop-bridge.ts";
-import { registerSoopBridgeRoutes } from "./http/routes/soop-bridge.ts";
 import { ModelAccount } from "../../packages/application/accounts/model-account.ts";
 import { registerModelAccountRoutes } from "./http/routes/model-account.ts";
-import { PlatformAccounts } from "../../packages/application/accounts/platform-accounts.ts";
-import { registerPlatformAccountRoutes } from "./http/routes/platform-accounts.ts";
 import { createModelAuthorization } from "../../packages/infrastructure/reactions/model-authorization.ts";
-import { WithdrawalFollowups } from "../../packages/application/rights/withdrawal-followups.ts";
 import { registerReaderStream } from "./http/reader-stream.ts";
 import { projectReadiness } from "../../packages/application/status/readiness.ts";
 import { registerInputRoutes } from "./http/routes/inputs.ts";
@@ -35,16 +26,10 @@ import { RuntimeStatusSource } from "../../packages/infrastructure/status/runtim
 import { projectAdminStatus } from "../../packages/application/status/projection.ts";
 import { BroadcastService } from "../../packages/application/broadcast/service.ts";
 import { registerBroadcastRoutes } from "./http/routes/broadcast.ts";
-import { YoutubeAuth } from "../../packages/infrastructure/accounts/youtube-auth.ts";
-import { FixedNoticeDelivery } from "../../packages/application/participation/fixed-notice-delivery.ts";
-import { Participation } from "../../packages/infrastructure/participation/runtime.ts";
-import { profileIssues } from "../../packages/privacy-profile.ts";
-import { createRightsService } from "../../packages/infrastructure/rights/sqlite.ts";
-import { registerRightsRoutes } from "./http/routes/rights.ts";
 import Fastify from "fastify";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { z } from "zod";
@@ -57,9 +42,6 @@ import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";
 import { ChatgptAuth } from "../../packages/infrastructure/accounts/chatgpt-auth.ts";
-import { ChzzkAuth } from "../../packages/infrastructure/accounts/chzzk-auth.ts";
-import { SoopAuth } from "../../packages/infrastructure/accounts/soop-auth.ts";
-import { Supervisor } from "../../packages/infrastructure/inputs/platform-supervisor.ts";
 import { createBroadcastCast } from "../../packages/infrastructure/cast/runtime.ts";
 export { equal } from "../../packages/infrastructure/accounts/administrator-sessions.ts";
 interface AppOptions {
@@ -70,9 +52,6 @@ interface AppOptions {
   startInputs?: boolean;
   persistReaderToken?: (token: string) => void;
   chatgptTokenPath?: string;
-  chzzkTokenPath?: string;
-  soopTokenPath?: string;
-  youtubeTokenPath?: string;
 }
 
 export function createApp(config: Config, opts: AppOptions) {
@@ -96,48 +75,9 @@ async function assembleApp(
   const pipeline = loadPipelineProfile(config.ai.pipelineProfile || undefined);
   config = applyPipelineProfile(structuredClone(config), pipeline);
   config = applyInputMode(config, !!opts.demo);
-  const aiStream = config.input.mode === "ai_stream";
-  const participation =
-    opts.demo || aiStream ? undefined : new Participation(config.privacy, "");
-  const store = new Store(
-    opts.demo ? ":memory:" : config.database,
-    participation,
-    undefined,
-    !aiStream,
-  );
+  const store = new Store(opts.demo ? ":memory:" : config.database, !opts.demo);
   startup.add(() => store.close());
-  const noticeBot = participation
-    ? new FixedNoticeDelivery(participation, config.soop.streamerId, "soop", {
-        now: () => Date.now(),
-        id: randomUUID,
-      })
-    : undefined;
-  store.on("reset", () => noticeBot?.reset());
-  const rights = createRightsService(
-    opts.demo ? ":memory:" : config.privacy.rightsDatabase,
-  );
-  startup.add(() => rights.close());
-  const followups = new WithdrawalFollowups(
-    rights,
-    store.rightsFollowups,
-    randomUUID,
-  );
-  startup.add(() => followups.clear());
-  followups.flush();
-  store.on("context_invalidated", () => followups.flush());
-  const privacyReady = () =>
-    aiStream
-      ? !config.ai.gate.enabled
-      : !participation ||
-        (!profileIssues(config.privacy).length &&
-          config.ai.provider === config.privacy.processing.provider &&
-          !config.ai.gate.enabled &&
-          config.privacy.processing.model ===
-            (config.ai.provider === "chatgpt_subscription"
-              ? chatgpt.active?.model
-              : process.env.OPENAI_MODEL));
-
-  const inputSessionOpen = () => !store.closed() && !participation?.ended;
+  const inputSessionOpen = () => !store.closed();
   const capture = new Capture(config.capture, !!opts.demo);
   const transcriber = new Transcriber(config.audio, fetch, (entry) =>
     store.transcripts.record(entry),
@@ -170,9 +110,6 @@ async function assembleApp(
     store,
     capture,
     transcriber,
-    participation,
-    followups,
-    profileReady: privacyReady,
     sessionOpen: inputSessionOpen,
   });
   const personaModel = limitModelConcurrency(
@@ -184,14 +121,8 @@ async function assembleApp(
             prompts: pipeline.prompts,
           })
         : openaiModel(config.ai, {
-            endpoint: () =>
-              aiStream
-                ? "https://api.openai.com/v1"
-                : config.privacy.processing.endpoint,
-            model: () =>
-              aiStream
-                ? process.env.OPENAI_MODEL!
-                : config.privacy.processing.model,
+            endpoint: () => "https://api.openai.com/v1",
+            model: () => process.env.OPENAI_MODEL!,
             ...modelBoundary,
             prompts: pipeline.prompts,
           }),
@@ -220,53 +151,13 @@ async function assembleApp(
   scheduler.preparePersonas = () => {
     personas.prepare();
   };
-  const auth = new ChzzkAuth(
-    opts.encryptionKey,
-    opts.chzzkTokenPath ?? "data/chzzk.tokens",
-  );
-  const soopAuth = new SoopAuth(
-    opts.encryptionKey,
-    opts.soopTokenPath ?? "data/soop.tokens",
-  );
-  const youtubeAuth = new YoutubeAuth(
-    opts.encryptionKey,
-    opts.youtubeTokenPath ?? "data/youtube.tokens",
-  );
-  const supervisor = new Supervisor(
-    config,
-    store,
-    auth,
-    !!opts.demo,
-    youtubeAuth,
-  );
-  const receiverConfigured = () =>
-    (config.youtube.enabled &&
-      !!(
-        youtubeAuth.connected ||
-        process.env.YOUTUBE_API_KEY ||
-        process.env.YOUTUBE_ACCESS_TOKEN
-      ) &&
-      !!(config.youtube.video || config.youtube.channelId)) ||
-    (config.chzzk.enabled &&
-      !!process.env.CHZZK_CLIENT_ID &&
-      !!process.env.CHZZK_CLIENT_SECRET &&
-      !!auth.token) ||
-    (config.soop.mode === "official" &&
-      !!config.soop.streamerId &&
-      !!soopAuth.token);
   const readyComponents = () =>
     projectReadiness({
       demo: !!opts.demo,
-      profileReady: privacyReady(),
-      aiStream,
       streamConfigured: !!config.input.streamUrl,
       modelReady: scheduler.providerReady(),
       screenRecent: !!capture.recent().length,
       speechState: transcriber.state,
-      receiverConfigured: !!receiverConfigured(),
-      receiverStates: Object.values(supervisor.states).map(
-        (connector) => connector.state,
-      ),
     });
   scheduler.readyCheck = () =>
     readyComponents()
@@ -301,11 +192,9 @@ async function assembleApp(
     inputs: {
       startScreen: () => capture.start(),
       startSpeech: () => transcriber.start(),
-      startChat: () => supervisor.start(),
       start: () => {
         capture.start();
         transcriber.start();
-        if (opts.demo || receiverConfigured()) supervisor.start();
       },
       prepareForAi: () => {
         if (opts.demo) return;
@@ -315,52 +204,12 @@ async function assembleApp(
           ["stopped", "disabled", "config_required"].includes(transcriber.state)
         )
           transcriber.start();
-        if (receiverConfigured()) supervisor.start();
       },
       stopScreen: () => capture.stop(),
       stopSpeech: () => transcriber.stop(),
-      stopChat: () => supervisor.stop(),
     },
   });
   startup.add(() => broadcast.shutdown());
-  supervisor.onBroadcastEnded = () => {
-    void broadcast.endBroadcast().catch(() => {
-      console.error(
-        "Broadcast ended; an input adapter failed to stop cleanly.",
-      );
-    });
-  };
-  const platformAccounts = new PlatformAccounts({
-    settings: () => ({
-      demo: !!opts.demo,
-      youtube: { ...config.youtube, configured: youtubeAuth.configured },
-      chzzk: {
-        ...config.chzzk,
-        configured:
-          !!process.env.CHZZK_CLIENT_ID && !!process.env.CHZZK_CLIENT_SECRET,
-      },
-      soop: {
-        enabled: config.soop.mode === "official",
-        redirectUri: config.soop.redirectUri,
-        clientId: process.env.SOOP_CLIENT_ID,
-        clientSecret: process.env.SOOP_CLIENT_SECRET,
-      },
-    }),
-    youtube: youtubeAuth,
-    chzzk: {
-      authorizationUrl: (redirect) => auth.authorizationUrl(redirect),
-      cancel: (state) => {
-        auth.states.delete(state);
-      },
-      exchange: (code, state) => auth.exchange(code, state),
-      forget: () => auth.forget(),
-    },
-    soop: soopAuth,
-    stop: (platform) => supervisor.stopPlatform(platform),
-    resetYoutubeNotices: () => supervisor.youtubeNotices?.reset(),
-    soopStatus: (state) => supervisor.status("soop", state),
-    now: () => Date.now(),
-  });
   let readerToken = opts.readerToken;
   await app.register(websocket, { options: { maxPayload: 4096 } });
   const { origins, publicOrigin } = registerHttpAccess(
@@ -368,11 +217,6 @@ async function assembleApp(
     {
       port: config.port,
       network: config.network,
-      redirects: {
-        youtube: config.youtube.redirectUri,
-        chzzk: config.chzzk.redirectUri,
-        soop: config.soop.redirectUri,
-      },
     },
     new AdministratorSessions(opts.adminToken),
   );
@@ -396,20 +240,12 @@ async function assembleApp(
     {
       snapshot: () => store.readerSnapshot(),
       event: (event) => store.readerEvent(event),
-      noticeEnabled: (notice) =>
-        store.consentNoticeEnabled(
-          notice.platform,
-          config[notice.platform as "youtube" | "chzzk" | "soop"]
-            ?.consentNoticeEnabled,
-        ),
       subscribe: (listeners) => {
         store.on("event", listeners.event);
         store.on("reset", listeners.reset);
-        store.on("consent_notice", listeners.notice);
         return () => {
           store.off("event", listeners.event);
           store.off("reset", listeners.reset);
-          store.off("consent_notice", listeners.notice);
         };
       },
     },
@@ -420,30 +256,6 @@ async function assembleApp(
     },
   );
   startup.add(() => readers.closeAll());
-  const participationAdmin = new ParticipationAdministration({
-    participation,
-    profile: () => config.privacy,
-    rights,
-    followups,
-    notices: () => ({
-      noticeBot: noticeBot?.state ?? "disabled",
-      youtubeNoticeBot: supervisor.youtubeNotices?.state ?? "disabled",
-      chzzkNoticeBot: supervisor.chzzkNotices?.state ?? "disabled",
-    }),
-    now: () => Date.now(),
-  });
-  registerParticipationRoutes(app, participationAdmin);
-  const profileUpdate = new ProfileUpdate({
-    current: () => config.privacy,
-    reconfigure: (apply) => broadcast.reconfigureInputs(apply),
-    clearSpeech: () => store.transcripts.clear(),
-    install: (profile) => {
-      participation?.replaceProfile(profile);
-      config.privacy = profile;
-    },
-  });
-  registerProfileRoutes(app, profileUpdate);
-  registerRightsRoutes(app, rights);
   const statusSource = new RuntimeStatusSource({
     demo: !!opts.demo,
     config,
@@ -451,23 +263,12 @@ async function assembleApp(
     capture,
     transcriber,
     scheduler,
-    supervisor,
     personas,
-    rights,
     chatgpt,
-    youtubeAuth,
-    auth,
-    soopAuth,
-    privacyReady,
     readyComponents,
     now: () => Date.now(),
     credentials: () => ({
       speech: !!speechApiKey(config.audio.provider),
-      youtube: !!(
-        process.env.YOUTUBE_API_KEY || process.env.YOUTUBE_ACCESS_TOKEN
-      ),
-      chzzk: !!(process.env.CHZZK_CLIENT_ID && process.env.CHZZK_CLIENT_SECRET),
-      soop: !!(process.env.SOOP_CLIENT_ID && process.env.SOOP_CLIENT_SECRET),
       apiKey: !!process.env.OPENAI_API_KEY,
       apiModel: process.env.OPENAI_MODEL,
     }),
@@ -475,19 +276,6 @@ async function assembleApp(
   app.get("/api/admin/status", async () =>
     projectAdminStatus(statusSource.read()),
   );
-  app.post("/api/admin/consent-notices/:platform", async (req, reply) => {
-    if (aiStream)
-      return reply.code(409).send({
-        error:
-          "AI 전용 스트림 모드에서는 시청자 채팅과 동의 안내를 사용하지 않습니다.",
-      });
-    const platform = z
-      .enum(["youtube", "chzzk", "soop"])
-      .parse((req.params as any).platform);
-    const body = z.object({ enabled: z.boolean() }).strict().parse(req.body);
-    store.setConsentNoticeEnabled(platform, body.enabled);
-    return { ok: true, platform, enabled: body.enabled };
-  });
   app.get("/api/admin/links", async () => ({
     reader: `${publicOrigin}/reader#${readerToken}`,
     overlay: `${publicOrigin}/overlay#${readerToken}`,
@@ -510,9 +298,6 @@ async function assembleApp(
     transcripts: () => store.transcripts.export(),
   });
   registerBroadcastRoutes(app, broadcast, readyComponents);
-  app.post("/api/admin/chat-summary/clear", async () => ({
-    summary: store.clearChatSummary(),
-  }));
   app.post("/api/admin/ai/approve", async () => {
     scheduler.approve();
     return { ok: true };
@@ -539,36 +324,9 @@ async function assembleApp(
     callback: (query) => chatgpt.callback(query),
     disconnect: () => chatgpt.disconnect(),
     stopGeneration: () => scheduler.stop("chatgpt_account_changed"),
-    invalidateContext: () => participation?.invalidateAll(),
+    invalidateContext: () => store.emit("context_invalidated"),
   });
   registerModelAccountRoutes(app, modelAccount);
-  registerPlatformAccountRoutes(app, platformAccounts);
-  const soopBridge = new SoopBridge({
-    settings: () => ({
-      enabled: !opts.demo && config.soop.mode === "official",
-      available: !!participation?.available("soop", config.soop.streamerId),
-      closed: store.closed(),
-      broadcastId: store.sessionId,
-      streamerId: config.soop.streamerId,
-      clientId: process.env.SOOP_CLIENT_ID,
-      clientSecret: process.env.SOOP_CLIENT_SECRET,
-      state: supervisor.states.soop.state,
-    }),
-    access: (clientId, secret) => soopAuth.access(clientId, secret),
-    status: (state) => supervisor.status("soop", state),
-    connectionLost: () => participation?.connectionLost("soop"),
-    receive: (message) => supervisor.receive("soop", message),
-    notices: {
-      reset: () => noticeBot?.reset(),
-      next: (connected) => noticeBot?.next(connected) ?? null,
-      state: () => noticeBot?.state ?? "disabled",
-      failed: (id) => noticeBot?.failed(id),
-      echo: (author, text) => {
-        noticeBot?.echo(author, text);
-      },
-    },
-  });
-  registerSoopBridgeRoutes(app, soopBridge);
   if (existsSync(resolve("dist/web"))) {
     await app.register(fastifyStatic, {
       root: resolve("dist/web"),
@@ -587,7 +345,7 @@ async function assembleApp(
     )
       return reply.code(409).send({
         error:
-          "현재 설정에서 허용하지 않는 입력 또는 제공자입니다. 선택한 AI 서비스와 운영 프로필을 확인해 주세요.",
+          "현재 설정에서 허용하지 않는 입력 또는 제공자입니다. 선택한 AI 서비스를 확인해 주세요.",
       });
   });
   const resumeAiIfRequested = () => broadcast.recoverAi();
@@ -605,10 +363,7 @@ async function assembleApp(
     cancelAuthoring: () => cancelAuthoringJobs(),
     shutdownBroadcast: () => broadcast.shutdown(),
     closeReaders: () => readers.closeAll(),
-    flushFollowups: () => followups.flush(),
     closeBroadcastStorage: () => store.close(),
-    closeRightsStorage: () => rights.close(),
-    clearFollowups: () => followups.clear(),
   });
   app.addHook("onClose", () => shutdown.close());
   startup.handoff(() => app.close());
@@ -619,11 +374,8 @@ async function assembleApp(
     store,
     capture,
     scheduler,
-    supervisor,
     transcriber,
     personas,
-    participation,
-    rights,
     resumeAiIfRequested,
   };
 }

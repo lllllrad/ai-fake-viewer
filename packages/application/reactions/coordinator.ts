@@ -23,7 +23,6 @@ import {
   publicationProblem,
   type CurrentEvidence,
 } from "../../domain/reactions/publication.ts";
-import { TimingGate } from "./timing-gate.ts";
 import { type Decision } from "../../contracts/decision.ts";
 export class AiStartError extends Error {
   statusCode = 409;
@@ -137,7 +136,6 @@ export class ReactionCoordinator<
     public demo: boolean,
     public providerReady: () => boolean,
     public transcriber: ReactionSpeech | undefined,
-    public gate: TimingGate,
     public random: () => number,
     private readonly runtime: ReactionRuntime<Handle>,
     readonly program: ReactionProgram = createReactionProgram(
@@ -211,7 +209,7 @@ export class ReactionCoordinator<
     }
   }
   allowed() {
-    return ["experiment", "youtube", "chzzk", "soop"];
+    return ["experiment"];
   }
   async tick(now = this.runtime.now()) {
     const generation = this.generation;
@@ -426,7 +424,6 @@ export class ReactionCoordinator<
     let input: ModelInput<Bytes> = {
       contextKey: memoryBinding,
       viewerState: memory,
-      privacyRevision: this.store.participation?.revision,
       frames,
       transcripts,
       newTranscripts,
@@ -496,32 +493,7 @@ export class ReactionCoordinator<
             messageVersion(message),
           );
       };
-      if (!this.demo && c.gate.enabled) {
-        this.phase = "jev_timing_filter";
-        consumeNewInput();
-        const allowed = await this.gate.allow(input, signal);
-        if (
-          generation !== this.generation ||
-          signal.aborted ||
-          this.state !== "running"
-        )
-          return;
-        if (!allowed) {
-          this.skips++;
-          if (this.gate.state === "budget_exhausted")
-            this.stop(`gate_${this.gate.state}`);
-          else this.lastAttempt = 0;
-          return;
-        }
-        // Evidence may expire or be hidden while the gate is evaluating.
-        if (
-          input.transcripts?.some((t) => !this.transcriber?.has(t.id)) ||
-          input.messages.some((m) => !this.store.publicMessage(m.id))
-        )
-          return;
-      } else {
-        consumeNewInput();
-      }
+      consumeNewInput();
       const outcome = await this.program.draft({
         input,
         signal,
@@ -728,7 +700,6 @@ export class ReactionCoordinator<
         ),
       ),
       recentVideo: this.capture.recent().length > 0,
-      privacyRevision: this.store.participation?.revision,
     };
   }
   approve() {

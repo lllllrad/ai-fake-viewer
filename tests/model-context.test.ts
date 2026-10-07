@@ -56,7 +56,7 @@ test("outgoing context strips unexpected message, transcript and top-level metad
     { id: "speech", capturedAt: 1, text: "Synthetic speech" },
   ]);
 });
-test("anonymous context contains only approved labels and no added summary fields", () => {
+test("retired chat summaries cannot enter model context", () => {
   const input = fixture();
   input.chatSummary = Object.assign(
     {
@@ -71,10 +71,10 @@ test("anonymous context contains only approved labels and no added summary field
   const context = modelContext(input);
   assert.deepEqual(context.anonymousChatSummary, {
     version: 1,
-    state: "available",
-    activity: "active",
-    topics: ["개발·기술"],
-    atmosphere: ["응원 표현"],
+    state: "insufficient_data",
+    activity: "unknown",
+    topics: [],
+    atmosphere: [],
   });
   assert.equal(JSON.stringify(context).includes("SECRET"), false);
 });

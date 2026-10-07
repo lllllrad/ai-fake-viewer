@@ -65,11 +65,6 @@ export class SqliteCastDispatch implements CastDispatch {
       now = this.runtime.now();
     const count = (sql: string, ...params: (string | number)[]) =>
       Number(this.database.prepare(sql).get(...params)!.n);
-    const upstream = count(
-      "SELECT COUNT(*) n FROM messages WHERE session=? AND platform<>'experiment' AND hidden=0 AND received>=?",
-      broadcast,
-      now - policy.rolling_window_ms,
-    );
     const synthetic = count(
       "SELECT COUNT(*) n FROM messages WHERE session=? AND platform='experiment' AND hidden=0 AND received>=?",
       broadcast,
@@ -122,7 +117,6 @@ export class SqliteCastDispatch implements CastDispatch {
       .map((row) => String(row.text));
     if (
       !dispatchAllowed(policy, {
-        upstream,
         synthetic,
         reservations,
         globalGapCount,

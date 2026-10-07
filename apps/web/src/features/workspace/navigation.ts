@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-export type WorkspacePage =
-  "broadcast" | "connections" | "participation" | "records";
+export type WorkspacePage = "broadcast" | "connections";
 export function workspacePage(hash: string): WorkspacePage {
   const target = hash.replace(/^#/, "");
   if (
@@ -14,10 +13,6 @@ export function workspacePage(hash: string): WorkspacePage {
     ].includes(target)
   )
     return "connections";
-  if (["participation", "privacy-panel", "operating-profile"].includes(target))
-    return "participation";
-  if (["records", "rights-requests", "video-inventory"].includes(target))
-    return "records";
   return "broadcast";
 }
 let pendingTabHash: string | undefined;

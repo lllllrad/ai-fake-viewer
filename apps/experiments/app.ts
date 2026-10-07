@@ -55,7 +55,6 @@ export function createExperimentApp(
       {
         port: settings.port,
         network: { bindHost: "127.0.0.1", publicBaseUrl: "" },
-        redirects: { youtube: origin, chzzk: origin, soop: origin },
       },
       new AdministratorSessions(
         options.adminToken,

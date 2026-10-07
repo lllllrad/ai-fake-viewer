@@ -2,22 +2,18 @@ import type { ReactionDecision } from "./decision.ts";
 export interface PublicationInput {
   messages: Array<{ id: string; text: string }>;
   frames: Array<{ id: string }>;
-  privacyRevision?: number;
 }
 export interface CurrentEvidence {
   messages: ReadonlyMap<string, string>;
   frames: ReadonlySet<string>;
   transcripts: ReadonlySet<string>;
   recentVideo: boolean;
-  privacyRevision?: number;
 }
 export function evidenceProblem(
   input: PublicationInput,
   decision: ReactionDecision,
   current: CurrentEvidence,
 ) {
-  if (input.privacyRevision !== current.privacyRevision)
-    return "privacy_changed";
   if (
     input.messages.some(
       (message) => current.messages.get(message.id) !== message.text,

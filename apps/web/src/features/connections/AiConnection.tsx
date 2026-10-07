@@ -211,24 +211,6 @@ export function AiConnection({
             ? "방송 화면에서 운영자 승인 필요"
             : "검토 통과 시 자동 게시"}
         </p>
-        {status.ai.gate.enabled && (
-          <p>
-            반응 시점 검사 {status.ai.gate.requests} /{" "}
-            {status.ai.gate.maxRequests}회 · 보류 {status.ai.gate.filtered}회 ·
-            오류 {status.ai.gate.errors}회
-          </p>
-        )}
-        <p>
-          모델은 도구를 실행하거나 플랫폼에 채팅을 발송하지 않습니다. 응답은 이
-          앱의 대화에 게시됩니다.
-        </p>
-        <a
-          href="https://chatgpt.com/settings/usage"
-          target="_blank"
-          rel="noreferrer"
-        >
-          ChatGPT 사용량 확인
-        </a>
       </details>
       {!!status.apiIssues.length && (
         <ul aria-label="API 사용 한도 및 권한 문제">

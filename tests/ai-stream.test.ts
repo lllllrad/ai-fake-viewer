@@ -1,3 +1,4 @@
+import { syntheticMessage } from "./helpers/message.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,7 +12,6 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createApp } from "../apps/server/app.ts";
 import { configSchema } from "../packages/config.ts";
-import { privacyMessage } from "./privacy-fixtures.ts";
 import { fixtureToolModel } from "../packages/infrastructure/experiments/models.ts";
 
 const admin = "a".repeat(64);
@@ -22,14 +22,6 @@ async function fixture(url = "rtmp://127.0.0.1:1935/live/synthetic-ai") {
   const config = configSchema.parse({
     database,
     input: { mode: "ai_stream", streamUrl: url },
-    privacy: { rightsDatabase: join(dir, "rights.sqlite") },
-    youtube: { enabled: true, consentNoticeEnabled: true },
-    chzzk: { enabled: true, consentNoticeEnabled: true },
-    soop: {
-      mode: "official",
-      streamerId: "synthetic",
-      consentNoticeEnabled: true,
-    },
     capture: {
       backend: "rtmp",
       url: "rtmp://127.0.0.1:1935/private-broadcast",
@@ -43,9 +35,6 @@ async function fixture(url = "rtmp://127.0.0.1:1935/live/synthetic-ai") {
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(dir, "chatgpt"),
-    youtubeTokenPath: join(dir, "youtube"),
-    chzzkTokenPath: join(dir, "chzzk"),
-    soopTokenPath: join(dir, "soop"),
     startInputs: false,
   });
   return {
@@ -61,8 +50,6 @@ async function fixture(url = "rtmp://127.0.0.1:1935/live/synthetic-ai") {
 test("AI stream mode isolates storage, rejects chat and notices and uses one dedicated media URL", async () => {
   const f = await fixture();
   try {
-    assert.equal(f.participation, undefined);
-    assert.equal(f.store.viewerChatEnabled, false);
     assert.equal(f.capture.config.url, f.transcriber.config.url);
     assert.equal(
       f.capture.config.url,
@@ -73,28 +60,33 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
       readFileSync(f.database, "utf8"),
       "Existing broadcast is not opened or rewritten",
     );
-    f.supervisor.start();
-    f.supervisor.receive(
-      "youtube",
-      privacyMessage("viewer", "PRIVATE CHAT", Date.now()),
+    assert.throws(() =>
+      f.store.ingestBatch([
+        {
+          ...syntheticMessage("viewer", "REJECTED"),
+          platform: "youtube",
+        } as any,
+      ]),
     );
-    f.store.ingestBatch([
-      privacyMessage("viewer", "!동의", Date.now()),
-      privacyMessage("viewer", "PRIVATE CHAT", Date.now()),
-    ]);
-    for (const table of [
-      "messages",
-      "actors_private",
-      "viewer_consents",
-      "chat_context_summaries",
-    ])
+    for (const table of ["messages", "actors_private"])
       assert.equal(
         f.store.db.prepare(`SELECT count(*) n FROM ${table}`).get()!.n,
         0,
       );
-    assert(
-      Object.values(f.supervisor.states).every((s) => s.state === "disabled"),
-    );
+    for (const name of [
+      "viewer_consents",
+      "chat_context_summaries",
+      "consent_notice_targets",
+      "consent_notice_state",
+    ])
+      assert.equal(
+        f.store.db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+          )
+          .get(name),
+        undefined,
+      );
     const headers = {
       host: "127.0.0.1:3210",
       authorization: `Bearer ${admin}`,
@@ -103,8 +95,8 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
     assert.equal(response.statusCode, 200, response.body);
     const status = response.json();
     assert.equal(status.inputMode, "ai_stream");
-    assert.equal(status.privacy.ready, true);
-    assert.deepEqual(status.privacy.issues, []);
+    assert.equal(status.privacy, undefined);
+    assert.equal(status.connectors, undefined);
     assert.equal(JSON.stringify(status).includes("synthetic-ai"), false);
     assert.equal(
       (
@@ -115,8 +107,22 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
           payload: { enabled: true },
         })
       ).statusCode,
-      409,
+      404,
     );
+    for (const [method, url] of [
+      ["GET", "/api/admin/participation"],
+      ["POST", "/api/admin/connectors/start"],
+      ["POST", "/api/admin/soop/message"],
+      ["POST", "/api/admin/youtube/authorize"],
+      ["GET", "/oauth/youtube/callback"],
+      ["PUT", "/api/admin/privacy/profile"],
+    ] as const) {
+      assert.equal(
+        (await f.app.inject({ method, url, headers })).statusCode,
+        404,
+        url,
+      );
+    }
     assert.equal(
       status.ai.readiness.checks.some((c: any) => c.id === "privacy"),
       false,
@@ -125,7 +131,7 @@ test("AI stream mode isolates storage, rejects chat and notices and uses one ded
     await f.close();
   }
 });
-test("AI stream speech drives the real pipeline without participation and closes with normal deletion", async () => {
+test("AI stream speech drives the real pipeline from dedicated media and closes with normal deletion", async () => {
   const f = await fixture();
   try {
     f.scheduler.providerReady = () => true;
@@ -179,7 +185,7 @@ test("missing AI stream URL cannot fall back to the configured broadcast feed", 
     await f.close();
   }
 });
-test("AI stream configuration accepts only explicit RTMP media and disables the chat gate", () => {
+test("AI stream configuration accepts only explicit RTMP media and rejects retired settings", () => {
   for (const streamUrl of [
     "file:///tmp/private",
     "http://example.com",
@@ -195,6 +201,15 @@ test("AI stream configuration accepts only explicit RTMP media and disables the 
       input: { mode: "ai_stream" },
       ai: { gate: { enabled: true }, visualMode: "on_request" },
     }).success,
+    false,
+  );
+});
+
+test("retired configuration sections and broadcast input mode are rejected", () => {
+  for (const key of ["youtube", "chzzk", "soop", "privacy"])
+    assert.equal(configSchema.safeParse({ [key]: {} }).success, false, key);
+  assert.equal(
+    configSchema.safeParse({ input: { mode: "broadcast" } }).success,
     false,
   );
 });

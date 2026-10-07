@@ -15,7 +15,6 @@ export interface ModelInput<Bytes extends Uint8Array = Uint8Array> {
   newTranscripts?: Transcript[];
   messages: { id: string; speaker: string; text: string }[];
   newMessages?: { id: string; speaker: string; text: string }[];
-  privacyRevision?: number;
   chatSummary?: ChatSummary;
   reviewDraft?: string;
   /** Service-owned instructions; omitted for the shared standard prompt profile. */

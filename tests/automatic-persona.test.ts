@@ -111,9 +111,6 @@ test("global AI toggle automatically installs research personas and reuses them 
     readerToken: "r".repeat(64),
     encryptionKey: "e".repeat(64),
     chatgptTokenPath: join(directory, "chatgpt"),
-    youtubeTokenPath: join(directory, "youtube.tokens"),
-    chzzkTokenPath: join(directory, "chzzk"),
-    soopTokenPath: join(directory, "soop"),
   });
   try {
     // Only scheduler startup is relevant here; no external inference or background tick.

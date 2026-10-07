@@ -1,5 +1,5 @@
 import type { AdminStatus } from "../../../packages/contracts/admin-status.ts";
-import { inputHealth, chatHealth, type Health } from "./input-health";
+import { inputHealth, type Health } from "./input-health";
 import { Button, ConfirmButton, StatusBadge } from "./components/ui";
 import {
   RefreshCw,
@@ -55,24 +55,11 @@ export function OperationsDashboard({
   const audio = stale
     ? unknown
     : inputHealth(status.audio.state, "transcription");
-  const platforms = ["youtube", "chzzk", "soop"] as const;
-  const names = { youtube: "유튜브", chzzk: "치지직", soop: "SOOP" };
-  const chat = stale
-    ? unknown
-    : chatHealth(platforms.map((p) => status.connectors[p]?.state));
-  const problems = platforms
-    .map((p) => ({
-      platform: p,
-      ...inputHealth(status.connectors[p]?.state, "chat_read"),
-    }))
-    .filter((p) => p.label === "확인 필요" || p.label === "확인 불가");
   const targets: Record<string, string> = {
     capture: "program-details",
     audio: "audio-details",
-    privacy: "privacy-panel",
     stream: "program-details",
     model: "ai-details",
-    receiver: "connection-details",
   };
   const stateText = stale
     ? "상태 응답이 오래되었거나 확인되지 않았습니다"
@@ -107,7 +94,6 @@ export function OperationsDashboard({
               (busy ||
                 stale ||
                 status.closed ||
-                status.broadcastEnded ||
                 !status.ai.readiness.ready ||
                 status.originsRevealed)
             }
@@ -136,7 +122,7 @@ export function OperationsDashboard({
               className="secondary"
               disabled={busy}
               title="방송을 종료할까요?"
-              description="채팅·동의·자막·AI 시청자 기록을 삭제합니다. 서버 재시작과 달리 복구할 수 없습니다. 외부 영상과 권리 요청은 별도로 관리합니다."
+              description="채팅·자막·AI 시청자 기록을 삭제합니다. 서버 재시작과 달리 복구할 수 없습니다."
               confirmLabel="방송 종료"
               onConfirm={() => onAction("session/close")}
             >
@@ -195,13 +181,6 @@ export function OperationsDashboard({
             Icon: Monitor,
           },
           {
-            title: "실제 채팅 정보",
-            health: chat,
-            href: "connection-details",
-            label: "채팅 연결 및 수신 제어",
-            Icon: MessagesSquare,
-          },
-          {
             title: "음성 자막",
             health: audio,
             href: "audio-details",
@@ -228,13 +207,6 @@ export function OperationsDashboard({
               </summary>
               <div className="source-detail">
                 {health.hint && <p>{health.hint}</p>}
-                {href === "connection-details" &&
-                  !stale &&
-                  problems.map((p) => (
-                    <p key={p.platform}>
-                      {names[p.platform]}: {p.hint}
-                    </p>
-                  ))}
                 {href === "audio-details" && (
                   <p>
                     {stale

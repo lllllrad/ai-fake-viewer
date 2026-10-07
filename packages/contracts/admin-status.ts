@@ -6,13 +6,6 @@ const count = z.number().int().nonnegative();
 const time = z.number().min(0).max(8.64e15);
 const provider = z.enum(["chatgpt_subscription", "openai_api"]);
 const visualMode = z.enum(["on_request", "continuous"]);
-const connector = z.object({
-  state: z.string(),
-  api: z.string().optional(),
-  recoveries: count,
-  received: count,
-  lastReceived: time.nullable(),
-});
 export const transcriptStatusSchema = z.object({
   id: z.string(),
   sessionId: z.string(),
@@ -25,13 +18,6 @@ const castMember = z.object({
   motive: z.string(),
   participation: z.string(),
 });
-const summary = z.object({
-  version: z.literal(1),
-  state: z.enum(["available", "insufficient_data"]),
-  topics: z.array(z.string()),
-  atmosphere: z.array(z.string()),
-  activity: z.enum(["unknown", "quiet", "active", "busy"]),
-});
 const account = z.object({
   clientId: z.string(),
   email: z.string().nullable(),
@@ -42,23 +28,14 @@ const account = z.object({
 /** Explicit administrator projection. Unknown fields never reach the UI or escape the server. */
 export const adminStatusSchema = z.object({
   demo: z.boolean(),
-  inputMode: z.enum(["broadcast", "ai_stream"]).default("broadcast"),
+  inputMode: z.literal("ai_stream"),
   generatedAt: time,
   originsRevealed: z.boolean(),
   sessionId: z.string(),
   closed: z.boolean(),
-  broadcastEnded: z.boolean(),
   aiDesiredRunning: z.boolean(),
   personas: z.array(castMember),
-  chatSummary: summary,
-  privacy: z.object({
-    memoryOnly: z.boolean(),
-    ready: z.boolean(),
-    issues: z.array(z.string()),
-    pendingRights: count,
-  }),
   retentionDays: z.number(),
-  connectors: z.record(z.string(), connector),
   apiIssues: z.array(
     z.object({ api: z.string(), operation: z.string(), message: z.string() }),
   ),
@@ -138,16 +115,6 @@ export const adminStatusSchema = z.object({
     pending: z
       .object({ text: z.string().nullable(), expires: time })
       .nullable(),
-    gate: z.object({
-      enabled: z.boolean(),
-      state: z.string(),
-      requests: count,
-      maxRequests: count,
-      filtered: count,
-      errors: count,
-      probability: z.number().nullable(),
-      suppressThreshold: z.number(),
-    }),
     skips: count,
     rejects: count,
     usage: z.object({
@@ -167,36 +134,6 @@ export const adminStatusSchema = z.object({
     accounts: z.array(account),
   }),
   setup: z.object({
-    youtube: z.object({
-      receiveApproved: z.boolean().optional(),
-      oauthConfigured: z.boolean(),
-      connected: z.boolean(),
-      channelId: z.string().nullable(),
-      redirectUri: z.string(),
-      noticeState: z.string(),
-      enabled: z.boolean(),
-      consentNoticeEnabled: z.boolean(),
-      credentialsConfigured: z.boolean(),
-      videoConfigured: z.boolean(),
-      channelConfigured: z.boolean(),
-    }),
-    chzzk: z.object({
-      receiveApproved: z.boolean().optional(),
-      enabled: z.boolean(),
-      tokenConfigured: z.boolean(),
-      consentNoticeEnabled: z.boolean(),
-      credentialsConfigured: z.boolean(),
-      redirectUri: z.string(),
-    }),
-    soop: z.object({
-      receiveApproved: z.boolean().optional(),
-      mode: z.enum(["disabled", "official", "experimental_library"]),
-      consentNoticeEnabled: z.boolean(),
-      streamerConfigured: z.boolean(),
-      credentialsConfigured: z.boolean(),
-      tokenConfigured: z.boolean(),
-      redirectUri: z.string(),
-    }),
     audio: z.object({ credentialsConfigured: z.boolean() }),
     ai: z.object({
       provider,

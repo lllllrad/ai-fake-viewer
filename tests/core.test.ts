@@ -5,11 +5,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "../packages/storage.ts";
 import { configSchema } from "../packages/config.ts";
-import { normalizeYoutube } from "../packages/infrastructure/platforms/youtube-chat-payload.ts";
-import { videoId } from "../packages/infrastructure/platforms/youtube-read-api.ts";
-import { makeGrpcClient } from "../packages/infrastructure/platforms/youtube-grpc.ts";
-import { normalizeChzzk } from "../packages/infrastructure/platforms/chzzk-chat-payload.ts";
-import { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { Capture } from "../packages/infrastructure/inputs/screen-input.ts";
 import { Scheduler } from "../packages/infrastructure/reactions/scheduler.ts";
 import { validateDecision } from "../packages/application/reactions/validate-decision.ts";
@@ -17,7 +12,7 @@ import { openaiModel } from "../packages/infrastructure/reactions/responses-api.
 import { type ModelInput } from "../packages/application/reactions/model-port.ts";
 import type { Incoming } from "../packages/contracts/incoming.ts";
 const msg = (extra: Partial<Incoming> = {}): Incoming => ({
-  platform: "youtube",
+  platform: "experiment",
   channel: "c",
   author: "u",
   name: "Same name",
@@ -27,93 +22,18 @@ const msg = (extra: Partial<Incoming> = {}): Incoming => ({
 const fixture = (name: string) =>
   JSON.parse(readFileSync(`fixtures/${name}.json`, "utf8"));
 const consent = (s: Store, m: Incoming = msg()) =>
-  s.grantConsent(m.platform, m.channel, m.author);
-test("A01–A04: account identity, repeated content, ID deduplication and mutation", () => {
-  const s = new Store(":memory:");
-  for (const platform of ["youtube", "chzzk", "soop"] as const) {
-    consent(s, msg({ platform }));
-    s.ingestBatch([msg({ platform })]);
-  }
-  assert.equal(new Set(s.snapshot().messages.map((m) => m!.actorId)).size, 3);
-  s.ingestBatch([msg({ sourceId: "a" }), msg({ sourceId: "b" })]);
-  assert.equal(s.snapshot().messages.length, 5);
-  s.ingestBatch([msg({ sourceId: "a" })]);
-  assert.equal(s.snapshot().messages.length, 5);
-  s.ingestBatch([msg({ sourceId: "a", text: "updated" })]);
-  assert.equal(s.snapshot().messages.length, 5);
-  assert.equal(s.snapshot().messages[3]!.text, "updated");
-  s.close();
-});
-test("viewer chat is private until per-stream platform identity consents, and withdrawal retracts it", () => {
-  const s = new Store(":memory:");
-  const privateMessage = msg({
-    sourceId: "before",
-    text: "private before consent",
+  test("AI desired running state survives a database-backed server restart", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ai-running-state-"));
+    const path = join(dir, "state.sqlite");
+    const first = new Store(path);
+    first.setAiDesiredRunning(true);
+    first.close();
+    const restarted = new Store(path);
+    assert.equal(restarted.aiDesiredRunning(), true);
+    restarted.setAiDesiredRunning(false);
+    restarted.close();
+    rmSync(dir, { recursive: true, force: true });
   });
-  s.ingestBatch([privateMessage]);
-  assert.equal(s.snapshot().messages.length, 0);
-  assert.equal(s.context(["youtube"]).length, 0);
-  s.ingestBatch([{ ...privateMessage, text: "!동의", sourceId: "consent" }]);
-  assert.equal(s.snapshot().messages.length, 0);
-  s.ingestBatch([msg({ sourceId: "visible", text: "consented message" })]);
-  assert.equal(s.snapshot().messages.length, 1);
-  const withdrawn = s.ingestBatch([
-    msg({ sourceId: "withdraw", text: "!철회" }),
-  ]);
-  assert.equal(withdrawn.length, 1);
-  assert.equal(s.snapshot().messages.length, 0);
-  assert.equal(s.context(["youtube"]).length, 0);
-  s.ingestBatch([msg({ sourceId: "after", text: "private after withdrawal" })]);
-  assert.equal(s.snapshot().messages.length, 0);
-  assert.equal(
-    JSON.stringify(s.replay(0)).includes("private after withdrawal"),
-    false,
-  );
-  s.ingestBatch([
-    msg({
-      platform: "chzzk",
-      channel: "c",
-      sourceId: "other",
-      text: "separate identity",
-    }),
-  ]);
-  assert.equal(s.snapshot().messages.length, 0);
-  s.close();
-});
-test("consent notices repeat per channel after 30 seconds and exclude withdrawn viewers", () => {
-  const s = new Store(":memory:");
-  const notices: unknown[] = [];
-  s.on("consent_notice", (notice) => notices.push(notice));
-  s.ingestBatch([msg({ text: "first private message" })]);
-  assert.equal(notices.length, 1);
-  s.ingestBatch([msg({ sourceId: "second", text: "still private" })]);
-  assert.equal(notices.length, 1);
-  s.db.exec("UPDATE consent_notice_state SET last_notice=last_notice-31000");
-  s.ingestBatch([msg({ sourceId: "third", text: "still waiting" })]);
-  assert.equal(notices.length, 2);
-  s.ingestBatch([msg({ sourceId: "withdraw", text: "!철회" })]);
-  assert.equal(s.pendingConsentNotice("youtube", "c"), false);
-  s.db.exec("UPDATE consent_notice_state SET last_notice=last_notice-31000");
-  s.ingestBatch([
-    msg({ sourceId: "after-withdraw", text: "do not remind me" }),
-  ]);
-  assert.equal(notices.length, 2);
-  s.setConsentNoticeEnabled("youtube", true);
-  assert.equal(s.consentNoticeEnabled("youtube"), true);
-  s.close();
-});
-test("AI desired running state survives a database-backed server restart", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ai-running-state-"));
-  const path = join(dir, "state.sqlite");
-  const first = new Store(path);
-  first.setAiDesiredRunning(true);
-  first.close();
-  const restarted = new Store(path);
-  assert.equal(restarted.aiDesiredRunning(), true);
-  restarted.setAiDesiredRunning(false);
-  restarted.close();
-  rmSync(dir, { recursive: true, force: true });
-});
 test("A05–A06: committed cursor, rollback, replay and hidden content never resurrect", () => {
   const s = new Store(":memory:");
   const events: any[] = [];
@@ -121,7 +41,7 @@ test("A05–A06: committed cursor, rollback, replay and hidden content never res
     assert.equal(s.checkpoint("cursor"), "next");
     events.push(e);
   });
-  consent(s);
+
   s.ingestBatch([msg({ sourceId: "a" })], { key: "cursor", value: "next" });
   assert.equal(events.length, 1);
   assert.throws(() =>
@@ -143,7 +63,7 @@ test("A05–A06: committed cursor, rollback, replay and hidden content never res
 });
 test("A12: public DTO excludes private account, source IDs and model metadata", () => {
   const s = new Store(":memory:");
-  consent(s, msg({ author: "PRIVATE_ACCOUNT" }));
+
   s.ingestBatch([
     msg({ author: "PRIVATE_ACCOUNT", sourceId: "PRIVATE_MESSAGE" }),
   ]);
@@ -160,140 +80,6 @@ test("A12: public DTO excludes private account, source IDs and model metadata", 
   s.reveal();
   assert(!JSON.stringify(s.snapshot()).includes("PRIVATE_ACCOUNT"));
   s.close();
-});
-test("T05: REST / proto-loader snake_case enum contract agrees", () => {
-  assert.deepEqual(
-    normalizeYoutube(fixture("youtube-rest"), "chat"),
-    normalizeYoutube(fixture("youtube-grpc"), "chat"),
-  );
-  assert.equal(
-    normalizeYoutube({ snippet: { type: "SUPER_CHAT_EVENT" } }, "chat"),
-    null,
-  );
-  const client = makeGrpcClient();
-  assert.equal(typeof client.StreamList, "function");
-  const method = client.StreamList;
-  const serialized = method.requestSerialize({
-    live_chat_id: "chat",
-    part: ["id", "snippet", "authorDetails"],
-    page_token: "resume",
-  });
-  assert.equal(method.requestDeserialize(serialized).live_chat_id, "chat");
-  client.close();
-});
-test("consented original chat is model evidence and triggers text-first generation", async () => {
-  let modelInput: ModelInput<Buffer> | undefined;
-  const h = harness(async (input: ModelInput<Buffer>) => {
-    modelInput = input;
-    return {
-      decision: {
-        action: "say",
-        text: "메시지 잘 봤어요.",
-        replyToMessageId: input.messages[0]?.id ?? null,
-        evidenceFrameIds: [],
-        evidenceMessageIds: [input.messages[0]?.id ?? ""],
-        evidenceTranscriptIds: [],
-      },
-    };
-  });
-  consent(h.s);
-  h.c.ai.visualMode = "on_request";
-  h.s.ingestBatch([
-    msg({ sourceId: "original", text: "원문 그대로 전달되는지 확인" }),
-  ]);
-  await h.ai.tick();
-  assert.equal(modelInput?.messages[0]?.text, "원문 그대로 전달되는지 확인");
-  assert.equal(
-    modelInput?.newMessages?.[0]?.text,
-    "원문 그대로 전달되는지 확인",
-  );
-  assert.equal(h.s.snapshot().messages.length, 2);
-  assert.equal(h.s.snapshot().messages[1]?.text, "메시지 잘 봤어요.");
-  h.s.close();
-});
-test("T04: video selection rejects arbitrary hosts, paths and protocols", () => {
-  assert.equal(videoId("https://youtu.be/abcdefghijk"), "abcdefghijk");
-  assert.equal(
-    videoId("https://www.youtube.com/live/abcdefghijk"),
-    "abcdefghijk",
-  );
-  for (const v of [
-    "http://youtube.com/watch?v=abcdefghijk",
-    "https://youtube.com.evil.test/watch?v=abcdefghijk",
-    "file:///etc/passwd",
-    "http://127.0.0.1/",
-  ])
-    assert.throws(() => videoId(v));
-});
-test("YouTube nicknames remain exact and AI persona display names omit internal markers", async () => {
-  const youtube = normalizeYoutube(
-    {
-      id: "youtube-message",
-      snippet: { type: "textMessageEvent", displayMessage: "hello" },
-      authorDetails: { channelId: "viewer", displayName: "@viewer" },
-    },
-    "live-chat",
-  );
-  assert.equal(youtube?.name, "@viewer");
-
-  const h = harness(async (input: ModelInput<Buffer>) => say(input));
-  h.c.ai.personas = [{ name: "Orbit · experiment", style: "Brief." }];
-  await h.ai.tick();
-  assert.equal(h.s.snapshot().messages[0]?.displayName, "Orbit");
-  assert.equal(h.s.snapshot().messages[0]?.attribution, "experiment");
-  h.s.close();
-});
-
-test("T06: CHZZK object/string parser never treats chatChannelId as message ID", () => {
-  const c = fixture("chzzk-chat");
-  assert.deepEqual(normalizeChzzk(c), normalizeChzzk(JSON.stringify(c)));
-  assert(normalizeChzzk(c).sourceId.startsWith("chzzk-event:"));
-  const s = new Store(":memory:");
-  consent(s, normalizeChzzk(c));
-  s.ingestBatch([normalizeChzzk(c), normalizeChzzk(c)]);
-  assert.equal(s.snapshot().messages.length, 1);
-  s.close();
-});
-test("A14: refresh single-flight and atomic encrypted token rotation", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "mixed-auth-"));
-  const path = join(dir, "tokens");
-  let calls = 0;
-  const mock = async () => {
-    calls++;
-    await new Promise((r) => setTimeout(r, 10));
-    return new Response(
-      JSON.stringify({
-        code: 200,
-        message: "success",
-        content: {
-          accessToken: "new-access",
-          refreshToken: "new-refresh",
-          tokenType: "Bearer",
-          expiresIn: "86400",
-          scope: "channel",
-        },
-      }),
-      { status: 200 },
-    );
-  };
-  const auth = new ChzzkAuth("a".repeat(64), path, mock as any);
-  auth.token = {
-    accessToken: "old",
-    refreshToken: "old-refresh",
-    expiresAt: 0,
-  };
-  assert.deepEqual(await Promise.all([auth.access(), auth.access()]), [
-    "new-access",
-    "new-access",
-  ]);
-  assert.equal(calls, 1);
-  assert(!readFileSync(path).includes("new-access"));
-  assert.equal(
-    new ChzzkAuth("a".repeat(64), path).token?.refreshToken,
-    "new-refresh",
-  );
-  await assert.rejects(auth.exchange("code", "invalid"));
-  rmSync(dir, { recursive: true, force: true });
 });
 function harness(model: any) {
   const c = configSchema.parse({ ai: { manualApproval: false } });
@@ -329,14 +115,14 @@ test("A07: stop discards late model response and platform ingestion continues", 
         resolve = () => r(say(i));
       }),
   );
-  consent(h.s);
+
   const pending = h.ai.tick();
   h.ai.stop();
   h.s.ingestBatch([msg()]);
   resolve();
   await pending;
   assert.equal(h.s.snapshot().messages.length, 1);
-  assert.equal(h.s.snapshot().messages[0]!.attribution, "youtube");
+  assert.equal(h.s.snapshot().messages[0]!.attribution, "experiment");
   h.s.close();
 });
 test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", async () => {
@@ -345,7 +131,7 @@ test("A08–A09: stale input pauses AI; unchanged fresh images are healthy", asy
     calls++;
     return say(i);
   });
-  consent(h.s);
+
   await h.ai.tick();
   assert.equal(calls, 1);
   h.capture.add(
@@ -373,7 +159,7 @@ test("A13: legacy call limits are ignored; money limits and usage survive restar
   const h = harness(async () => {
     throw Error("provider failed");
   });
-  consent(h.s);
+
   h.c.ai.maxCalls = 1;
   await h.ai.tick();
   assert.equal(h.ai.state, "model_error");
@@ -396,26 +182,6 @@ test("A13: legacy call limits are ignored; money limits and usage survive restar
   assert.equal(s.reserve(0.5, 0.5), null);
   s.close();
   rmSync(dir, { recursive: true, force: true });
-});
-test("A17: configured platform context enters the model without raw account IDs", async () => {
-  let input: ModelInput<Buffer> | undefined;
-  const h = harness(async (i: ModelInput<Buffer>) => {
-    input = i;
-    return say(i);
-  });
-  consent(h.s);
-  consent(h.s, msg({ platform: "experiment" }));
-  consent(h.s, msg({ author: "PRIVATE" }));
-  h.s.ingestBatch([
-    msg({ author: "PRIVATE", text: "exclude me" }),
-    msg({ platform: "experiment", text: "include me" }),
-  ]);
-  await h.ai.tick();
-  assert.equal(input!.messages.length, 2);
-  assert(input!.messages.some((m) => m.text === "include me"));
-  assert(input!.messages.some((m) => m.text === "exclude me"));
-  assert(!JSON.stringify(input).includes("PRIVATE"));
-  h.s.close();
 });
 test("A10–A11: evidence, prompt-like content and unsafe generated text are constrained", () => {
   const h = harness(() => {});
@@ -471,13 +237,10 @@ test("RTMP configuration requires a local stream URL without embedded credential
     "rtmp",
   );
   for (const url of [
-    "",
     "http://127.0.0.1/program",
     "rtmp://user:secret@127.0.0.1/program",
   ])
-    assert.throws(() =>
-      configSchema.parse({ capture: { backend: "rtmp", url } }),
-    );
+    assert.throws(() => configSchema.parse({ input: { streamUrl: url } }));
 });
 test("A20: strict configuration rejects typos, invalid masks and unsupported blind mode", () => {
   for (const v of [
@@ -524,62 +287,6 @@ test("T09: source resolution change clears old frames and continues receiving", 
   );
   assert.equal(c.state, "demo");
   assert.equal(c.frames.length, 1);
-});
-
-test("SOOP OAuth encrypts tokens at rest and refreshes through the official token endpoint", async () => {
-  const { SoopAuth } =
-    await import("../packages/infrastructure/accounts/soop-auth.ts");
-  const directory = mkdtempSync(join(tmpdir(), "soop-auth-test-"));
-  const path = join(directory, "soop.tokens");
-  const key = "a".repeat(64);
-  const requests: { url: string; body: URLSearchParams }[] = [];
-  let expiresIn = 3600;
-  const request: typeof fetch = async (input, init) => {
-    requests.push({
-      url: String(input),
-      body: new URLSearchParams(String(init?.body)),
-    });
-    return new Response(
-      JSON.stringify({
-        access_token: requests.length === 1 ? "access-one" : "access-two",
-        refresh_token: requests.length === 1 ? "refresh-one" : "refresh-two",
-        expires_in: expiresIn,
-        token_type: "Bearer",
-      }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    );
-  };
-  try {
-    const auth = new SoopAuth(key, path, request);
-    await auth.exchange(
-      "one-use-code",
-      "client-id",
-      "client-secret",
-      "http://127.0.0.1:3210/oauth/soop/callback",
-    );
-    assert.equal(requests[0]?.url, "https://openapi.sooplive.com/auth/token");
-    assert.equal(requests[0]?.body.get("grant_type"), "authorization_code");
-    assert.equal(
-      requests[0]?.body.get("redirect_uri"),
-      "http://127.0.0.1:3210/oauth/soop/callback",
-    );
-    const bytes = readFileSync(path);
-    assert(!bytes.includes(Buffer.from("access-one")));
-    assert.equal(await auth.access("client-id", "client-secret"), "access-one");
-    expiresIn = 1;
-    auth.token!.expiresAt = Date.now() - 1000;
-    assert.equal(await auth.access("client-id", "client-secret"), "access-two");
-    assert.equal(requests[1]?.body.get("grant_type"), "refresh_token");
-    assert.equal(requests[1]?.body.get("refresh_token"), "refresh-one");
-    assert.equal(
-      new SoopAuth(key, path, request).token?.accessToken,
-      "access-two",
-    );
-    auth.forget();
-    assert.equal(existsSync(path), false);
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
 });
 
 test("publication drops a candidate citing frames removed by source resolution change", async () => {

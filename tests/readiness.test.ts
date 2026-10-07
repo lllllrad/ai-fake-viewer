@@ -6,19 +6,17 @@ import {
 } from "../packages/application/status/readiness.ts";
 const facts: ReadinessFacts = {
   demo: false,
-  profileReady: true,
+  streamConfigured: true,
   modelReady: true,
   screenRecent: false,
   speechState: "stopped",
-  receiverConfigured: true,
-  receiverStates: ["auth_required"],
 };
 test("optional unavailable inputs remain visible without blocking AI start", () => {
   const result = projectReadiness(facts);
   assert.equal(result.ready, true);
   assert.deepEqual(
     result.checks.filter((check) => !check.ready).map((check) => check.id),
-    ["capture", "audio", "receiver"],
+    ["capture", "audio"],
   );
   assert(
     result.checks
@@ -26,7 +24,7 @@ test("optional unavailable inputs remain visible without blocking AI start", () 
       .every((check) => check.optional),
   );
 });
-for (const field of ["profileReady", "modelReady"] as const)
+for (const field of ["streamConfigured", "modelReady"] as const)
   test(`${field} is required in the same readiness result used for AI start`, () => {
     const result = projectReadiness({ ...facts, [field]: false });
     assert.equal(result.ready, false);
@@ -40,18 +38,17 @@ test("demo readiness is independent of live accounts and inputs", () => {
     projectReadiness({
       ...facts,
       demo: true,
-      profileReady: false,
+      streamConfigured: false,
       modelReady: false,
     }).ready,
     true,
   );
 });
-test("configured receiving sources and unselected chat receivers are reported consistently", () => {
+test("configured media sources are reported consistently", () => {
   const result = projectReadiness({
     ...facts,
     screenRecent: true,
     speechState: "listening",
-    receiverConfigured: false,
   });
   assert(result.checks.every((check) => check.ready));
 });

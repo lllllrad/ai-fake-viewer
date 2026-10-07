@@ -62,7 +62,7 @@ automatically composed viewers and expandable persona details alongside it.
 Enter a broadcast topic, explicitly choose Responses API, Sign in with ChatGPT
 or the offline fixture provider, and start a test. Text input represents what
 the broadcaster says, entering the same speech evidence journal as microphone
-transcriptions. It is not inserted as a consented platform viewer message.
+transcriptions. It is not inserted as an AI reply.
 
 The interactive session uses the production host `ReactionCoordinator` and calls the
 AI service for cast selection, participation propensity, generation and review. Host
@@ -163,7 +163,7 @@ text input; start a new test for a new microphone budget.
 
 Retain at
 most 100 sessions; delete old sessions using **Delete test record**. Test records
-are independent of broadcast withdrawal, retention and session end, so use only
+are independent of broadcast retention and session end, so use only
 your own or separately authorized inputs. Deleting a record does not delete
 downloaded copies or provider-side records. Test keys and account credentials
 are never included in records.
@@ -299,23 +299,18 @@ included in this runner.
 Scenarios declare a topic, duration and ordered `events` with `atMs` and `kind`:
 
 - `speech`: synthetic transcription text.
-- `chat`: synthetic author and text, admitted as a consented fixture viewer.
-- `withdraw`: erase that fixture author's current chat context and dependent
-  output. A subsequent fixture `chat` explicitly grants consent again.
 - `frame`: a local image `file` relative to the scenario; decoded with pixel/byte
   limits and converted to JPEG. Continuous video profiles need a frame at time
   zero and fresh frames throughout the scenario. Image IDs and bytes are captured
   in rendered requests for review.
 
 Fixtures do not transcribe audio or connect to OBS. They represent inputs after
-those adapters. Synthetic chat follows production ingestion/storage rules; the
-runner does not test platform notice delivery or pretend a fixture represents a
-real viewer's consent. Never automatically export live viewer chat or audio into
+those adapters. Replay uses the production media, state and publication boundaries. Never automatically export live viewer chat or audio into
 tracked scenarios. Full fixture inputs and outputs are intentionally retained in
 experiment artifacts; only use synthetic or separately authorized material.
 
 `expectations.minPublished`, `maxPublished` and `forbiddenText` are replay checks.
-They examine output remaining at scenario completion, after any withdrawal.
+They examine output remaining at scenario completion, after the final event.
 A failed check or model-call error gives the CLI a nonzero exit status while
 preserving completed results. Absence of a check is not evidence of quality.
 Human evaluation should cover relevance, evidence grounding, persona distinction,
@@ -364,8 +359,7 @@ Automatic cast definitions belong to the broadcast and survive restart. Changed
 persona patches take effect when the next broadcast creates its cast; restarting
 does not rewrite existing viewers. To compare a coherent new cast plus pipeline,
 promote between broadcasts. On an existing broadcast, a restart can apply new
-prompts/settings while retaining the old cast. Profiles do not change privacy
-configuration, platform connectivity, model account selection or budgets.
+prompts/settings while retaining the old cast. Profiles do not change input configuration, model account selection or budgets.
 
 ## Ownership and verification
 
@@ -386,7 +380,7 @@ configuration, platform connectivity, model account selection or budgets.
 - [CLI](../../scripts/experiment.ts): suite iteration, provider selection, whole
   cumulative usage and private artifacts.
 - [Tests](../../tests/experiments.test.ts): reproducibility, silence, participation,
-  review rejection, legacy call-limit compatibility, withdrawal, prompt application and escaping.
+  review rejection, legacy call-limit compatibility, prompt application and escaping.
 
 Run `sh run-command.sh npm run check` and
 `sh run-command.sh npm run test:experiments:browser` after building.

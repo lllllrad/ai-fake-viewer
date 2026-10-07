@@ -11,7 +11,7 @@ import type {
 } from "../packages/application/reactions/model-port.ts";
 
 const original = {
-  platform: "youtube" as const,
+  platform: "experiment" as const,
   channel: "fixture",
   author: "viewer",
   name: "Viewer",
@@ -42,8 +42,18 @@ function fixture(model: Model<Buffer>) {
     model,
     false,
     () => true,
+    {
+      recent: () => [
+        {
+          id: "speech-" + store.lastSeq(),
+          text: "Synthetic speech",
+          capturedAt: Date.now(),
+        },
+      ],
+      has: () => true,
+    } as any,
   );
-  store.grantConsent(original.platform, original.channel, original.author);
+
   store.ingestBatch([original]);
   scheduler.state = "running";
   return { store, scheduler };

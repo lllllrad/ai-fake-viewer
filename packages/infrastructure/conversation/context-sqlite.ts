@@ -1,51 +1,11 @@
 import type { DatabaseSync } from "node:sqlite";
 import { conversationIdentitySchema } from "../../contracts/conversation.ts";
-import type {
-  ContextRepository,
-  SummaryRow,
-} from "../../application/conversation/context-ports.ts";
-import type { ChatSummary } from "../../domain/conversation/summary.ts";
+import type { ContextRepository } from "../../application/conversation/context-ports.ts";
 import type { MessageDependency } from "../../domain/conversation/dependencies.ts";
 
 const identitiesSchema = conversationIdentitySchema.array();
 export class SqliteConversationContext implements ContextRepository {
   constructor(private readonly database: DatabaseSync) {}
-  summary(session: string) {
-    const row = this.database
-      .prepare(
-        "SELECT payload,cutoff FROM chat_context_summaries WHERE session=?",
-      )
-      .get(session);
-    return row
-      ? {
-          payload: JSON.parse(String(row.payload)) as unknown,
-          cutoff: Number(row.cutoff),
-        }
-      : undefined;
-  }
-  saveSummary(
-    session: string,
-    value: ChatSummary,
-    expires: number,
-    cutoff: number,
-  ) {
-    this.database
-      .prepare(
-        "INSERT INTO chat_context_summaries(session,payload,expires,cutoff) VALUES(?,?,?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload,expires=excluded.expires,cutoff=excluded.cutoff",
-      )
-      .run(session, JSON.stringify(value), expires, cutoff);
-  }
-  consentedRows(session: string, since: number, cutoff: number): SummaryRow[] {
-    return this.database
-      .prepare(
-        `SELECT m.actor,m.text FROM messages m JOIN actors_private a ON a.id=m.actor
-      JOIN viewer_consents c ON c.session=m.session AND c.platform=m.platform AND c.channel=m.channel AND c.author=a.author
-      WHERE m.session=? AND m.hidden=0 AND m.platform<>'experiment' AND c.granted=1 AND m.received>? AND m.seq>?
-      ORDER BY m.seq DESC LIMIT 300`,
-      )
-      .all(session, since, cutoff)
-      .map((row) => ({ actor: String(row.actor), text: String(row.text) }));
-  }
   dependencies(session: string): MessageDependency[] {
     return this.database
       .prepare(
@@ -66,19 +26,6 @@ export class SqliteConversationContext implements ContextRepository {
         "SELECT 1 FROM messages WHERE session=? AND id=? AND (?=0 OR hidden=0)",
       )
       .get(session, id, visibleOnly ? 1 : 0);
-  }
-  participantMessages(
-    session: string,
-    platform: string,
-    channel: string,
-    author: string,
-  ) {
-    return this.database
-      .prepare(
-        "SELECT m.id FROM messages m JOIN actors_private a ON a.id=m.actor WHERE m.session=? AND m.platform=? AND m.channel=? AND a.author=?",
-      )
-      .all(session, platform, channel, author)
-      .map((row) => String(row.id));
   }
   eraseMessage(session: string, id: string, now: number) {
     this.database
@@ -145,11 +92,7 @@ export class SqliteConversationContext implements ContextRepository {
     );
     for (const id of sourceIds) insert.run(messageId, id);
   }
-  audit(
-    session: string,
-    action: "message.hidden" | "chat_summary.cleared",
-    now: number,
-  ) {
+  audit(session: string, action: "message.hidden", now: number) {
     this.database
       .prepare("INSERT INTO audit_events(session,at,action) VALUES(?,?,?)")
       .run(session, now, action);

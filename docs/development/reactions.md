@@ -11,7 +11,7 @@ Media acquisition is documented in [inputs and accounts](inputs-and-accounts.md)
 Separate input selection, pacing/eligibility, persona selection, model request,
 review and publication. Use injected time/randomness at policy boundaries so tests
 do not depend on sleeps or probability. By default, context includes the latest ten recent
-transcript chunks, eligible human text and configured visual evidence. New input
+transcript chunks, recent synthetic conversation and configured visual evidence. New input
 and background context are distinct; input received during pacing remains eligible.
 
 The provider port supports API-key authentication and Sign in with ChatGPT using
@@ -24,7 +24,7 @@ current chat window and latest ten transcript chunks by default by capture time,
 new triggers from background, and prunes consumed-input bookkeeping without
 consuming new evidence. Synthetic chat alone is not a speech-trigger substitute.
 Message revisions include both speaker and text; the coordinator hashes that
-revision into its duplicate key so edits to the same platform message remain
+revision into its duplicate key so edits to the same synthetic message remain
 eligible without retaining raw text in the key.
 
 The [service cast selection](../../services/viewer-ai/cast-selection.ts)
@@ -46,7 +46,7 @@ connects those ports to the durable services. Production and tests use the same 
 composition. The same candidate and evidence guards run
 for automatic dispatch and manual approval.
 
-Every attempt carries broadcast/context/consent and cast revisions. Review and
+Every attempt carries broadcast/context and cast revisions. Review and
 publication validate those revisions, cited evidence, expiry, duplicate and
 frequency rules. Silence is a normal result. Failures distinguish authentication,
 quota, local budget, token bounds, timeouts and invalid output. Diagnostics contain
@@ -58,7 +58,7 @@ parses that shape and applies the
 [pure evidence/output policy](../../packages/domain/reactions/decision.ts).
 [Review and publication policies](../../packages/domain/reactions/publication.ts)
 drop expired background speech while rejecting expired cited speech; bind a
-candidate to its broadcast, generation, consent revision and deadline; and require
+candidate to its broadcast, generation and deadline; and require
 all input message bodies to match their current permitted versions. An edited
 message is stale evidence even if its identifier still exists. The coordinator
 gathers current evidence through its adapters and applies the same checks after
@@ -70,15 +70,9 @@ not input text.
 
 The [model authorization service](../../packages/application/reactions/model-authorization.ts)
 revalidates the exact outgoing message text, frame bytes/capture time and both
-background/new transcript windows at each provider boundary. Current consent
-revision, profile availability and an open broadcast are required even for
-text-only or empty contexts. An edited message with the same ID is stale input.
-The [audience query](../../packages/infrastructure/reactions/model-audience.ts)
-loads message authors in one broadcast-scoped query and matches platform/account/
-channel identities. Only participant IDs and authorized epochs are retained for
-late provider request tracking, never mutable participant objects or raw chat.
-The [runtime adapter](../../packages/infrastructure/reactions/model-authorization.ts)
-connects these ports to current media, consent, storage and rights follow-up owners.
+background/new transcript windows at each provider boundary. An open session and current
+media/message evidence are required, including after asynchronous authentication.
+The runtime adapter connects these checks to current media and storage.
 
 The [draft and review use case](../../services/viewer-ai/draft-review.ts)
 owns the bounded generation workflow: an initial response, at most one requested
@@ -227,31 +221,6 @@ transient request failures stop AI; a successful response or a non-transient
 validation/stale-context outcome breaks that streak. Permanent errors and budget
 exhaustion stop immediately. Provider error classification supplies a typed issue,
 while the coordinator applies the returned stop state only for its current generation.
-
-The optional [timing gate use case](../../packages/application/reactions/timing-gate.ts)
-owns its separate request cap, probability threshold and evaluation status.
-Its [TypeSafe adapter](../../packages/infrastructure/reactions/typesafe-gate.ts)
-owns prompt loading, credentials, the text-only HTTP payload, bounded response
-validation and timeout. Each evaluation snapshots its configuration and has a
-revision; a superseded response cannot overwrite the newest status or allow a
-canceled generation. Every outgoing evaluation still counts toward the cap.
-
-The [generation work owner](../../packages/application/reactions/generation-work.ts)
-tracks the current asynchronous request with an identity-bound lease. Cancellation
-advances the generation, detaches the busy slot, clears retained chat context
-from every draft/review input variant and aborts the request. A replacement can
-start even if an old transport ignores cancellation. Late completion or input
-callbacks cannot clear the new busy slot, restore canceled context or change its
-pacing. The coordinator also ignores errors escaping an obsolete generation.
-
-The [reaction schedule](../../packages/application/reactions/scheduling.ts)
-owns polling and delayed-publication timers through an injected clock. Canceling,
-restarting or replacing a timer invalidates callbacks already queued by the host;
-an old callback cannot execute or clear its replacement. Publication callbacks
-are one-shot even when invoked again. A synchronous polling or publication error
-stops both timers before reaching the coordinator's error handler. Delayed storage
-failures therefore stop AI with a diagnostic instead of escaping the timer and
-terminating the process. Manual publication also cancels its queued callback.
 
 ## Experiments
 

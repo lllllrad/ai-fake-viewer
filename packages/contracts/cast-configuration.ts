@@ -18,14 +18,7 @@ export const briefSchema = z
   .strict()
   .refine((b) => b.cast_size <= b.candidate_count, "Cast exceeds candidates");
 export type Brief = z.infer<typeof briefSchema>;
-const band = z
-  .object({
-    min_messages: z.number().int().nonnegative(),
-    max_messages: z.number().int().nonnegative().nullable(),
-    ai_cap_messages_per_window: z.number().int().nonnegative().max(30),
-  })
-  .strict();
-export const policySchema = z
+const currentPolicySchema = z
   .object({
     max_selected_per_event_group: z.number().int().min(1).max(3).default(1),
     max_inflight_per_session: z.number().int().min(1).max(8).default(2),
@@ -54,15 +47,6 @@ export const policySchema = z
       .nonnegative()
       .max(300000)
       .default(30000),
-    upstream_activity_bands: z
-      .array(band)
-      .min(1)
-      .max(10)
-      .default([
-        { min_messages: 0, max_messages: 4, ai_cap_messages_per_window: 4 },
-        { min_messages: 5, max_messages: 19, ai_cap_messages_per_window: 2 },
-        { min_messages: 20, max_messages: null, ai_cap_messages_per_window: 1 },
-      ]),
     response_delay_min_ms: z
       .number()
       .int()
@@ -109,22 +93,19 @@ export const policySchema = z
     const fail = (message: string) => c.addIssue({ code: "custom", message });
     if (p.response_delay_min_ms > p.response_delay_max_ms)
       fail("Invalid delay range");
-    let next = 0;
-    for (const [i, b] of p.upstream_activity_bands.entries()) {
-      if (
-        b.min_messages !== next ||
-        (b.max_messages !== null && b.max_messages < b.min_messages) ||
-        (b.max_messages === null && i !== p.upstream_activity_bands.length - 1)
-      )
-        fail("Bands must be contiguous");
-      next = (b.max_messages ?? -1) + 1;
-    }
-    if (p.upstream_activity_bands.at(-1)?.max_messages !== null)
-      fail("Bands must cover all activity");
     if (
       p.estimated_cost_cap_usd !== null &&
       (p.input_usd_per_million === null || p.output_usd_per_million === null)
     )
       fail("A monetary cap requires a price table");
   });
+// Read existing saved sessions while dropping the retired platform-activity setting.
+export const policySchema = z.preprocess((value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const { upstream_activity_bands: retired, ...current } = value as Record<
+    string,
+    unknown
+  >;
+  return current;
+}, currentPolicySchema);
 export type Policy = z.infer<typeof policySchema>;

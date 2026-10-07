@@ -1,8 +1,6 @@
 import { SectionTabs } from "../../components/ui";
 import { useLocationHash, navigateWorkspaceTab } from "../workspace/navigation";
-import type { ReactNode } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
-import { PlatformConnections } from "./PlatformConnections.tsx";
 import { MediaConnections } from "./MediaConnections.tsx";
 import { AiConnection } from "./AiConnection.tsx";
 import { ReaderLinks } from "./ReaderLinks.tsx";
@@ -11,27 +9,23 @@ export function ConnectionsPage({
   stale,
   preview,
   refresh,
-  soop,
 }: {
   status: AdminStatus;
   stale: boolean;
   preview: string;
   refresh: () => Promise<void>;
-  soop: ReactNode;
 }) {
   const hash = useLocationHash().slice(1);
-  const streamOnly = status.inputMode === "ai_stream";
   const tab =
-    (streamOnly && !["ai-details", "reader-links"].includes(hash)) ||
+    !["ai-details", "reader-links"].includes(hash) ||
     ["program-details", "audio-details"].includes(hash)
       ? "media"
       : hash === "ai-details"
         ? "ai"
         : hash === "reader-links"
           ? "output"
-          : "platforms";
+          : "media";
   const paths: Record<string, string> = {
-    platforms: "connection-details",
     media: "program-details",
     ai: "ai-details",
     output: "reader-links",
@@ -47,11 +41,9 @@ export function ConnectionsPage({
       )}
       <div className="setup-intro">
         <p>
-          {streamOnly
-            ? "AI 전용 스트림의 화면·마이크 음성으로 반응합니다. 시청자 채팅은 수신하지 않습니다."
-            : status.demo
-              ? "데모는 인공 채팅·화면·모의 AI를 사용합니다."
-              : "필요한 입력을 연결하고 AI 계정과 OBS 출력을 확인하세요."}
+          {status.demo
+            ? "데모는 인공 화면·모의 AI를 사용합니다."
+            : "AI 전용 스트림의 화면·마이크 음성으로 반응합니다."}
         </p>
         <a href="#broadcast">라이브로 돌아가기</a>
       </div>
@@ -62,22 +54,6 @@ export function ConnectionsPage({
           navigateWorkspaceTab(paths[value]);
         }}
         items={[
-          ...(!streamOnly
-            ? [
-                {
-                  value: "platforms",
-                  label: "채팅 플랫폼",
-                  content: (
-                    <PlatformConnections
-                      status={status}
-                      stale={stale}
-                      refresh={refresh}
-                      soop={soop}
-                    />
-                  ),
-                },
-              ]
-            : []),
           {
             value: "media",
             label: "화면·음성",
