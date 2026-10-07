@@ -245,5 +245,9 @@ are usable merely because their quota failure has not been observed.
 The current privacy-policy and participation-notice link is
 [the published policy](https://cafe.naver.com/lllllrad/3). Set both
 `privacy.policyUrl` and `privacy.noticeUrl` in local `config.yaml`;
-`config.example.yaml` includes this URL. Restart the broadcast server after changing
-the configuration so displayed policy links and platform guidance use it.
+`config.example.yaml` includes this URL. The active broadcast binds its consent
+records to its privacy profile, including these links. Changing them while a saved
+broadcast exists blocks startup. Keep the previous profile until the operator ends
+that broadcast through the app; ending deletes ordinary broadcast data. Then update
+the links and restart so displayed policy links and platform guidance use them.
+Do not rewrite stored consent records to bypass the profile check.
