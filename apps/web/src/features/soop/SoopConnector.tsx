@@ -74,9 +74,11 @@ export function SoopConnector({
           ? "config.yaml에서 soop.mode를 official로 설정하세요."
           : !setup.streamerConfigured
             ? "config.yaml에 SOOP 방송 계정을 설정하세요."
-            : setup.credentialsConfigured
-              ? "SOOP 앱 인증 정보가 설정되었습니다."
-              : "앱 승인 후 .env에 SOOP_CLIENT_ID와 SOOP_CLIENT_SECRET을 설정하세요."}
+            : setup.tokenConfigured
+              ? "SOOP 계정 인증이 완료되었습니다."
+              : setup.credentialsConfigured
+                ? "SOOP 앱 인증 정보가 설정되었습니다. 계정 인증을 진행해 주세요."
+                : "앱 승인 후 .env에 SOOP_CLIENT_ID와 SOOP_CLIENT_SECRET을 설정하세요."}
       </p>
       <p className="hint">인증 콜백: {setup.redirectUri}</p>
       <p className="hint">

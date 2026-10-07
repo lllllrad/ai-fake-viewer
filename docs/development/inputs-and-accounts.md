@@ -323,3 +323,8 @@ A configured platform without a matching `privacy.approvals` receive approval is
 shown as requiring attention, with the exact configuration location. OAuth
 connection and `soop.streamerId` do not create that approval. Disabled and blocked
 inputs must remain distinguishable in aggregate chat health.
+
+SOOP OAuth completion (`auth_ready`) means the account is authorized, not that
+the browser SDK is receiving chat. The connection card confirms authentication
+and explicitly directs the operator to its chat-connect button. Keep the
+administrator browser open while receiving.
