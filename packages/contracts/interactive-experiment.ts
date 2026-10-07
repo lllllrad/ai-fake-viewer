@@ -1,3 +1,4 @@
+import { viewerMemorySchema } from "./model-tools.ts";
 import { viewerInspectionSchema } from "./reaction-inspection.ts";
 import { z } from "zod";
 import { castRuntimeSchema } from "./cast-runtime.ts";
@@ -93,6 +94,7 @@ export const experimentIndexSchema = z.object({
   ),
 });
 export const experimentTraceSchema = z.object({
+  memories: z.array(viewerMemorySchema).default([]),
   session: experimentSessionSchema,
   pipeline: z.unknown(),
   calls: z.array(

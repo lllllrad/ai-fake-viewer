@@ -626,7 +626,7 @@ test("PC01: API-key requests disable response storage and include explicit input
     authorize: () => {},
   });
   assert.equal(
-    (await run(input, new AbortController().signal)).decision.action,
+    (await run(input, new AbortController().signal)).decision!.action,
     "skip",
   );
   assert.equal(calls, 2);

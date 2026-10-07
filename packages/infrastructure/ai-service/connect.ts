@@ -60,6 +60,7 @@ export async function connectAiService(connection = aiServiceConnection()) {
             pipelineType: descriptor.id,
             revision: descriptor.revision,
             context: {
+              memories: engine.store.viewerMemory?.list() ?? [],
               members: engine.store.personaRuntime()?.members ?? [],
               state: engine.state,
               busy: engine.busy,

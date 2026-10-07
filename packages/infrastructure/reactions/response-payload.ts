@@ -1,3 +1,7 @@
+import {
+  modelToolCallSchema,
+  continuationItemSchema,
+} from "../../contracts/model-tools.ts";
 import { z } from "zod";
 export const inputTokenCountSchema = z.object({
   input_tokens: z.number().int().nonnegative(),
@@ -5,6 +9,9 @@ export const inputTokenCountSchema = z.object({
 const usageSchema = z.object({
   input_tokens: z.number().int().nonnegative().optional(),
   output_tokens: z.number().int().nonnegative().optional(),
+  input_tokens_details: z
+    .object({ cached_tokens: z.number().int().nonnegative().optional() })
+    .optional(),
 });
 export const completedResponseSchema = z.object({
   status: z.literal("completed"),
@@ -24,4 +31,22 @@ export function responseText(output: unknown[]) {
     }
   }
   return texts.join("");
+}
+
+export function responseTools(output: unknown[]) {
+  const calls = output
+    .filter((item: any) => item?.type === "function_call")
+    .map((item) => modelToolCallSchema.parse(item));
+  if (
+    calls.length > 8 ||
+    new Set(calls.map((call) => call.call_id)).size !== calls.length
+  )
+    throw Error("Invalid model tool calls");
+  const continuation = output
+    .filter(
+      (item: any) =>
+        item?.type === "function_call" || item?.type === "reasoning",
+    )
+    .map((item) => continuationItemSchema.parse(item));
+  return { calls, continuation };
 }

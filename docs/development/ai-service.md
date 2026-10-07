@@ -41,8 +41,8 @@ This token authorizes private pipeline processing; it is not a model-provider ke
 - `POST /v1/select`: admitted observation, cast and caller-supplied deterministic
   random draws; returns a selected member and its observation window.
 - `POST /v1/runs`: starts an isolated draft job and returns a model-request step
-  or final outcome. The service can choose how many generation/review steps to use.
-- `POST /v1/runs/:id/continue`: supplies a completed model result and refreshed
+  or state-update step or final outcome. The service can choose how many generation/review steps to use.
+- `POST /v1/runs/:id/continue`: supplies a completed model result or committed state and refreshed
   evidence availability. A step number prevents duplicate continuation.
 - `DELETE /v1/runs/:id`: cancels and releases the job.
 - `POST /v1/inspect`: renders implementation-specific viewer state from explicit
@@ -53,7 +53,7 @@ with its own account, budget and authorization checks, then sends the result bac
 Provider credentials never cross the service API. A service model request can set
 `ModelInput.instructions` to replace developer instructions for that call; otherwise
 the host uses the existing standard or experiment prompt profile. Provider message
-serialization and the shared decision output schema remain host contracts. Live and test account ownership
+serialization, bounded function-call transport and the final decision schema remain host contracts. Live and test account ownership
 remains separate. Returned candidates still pass host evidence, context-revision,
 expiry and publication checks. Cancellation aborts host model work and deletes the
 remote job; unreachable jobs expire after 90 seconds. The service has a 100-job cap,
@@ -80,3 +80,39 @@ production never uses that fixture or falls back to it. Service integration and
 browser tests spawn a separate foreground child on an ephemeral loopback port with
 synthetic inputs and isolated credentials. They never connect to the managed live
 service or establish real model quality.
+
+## Tools and reusable viewer context
+
+The standard service exposes strict `update_state`, `send_chat`, `wait` and
+`inspect_screen` function tools. `update_state` replaces a concise mood, focus,
+intent and conversation summary; these are observable simulation state, not hidden
+model reasoning. Other implementations can define different state keys and tools.
+The generic host state port bounds stored JSON, binds it to the selected viewer,
+session and pipeline/persona definition, and rejects canceled or obsolete writes.
+
+A state packet is committed by the host before the service receives its result.
+A numbered step can be continued once. Invalid arguments, repeated call IDs or
+conflicting terminal actions fail before writes. Each generation/review phase
+allows four model rounds and eight tools per response. `send_chat` produces a
+candidate, never a direct platform write: evidence validation, independent review,
+pacing and final host publication still apply.
+
+The host persists state in `viewer_memory`; it supplies current state alongside
+the existing recent conversation on the next invocation. State expires within the
+configured context window, without sliding an inherited summary indefinitely.
+State is reused only while its original chat sources are still present in the current authorized message window, so publication provenance continues to cover those sources. Context invalidation, withdrawal, reset and broadcast close clear derived state.
+Restarting only the AI service preserves host state; in-flight jobs are canceled.
+
+Provider requests use strict Responses API function schemas, `store:false` and a
+stable hashed `prompt_cache_key` per viewer binding. Stable instructions/tool
+definitions precede variable input; cache hits depend on provider/model support,
+prefix length and retention and are not guaranteed. `cachedInputTokens` is recorded
+in model results; local USD accounting remains conservative at configured full
+input prices. There is no `previous_response_id` or provider-hosted conversation.
+Within a tool workflow, function calls and results are replayed explicitly, including
+opaque encrypted reasoning items required for continuation. These items are
+short-lived transport data and excluded from test traces and state inspection.
+
+See the official [function calling guide](https://developers.openai.com/api/docs/guides/function-calling),
+[conversation state guide](https://developers.openai.com/api/docs/guides/conversation-state)
+and [prompt caching guide](https://developers.openai.com/api/docs/guides/prompt-caching).

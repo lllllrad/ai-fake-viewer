@@ -3,8 +3,9 @@ import type {
   ModelInput,
   ModelLimits,
 } from "../../application/reactions/model-port.ts";
-import { decisionJsonSchema, type Decision } from "../../contracts/decision.ts";
-import { modelMessages, type ModelPrompts } from "./model-messages.ts";
+import { type Decision } from "../../contracts/decision.ts";
+import { type ModelPrompts } from "./model-messages.ts";
+import { modelRequest } from "./model-request.ts";
 import { readResponsesStream } from "./responses-stream.ts";
 import { ModelRequestError } from "../../model-errors.ts";
 export interface ChatgptModelAccount {
@@ -31,15 +32,7 @@ export function chatgptModel<Bytes extends Uint8Array = Uint8Array>(
       model,
       store: false,
       stream: true,
-      input: modelMessages(input, options?.prompts),
-      text: {
-        format: {
-          type: "json_schema",
-          name: "persona_decision",
-          strict: true,
-          schema: decisionJsonSchema,
-        },
-      },
+      ...modelRequest(input, options?.prompts),
     };
     const serialized = JSON.stringify(body);
     if (Buffer.byteLength(serialized) > 8 * 1024 * 1024)
@@ -67,10 +60,12 @@ export function chatgptModel<Bytes extends Uint8Array = Uint8Array>(
         { status: r.status },
         r.status === 408 || r.status === 429 || r.status >= 500,
       );
-    const { output, inputTokens, outputTokens } = await readResponsesStream(
+    const parsed = await readResponsesStream(
       r.body,
       signal,
+      !!input.tools?.length,
     );
+    const { output, inputTokens, outputTokens } = parsed;
     if (inputTokens !== undefined && inputTokens > config.maxInputTokens)
       throw new ModelRequestError(
         "input_token_limit",
@@ -83,6 +78,14 @@ export function chatgptModel<Bytes extends Uint8Array = Uint8Array>(
         "ChatGPT token budget exceeded",
         { actual: outputTokens, limit: config.maxOutputTokens },
       );
+    if (input.tools?.length)
+      return {
+        toolCalls: parsed.toolCalls,
+        continuation: parsed.continuation,
+        cachedInputTokens: parsed.cachedInputTokens,
+        inputTokens,
+        outputTokens,
+      };
     let decision: unknown;
     try {
       decision = JSON.parse(output);

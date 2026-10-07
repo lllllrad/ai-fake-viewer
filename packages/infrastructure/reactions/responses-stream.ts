@@ -1,10 +1,15 @@
 import { z } from "zod";
-import { completedResponseSchema, responseText } from "./response-payload.ts";
+import {
+  completedResponseSchema,
+  responseText,
+  responseTools,
+} from "./response-payload.ts";
 const eventSchema = z.object({ type: z.string() }).passthrough();
 /** Bounded Responses API SSE decoding; transport and decision validation remain separate. */
 export async function readResponsesStream(
   body: ReadableStream<Uint8Array>,
   signal: AbortSignal,
+  toolMode = false,
 ) {
   const reader = body.getReader(),
     decoder = new TextDecoder();
@@ -60,10 +65,21 @@ export async function readResponsesStream(
     }
     if (!completed) throw Error("ChatGPT stream ended before completion");
     const output = responseText(completed.output) || streamedText;
-    if (!output || output.length > 10000)
+    const tools = toolMode ? responseTools(completed.output) : undefined;
+    if (toolMode && !tools?.calls.length)
+      throw Error("Model returned no tool call");
+    if ((!toolMode && !output) || output.length > 10000)
       throw Error(output ? "ChatGPT output too large" : "ChatGPT output empty");
     return {
       output,
+      ...(tools
+        ? {
+            toolCalls: tools.calls,
+            continuation: tools.continuation,
+            cachedInputTokens:
+              completed.usage?.input_tokens_details?.cached_tokens,
+          }
+        : {}),
       inputTokens: completed.usage?.input_tokens,
       outputTokens: completed.usage?.output_tokens,
     };

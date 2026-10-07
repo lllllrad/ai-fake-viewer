@@ -1,3 +1,4 @@
+import { SqliteViewerMemory } from "./infrastructure/reactions/viewer-memory-sqlite.ts";
 import { SqliteConnectorCheckpoints } from "./infrastructure/storage/connector-checkpoints.ts";
 import { ConversationIdentities } from "./application/conversation/identity-service.ts";
 import { SqliteConversationIdentities } from "./infrastructure/conversation/identity-sqlite.ts";
@@ -49,6 +50,7 @@ import {
 } from "./contracts/conversation.ts";
 export class Store extends EventEmitter {
   db: DatabaseSync;
+  readonly viewerMemory: SqliteViewerMemory;
   readonly checkpoints: SqliteConnectorCheckpoints;
   readonly identities: ConversationIdentities;
   readonly ingestion: ConversationIngestion;
@@ -92,6 +94,13 @@ export class Store extends EventEmitter {
       this.db.close();
       throw error;
     }
+    this.viewerMemory = new SqliteViewerMemory(
+      this.db,
+      () => this.sessionId,
+      () => this.runtime.now(),
+    );
+    this.on("context_invalidated", () => this.viewerMemory.clear());
+    this.on("reset", () => this.viewerMemory.clear());
     this.checkpoints = new SqliteConnectorCheckpoints(this.db);
     this.incomingMessages = new SqliteIncomingMessages(this.db, {
       sessionId: () => this.sessionId,

@@ -189,6 +189,13 @@ try {
   await expect(
     page.getByRole("button", { name: "마이크 중지", exact: true }),
   ).toBeVisible();
+  const recordedMemory = experiments.active!.trace().memories[0];
+  assert(recordedMemory, "tool pipeline must persist an AI state");
+  await page
+    .getByLabel("확인할 AI 시청자")
+    .selectOption(recordedMemory.memberId);
+  await expect(page.getByText("현재 AI 상태", { exact: true })).toBeVisible();
+  await expect(page.getByText("상태 업데이트", { exact: true })).toBeVisible();
   await captureUIReview(page, "experiment-viewer-state");
   await page
     .getByRole("tab", { name: "AI 호출 세부사항", exact: true })

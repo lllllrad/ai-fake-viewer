@@ -32,6 +32,9 @@ export interface DraftOptions<Bytes extends Uint8Array> {
   latestFrames(): ScreenFrame<Bytes>[];
   hasTranscript(id: string): boolean;
   model(input: ModelInput<Bytes>, signal: AbortSignal): Promise<ModelResult>;
+  updateState?(
+    values: import("../../contracts/model-tools.ts").ViewerState,
+  ): Promise<import("../../contracts/model-tools.ts").ViewerMemory>;
   active(input: ModelInput<Bytes>): void;
   phase(phase: DraftPhase): void;
   trace(event: string, details: Record<string, string | number>): void;

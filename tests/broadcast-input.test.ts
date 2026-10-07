@@ -204,5 +204,5 @@ test("CHZZK current broadcast admits normalized messages including its owner and
   assert.equal(ingestions, 2);
   f.controller.abort();
   await running;
-  assert.equal(store.listenerCount("reset"), 0);
+  assert.equal(store.listenerCount("reset"), 1); // Store owns its derived-state invalidation listener.
 });

@@ -142,7 +142,7 @@ test("ChatGPT inference requires completed stream and sends masked image with su
     }) as typeof fetch;
     const model = chatgptModel(configSchema.parse({}).ai, auth, request);
     const result = await model(input, new AbortController().signal);
-    assert.equal(result.decision.action, "skip");
+    assert.equal(result.decision!.action, "skip");
     assert.equal(seen.store, false);
     assert.equal(seen.stream, true);
     assert.equal(seen.input[1].content[1].detail, "high");
@@ -171,7 +171,7 @@ test("ChatGPT inference requires completed stream and sends masked image with su
         )) as typeof fetch,
     );
     assert.equal(
-      (await deltaOnly(input, new AbortController().signal)).decision.action,
+      (await deltaOnly(input, new AbortController().signal)).decision!.action,
       "skip",
     );
     const interrupted = chatgptModel(

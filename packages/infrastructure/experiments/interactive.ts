@@ -28,7 +28,10 @@ import {
   pipelineProfileSchema,
   type LoadedPipeline,
 } from "../reactions/pipeline-profile.ts";
-import { modelMessages } from "../reactions/model-messages.ts";
+import {
+  inspectedModelRequest,
+  inspectedModelResult,
+} from "../reactions/model-request.ts";
 import { generationIssue } from "../../model-errors.ts";
 import {
   experimentTraceSchema,
@@ -138,7 +141,9 @@ export class InteractiveExperiment {
         model: adapter.name,
         at: Date.now(),
         elapsedMs: 0,
-        request: structuredClone(modelMessages(input, pipeline.prompts)),
+        request: structuredClone(
+          inspectedModelRequest(input, pipeline.prompts),
+        ),
       };
       this.calls.push(call);
       this.dirty = true;
@@ -147,7 +152,7 @@ export class InteractiveExperiment {
         const deadline = AbortSignal.any([signal, AbortSignal.timeout(30000)]);
         const result = await adapter.model(input, deadline);
         deadline.throwIfAborted();
-        call.result = structuredClone(result);
+        call.result = structuredClone(inspectedModelResult(result));
         return result;
       } catch (error) {
         call.error = signal.aborted ? "canceled" : generationIssue(error).code;
@@ -287,6 +292,7 @@ export class InteractiveExperiment {
   }
   trace(): ExperimentTrace {
     return {
+      memories: this.store.viewerMemory.list(),
       session: this.snapshot(),
       pipeline: { ...this.pipeline, effectiveAi: this.coordinator.config.ai },
       calls: this.calls,

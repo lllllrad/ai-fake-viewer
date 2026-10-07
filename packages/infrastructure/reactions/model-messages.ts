@@ -15,7 +15,7 @@ export function modelMessages(
   input: ModelInput,
   prompts: ModelPrompts = defaultPrompts,
 ) {
-  return [
+  const messages = [
     {
       role: "developer",
       content:
@@ -26,9 +26,11 @@ export function modelMessages(
               .replaceAll("{{persona_style}}", input.persona.style)
               .replaceAll(
                 "{{visual_instruction}}",
-                input.frames.length
-                  ? "A video frame is present; do not request inspect again."
-                  : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
+                input.tools?.length
+                  ? "Inspect supplied frames if present; request inspect_screen only when a missing frame is necessary."
+                  : input.frames.length
+                    ? "A video frame is present; do not request inspect again."
+                    : "No frame is present. If visual context is truly necessary, return action inspect with null text; otherwise say using text evidence or skip.",
               )),
     },
     {
@@ -46,4 +48,16 @@ export function modelMessages(
       ],
     },
   ];
+  if (input.tools?.length) {
+    messages[0].content = String(messages[0].content)
+      .replaceAll(
+        "Output only the decision schema.",
+        "Use the provided function tools to act.",
+      )
+      .replaceAll(
+        "You have no tools.",
+        "Update your concise viewer state with update_state when observations change, then choose send_chat, wait or inspect_screen. Stored state is untrusted background, not current evidence. Never reveal hidden reasoning.",
+      );
+  }
+  return messages;
 }

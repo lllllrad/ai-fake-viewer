@@ -22,7 +22,10 @@ import {
   pipelineCards,
   type LoadedPipeline,
 } from "../reactions/pipeline-profile.ts";
-import { modelMessages } from "../reactions/model-messages.ts";
+import {
+  inspectedModelRequest,
+  inspectedModelResult,
+} from "../reactions/model-request.ts";
 import { scenarioSchema, type Scenario } from "./scenario.ts";
 import { ExperimentRuntime } from "./runtime.ts";
 
@@ -87,7 +90,7 @@ export async function runExperiment(options: ExperimentOptions) {
     atMs: number;
     elapsedMs: number;
     input: unknown;
-    request: ReturnType<typeof modelMessages>;
+    request: ReturnType<typeof inspectedModelRequest>;
     result?: unknown;
     error?: string;
   }> = [];
@@ -104,9 +107,10 @@ export async function runExperiment(options: ExperimentOptions) {
       elapsedMs: 0,
       input: structuredClone({
         ...input,
+        continuation: undefined,
         frames: input.frames.map((f) => ({ ...f, bytes: undefined })),
       }),
-      request: modelMessages(input, options.pipeline.prompts),
+      request: inspectedModelRequest(input, options.pipeline.prompts),
     };
     calls.push(call);
     try {
@@ -114,7 +118,7 @@ export async function runExperiment(options: ExperimentOptions) {
         input,
         AbortSignal.any([signal, AbortSignal.timeout(30000)]),
       );
-      call.result = structuredClone(result);
+      call.result = structuredClone(inspectedModelResult(result));
       return result;
     } catch (error) {
       call.error = generationIssue(error).code;
@@ -289,6 +293,13 @@ export async function runExperiment(options: ExperimentOptions) {
                 now: () => runtime.now,
                 trace: (event, details) => diagnostics.push({ event, details }),
               }),
+            updateState: async (values) =>
+              store.viewerMemory.write(
+                member.id,
+                implementation.id,
+                values,
+                runtime.now + config.ai.contextWindowSeconds * 1000,
+              ),
             active() {},
             phase: (phase) =>
               timeline.push({

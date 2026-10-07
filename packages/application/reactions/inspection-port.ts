@@ -2,6 +2,7 @@ import type { CastRuntime } from "../../contracts/cast-runtime.ts";
 import type { Decision } from "../../contracts/decision.ts";
 /** Serializable host observations; the service decides how its algorithm presents state. */
 export interface InspectionContext {
+  memories?: import("../../contracts/model-tools.ts").ViewerMemory[];
   members: CastRuntime["members"];
   state: string;
   busy: boolean;

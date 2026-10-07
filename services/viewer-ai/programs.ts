@@ -2,7 +2,7 @@ import { standardInspection } from "./inspection.ts";
 import type { InspectionContext } from "../../packages/application/reactions/inspection-port.ts";
 import type { ViewerInspection } from "../../packages/contracts/reaction-inspection.ts";
 import { chooseCastMember } from "./cast-selection.ts";
-import { generateReviewedDraft } from "./draft-review.ts";
+import { generateToolDraft } from "./tool-draft.ts";
 import type { ReactionProgram } from "../../packages/application/reactions/program.ts";
 export interface ServicePipeline extends ReactionProgram {
   inspect?(context: InspectionContext): ViewerInspection[];
@@ -26,7 +26,7 @@ export const servicePipelines: ServicePipeline[] = [
         random: () => input.randomValues[index++] ?? 0.5,
       });
     },
-    draft: generateReviewedDraft,
+    draft: generateToolDraft,
     inspect: standardInspection,
   },
 ];

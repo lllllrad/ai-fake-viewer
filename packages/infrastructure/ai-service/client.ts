@@ -98,6 +98,17 @@ export class AiServiceClient {
             for (const event of packet.traces ?? [])
               options.trace(event.event, event.details);
             if (packet.kind === "done") return packet.outcome;
+            if (packet.kind === "state") {
+              if (!options.updateState)
+                throw Error("Viewer state port unavailable");
+              const result = await options.updateState(packet.values);
+              packet = await this.json(
+                `/v1/runs/${runId}/continue`,
+                { step: packet.step, result, ...evidence() },
+                options.signal,
+              );
+              continue;
+            }
             if (packet.kind !== "model")
               throw Error("AI service pipeline failed");
             options.active(packet.input);

@@ -8,7 +8,10 @@ import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
 import { ExperimentWorkspace } from "../packages/infrastructure/experiments/interactive.ts";
 import { loadPipelineProfile } from "../packages/infrastructure/reactions/pipeline-profile.ts";
-import { fixtureModel } from "../packages/infrastructure/experiments/models.ts";
+import {
+  fixtureModel,
+  fixtureToolModel,
+} from "../packages/infrastructure/experiments/models.ts";
 import { registerExperimentRoutes } from "../apps/experiments/routes.ts";
 import { registerExperimentErrors } from "../apps/experiments/errors.ts";
 import type { Model } from "../packages/application/reactions/model-port.ts";
@@ -40,6 +43,48 @@ function workspace(model: Model<Buffer> = fixtureModel) {
     },
   };
 }
+
+test("tool-updated viewer state is inspectable, restored and reused after reopening a test", async () => {
+  const { service, directory, cleanup } = workspace(fixtureToolModel);
+  let reopened: ExperimentWorkspace | undefined;
+  try {
+    const first = service.start({ topic: "퍼즐 게임", provider: "fixture" });
+    service.active!.input(
+      randomUUID(),
+      "퍼즐 게임 처음 하는데 어떤가요?",
+      "text",
+    );
+    await until(() => service.active!.messages.length === 1);
+    const saved = service.active!.trace().memories;
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0].revision, 2); // Generation and review both use actual tools.
+    assert(
+      service
+        .active!.snapshot()
+        .viewerStates.some((viewer) =>
+          viewer.sections.some(
+            (section) =>
+              section.label === "현재 AI 상태" &&
+              JSON.stringify(section.value).includes("퍼즐"),
+          ),
+        ),
+    );
+    service.active!.stop();
+    service.close();
+    reopened = new ExperimentWorkspace(
+      directory,
+      loadPipelineProfile(),
+      () => ({ name: "fixture", model: fixtureToolModel }),
+      () => 0,
+    );
+    reopened.resume(first.id);
+    assert.deepEqual(reopened.active!.trace().memories, saved);
+    reopened.active!.stop();
+  } finally {
+    reopened?.close();
+    cleanup();
+  }
+});
 
 test("interactive speech drives the production cast, records review, and survives restart as history", async () => {
   const { service, directory, cleanup } = workspace();

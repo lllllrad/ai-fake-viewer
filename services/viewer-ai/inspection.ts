@@ -13,6 +13,9 @@ export const standardInspection = (
       .filter((event) => event.details.memberId === member.id)
       .slice(-12);
     const latest = events.at(-1);
+    const memory = engine.memories?.find(
+      (state) => state.memberId === member.id,
+    );
     const decision = events.findLast((event) => event.event === "model_result");
     const pending =
       engine.pending?.memberId === member.id ? engine.pending : undefined;
@@ -30,6 +33,22 @@ export const standardInspection = (
               : "관찰 대기",
       updatedAt: latest?.at ?? member.lastPublishedAt,
       sections: [
+        {
+          label: "현재 AI 상태",
+          value: memory ? memory.values : "아직 상태 업데이트가 없습니다.",
+        },
+        ...(memory
+          ? [
+              {
+                label: "상태 업데이트",
+                value: {
+                  revision: memory.revision,
+                  updatedAt: new Date(memory.updatedAt).toISOString(),
+                  expiresAt: new Date(memory.expiresAt).toISOString(),
+                },
+              },
+            ]
+          : []),
         {
           label: "최근 모델 판단",
           value: decision

@@ -1,3 +1,9 @@
+import type {
+  ModelTool,
+  ModelToolCall,
+  ModelContinuationItem,
+  ViewerMemory,
+} from "../../contracts/model-tools.ts";
 import type { ChatSummary } from "../../domain/conversation/summary.ts";
 import type { ScreenFrame } from "../inputs/screen-context.ts";
 import type { Transcript } from "../../contracts/transcript.ts";
@@ -14,11 +20,18 @@ export interface ModelInput<Bytes extends Uint8Array = Uint8Array> {
   reviewDraft?: string;
   /** Service-owned instructions; omitted for the shared standard prompt profile. */
   instructions?: string;
+  tools?: ModelTool[];
+  continuation?: ModelContinuationItem[];
+  contextKey?: string;
+  viewerState?: ViewerMemory;
   persona: { name: string; style: string };
   description: string;
 }
 export interface ModelResult {
-  decision: Decision;
+  decision?: Decision;
+  toolCalls?: ModelToolCall[];
+  continuation?: ModelContinuationItem[];
+  cachedInputTokens?: number;
   inputTokens?: number;
   outputTokens?: number;
 }

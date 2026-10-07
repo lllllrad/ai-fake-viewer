@@ -463,7 +463,7 @@ test("T10/A10/A19: Responses receives real image bytes, structured output and no
       },
       new AbortController().signal,
     );
-    assert.equal(result.decision.action, "skip");
+    assert.equal(result.decision!.action, "skip");
     assert.equal(requests.length, 2);
     const b = requests[1].body;
     assert.equal(b.store, false);

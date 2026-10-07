@@ -21,6 +21,7 @@ export const standardPipeline: ReactionPipeline = {
       state: engine.state,
       busy: engine.busy,
       diagnostics: engine.diagnostics,
+      memories: engine.store.viewerMemory?.list() ?? [],
       pending: engine.pending,
     }) ?? [],
 };

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { startAiServiceFixture } from "../scripts/ai-service-fixture.ts";
 import { AiServiceClient } from "../packages/infrastructure/ai-service/client.ts";
-import { fixtureModel } from "../packages/infrastructure/experiments/models.ts";
+import { fixtureToolModel as fixtureModel } from "../packages/infrastructure/experiments/models.ts";
 import { createAiService } from "../services/viewer-ai/app.ts";
 
 test("a separate AI process performs generation and review through host model callbacks", async () => {
@@ -33,6 +33,14 @@ test("a separate AI process performs generation and review through host model ca
         calls++;
         return fixtureModel(request, signal);
       },
+      updateState: async (values) => ({
+        memberId: "fixture",
+        binding: "fixture",
+        revision: 1,
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + 60000,
+        values,
+      }),
       active() {},
       phase: (phase) => phases.push(phase),
       trace() {},
@@ -53,6 +61,14 @@ test("a separate AI process performs generation and review through host model ca
         controller.abort();
         return fixtureModel(request, new AbortController().signal);
       },
+      updateState: async (values) => ({
+        memberId: "fixture",
+        binding: "fixture",
+        revision: 1,
+        updatedAt: Date.now(),
+        expiresAt: Date.now() + 60000,
+        values,
+      }),
       active() {},
       phase() {},
       trace() {},

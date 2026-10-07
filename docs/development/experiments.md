@@ -124,15 +124,14 @@ own status labels and JSON-compatible sections through `ViewerInspection`. Inspe
 must be synchronous and read-only, without model calls. Invalid or failed inspection
 produces an unavailable-state message without stopping the test. Session snapshots save
 these sections, so ended sessions remain inspectable without loading implementation code;
-older records without inspection show an explicit empty state.
+older records without inspection show an explicit empty state. The standard implementation displays its saved mood, focus, intent and conversation summary, with revision, update time and expiry. Each successful `update_state` tool call updates these values; state is reused on subsequent calls until it expires or is invalidated.
 
 **AI call details** fetches the trace only while selected and refreshes every three
 seconds. Each call records the viewer ID/name, generation/review stage, provider/model,
-time, elapsed duration, complete serialized model-message prompts and response or error.
+time, elapsed duration, complete serialized model-message prompts, tool definitions/calls, cache usage and response or error.
 Historical calls missing metadata are labeled as unavailable rather than guessed.
 The tab also retains diagnostic events, publication attempts and resolved profile/prompts,
-with full JSON download. Prompt details are application model messages, not a packet capture
-of provider HTTP headers, credentials or adapter transport envelopes. Inspection and tab
+with full JSON download. Prompt details include the model input and tool envelope, not provider HTTP headers or credentials. Opaque reasoning continuation is omitted. Inspection and tab
 changes do not initiate AI inference. Text is escaped and long content scrolls/wraps.
 
 Automatic test casts use the same [stable synthetic nickname rules](../specifications/personas.md#stable-synthetic-nicknames) as broadcasts. Trace downloads include `personaProvenance`, including the saved name, root and transformations; older traces default this field to an empty list.
@@ -157,7 +156,7 @@ A fresh coordinator is constructed from saved history; pending requests, timers 
 unpublished replies are not resumed. Generation waits for new text or microphone input.
 Recent-context windows and publication pacing still apply, so old speech does not become
 fresh evidence and a reaction is not guaranteed for every new input. This restores
-conversation/cast context, not an exact checkpoint of algorithm-specific internal state.
+conversation/cast context and unexpired host-owned AI state. Expired state and transient model continuation are not restored; older records start without saved AI state.
 A resume grants a fresh 30-minute run and 300 new inputs; cumulative microphone usage
 is retained. A test that has exhausted its transcription budget can still resume with
 text input; start a new test for a new microphone budget.

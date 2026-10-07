@@ -25,7 +25,9 @@ interface RequestEvidence {
   reviewDraft?: unknown;
 }
 interface UsageResult {
-  decision: unknown;
+  decision?: unknown;
+  toolCalls?: readonly unknown[];
+  cachedInputTokens?: number;
   inputTokens?: number;
   outputTokens?: number;
 }
@@ -74,8 +76,14 @@ export async function callMeteredModel<
   const parsed = decisionSchema.safeParse(result.decision);
   trace("model_result", {
     stage,
-    action: parsed.success ? parsed.data.action : "invalid",
+    action: result.toolCalls?.length
+      ? "tool_calls"
+      : parsed.success
+        ? parsed.data.action
+        : "invalid",
     elapsedMs: now() - started,
+    toolCalls: result.toolCalls?.length ?? 0,
+    cachedInputTokens: result.cachedInputTokens ?? 0,
   });
   const validTokens = (value: number | undefined) =>
     value !== undefined && Number.isSafeInteger(value) && value >= 0

@@ -27,6 +27,7 @@ export interface ReactionConfig {
 }
 export interface ReactionStore extends ModelUsagePort {
   readonly sessionId: string;
+  readonly viewerMemory?: import("./viewer-memory.ts").ViewerMemoryStore;
   readonly participation?: { revision: number };
   readonly attempts: ReactionAttempts;
   readonly dispatch: CastDispatch;

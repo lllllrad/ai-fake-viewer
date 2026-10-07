@@ -21,6 +21,15 @@ export function modelContext(input: ModelInput) {
   return {
     description: input.description,
     reviewDraft: input.reviewDraft ?? null,
+    ...(input.viewerState
+      ? {
+          viewerState: {
+            revision: input.viewerState.revision,
+            updatedAt: input.viewerState.updatedAt,
+            values: input.viewerState.values,
+          },
+        }
+      : {}),
     recentContext: input.messages.map(message),
     anonymousChatSummary: input.chatSummary
       ? retainApprovedSummary(input.chatSummary, summarizeChat([]))

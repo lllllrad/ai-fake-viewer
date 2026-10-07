@@ -116,6 +116,20 @@ export function restoreExperiment(store: Store, trace: ExperimentTrace) {
         capturedAt: input.at,
         text: input.text,
       });
+    for (const memory of trace.memories ?? []) {
+      if (
+        memory.expiresAt <= Date.now() ||
+        !session.personas.some((p) => p.id === memory.memberId)
+      )
+        continue;
+      db.prepare("INSERT OR REPLACE INTO viewer_memory VALUES(?,?,?,?,?)").run(
+        store.sessionId,
+        memory.memberId,
+        memory.binding,
+        JSON.stringify(memory),
+        memory.expiresAt,
+      );
+    }
     for (let index = 0; index < session.calls; index++) {
       const id = store.reserve(null, null);
       if (!id) throw Error("Invalid saved test usage");

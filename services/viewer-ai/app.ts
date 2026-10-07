@@ -23,6 +23,11 @@ export function createAiService(
   if (registry.size !== pipelines.length)
     throw Error("Duplicate AI service pipeline");
   type Packet =
+    | {
+        kind: "state";
+        step: number;
+        values: import("../../packages/contracts/model-tools.ts").ViewerState;
+      }
     | { kind: "model"; step: number; input: ModelInput<Buffer> }
     | { kind: "done"; outcome: DraftOutcome<ModelInput<Buffer>> }
     | { kind: "error" };
@@ -36,7 +41,7 @@ export function createAiService(
     valid: Set<string>;
     packet?: Packet;
     ready?: () => void;
-    resolve?: (result: ModelResult) => void;
+    resolve?: (result: any) => void;
     reject?: (error: Error) => void;
     claimed: boolean;
   };
@@ -98,7 +103,7 @@ export function createAiService(
       phase: job.phase,
       traces: job.traces.splice(0),
     });
-    if (packet.kind !== "model") jobs.delete(id);
+    if (packet.kind === "done" || packet.kind === "error") jobs.delete(id);
     return response;
   };
   app.get("/health", async () => ({
@@ -178,6 +183,13 @@ export function createAiService(
         review: body.review === true,
         latestFrames: () => job.frames,
         hasTranscript: (id) => job.valid.has(id),
+        updateState: (values) =>
+          new Promise((resolve, reject) => {
+            job.resolve = resolve;
+            job.reject = reject;
+            job.claimed = false;
+            emit({ kind: "state", step: ++job.step, values });
+          }),
         active() {},
         phase: (phase) => {
           job.phase = phase;
@@ -205,7 +217,7 @@ export function createAiService(
     const body = decodeWire(req.body);
     if (
       !job ||
-      job.packet?.kind !== "model" ||
+      (job.packet?.kind !== "model" && job.packet?.kind !== "state") ||
       job.claimed ||
       body.step !== job.step
     )

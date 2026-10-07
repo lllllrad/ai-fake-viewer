@@ -1,4 +1,7 @@
-import type { Model } from "../../application/reactions/model-port.ts";
+import type {
+  Model,
+  ModelInput,
+} from "../../application/reactions/model-port.ts";
 import { configSchema } from "../../config.ts";
 import { chatgptModel } from "../reactions/chatgpt-model.ts";
 import { openaiModel } from "../reactions/responses-api.ts";
@@ -6,15 +9,18 @@ import { ChatgptAuth } from "../accounts/chatgpt-auth.ts";
 import type { LoadedPipeline } from "../reactions/pipeline-profile.ts";
 
 /** Deterministic plumbing fixture, explicitly unsuitable for quality evaluation. */
-export const fixtureModel: Model<Buffer> = async (input, signal) => {
+export const fixtureModel = async (
+  input: ModelInput<Buffer>,
+  signal: AbortSignal,
+) => {
   signal.throwIfAborted();
   const speech = input.transcripts?.at(-1);
   const message = input.messages.at(-1);
   const frame = input.frames.at(-1);
   const evidence = !!(speech || message || frame);
-  return {
+  const result = {
     decision: {
-      action: evidence ? "say" : "skip",
+      action: evidence ? ("say" as const) : ("skip" as const),
       text: evidence
         ? (input.reviewDraft ??
           `[fixture] ${(speech?.text ?? message?.text ?? "합성 화면").slice(0, 70)}`)
@@ -27,6 +33,41 @@ export const fixtureModel: Model<Buffer> = async (input, signal) => {
     inputTokens: 0,
     outputTokens: 0,
   };
+  return result;
+};
+export const fixtureToolModel: Model<Buffer> = async (input, signal) => {
+  const result = await fixtureModel(input, signal);
+  if (!input.tools?.length) return result;
+  const speech = input.transcripts?.at(-1);
+  const message = input.messages.at(-1);
+  const { action, ...chat } = result.decision;
+  return {
+    inputTokens: 0,
+    outputTokens: 0,
+    cachedInputTokens: 0,
+    toolCalls: [
+      {
+        type: "function_call" as const,
+        call_id: "fixture-state",
+        name: "update_state",
+        arguments: JSON.stringify({
+          mood: "관심",
+          focus: (speech?.text ?? message?.text ?? "화면").slice(0, 240),
+          intent: "새로운 입력에 반응",
+          summary: (speech?.text ?? message?.text ?? "합성 화면").slice(
+            0,
+            1600,
+          ),
+        }),
+      },
+      {
+        type: "function_call" as const,
+        call_id: "fixture-action",
+        name: action === "say" ? "send_chat" : "wait",
+        arguments: JSON.stringify(action === "say" ? chat : {}),
+      },
+    ],
+  };
 };
 export function experimentModel(
   provider: "fixture" | "openai_api" | "chatgpt_subscription",
@@ -36,7 +77,7 @@ export function experimentModel(
 ) {
   const limits = configSchema.parse({}).ai;
   if (provider === "fixture")
-    return { model: fixtureModel, name: "deterministic-fixture" };
+    return { model: fixtureToolModel, name: "deterministic-fixture" };
   if (provider === "openai_api") {
     if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
       throw Error(

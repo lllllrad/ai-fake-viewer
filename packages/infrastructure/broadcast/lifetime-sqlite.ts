@@ -7,6 +7,7 @@ export class SqliteBroadcastLifetime implements BroadcastLifetimeRepository {
   erase() {
     this.database.exec(
       `
+      DELETE FROM viewer_memory;
       DELETE FROM chat_context_summaries;
       DELETE FROM ai_message_context;
       DELETE FROM messages;
@@ -43,6 +44,7 @@ export class SqliteBroadcastLifetime implements BroadcastLifetimeRepository {
       .run(id, at, closed ? at : null);
   }
   closeReference(id: string, at: number) {
+    this.database.prepare("DELETE FROM viewer_memory WHERE session=?").run(id);
     this.database
       .prepare(
         "INSERT INTO runtime_flags(key,value) VALUES('ai_desired_running','0') ON CONFLICT(key) DO UPDATE SET value=excluded.value",

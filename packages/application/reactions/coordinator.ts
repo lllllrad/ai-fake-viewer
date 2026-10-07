@@ -71,6 +71,8 @@ export class ReactionCoordinator<
     input.newMessages = [];
     input.chatSummary = undefined;
     input.reviewDraft = undefined;
+    input.viewerState = undefined;
+    input.continuation = undefined;
   }
   state = "stopped";
   private readonly recovery = new GenerationRecovery();
@@ -402,7 +404,28 @@ export class ReactionCoordinator<
     const publicDescription = personaRuntime
       ? `${personaRuntime.brief.topic}. ${personaRuntime.brief.audience_intent}. ${personaRuntime.brief.public_context}`
       : c.description;
+    const memoryMember = activeMember?.id ?? `reference:${persona}`;
+    const memoryBinding = this.runtime.hash(
+      JSON.stringify([
+        this.store.sessionId,
+        c.pipelineType ?? "standard",
+        activeMember?.hash ?? personaStyle,
+      ]),
+    );
+    const storedMemory = this.store.viewerMemory?.read(
+      memoryMember,
+      memoryBinding,
+    );
+    // Reused derived text must keep all original chat sources in current authorization
+    // and publication provenance, including when the recent-message window shrinks.
+    const memory = storedMemory?.sourceMessageIds?.some(
+      (id) => !messages.some((message) => message.id === id),
+    )
+      ? undefined
+      : storedMemory;
     let input: ModelInput<Bytes> = {
+      contextKey: memoryBinding,
+      viewerState: memory,
       privacyRevision: this.store.participation?.revision,
       frames,
       transcripts,
@@ -509,6 +532,30 @@ export class ReactionCoordinator<
         hasTranscript: (id) => !!this.transcriber?.has(id),
         model: (request, requestSignal) =>
           this.callModel(request, requestSignal),
+        updateState: async (values) => {
+          signal.throwIfAborted();
+          if (
+            (memory && memory.expiresAt <= this.runtime.now()) ||
+            !this.work.current(lease) ||
+            this.state !== "running" ||
+            this.store.closed()
+          )
+            throw Error("Stale state update");
+          const saved = this.store.viewerMemory?.write(
+            memoryMember,
+            memoryBinding,
+            values,
+            this.runtime.now() + c.contextWindowSeconds * 1000,
+            input.messages.map((message) => message.id),
+          );
+          if (!saved) throw Error("Viewer state storage unavailable");
+          this.trace(
+            "state_updated",
+            { revision: saved.revision },
+            activeMember?.id,
+          );
+          return saved;
+        },
         active: (request) => {
           this.work.track(lease, request);
         },
@@ -641,6 +688,8 @@ export class ReactionCoordinator<
     }
   }
   async callModel(input: ModelInput<Bytes>, signal: AbortSignal) {
+    if (input.viewerState && input.viewerState.expiresAt <= this.runtime.now())
+      throw Error("Viewer state expired");
     const memberId = this.store
       .personaRuntime()
       ?.members.find((member) => member.displayName === input.persona.name)?.id;

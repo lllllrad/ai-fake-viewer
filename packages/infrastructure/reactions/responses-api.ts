@@ -3,11 +3,13 @@ import type {
   ModelInput,
   ModelLimits,
 } from "../../application/reactions/model-port.ts";
-import { decisionJsonSchema, type Decision } from "../../contracts/decision.ts";
-import { modelMessages, type ModelPrompts } from "./model-messages.ts";
+import { type Decision } from "../../contracts/decision.ts";
+import { type ModelPrompts } from "./model-messages.ts";
+import { modelRequest } from "./model-request.ts";
 import {
   completedResponseSchema,
   responseText,
+  responseTools,
   inputTokenCountSchema,
 } from "./response-payload.ts";
 export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
@@ -27,7 +29,7 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
     options?.authorize(input);
     const endpoint = options?.endpoint() ?? "https://api.openai.com/v1";
     const model = options?.model() ?? process.env.OPENAI_MODEL;
-    const messages = modelMessages(input, options?.prompts);
+    const payload = modelRequest(input, options?.prompts);
     const headers = {
       Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       "Content-Type": "application/json",
@@ -35,15 +37,7 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
     const body = {
       model,
       store: false,
-      input: messages,
-      text: {
-        format: {
-          type: "json_schema",
-          name: "persona_decision",
-          strict: true,
-          schema: decisionJsonSchema,
-        },
-      },
+      ...payload,
       max_output_tokens: config.maxOutputTokens,
     };
     if (Buffer.byteLength(JSON.stringify(body)) > 8 * 1024 * 1024)
@@ -56,8 +50,9 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
       signal,
       body: JSON.stringify({
         model: body.model,
-        input: messages,
-        text: body.text,
+        ...payload,
+        include: undefined,
+        prompt_cache_key: undefined,
       }),
     });
     const countRequestId = count.headers.get("x-request-id");
@@ -89,6 +84,17 @@ export function openaiModel<Bytes extends Uint8Array = Uint8Array>(
     )
       throw Error("Model response incomplete");
     const b = completedResponseSchema.parse(raw);
+    if (input.tools?.length) {
+      const { calls, continuation } = responseTools(b.output);
+      if (!calls.length) throw Error("Model returned no tool call");
+      return {
+        toolCalls: calls,
+        continuation,
+        inputTokens: b.usage?.input_tokens,
+        outputTokens: b.usage?.output_tokens,
+        cachedInputTokens: b.usage?.input_tokens_details?.cached_tokens,
+      };
+    }
     const text = responseText(b.output);
     return {
       decision: JSON.parse(text) as Decision,

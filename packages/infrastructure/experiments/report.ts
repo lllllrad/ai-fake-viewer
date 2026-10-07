@@ -29,15 +29,15 @@ function renderRun(r: ExperimentResult, index: number) {
   const images = [
     ...new Set(
       r.calls.flatMap((call) =>
-        call.request.flatMap((message) =>
+        call.request.input.flatMap((message) =>
           Array.isArray(message.content)
             ? message.content
-                .filter((part) => part.type === "input_image")
-                .map((part) =>
+                .filter((part: any) => part.type === "input_image")
+                .map((part: any) =>
                   "image_url" in part ? part.image_url : undefined,
                 )
                 .filter(
-                  (url): url is string =>
+                  (url: unknown): url is string =>
                     typeof url === "string" &&
                     url.startsWith("data:image/jpeg;base64,"),
                 )

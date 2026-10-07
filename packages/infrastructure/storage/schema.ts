@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-export const broadcastSchemaVersion = 3;
+export const broadcastSchemaVersion = 4;
 const reactionAttemptDefinition = `id TEXT PRIMARY KEY,session_id TEXT NOT NULL,member_id TEXT NOT NULL,event_ids TEXT NOT NULL,context_cutoff INTEGER NOT NULL,session_epoch INTEGER NOT NULL,member_epoch INTEGER NOT NULL,definition_hash TEXT NOT NULL,config_revision INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT,started_at INTEGER NOT NULL,finished_at INTEGER,model_manifest TEXT,result TEXT,public_message_id TEXT,context_key TEXT NOT NULL,UNIQUE(session_id,member_id,context_key)`;
 function tableInfo(database: DatabaseSync, table: string) {
   return database
@@ -9,7 +9,8 @@ function tableInfo(database: DatabaseSync, table: string) {
 }
 /** Called inside the startup transaction; supports the historical reference schemas. */
 export function migrateBroadcastSchema(database: DatabaseSync) {
-  database.exec(`CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
+  database.exec(`CREATE TABLE IF NOT EXISTS viewer_memory(session TEXT NOT NULL,member TEXT NOT NULL,binding TEXT NOT NULL,payload TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(session,member));
+ CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,started INTEGER NOT NULL,closed INTEGER);
  CREATE TABLE IF NOT EXISTS actors_private(id TEXT PRIMARY KEY,session TEXT,source TEXT,author TEXT,name TEXT,UNIQUE(session,source,author));
  CREATE TABLE IF NOT EXISTS messages(id TEXT PRIMARY KEY,session TEXT,actor TEXT,platform TEXT,channel TEXT,source_id TEXT,published INTEGER,received INTEGER,text TEXT,reply TEXT,hidden INTEGER DEFAULT 0,seq INTEGER,UNIQUE(session,platform,channel,source_id));
  CREATE TABLE IF NOT EXISTS chat_context_summaries(session TEXT PRIMARY KEY,payload TEXT NOT NULL,expires INTEGER NOT NULL,cutoff INTEGER NOT NULL DEFAULT 0);
