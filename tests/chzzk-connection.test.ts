@@ -146,7 +146,7 @@ test("CHZZK retired worker callbacks cannot affect its replacement", async () =>
   await task;
 });
 
-test("CHZZK admits only subscribed room viewers and unsubscribes once", async () => {
+test("CHZZK admits only subscribed room messages and unsubscribes once", async () => {
   const f = fixture();
   const task = runChzzk(f.ports, f.controller.signal);
   await flush();
@@ -171,7 +171,7 @@ test("CHZZK admits only subscribed room viewers and unsubscribes once", async ()
   chat("room", "viewer");
   f.controller.abort();
   await task;
-  assert.equal(f.messages.length, 1);
+  assert.equal(f.messages.length, 2);
   assert.equal(f.calls.filter((p) => p.includes("/subscribe/")).length, 1);
   assert.equal(f.calls.filter((p) => p.includes("/unsubscribe/")).length, 1);
   assert.equal(f.resets, 1);
@@ -249,4 +249,26 @@ test("CHZZK rejects an invalid session response without opening a worker or retr
   assert.equal(f.workers.length, 0);
   assert.equal(f.recoveries, 0);
   assert.equal(f.states.at(-1)?.state, "permission_blocked");
+});
+
+test("CHZZK forwards the broadcaster's own chat to admission", async () => {
+  const f = fixture();
+  const task = runChzzk(f.ports, f.controller.signal);
+  await flush();
+  subscribe(f.workers[0]);
+  await flush();
+  f.workers[0].emit("message", {
+    type: "CHAT",
+    data: {
+      channelId: "room",
+      senderChannelId: "room",
+      profile: { nickname: "Streamer" },
+      content: "My own chat",
+      messageTime: Date.now(),
+    },
+  });
+  await flush();
+  assert.equal(f.messages.length, 1);
+  f.controller.abort();
+  await task;
 });

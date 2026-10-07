@@ -111,8 +111,7 @@ async function connect(ports: ChzzkConnectionPorts, signal: AbortSignal) {
             }
           } else if (m.type === "CHAT" && subscribed) {
             const parsed = normalizeChzzk(m.data);
-            if (parsed.channel === channel && parsed.author !== channel)
-              ports.receive(parsed);
+            if (parsed.channel === channel) ports.receive(parsed);
           }
         })().catch((error: unknown) => {
           // A request may settle after exit, abort or a newer connection starts.

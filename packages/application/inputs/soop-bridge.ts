@@ -131,7 +131,6 @@ export class SoopBridge {
       );
     if (message.userId === settings.streamerId) {
       this.ports.notices.echo(message.userId, message.message);
-      return;
     }
     this.ports.receive({
       platform: "soop",

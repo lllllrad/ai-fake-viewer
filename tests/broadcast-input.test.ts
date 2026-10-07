@@ -173,7 +173,7 @@ test("CHZZK late account refresh cannot create a connection for a replaced broad
   assert.deepEqual(f.states, ["connecting"]);
 });
 
-test("CHZZK current broadcast admits normalized viewers and stops cleanly", async (t) => {
+test("CHZZK current broadcast admits normalized messages including its owner and stops cleanly", async (t) => {
   const store = new Store(":memory:");
   t.after(() => store.close());
   const f = chzzkFixture(store);
@@ -201,7 +201,7 @@ test("CHZZK current broadcast admits normalized viewers and stops cleanly", asyn
         messageTime: 1,
       },
     });
-  assert.equal(ingestions, 1);
+  assert.equal(ingestions, 2);
   f.controller.abort();
   await running;
   assert.equal(store.listenerCount("reset"), 0);

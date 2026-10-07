@@ -54,7 +54,6 @@ export class FixedNoticeDelivery {
       if (
         person.platform !== this.platform ||
         person.broadcaster !== this.broadcaster ||
-        person.author === this.broadcaster ||
         p.profile.notices.botUserIds.includes(person.author) ||
         person.age === "blocked"
       )

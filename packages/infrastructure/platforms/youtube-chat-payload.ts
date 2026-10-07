@@ -47,13 +47,6 @@ export function normalizeYoutube(
   return parsed.success ? parsed.data : null;
 }
 
-export function ignoreYoutubeOwnMessage(
-  message: Incoming,
-  ownChannel: string | undefined,
-) {
-  return message.author === ownChannel;
-}
-
 const offline = z
   .union([z.iso.datetime({ offset: true }), z.literal("")])
   .optional();
@@ -72,15 +65,14 @@ const pageSchema = z.object({
 });
 export function youtubeChatBatch(
   value: unknown,
-  target: { chat: string; broadcaster?: string; ownChannel?: string },
+  target: { chat: string; broadcaster?: string },
   transport: "rest" | "grpc",
 ) {
   const page = pageSchema.parse(value);
   const messages: Incoming[] = [];
   for (const item of page.items) {
     const message = normalizeYoutube(item, target.broadcaster ?? target.chat);
-    if (message && !ignoreYoutubeOwnMessage(message, target.ownChannel))
-      messages.push(message);
+    if (message) messages.push(message);
   }
   return {
     messages,

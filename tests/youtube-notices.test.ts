@@ -1,3 +1,7 @@
+import {
+  fixedNoticeText,
+  consentNoticeText,
+} from "../packages/domain/participation/notice-text.ts";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
@@ -8,7 +12,6 @@ import {
   youtubeScope,
 } from "../packages/infrastructure/accounts/youtube-auth.ts";
 import { YoutubeNotices } from "../packages/infrastructure/participation/platform-notices.ts";
-import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
 import { approvedProfile, privacyMessage } from "./privacy-fixtures.ts";
@@ -328,7 +331,7 @@ test("YouTube OAuth routes require admin initiation, validate public callback st
   }
 });
 
-test("supervisor sends fixed notices and excludes broadcast account messages", async (t) => {
+test("supervisor sends fixed notices and excludes its own exact fixed-notice echoes", async (t) => {
   const { Supervisor } =
     await import("../packages/infrastructure/inputs/platform-supervisor.ts");
   const p = new Participation(approvedProfile(), "session"),
@@ -391,7 +394,7 @@ test("supervisor sends fixed notices and excludes broadcast account messages", a
                 snippet: {
                   type: "textMessageEvent",
                   publishedAt: new Date().toISOString(),
-                  displayMessage: "[안내] fixed bot notice",
+                  displayMessage: fixedNoticeText(consentNoticeText(p.profile)),
                 },
                 authorDetails: {
                   channelId: "fixture",
@@ -498,25 +501,6 @@ test("YouTube forbidden/quota responses pause writes without acknowledging deliv
   await f.sender.tick(f.signal);
   assert.equal(f.sent.length, 1);
   assert.equal(f.p.get("youtube", "fixture", "viewer")!.introDelivered, false);
-});
-
-test("broadcast account messages are excluded from viewer participation", async () => {
-  const { ignoreYoutubeOwnMessage } =
-    await import("../packages/infrastructure/platforms/youtube-chat-payload.ts");
-  assert.equal(
-    ignoreYoutubeOwnMessage(
-      privacyMessage("fixture", "hello", Date.now()),
-      "fixture",
-    ),
-    true,
-  );
-  assert.equal(
-    ignoreYoutubeOwnMessage(
-      privacyMessage("viewer", "hello", Date.now()),
-      "fixture",
-    ),
-    false,
-  );
 });
 
 test("YouTube retains confirmed delivery when receive state changes during an insertion", async (t) => {

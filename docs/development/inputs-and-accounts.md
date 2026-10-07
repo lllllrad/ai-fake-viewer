@@ -337,3 +337,14 @@ READY callback. The controller waits for READY before calling `getRoomInfo()`;
 calling it early emits `connection-failed` even with valid authorization. Room
 identity verification still precedes subscription and any message forwarding.
 Timeout, disconnect and broadcast changes retire pending READY waits.
+
+### Broadcaster chat admission
+
+YouTube, CHZZK and SOOP forward broadcaster-authored messages through ordinary
+participation admission. Being the channel owner neither drops the message nor
+automatically grants consent. Guidance must be enabled and delivered; a fresh
+consent command permits subsequent chat, and withdrawal removes its raw context.
+The shared notice-text policy excludes exact own fixed-notice echoes, including
+the SOOP delivery suffix and the YouTube/CHZZK formatted prefix. SOOP still offers
+owner echoes to delivery confirmation before admission. This preserves notice
+acknowledgment without turning automatic notices into new guidance targets.

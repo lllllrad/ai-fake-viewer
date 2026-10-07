@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ChzzkNotices } from "../packages/infrastructure/participation/platform-notices.ts";
-import { fixedNoticeText } from "../packages/domain/participation/notice-text.ts";
+import {
+  consentNoticeText,
+  fixedNoticeText,
+} from "../packages/domain/participation/notice-text.ts";
 import type { ChzzkAuth } from "../packages/infrastructure/accounts/chzzk-auth.ts";
 import { Participation } from "../packages/infrastructure/participation/runtime.ts";
 import { Store } from "../packages/storage.ts";
@@ -191,7 +194,7 @@ test("CHZZK stops stale jobs on reset and abort", async (t) => {
   assert.equal(f.sent.length, 0);
 });
 
-test("CHZZK supervisor wires subscription to automatic notices and excludes own-channel messages", async (t) => {
+test("CHZZK supervisor wires subscription to automatic notices and excludes exact own fixed-notice echoes", async (t) => {
   const { EventEmitter } = await import("node:events");
   const { Supervisor } =
     await import("../packages/infrastructure/inputs/platform-supervisor.ts");
@@ -231,7 +234,10 @@ test("CHZZK supervisor wires subscription to automatic notices and excludes own-
                 channelId: "fixture",
                 senderChannelId: author,
                 profile: { nickname: "PRIVATE_NAME" },
-                content: "PRIVATE_TEXT",
+                content:
+                  author === "fixture"
+                    ? fixedNoticeText(consentNoticeText(p.profile), 88)
+                    : "PRIVATE_TEXT",
                 messageTime: ++now,
               },
             });

@@ -54,7 +54,7 @@ function accept(
   return 1;
 }
 
-/** Caller excludes the broadcaster and bots before obtaining participant state. */
+/** Caller excludes own fixed-notice echoes and configured bots before obtaining participant state. */
 export function receiveParticipantMessage(
   current: Participant,
   message: ParticipantMessage,

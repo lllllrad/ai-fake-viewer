@@ -143,7 +143,7 @@ test("closed broadcast rejects browser status and chat, and cannot issue notices
   assert.equal(f.bridge.nextNotice("broadcast").notice, null);
   assert.deepEqual(f.events, [["next", false]]);
 });
-test("broadcaster messages only reach echo confirmation; viewers enter the ingestion pipeline", () => {
+test("broadcaster messages check echo confirmation and enter the shared admission pipeline", () => {
   const f = fixture();
   f.bridge.receive(
     {
@@ -163,6 +163,17 @@ test("broadcaster messages only reach echo confirmation; viewers enter the inges
   );
   assert.deepEqual(f.events, [
     ["echo", "owner", "fixed"],
+    [
+      "message",
+      {
+        platform: "soop",
+        channel: "owner",
+        author: "owner",
+        name: "Owner",
+        text: "fixed",
+        sourceId: null,
+      },
+    ],
     [
       "message",
       {
@@ -188,7 +199,7 @@ test("broadcaster messages only reach echo confirmation; viewers enter the inges
       ),
     SoopBridgeError,
   );
-  assert.equal(f.events.length, 2);
+  assert.equal(f.events.length, 3);
 });
 test("HTTP bridge validates viewer messages before ingestion and retains endpoint shapes", async () => {
   const f = fixture(),

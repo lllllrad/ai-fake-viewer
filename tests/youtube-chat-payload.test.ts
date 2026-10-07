@@ -75,13 +75,14 @@ test("one invalid YouTube message does not discard valid neighbours or leak unkn
   assert.equal(JSON.stringify(batch).includes("PRIVATE"), false);
 });
 
-test("YouTube batch maps approved broadcaster and excludes own channel messages", () => {
+test("YouTube batch maps approved broadcaster and preserves own channel messages for admission", () => {
   const batch = youtubeChatBatch(
     { items: [item("own", "owner"), item()], next_page_token: "grpc-next" },
-    { chat: "chat", broadcaster: "owner", ownChannel: "owner" },
+    { chat: "chat", broadcaster: "owner" },
     "grpc",
   );
-  assert.equal(batch.messages.length, 1);
+  assert.equal(batch.messages.length, 2);
+  assert.equal(batch.messages[0].author, "owner");
   assert.equal(batch.messages[0].channel, "owner");
   assert.equal(batch.cursor, "grpc-next");
 });

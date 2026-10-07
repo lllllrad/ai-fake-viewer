@@ -87,7 +87,7 @@ export function runYoutube(
         messages: async (chat, cursor, broadcaster, signal) =>
           youtubeChatBatch(
             await api.messages(chat, cursor, signal),
-            { chat, broadcaster, ownChannel: options?.ownChannel?.() },
+            { chat, broadcaster },
             "rest",
           ),
         stream: (chat, cursor, broadcaster, signal, receive) =>
@@ -95,13 +95,7 @@ export function runYoutube(
             { chat, cursor, access: options?.access },
             signal,
             (raw) =>
-              receive(
-                youtubeChatBatch(
-                  raw,
-                  { chat, broadcaster, ownChannel: options?.ownChannel?.() },
-                  "grpc",
-                ),
-              ),
+              receive(youtubeChatBatch(raw, { chat, broadcaster }, "grpc")),
           ),
         checkpoint: (key) => store.checkpoints.get(key),
         clearCheckpoint: (key) => store.checkpoints.clear(key),

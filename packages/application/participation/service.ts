@@ -1,3 +1,7 @@
+import {
+  consentNoticeText,
+  isOwnFixedNotice,
+} from "../../domain/participation/notice-text.ts";
 import type { PrivacyProfile } from "../../contracts/privacy-profile.ts";
 import type {
   ParticipationPersistence,
@@ -125,7 +129,7 @@ export class ParticipationService {
   } {
     if (
       this.ended ||
-      m.author === m.channel ||
+      isOwnFixedNotice(m, this.profile) ||
       this.profile.notices.botUserIds.includes(m.author)
     )
       return { allow: false, withdraw: false, epoch: 0 };
@@ -176,7 +180,7 @@ export class ParticipationService {
     const profile = this.profile;
     return {
       stage,
-      text: `14세 이상 수집·AI·국외처리·방송공개${profile.thirdPartyNotice ? "·제3자제공" : ""} !동의/철회 !철회. 미동의 제외 ${profile.noticeUrl}`,
+      text: consentNoticeText(profile),
     };
   }
 
