@@ -33,8 +33,9 @@ FIRST VIEWPORT: The test heading and account disclosure precede the saved-sessio
 selector. A new test collects topic, AI type and provider. An active session shows
 status and end controls, then microphone controls above the three tabs. Conversation
 and expandable personas occupy two columns, stacking at 1000px. Header/account actions
-stack at 600px. New messages scroll only the log; reading older messages suspends
-following. Tab changes preserve microphone capture and the conversation draft.
+stack at 600px. Input/transcription and AI chat have separate manual histories. New entries never
+move either log or the page; recent-entry buttons jump once. Tab changes preserve
+both scroll positions, microphone capture and the conversation draft.
 
 FORM: Category-standard, code-led extension of the existing system. No visual
 redesign or generated comp is required. Shared controls and ordinary conversation

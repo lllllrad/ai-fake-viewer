@@ -232,3 +232,42 @@
   align-items: center;
   cursor: pointer;
 }
+
+.experiment-conversation-panel[data-state="inactive"] {
+  display: none;
+}
+.experiment-histories {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.experiment-history {
+  min-width: 0;
+}
+.experiment-history + .experiment-history {
+  border-left: 1px solid var(--line);
+}
+.experiment-history header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.experiment-history h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+.experiment-log {
+  overflow-anchor: none;
+}
+@media (max-width: 700px) {
+  .experiment-histories {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .experiment-history + .experiment-history {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+}

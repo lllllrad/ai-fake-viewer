@@ -95,72 +95,65 @@ try {
     page.getByRole("heading", { name: "AI 호출 세부사항", exact: true }),
   ).toHaveCount(0);
   await expect(page.getByLabel("AI 호출 한도", { exact: true })).toHaveCount(0);
-  // Long synthetic conversation: new input must scroll only the chat container,
-  // never the page, and must preserve an operator reading older messages.
+  // Incoming entries never scroll either independently labeled history.
+  const inputs = page.getByRole("log", {
+    name: "내 입력 · 음성 전사 내용",
+    exact: true,
+  });
+  const chats = page.getByRole("log", { name: "AI 채팅 내용", exact: true });
+  await expect(inputs.locator(".experiment-message:not(.own)")).toHaveCount(0);
+  await expect(chats.locator(".experiment-message.own")).toHaveCount(0);
   for (let i = 0; i < 16; i++)
-    experiments.active!.input(randomUUID(), `합성 스크롤 확인 ${i}`, "text");
+    experiments.active!.input(randomUUID(), "합성 스크롤 확인 " + i, "text");
   await expect(page.locator(".experiment-message.own")).toHaveCount(17);
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.locator(".experiment-log").evaluate((el) => {
+    await inputs.evaluate((el) => {
       el.scrollTop = el.scrollHeight;
-      el.dispatchEvent(new Event("scroll", { bubbles: true }));
     });
-    await expect(
-      page.getByRole("button", { name: "최근 대화로", exact: true }),
-    ).toHaveCount(0);
+    const bottom = await inputs.evaluate((el) => el.scrollTop);
     await page.evaluate(() => window.scrollTo(0, 0));
-    experiments.active!.input(randomUUID(), `아래쪽 새 입력 ${width}`, "text");
+    experiments.active!.input(randomUUID(), "아래쪽 새 입력 " + width, "text");
     await expect(
-      page
-        .locator(".experiment-message.own")
-        .filter({ hasText: `아래쪽 새 입력 ${width}` }),
+      inputs.getByText("아래쪽 새 입력 " + width, { exact: true }),
     ).toHaveCount(1);
-    assert.equal(
-      await page.evaluate(() => window.scrollY),
-      0,
-      "incoming chat must not move the document",
-    );
-    await expect
-      .poll(() =>
-        page
-          .locator(".experiment-log")
-          .evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
-      )
-      .toBeLessThan(2);
-    await page.locator(".experiment-log").evaluate((el) => {
-      el.scrollTop = 0;
-      el.dispatchEvent(new Event("scroll", { bubbles: true }));
+    assert.equal(await inputs.evaluate((el) => el.scrollTop), bottom);
+    assert.equal(await page.evaluate(() => window.scrollY), 0);
+    await inputs.evaluate((el) => {
+      el.scrollTop = 42;
     });
-    await expect(
-      page.getByRole("button", { name: "최근 대화로", exact: true }),
-    ).toHaveCount(1);
-    const documentTop = await page.evaluate(() => window.scrollY);
     experiments.active!.input(
       randomUUID(),
-      `읽는 동안 새 입력 ${width}`,
-      "text",
+      "읽는 동안 음성 " + width,
+      "microphone",
     );
     await expect(
-      page
-        .locator(".experiment-message.own")
-        .filter({ hasText: `읽는 동안 새 입력 ${width}` }),
+      inputs.getByText("읽는 동안 음성 " + width, { exact: true }),
     ).toHaveCount(1);
-    assert.equal(
-      await page.locator(".experiment-log").evaluate((el) => el.scrollTop),
-      0,
-    );
-    assert.equal(await page.evaluate(() => window.scrollY), documentTop);
+    assert.equal(await inputs.evaluate((el) => el.scrollTop), 42);
+    await page.getByRole("tab", { name: "AI별 상태", exact: true }).click();
+    await page.getByRole("tab", { name: "대화 보기", exact: true }).click();
+    assert.equal(await inputs.evaluate((el) => el.scrollTop), 42);
     await page
-      .getByRole("button", { name: "최근 대화로", exact: true })
+      .getByLabel("시청자에게 할 말", { exact: true })
+      .fill("직접 전송 " + width);
+    await page.getByRole("button", { name: "보내기", exact: true }).click();
+    await expect(
+      inputs.getByText("직접 전송 " + width, { exact: true }),
+    ).toHaveCount(1);
+    assert.equal(await inputs.evaluate((el) => el.scrollTop), 42);
+    const chatTop = await chats.evaluate((el) => el.scrollTop);
+    await page
+      .getByRole("button", { name: "최근 입력으로", exact: true })
       .click();
     await expect
       .poll(() =>
-        page
-          .locator(".experiment-log")
-          .evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+        inputs.evaluate(
+          (el) => el.scrollHeight - el.clientHeight - el.scrollTop,
+        ),
       )
       .toBeLessThan(2);
+    assert.equal(await chats.evaluate((el) => el.scrollTop), chatTop);
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page

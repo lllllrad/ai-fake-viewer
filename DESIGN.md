@@ -246,8 +246,10 @@ Use the shared native modal dialog with a maximum width of `480px`, bounded view
 
 Reader rows pair a circular initial avatar with author, timestamp and text; origin labels appear when the product contract allows them. The overlay adapts this structure to translucent dark rows with larger message type. Maintain readable disclosure and guidance without turning the transparent page into a full-screen opaque panel.
 
-The test conversation follows new entries by scrolling its own log container only.
-Scrolling up suspends following; the recent-conversation action restores it. Polling
+The test conversation separates input/transcription and AI chat into independently
+scrollable histories, side by side on desktop and stacked on narrow screens. Incoming
+entries, sends, polling and tab changes preserve each scroll position; no automatic
+following is allowed. Each recent-entry button moves only its own log once. Updates
 must not move the page, steal focus or interrupt microphone recording. Ended sessions
 show the resume action without an additional-call-limit field.
 

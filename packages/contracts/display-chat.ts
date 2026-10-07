@@ -15,7 +15,7 @@ export const displayChatSettingsSchema = z
   .object({
     youtube: z
       .object({
-        enabled: z.boolean().default(false),
+        enabled: z.boolean().default(true),
         video: z.string().max(2048).default(""),
         channelId: z.string().max(100).default(""),
         transport: z.enum(["grpc", "rest"]).default("grpc"),
@@ -24,12 +24,12 @@ export const displayChatSettingsSchema = z
       .strict()
       .prefault({}),
     chzzk: z
-      .object({ enabled: z.boolean().default(false) })
+      .object({ enabled: z.boolean().default(true) })
       .strict()
       .prefault({}),
     soop: z
       .object({
-        enabled: z.boolean().default(false),
+        enabled: z.boolean().default(true),
         streamerId: z.string().max(100).default(""),
       })
       .strict()

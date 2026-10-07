@@ -21,6 +21,11 @@ const runtime = await createApp(
   configSchema.parse({
     port,
     database: ":memory:",
+    displayChat: {
+      youtube: { enabled: false },
+      chzzk: { enabled: false },
+      soop: { enabled: false },
+    },
     input: {
       mode: "ai_stream",
       streamUrl: "rtmp://127.0.0.1:1935/synthetic-ai",

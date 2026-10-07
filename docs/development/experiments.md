@@ -110,10 +110,12 @@ The workspace has separate **Conversation**, **Per-viewer state** and **AI call 
 tabs. Microphone controls belong to the session toolbar above these tabs. Switching
 tabs preserves the same AudioWorklet and pending transcription; stopping the microphone,
 ending/changing the session, leaving the page or losing input readiness stops capture.
-The conversation text draft remains available when returning to its tab. Following
-new messages scrolls only the conversation container, never the surrounding page.
-Reading older messages suspends following until **Recent conversation** is selected
-or the operator scrolls back to the bottom.
+The conversation text draft remains available when returning to its tab. Input text
+and microphone transcripts share a labeled input history; AI replies occupy a separate
+history. Both logs preserve their scroll position on polling, sending text, receiving
+transcription/replies and switching tabs. There is no automatic following, including
+when already at the bottom. Each recent-entry button moves only its own log once.
+New entries must not move the surrounding page or steal focus.
 
 **Per-viewer state** selects a cast member and displays inspection sections supplied by
 that service pipeline's optional `inspect(context)` hook. The standard implementation reports

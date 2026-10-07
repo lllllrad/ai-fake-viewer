@@ -47,13 +47,13 @@ ai:
 # Display-only chat. UI saves override these defaults in data/display-chat.settings.json.
 displayChat:
   youtube:
-    enabled: false
+    enabled: true
     video: ""
     channelId: ""
     transport: grpc
     restFallback: true
   chzzk:
-    enabled: false
+    enabled: true
   soop:
-    enabled: false
+    enabled: true
     streamerId: ""

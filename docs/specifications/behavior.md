@@ -2,7 +2,8 @@
 
 Mixed Chat Studio generates synthetic viewer reactions to a dedicated screen and
 microphone stream. Publication is local to the administrator, reader and OBS overlay.
-YouTube, CHZZK and SOOP chat can be received for display only. Actual chat and
+YouTube, CHZZK and SOOP chat reception defaults on for display only. Explicit saved
+opt-outs are preserved; accounts and channel configuration are still required. Actual chat and
 identities never enter AI context, selection, pacing, memory or nickname generation.
 There are no native-platform chat sends, viewer participation commands, policy
 profiles or rights-management screens.
@@ -39,6 +40,13 @@ Port 3211 provides text/microphone conversations, persona inspection, per-AI sta
 full call details and resumable ended sessions. Microphone controls remain outside
 the conversation tab. Both apps use the same independent AI service and speech
 processing. Tests never target the shared live database or input.
+
+The conversation must show operator text/microphone transcriptions separately from
+AI chat. Each history is independently scrollable. New input, transcription, AI replies,
+polling, sending and tab changes must not automatically scroll either history or the
+surrounding page, even when the operator was at the bottom. Tab changes preserve both
+history positions. Only an explicit recent-entry action moves its corresponding log,
+once, without enabling subsequent automatic following.
 
 ## Limits
 

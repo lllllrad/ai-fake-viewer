@@ -1,8 +1,9 @@
 import * as Tabs from "@radix-ui/react-tabs";
+import { ConversationHistory } from "./ConversationHistory";
 import { ViewerStates } from "./ViewerStates";
 import { useEffect, useRef, useState } from "react";
 import { z } from "zod";
-import { Send, Square, Plus, ArrowDown } from "lucide-react";
+import { Send, Square, Plus } from "lucide-react";
 import {
   Button,
   Input,
@@ -82,8 +83,6 @@ export function ExperimentsPage({
   const [error, setError] = useState("");
   const [stale, setStale] = useState(false);
   const [showSetup, setShowSetup] = useState(false);
-  const [follow, setFollow] = useState(true);
-  const log = useRef<HTMLDivElement>(null);
   const selection = useRef("");
   const epoch = useRef(0);
   const mounted = useRef(true);
@@ -182,30 +181,6 @@ export function ExperimentsPage({
   useEffect(() => {
     if (session?.endedAt) void refreshIndex().catch(() => {});
   }, [session?.endedAt]);
-  const entries = session
-    ? [
-        ...session.inputs.map((input) => ({
-          id: input.id,
-          at: input.at,
-          name: "나",
-          text: input.text,
-          source: input.source,
-          own: true,
-        })),
-        ...session.messages.map((message) => ({
-          id: message.id,
-          at: message.displayTime,
-          name: message.displayName,
-          text: message.text,
-          source: "AI 시청자",
-          own: false,
-        })),
-      ].sort((a, b) => a.at - b.at)
-    : [];
-  useEffect(() => {
-    if (follow && view === "conversation" && log.current)
-      log.current.scrollTop = log.current.scrollHeight;
-  }, [entries.length, follow, view]);
   const act = async (work: () => Promise<void>) => {
     if (command.current) return;
     command.current = true;
@@ -244,7 +219,6 @@ export function ExperimentsPage({
         setSession(value);
         setText("");
         inputAttempt.current = undefined;
-        setFollow(true);
       }
     });
   useEffect(() => {
@@ -576,7 +550,6 @@ export function ExperimentsPage({
                 if (mounted.current && selection.current === currentId) {
                   epoch.current++;
                   setSession(value);
-                  setFollow(true);
                 }
               }}
             />
@@ -610,69 +583,17 @@ export function ExperimentsPage({
                 AI 호출 세부사항
               </Tabs.Trigger>
             </Tabs.List>
-            <Tabs.Content value="conversation">
+            <Tabs.Content
+              value="conversation"
+              forceMount
+              className="experiment-conversation-panel"
+            >
               <div className="experiment-columns">
                 <section
                   className="card experiment-chat"
                   aria-label="테스트 대화방"
                 >
-                  <div
-                    ref={log}
-                    className="experiment-log"
-                    role="log"
-                    aria-label="대화 내용"
-                    aria-live="polite"
-                    tabIndex={0}
-                    onScroll={() => {
-                      const el = log.current!;
-                      setFollow(
-                        el.scrollHeight - el.scrollTop - el.clientHeight < 80,
-                      );
-                    }}
-                  >
-                    {!entries.length && (
-                      <div className="experiment-empty">
-                        <h3>시청자들에게 말을 건네 보세요</h3>
-                        <p>
-                          텍스트를 보내거나 마이크로 이야기할 수 있습니다.
-                          시청자마다 관심과 참여 성향이 달라 항상 답하지는
-                          않습니다.
-                        </p>
-                      </div>
-                    )}
-                    {entries.map((entry) => (
-                      <article
-                        className={
-                          entry.own
-                            ? "experiment-message own"
-                            : "experiment-message"
-                        }
-                        key={entry.id}
-                      >
-                        <div>
-                          <strong>{entry.name}</strong>
-                          <span>
-                            {entry.own
-                              ? entry.source === "microphone"
-                                ? "나 · 음성 전사"
-                                : "나 · 텍스트"
-                              : "AI 시청자"}
-                          </span>
-                          <time>{time(entry.at)}</time>
-                        </div>
-                        <p>{entry.text}</p>
-                      </article>
-                    ))}
-                  </div>
-                  {!follow && (
-                    <Button
-                      className="secondary"
-                      onClick={() => setFollow(true)}
-                    >
-                      <ArrowDown size={16} aria-hidden="true" />
-                      최근 대화로
-                    </Button>
-                  )}
+                  <ConversationHistory key={session.id} session={session} />
                   <form
                     className="experiment-composer"
                     onSubmit={(event) => {

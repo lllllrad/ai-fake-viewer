@@ -23,7 +23,9 @@ and the configured server port. Successful callbacks return to /admin#chat-detai
 YouTube authorization requests youtube.readonly; existing broader read-capable
 tokens do not enable any sending code.
 
-config.yaml's displayChat section supplies defaults. UI saves override those
+config.yaml's displayChat section supplies defaults. All three platforms default to
+enabled; explicit saved disabled flags remain opt-outs. Accounts and channel targets
+are still required before reception can start. UI saves override those
 defaults in display-chat.settings.json beside the live database. Encrypted platform
 tokens use the existing provider token files in that directory. Stopping reception
 does not disconnect the account or stop AI. Platform end/disconnect does not end the

@@ -246,3 +246,16 @@ test("unreadable platform tokens cannot stop AI storage or overwrite the origina
     );
   }
 });
+
+test("display reception defaults on but preserves explicit platform opt-outs", () => {
+  const defaults = displayChatSettingsSchema.parse({});
+  for (const platform of ["youtube", "chzzk", "soop"] as const) {
+    assert.equal(defaults[platform].enabled, true);
+    assert.equal(
+      displayChatSettingsSchema.parse({ [platform]: { enabled: false } })[
+        platform
+      ].enabled,
+      false,
+    );
+  }
+});
