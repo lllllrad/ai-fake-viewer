@@ -25,6 +25,7 @@ export function MicrophoneInput({
     | undefined
   >(undefined);
   const pending = useRef<AbortController | undefined>(undefined);
+  const stopPending = useRef<Promise<void>>(Promise.resolve());
   const callbacks = useRef({ send, stop, onError });
   callbacks.current = { send, stop, onError };
   const cancel = () => {
@@ -38,7 +39,7 @@ export function MicrophoneInput({
       current.node.disconnect();
       current.stream.getTracks().forEach((track) => track.stop());
       void current.context.close();
-      void callbacks.current.stop().catch(() => {});
+      stopPending.current = callbacks.current.stop().catch(() => {});
     }
   };
   useEffect(() => () => cancel(), []);
@@ -54,6 +55,8 @@ export function MicrophoneInput({
     setStarting(true);
     let stream: MediaStream | undefined, context: AudioContext | undefined;
     try {
+      await stopPending.current;
+      if (generation !== epoch.current) return;
       if (
         !navigator.mediaDevices?.getUserMedia ||
         typeof AudioContext === "undefined"
