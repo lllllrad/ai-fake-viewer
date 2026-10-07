@@ -49,6 +49,7 @@ export class SoopController {
   private tail: Promise<void> = Promise.resolve();
   private polling = false;
   private connectTimer?: ReturnType<typeof setTimeout>;
+  private releaseReady?: () => void;
   private queuedMessages = 0;
   constructor(private readonly ports: SoopPorts) {}
   snapshot = () => this.state;
@@ -65,6 +66,8 @@ export class SoopController {
   private detach() {
     clearTimeout(this.connectTimer);
     this.revision++;
+    this.releaseReady?.();
+    this.releaseReady = undefined;
     const chat = this.chat;
     this.chat = undefined;
     this.broadcastId = undefined;
@@ -127,6 +130,11 @@ export class SoopController {
         return;
       }
       this.chat = chat;
+      let resolveReady!: (ready: boolean) => void;
+      const readiness = new Promise<boolean>((resolve) => {
+        resolveReady = resolve;
+      });
+      this.releaseReady = () => resolveReady(false);
       let ready = false,
         roomVerified = false,
         announced = false;
@@ -163,6 +171,7 @@ export class SoopController {
       chat.handleReady(() => {
         if (!active()) return;
         ready = true;
+        resolveReady(true);
         announce();
       });
       chat.handleMessageReceived((action, data) => {
@@ -210,6 +219,10 @@ export class SoopController {
       );
       await chat.connect();
       if (!active()) return;
+      // The official SDK connect() resolves when opening the socket, before READY.
+      // getRoomInfo() before READY emits connection-failed, even with valid auth.
+      if (!(await readiness) || !active()) return;
+      this.releaseReady = undefined;
       const room = await chat.getRoomInfo();
       if (!active()) return;
       if (room.bjId !== auth.streamerId)

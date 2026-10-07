@@ -1,3 +1,4 @@
+import { SoopAutoConnection } from "./auto-connection.ts";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { AdminStatus } from "../../../../../packages/contracts/admin-status.ts";
 import { inputHealth } from "../../input-health.ts";
@@ -23,6 +24,7 @@ export function SoopConnector({
   const [controller] = useState(
     () => new SoopController(browserSoopPorts(refresh)),
   );
+  const [automatic] = useState(() => new SoopAutoConnection(controller));
   const connection = useSyncExternalStore(
     controller.subscribe,
     controller.snapshot,
@@ -35,28 +37,25 @@ export function SoopConnector({
       controller.dispose();
     };
   }, [controller]);
-  // Observe server commands, not the local connecting phase: initial server state
-  // may still say stopped while this generation verifies its room.
+  const enabled =
+    setup.mode === "official" &&
+    setup.credentialsConfigured &&
+    setup.tokenConfigured &&
+    setup.streamerConfigured;
   useEffect(() => {
-    if (
-      (closed || state === "stopped") &&
-      ["connecting", "connected"].includes(controller.snapshot().phase)
-    )
-      void controller.disconnect();
-  }, [closed, state, controller]);
-  useEffect(
-    () => () => {
-      controller.dispose();
-    },
-    [sessionId, controller],
-  );
+    const sync = () =>
+      automatic.sync({ sessionId, enabled, stale, closed, state });
+    sync();
+    const timer = setInterval(sync, 1000);
+    return () => clearInterval(timer);
+  }, [automatic, sessionId, enabled, stale, closed, state]);
   const health = stale
     ? { label: "확인 불가", hint: "상태를 다시 확인해 주세요." }
     : inputHealth(state, "chat_read");
   const busy = connection.phase === "connecting" || actions.busy("authorize");
   const message = actions.error || connection.message;
-  const connect = controller.connect,
-    disconnect = controller.disconnect;
+  const connect = automatic.connect,
+    disconnect = automatic.disconnect;
   const authorize = () =>
     actions.run("authorize", async (signal) => {
       const { url } = await connectionApi.authorize("soop", signal);
@@ -82,8 +81,8 @@ export function SoopConnector({
       </p>
       <p className="hint">인증 콜백: {setup.redirectUri}</p>
       <p className="hint">
-        공식 SDK는 이 브라우저에서 본인 방송의 채팅을 연결합니다. 수신 중에는
-        관리자 탭을 열어 두세요. 화면을 이동해도 연결은 유지됩니다.
+        인증이 완료되면 이 브라우저에서 본인 방송의 채팅을 자동 연결합니다. 수신
+        중에는 관리자 탭을 열어 두세요. 화면을 이동해도 연결은 유지됩니다.
       </p>
       <div className="toolbar">
         <button

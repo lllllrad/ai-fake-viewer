@@ -58,6 +58,7 @@ test("missing platform approval is an actionable problem, not an unused input", 
 test("authenticated SOOP waiting for browser chat connection names the next action", () => {
   const health = inputHealth("auth_ready", "chat_read");
   assert.match(health.hint!, /계정 인증이 완료/);
-  assert.match(health.hint!, /SOOP 채팅 연결/);
-  assert.match(inputHealth("awaiting_browser").hint!, /SOOP 채팅 연결/);
+  assert.equal(health.label, "준비 중");
+  assert.match(health.hint!, /자동 연결/);
+  assert.match(inputHealth("awaiting_browser").hint!, /자동 연결/);
 });

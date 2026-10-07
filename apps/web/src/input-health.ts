@@ -23,10 +23,20 @@ export function inputHealth(
     ].includes(kind ?? "")
   )
     return { label: "정상" };
-  if (["connecting", "reconnecting", "fallback_to_rest"].includes(kind ?? ""))
+  if (
+    [
+      "connecting",
+      "reconnecting",
+      "fallback_to_rest",
+      "auth_ready",
+      "awaiting_browser",
+    ].includes(kind ?? "")
+  )
     return {
       label: "준비 중",
-      hint: "연결을 준비하고 있습니다. 잠시 기다려 주세요.",
+      hint: ["auth_ready", "awaiting_browser"].includes(kind ?? "")
+        ? "계정 인증이 완료되어 SOOP 채팅을 자동 연결하고 있습니다. 관리자 탭을 열어 두세요."
+        : "연결을 준비하고 있습니다. 잠시 기다려 주세요.",
     };
   if (kind === "privacy_blocked")
     return {
@@ -43,9 +53,6 @@ export function inputHealth(
     config_required: "연결 설정을 확인해 주세요.",
     permission_blocked: "계정의 접근 권한을 확인해 주세요.",
     needs_approval: "사용 설정을 확인해 주세요.",
-    awaiting_browser: "SOOP 채팅 연결을 눌러 수신을 시작해 주세요.",
-    auth_ready:
-      "계정 인증이 완료되었습니다. SOOP 채팅 연결을 눌러 수신을 시작해 주세요.",
     waiting_live:
       "연결한 채널에서 채팅이 열린 방송을 찾지 못했습니다. 30초마다 다시 확인합니다. 방송 중이라면 채널 또는 방송 URL 설정을 확인하세요.",
     broadcast_selection_required:

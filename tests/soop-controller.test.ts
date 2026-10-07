@@ -334,3 +334,52 @@ test("failed authorization cannot send an unscoped receiver status", async () =>
   assert.deepEqual(f.events, []);
   f.controller.dispose();
 });
+
+test("official SDK connect resolves before READY; room lookup must wait", async () => {
+  const f = fixture();
+  let roomReads = 0;
+  f.ports.createChat = async () => {
+    const chat = new Chat();
+    chat.connect = async () => true;
+    chat.getRoomInfo = async () => {
+      roomReads++;
+      return chat.room;
+    };
+    f.chats.push(chat);
+    return chat;
+  };
+  const connecting = f.controller.connect();
+  await flush();
+  assert.equal(roomReads, 0);
+  assert.equal(f.controller.snapshot().phase, "connecting");
+  f.chats[0].ready();
+  await connecting;
+  await f.controller.drain();
+  assert.equal(roomReads, 1);
+  assert.equal(f.controller.snapshot().phase, "connected");
+  assert.deepEqual(f.events, ["subscribed"]);
+  f.controller.dispose();
+});
+
+test("disconnect releases a pending READY wait and late READY cannot read the room", async () => {
+  const f = fixture();
+  let roomReads = 0;
+  f.ports.createChat = async () => {
+    const chat = new Chat();
+    chat.connect = async () => true;
+    chat.getRoomInfo = async () => {
+      roomReads++;
+      return chat.room;
+    };
+    f.chats.push(chat);
+    return chat;
+  };
+  const connecting = f.controller.connect();
+  await flush();
+  await f.controller.disconnect();
+  await connecting;
+  f.chats[0].ready();
+  assert.equal(roomReads, 0);
+  assert.equal(f.controller.snapshot().phase, "idle");
+  f.controller.dispose();
+});

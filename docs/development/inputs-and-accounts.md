@@ -326,5 +326,14 @@ inputs must remain distinguishable in aggregate chat health.
 
 SOOP OAuth completion (`auth_ready`) means the account is authorized, not that
 the browser SDK is receiving chat. The connection card confirms authentication
-and explicitly directs the operator to its chat-connect button. Keep the
+and automatically connects when the broadcast is open and configuration is ready.
+Failed connections retry no faster than once every 30 seconds; manual disconnect
+suppresses automatic reconnection until explicit reconnect or a new broadcast.
+Closed, stopped, blocked and stale inputs do not start connections. Keep the
 administrator browser open while receiving.
+
+The official SDK's `connect()` resolves after socket initialization, before its
+READY callback. The controller waits for READY before calling `getRoomInfo()`;
+calling it early emits `connection-failed` even with valid authorization. Room
+identity verification still precedes subscription and any message forwarding.
+Timeout, disconnect and broadcast changes retire pending READY waits.
