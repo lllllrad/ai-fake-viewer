@@ -1,5 +1,6 @@
 import { z } from "zod";
-export type YoutubeReadPath = "search" | "videos" | "liveChat/messages";
+export type YoutubeReadPath =
+  "search" | "videos" | "liveBroadcasts" | "liveChat/messages";
 export class UpstreamError extends Error {
   constructor(
     public state: string,
@@ -69,6 +70,20 @@ const videosSchema = z.object({
       }),
     )
     .default([]),
+});
+const broadcastsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().regex(/^[\w-]{11}$/),
+        snippet: z.object({
+          channelId: z.string().min(1),
+          liveChatId: z.string().min(1).optional(),
+        }),
+      }),
+    )
+    .default([]),
+  nextPageToken: z.string().optional(),
 });
 const apiName = (path: YoutubeReadPath) =>
   path === "liveChat/messages"
@@ -167,6 +182,35 @@ export class YoutubeReadApi {
     if (!parsed.success)
       throw new UpstreamError("reconnecting", 0, apiName("search"));
     return parsed.data.items.find((item) => item.id?.videoId)?.id?.videoId;
+  }
+  async activeBroadcast(
+    channelId: string,
+    signal: AbortSignal,
+  ): Promise<string | undefined> {
+    const parsed = broadcastsSchema.safeParse(
+      await this.json(
+        "liveBroadcasts",
+        {
+          part: "id,snippet",
+          broadcastStatus: "active",
+          broadcastType: "all",
+          maxResults: "50",
+        },
+        signal,
+      ),
+    );
+    if (!parsed.success)
+      throw new UpstreamError("reconnecting", 0, apiName("liveBroadcasts"));
+    const candidates = parsed.data.items.filter(
+      (item) => item.snippet.channelId === channelId && item.snippet.liveChatId,
+    );
+    if (parsed.data.nextPageToken || candidates.length > 1)
+      throw new UpstreamError(
+        "broadcast_selection_required",
+        0,
+        apiName("liveBroadcasts"),
+      );
+    return candidates[0]?.id;
   }
   async video(input: string, includeBroadcaster: boolean, signal: AbortSignal) {
     const parsed = videosSchema.safeParse(

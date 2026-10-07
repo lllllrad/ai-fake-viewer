@@ -30,8 +30,8 @@ export function inputHealth(
     };
   if (kind === "privacy_blocked")
     return {
-      label: "사용 안 함",
-      hint: "현재 운영 프로필에서 이 입력 경로를 사용하지 않습니다.",
+      label: "확인 필요",
+      hint: "운영 프로필에 이 플랫폼·방송 계정의 수신 승인이 없습니다. config.yaml의 privacy.approvals를 확인하세요.",
     };
   if (kind === "disabled") return { label: "사용 안 함" };
   if (kind === "stopped")
@@ -44,7 +44,10 @@ export function inputHealth(
     permission_blocked: "계정의 접근 권한을 확인해 주세요.",
     needs_approval: "사용 설정을 확인해 주세요.",
     awaiting_browser: "상세 설정에서 채팅 연결을 시작해 주세요.",
-    waiting_live: "방송이 시작되었는지 확인해 주세요.",
+    waiting_live:
+      "연결한 채널에서 채팅이 열린 방송을 찾지 못했습니다. 30초마다 다시 확인합니다. 방송 중이라면 채널 또는 방송 URL 설정을 확인하세요.",
+    broadcast_selection_required:
+      "진행 중인 방송이 여러 개입니다. config.yaml의 youtube.video에 사용할 방송 URL을 지정하세요.",
     ended: "방송이 종료되었습니다.",
     budget_exhausted:
       scope === "transcription"

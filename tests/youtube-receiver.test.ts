@@ -237,3 +237,81 @@ test("actual YouTube composition does not store an old response after a new broa
   assert.equal(store.checkpoint(`youtube:${before}:chat:rest`), undefined);
   assert.deepEqual(states, ["connecting"]);
 });
+
+test("YouTube waiting discovery retries without restarting reception", async () => {
+  const f = fixture();
+  f.config.video = "";
+  f.config.channelId = "UC" + "a".repeat(22);
+  let searches = 0;
+  f.ports.search = async () => (++searches === 1 ? undefined : "abcdefghijk");
+  await f.run();
+  assert.equal(searches, 2);
+  assert.deepEqual(f.delays, [30000]);
+  assert.equal(f.states[0].state, "waiting_live");
+  assert(f.states.some((s) => s.state === "subscribed:rest"));
+});
+
+test("canceling a discovery wait never starts a new request", async () => {
+  const f = fixture();
+  f.config.video = "";
+  f.config.channelId = "UC" + "a".repeat(22);
+  let searches = 0;
+  f.ports.search = async () => {
+    searches++;
+    return undefined;
+  };
+  f.ports.sleep = async () => {
+    f.controller.abort();
+  };
+  await f.run();
+  assert.equal(searches, 1);
+  assert.equal(f.writes.length, 0);
+});
+
+test("OAuth owner discovery uses liveBroadcasts instead of public search in receiver composition", async (t) => {
+  const store = new Store(":memory:");
+  t.after(() => store.close());
+  const owner = "UC" + "a".repeat(22);
+  const paths: string[] = [];
+  t.mock.method(globalThis, "fetch", async (input: URL) => {
+    const path = new URL(String(input)).pathname;
+    paths.push(path);
+    if (path.endsWith("/liveBroadcasts"))
+      return Response.json({
+        items: [
+          {
+            id: "abcdefghijk",
+            snippet: { channelId: owner, liveChatId: "chat" },
+          },
+        ],
+      });
+    if (path.endsWith("/videos"))
+      return Response.json({
+        items: [
+          {
+            liveStreamingDetails: { activeLiveChatId: "chat" },
+            snippet: { channelId: owner },
+          },
+        ],
+      });
+    if (path.endsWith("/liveChat/messages"))
+      return Response.json({
+        items: [],
+        nextPageToken: "end",
+        offlineAt: "2026-10-07T00:00:00Z",
+      });
+    throw Error("Unexpected API request");
+  });
+  await runYoutube(
+    { video: "", channelId: owner, transport: "rest", restFallback: true },
+    store,
+    new AbortController().signal,
+    () => {},
+    { access: async () => "token", ownChannel: () => owner },
+  );
+  assert.deepEqual(paths, [
+    "/youtube/v3/liveBroadcasts",
+    "/youtube/v3/videos",
+    "/youtube/v3/liveChat/messages",
+  ]);
+});

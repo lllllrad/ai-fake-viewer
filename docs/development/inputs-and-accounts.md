@@ -307,3 +307,19 @@ at cutover; missing broadcast scope is rejected.
 Broadcaster messages go only to exact notice echo confirmation; viewer messages
 enter the normal consent-aware ingestion path. Non-subscribed reports reset
 pending notices and delivery opportunity before updating receiver status.
+
+### YouTube live discovery and platform approval diagnostics
+
+When the configured YouTube channel matches the connected OAuth account, discovery
+uses `liveBroadcasts.list` with `broadcastStatus=active` and `broadcastType=all`.
+This avoids dependence on public search indexing. Other-channel/API-key discovery
+continues to use `search.list`; an explicit `youtube.video` takes precedence.
+Multiple active matches require an explicit broadcast URL instead of selecting an
+arbitrary chat. Empty discovery or a missing live chat is checked again after 30
+seconds, bound to the same broadcast/cancellation scope. See the
+[official list parameters](https://developers.google.com/youtube/v3/live/docs/liveBroadcasts/list).
+
+A configured platform without a matching `privacy.approvals` receive approval is
+shown as requiring attention, with the exact configuration location. OAuth
+connection and `soop.streamerId` do not create that approval. Disabled and blocked
+inputs must remain distinguishable in aggregate chat health.

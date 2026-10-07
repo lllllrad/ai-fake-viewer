@@ -154,3 +154,60 @@ test("YouTube retry delays cannot become negative, nonfinite or overflow Node ti
     );
   }
 });
+
+test("authenticated discovery uses active broadcasts and binds the configured owner", async () => {
+  const api = new YoutubeReadApi(
+    async () => "token",
+    async (input) => {
+      const url = new URL(String(input));
+      assert(url.pathname.endsWith("/liveBroadcasts"));
+      assert.equal(url.searchParams.get("broadcastStatus"), "active");
+      assert.equal(url.searchParams.get("broadcastType"), "all");
+      assert.equal(url.searchParams.has("mine"), false);
+      return Response.json({
+        items: [
+          {
+            id: "abcdefghijk",
+            snippet: { channelId: "other", liveChatId: "other-chat" },
+          },
+          {
+            id: "lmnopqrstuv",
+            snippet: { channelId: "owner", liveChatId: "chat" },
+          },
+        ],
+      });
+    },
+  );
+  assert.equal(await api.activeBroadcast("owner", signal()), "lmnopqrstuv");
+});
+
+test("authenticated discovery distinguishes empty, ambiguous, and malformed results", async () => {
+  const row = {
+    id: "abcdefghijk",
+    snippet: { channelId: "owner", liveChatId: "chat" },
+  };
+  const api = (body: unknown) =>
+    new YoutubeReadApi(
+      async () => "token",
+      async () => Response.json(body),
+    );
+  assert.equal(
+    await api({ items: [] }).activeBroadcast("owner", signal()),
+    undefined,
+  );
+  for (const body of [
+    { items: [row, { ...row, id: "lmnopqrstuv" }] },
+    { items: [row], nextPageToken: "next" },
+  ])
+    await assert.rejects(
+      api(body).activeBroadcast("owner", signal()),
+      (e: unknown) =>
+        e instanceof UpstreamError &&
+        e.state === "broadcast_selection_required" &&
+        e.api === "YouTube liveBroadcasts.list",
+    );
+  await assert.rejects(
+    api({ items: [{ id: 42 }] }).activeBroadcast("owner", signal()),
+    (e: unknown) => e instanceof UpstreamError && e.state === "reconnecting",
+  );
+});

@@ -78,7 +78,10 @@ export function runYoutube(
           !!store.participation?.available("youtube", broadcaster),
         resolve: (chat, broadcaster) => options?.resolve?.(chat, broadcaster),
         status,
-        search: (channel, signal) => api.search(channel, signal),
+        search: (channel, signal) =>
+          options?.access && options.ownChannel?.() === channel
+            ? api.activeBroadcast(channel, signal)
+            : api.search(channel, signal),
         video: (video, signal) =>
           api.video(video, !!store.participation, signal),
         messages: async (chat, cursor, broadcaster, signal) =>

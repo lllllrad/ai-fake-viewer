@@ -71,53 +71,61 @@ export async function receiveYoutube(
     status("config_required");
     return;
   }
-  let chat: string, broadcaster: string | undefined;
+  let chat = "";
+  let broadcaster: string | undefined;
   let selectedVideo = config.video.trim();
-  try {
-    if (!selectedVideo && config.channelId?.trim()) {
-      const channel = config.channelId.trim();
-      if (!/^UC[\w-]{22}$/.test(channel)) {
-        status("config_required");
-        return;
+  while (current()) {
+    try {
+      if (!selectedVideo && config.channelId?.trim()) {
+        const channel = config.channelId.trim();
+        if (!/^UC[\w-]{22}$/.test(channel)) {
+          status("config_required");
+          return;
+        }
+        selectedVideo = (await ports.search(channel, signal)) ?? "";
+        if (!current()) {
+          status("stopped");
+          return;
+        }
+        if (!selectedVideo) {
+          status("waiting_live");
+          await ports.sleep(30000, signal);
+          continue;
+        }
       }
-      selectedVideo = (await ports.search(channel, signal)) ?? "";
+      const resolved = await ports.video(selectedVideo, signal);
       if (!current()) {
         status("stopped");
         return;
       }
-      if (!selectedVideo) {
+      chat = resolved.chat ?? "";
+      if (ports.requiresParticipation) {
+        broadcaster = resolved.broadcaster;
+        if (!broadcaster || !ports.available(broadcaster)) {
+          status("privacy_blocked");
+          return;
+        }
+      }
+      if (chat && broadcaster) ports.resolve(chat, broadcaster);
+      if (!current()) return;
+      if (!chat) {
         status("waiting_live");
+        await ports.sleep(30000, signal);
+        selectedVideo = config.video.trim();
+        continue;
+      }
+      break;
+    } catch (error) {
+      if (!current()) {
+        status("stopped");
         return;
       }
-    }
-    const resolved = await ports.video(selectedVideo, signal);
-    if (!current()) {
-      status("stopped");
+      const issue = ports.issue(error, "discovery", false);
+      status(issue.state, issue.api);
       return;
     }
-    chat = resolved.chat ?? "";
-    if (ports.requiresParticipation) {
-      broadcaster = resolved.broadcaster;
-      if (!broadcaster || !ports.available(broadcaster)) {
-        status("privacy_blocked");
-        return;
-      }
-    }
-    if (chat && broadcaster) ports.resolve(chat, broadcaster);
-    if (!current()) return;
-    if (!chat) {
-      status("waiting_live");
-      return;
-    }
-  } catch (error) {
-    if (!current()) {
-      status("stopped");
-      return;
-    }
-    const issue = ports.issue(error, "discovery", false);
-    status(issue.state, issue.api);
-    return;
   }
+  if (!current()) return;
   let transport = config.transport,
     failures = 0;
   status("connecting");

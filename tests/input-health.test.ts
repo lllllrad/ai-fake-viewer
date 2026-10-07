@@ -44,3 +44,13 @@ test("a failing platform takes priority and exposes a useful action instead of a
   assert.equal(unknown.label, "확인 필요");
   assert.ok(!JSON.stringify(unknown).includes("unexpected_transport_error"));
 });
+
+test("missing platform approval is an actionable problem, not an unused input", () => {
+  const health = inputHealth("privacy_blocked");
+  assert.equal(health.label, "확인 필요");
+  assert.match(health.hint!, /privacy.approvals/);
+  assert.equal(
+    chatHealth(["subscribed", "privacy_blocked"]).label,
+    "확인 필요",
+  );
+});
