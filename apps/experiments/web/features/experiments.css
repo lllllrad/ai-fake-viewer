@@ -170,3 +170,7 @@
 .experiment-workspace .experiment-session-heading {
   gap: 8px;
 }
+
+.experiment-settings > div:first-child {
+  grid-column: 1 / -1;
+}

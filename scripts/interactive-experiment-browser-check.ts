@@ -57,6 +57,9 @@ try {
   await expect(
     page.getByRole("heading", { name: "AI 시청자와 대화하기" }),
   ).toBeVisible();
+  await expect(page.getByLabel("AI 유형", { exact: true })).toHaveValue(
+    "standard",
+  );
   await captureUIReview(page, "experiment-setup");
   await page
     .getByLabel("방송 주제", { exact: true })
@@ -238,14 +241,16 @@ try {
     const snapshot = experiments.start({ ...body, provider: "fixture" });
     return route.fulfill({ json: snapshot });
   });
-  await page.reload();
+  // A callback redirect loads the document, even when the UI was already open.
+  await page.goto("about:blank");
+  await page.goto(`http://127.0.0.1:${port}/admin#ai-connection`);
+  await expect(page.locator(".test-account")).toHaveAttribute("open", "");
   await page.getByLabel("방송 주제", { exact: true }).fill("연결 직후 테스트");
   await expect(page.getByLabel("AI 연결", { exact: true })).toHaveValue(
     "openai_api",
   );
   await page.getByRole("button", { name: "테스트 시작", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Responses API가 선택");
-  await page.locator(".test-account > summary").click();
   await page.getByRole("button", { name: "모델 목록 새로고침" }).click();
   await page
     .getByLabel("테스트 모델", { exact: true })

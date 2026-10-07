@@ -30,6 +30,10 @@ export const pipelineProfileSchema = z
     personas: z.array(patch).length(6).optional(),
     ai: z
       .object({
+        pipelineType: z
+          .string()
+          .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+          .optional(),
         reviewDraft: z.boolean().optional(),
         visualMode: z.enum(["continuous", "on_request"]).optional(),
         contextWindowSeconds: z.number().int().min(30).max(300).optional(),

@@ -256,3 +256,7 @@ terminating the process. Manual publication also cancels its queued callback.
 [Persona and pipeline experiments](experiments.md) invoke the same coordinator,
 draft/review owner and model adapters with an isolated store and injected clock.
 Versioned profiles are also consumed by the live server at startup.
+
+## AI implementation selection
+
+Live startup selects `ai.pipelineType` through the [shared registry](../../packages/application/reactions/pipelines.ts), independently of the inference provider. `standard` preserves the existing coordinator. Interactive and replay tests use the same factory and lifecycle contract; see [replacement and promotion](experiments.md#replaceable-ai-implementations). Alternate implementations are trusted code and must preserve the publication and cancellation guarantees documented here.

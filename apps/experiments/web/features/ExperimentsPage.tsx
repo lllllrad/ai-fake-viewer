@@ -71,6 +71,7 @@ export function ExperimentsPage({
     chatgptReady ? "chatgpt_subscription" : "openai_api",
   );
   const providerChosen = useRef(false);
+  const [pipelineType, setPipelineType] = useState("");
   const [maxCalls, setMaxCalls] = useState(12);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -319,7 +320,13 @@ export function ExperimentsPage({
                 experimentSessionSchema,
                 {
                   method: "POST",
-                  body: { topic, provider, maxCalls },
+                  body: {
+                    topic,
+                    provider,
+                    maxCalls,
+                    pipelineType:
+                      pipelineType || index?.defaultPipelineType || "standard",
+                  },
                   signal: lifetime.current.signal,
                 },
               );
@@ -345,6 +352,28 @@ export function ExperimentsPage({
             placeholder="예: 처음 해 보는 퍼즐 게임"
           />
           <div className="experiment-settings">
+            <div>
+              <label htmlFor="experiment-type">AI 유형</label>
+              <Select
+                id="experiment-type"
+                value={pipelineType || index?.defaultPipelineType || "standard"}
+                onChange={(event) => setPipelineType(event.target.value)}
+              >
+                {(index?.pipelineTypes ?? []).map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.label} · {type.id}
+                  </option>
+                ))}
+              </Select>
+              <p className="hint">
+                {
+                  index?.pipelineTypes.find(
+                    (type) =>
+                      type.id === (pipelineType || index.defaultPipelineType),
+                  )?.description
+                }
+              </p>
+            </div>
             <div>
               <label htmlFor="experiment-provider">AI 연결</label>
               <Select
@@ -403,7 +432,8 @@ export function ExperimentsPage({
             <div>
               <h2>{session.topic}</h2>
               <p className="hint">
-                {providerName(session.provider)} · {session.model} · 프로필{" "}
+                {providerName(session.provider)} · {session.model} · AI 유형{" "}
+                {session.pipelineType}@{session.pipelineRevision} · 프로필{" "}
                 {session.profile.id}@{session.profile.revision}
               </p>
             </div>

@@ -4,12 +4,9 @@ import { resolve } from "node:path";
 import sharp from "sharp";
 import { Store } from "../../storage.ts";
 import { configSchema } from "../../config.ts";
-import { ReactionCoordinator } from "../../application/reactions/coordinator.ts";
+import { reactionPipelines } from "../../application/reactions/pipelines.ts";
 import { TimingGate } from "../../application/reactions/timing-gate.ts";
-import {
-  generateReviewedDraft,
-  type DraftOutcome,
-} from "../../application/reactions/draft-review.ts";
+import { type DraftOutcome } from "../../application/reactions/draft-review.ts";
 import { personaStyle } from "../../application/reactions/persona-style.ts";
 import type {
   Model,
@@ -49,6 +46,9 @@ export async function runExperiment(options: ExperimentOptions) {
     options.maxCalls > 1000
   )
     throw Error("Invalid call limit");
+  const implementation = reactionPipelines.get(
+    options.pipeline.profile.ai.pipelineType ?? "standard",
+  );
   const runtime = new ExperimentRuntime(options.seed);
   const base = runtime.now;
   const store = new Store(":memory:", undefined, {
@@ -128,7 +128,7 @@ export async function runExperiment(options: ExperimentOptions) {
       call.elapsedMs = Math.round(performance.now() - started);
     }
   };
-  const coordinator = new ReactionCoordinator(
+  const coordinator = implementation.create<Buffer, number>(
     store,
     screen,
     config,
@@ -276,7 +276,7 @@ export async function runExperiment(options: ExperimentOptions) {
       };
       try {
         drafts.push(
-          await generateReviewedDraft({
+          await implementation.draft({
             input,
             signal: AbortSignal.timeout(90000),
             isCurrent: () => true,
@@ -343,6 +343,10 @@ export async function runExperiment(options: ExperimentOptions) {
       provider: options.provider,
       model: options.modelName,
       pipeline: options.pipeline,
+      implementation: {
+        id: implementation.id,
+        revision: implementation.revision,
+      },
       effectiveAi: config.ai,
       scenario,
       personas,

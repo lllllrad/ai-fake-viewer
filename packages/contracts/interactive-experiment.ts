@@ -6,6 +6,10 @@ export const experimentStartSchema = z
   .object({
     topic: z.string().trim().min(1).max(500),
     provider: z.enum(["fixture", "openai_api", "chatgpt_subscription"]),
+    pipelineType: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+      .optional(),
     maxCalls: z.number().int().min(1).max(100).default(12),
   })
   .strict();
@@ -21,6 +25,8 @@ export const experimentSessionSchema = z.object({
   topic: z.string(),
   provider: z.string(),
   model: z.string(),
+  pipelineType: z.string().default("standard"),
+  pipelineRevision: z.number().int().positive().default(1),
   startedAt: z.number(),
   endedAt: z.number().nullable(),
   state: z.string(),
@@ -49,6 +55,15 @@ export type ExperimentSession = z.infer<typeof experimentSessionSchema>;
 export const experimentIndexSchema = z.object({
   activeId: z.string().nullable(),
   microphoneReady: z.boolean(),
+  defaultPipelineType: z.string(),
+  pipelineTypes: z.array(
+    z.object({
+      id: z.string(),
+      revision: z.number(),
+      label: z.string(),
+      description: z.string(),
+    }),
+  ),
   microphone: z.object({
     provider: z.enum(["groq", "openai"]),
     label: z.string(),

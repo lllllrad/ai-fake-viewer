@@ -56,6 +56,7 @@ ai:
     minSeconds: 35
     maxSeconds: 95
   # Optional versioned persona/prompt/pipeline profile; see docs/development/experiments.md.
+  pipelineType: standard
   pipelineProfile: ""
   transcriptLimit: 10
   contextWindowSeconds: 120

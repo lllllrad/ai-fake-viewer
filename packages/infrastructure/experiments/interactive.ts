@@ -11,7 +11,11 @@ import {
 import { join } from "node:path";
 import { Store } from "../../storage.ts";
 import { configSchema } from "../../config.ts";
-import { ReactionCoordinator } from "../../application/reactions/coordinator.ts";
+import {
+  reactionPipelines,
+  type ReactionEngine,
+  type ReactionPipeline,
+} from "../../application/reactions/pipelines.ts";
 import { TimingGate } from "../../application/reactions/timing-gate.ts";
 import type { Model } from "../../application/reactions/model-port.ts";
 import { createBroadcastCast } from "../cast/runtime.ts";
@@ -47,7 +51,8 @@ export class InteractiveExperiment {
   readonly calls: ExperimentTrace["calls"] = [];
   readonly diagnostics: unknown[] = [];
   readonly messages: ExperimentSession["messages"] = [];
-  readonly coordinator: ReactionCoordinator<Buffer, NodeJS.Timeout>;
+  readonly coordinator: ReactionEngine<Buffer, NodeJS.Timeout>;
+  readonly implementation: ReactionPipeline;
   private timer?: NodeJS.Timeout;
   private disposed = false;
   private dirty = true;
@@ -76,6 +81,8 @@ export class InteractiveExperiment {
     );
     // This surface has speech/text only. Preserve the profile's pacing and review.
     config.ai.visualMode = "on_request";
+    config.ai.pipelineType = options.pipelineType ?? config.ai.pipelineType;
+    this.implementation = reactionPipelines.get(config.ai.pipelineType);
     const screen = { recent: () => [], has: () => false };
     const cast = createBroadcastCast(this.store, () => options.topic, {
       cards: pipelineCards(pipeline),
@@ -113,7 +120,7 @@ export class InteractiveExperiment {
         this.dirty = true;
       }
     };
-    this.coordinator = new ReactionCoordinator<Buffer, NodeJS.Timeout>(
+    this.coordinator = this.implementation.create<Buffer, NodeJS.Timeout>(
       this.store,
       screen,
       config,
@@ -201,6 +208,8 @@ export class InteractiveExperiment {
       topic: this.options.topic,
       provider: this.options.provider,
       model: this.adapter.name,
+      pipelineType: this.implementation.id,
+      pipelineRevision: this.implementation.revision,
       startedAt: this.startedAt,
       endedAt: this.endedAt,
       state: this.coordinator.state,
@@ -289,6 +298,8 @@ export class ExperimentWorkspace {
       name: string;
     },
     private readonly random?: () => number,
+    readonly defaultPipelineType = pipeline.profile.ai.pipelineType ??
+      "standard",
   ) {}
   private path(id: string) {
     if (!/^[0-9a-f-]{36}$/.test(id))
@@ -314,6 +325,14 @@ export class ExperimentWorkspace {
       .sort((a, b) => b.startedAt - a.startedAt);
   }
   start(options: ExperimentStart) {
+    try {
+      reactionPipelines.get(options.pipelineType ?? this.defaultPipelineType);
+    } catch {
+      throw new ExperimentError(
+        "등록되지 않은 AI 유형입니다. 테스트 서버의 구현 목록을 확인해 주세요.",
+        400,
+      );
+    }
     if (this.active && !this.active.endedAt)
       throw new ExperimentError("진행 중인 테스트를 먼저 종료해 주세요.");
     if (this.list().length >= 100)
@@ -334,7 +353,10 @@ export class ExperimentWorkspace {
     }
     this.active?.dispose();
     const session = new InteractiveExperiment(
-      options,
+      {
+        ...options,
+        pipelineType: options.pipelineType ?? this.defaultPipelineType,
+      },
       this.pipeline,
       adapter,
       this.save,

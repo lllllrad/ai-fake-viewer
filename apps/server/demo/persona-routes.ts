@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { Store } from "../../../packages/storage.ts";
-import type { Scheduler } from "../../../packages/infrastructure/reactions/scheduler.ts";
+import type { BroadcastScheduler } from "../../../packages/infrastructure/reactions/scheduler.ts";
 import type { Config } from "../../../packages/config.ts";
 import type { Model } from "../../../packages/application/reactions/model-port.ts";
 import { PersonaService } from "../../../packages/persona/service.ts";
@@ -12,7 +12,7 @@ import { hash as canonicalHash } from "../../../packages/persona/contracts.ts";
 export function registerDemoPersonaRoutes(
   app: FastifyInstance,
   store: Store,
-  scheduler: Scheduler,
+  scheduler: BroadcastScheduler,
   config: Config,
   model: Model<Buffer>,
 ) {

@@ -162,6 +162,10 @@ export const configSchema = z
             "maxSeconds must be at least minSeconds",
           )
           .default({ minSeconds: 35, maxSeconds: 95 }),
+        pipelineType: z
+          .string()
+          .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+          .default("standard"),
         pipelineProfile: z.string().max(1024).default(""),
         transcriptLimit: z.number().int().min(1).max(10).default(10),
         contextWindowSeconds: z.number().int().min(30).max(300).default(120),
@@ -206,6 +210,7 @@ export const configSchema = z
         provider: "openai_api",
         gate: gateSchema.parse({}),
         pacing: { minSeconds: 35, maxSeconds: 95 },
+        pipelineType: "standard",
         pipelineProfile: "",
         transcriptLimit: 10,
         contextWindowSeconds: 120,

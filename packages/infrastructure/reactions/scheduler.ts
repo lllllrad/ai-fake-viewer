@@ -1,3 +1,7 @@
+import {
+  reactionPipelines,
+  type ReactionEngine,
+} from "../../application/reactions/pipelines.ts";
 import { randomUUID, createHash } from "node:crypto";
 import { ReactionCoordinator } from "../../application/reactions/coordinator.ts";
 export { AiStartError } from "../../application/reactions/coordinator.ts";
@@ -55,4 +59,57 @@ export class Scheduler extends ReactionCoordinator<Buffer, NodeJS.Timeout> {
       },
     );
   }
+}
+
+export type BroadcastScheduler = Omit<
+  ReactionEngine<Buffer, NodeJS.Timeout>,
+  "store" | "capture" | "config" | "transcriber"
+> & {
+  store: Store;
+  capture: Capture;
+  config: Config;
+  transcriber: Transcriber | undefined;
+};
+/** Live composition selects a complete implementation, independently of the model provider. */
+export function createScheduler(
+  store: Store,
+  capture: Capture,
+  config: Config,
+  model: Model<Buffer>,
+  demo = false,
+  providerReady: () => boolean = () =>
+    !!process.env.OPENAI_API_KEY && !!process.env.OPENAI_MODEL,
+  transcriber?: Transcriber,
+  gate = new TimingGate(config.ai.gate, new TypeSafeTimingGate()),
+  random: () => number = () => Math.random(),
+): BroadcastScheduler {
+  const engine = reactionPipelines.create<Buffer, NodeJS.Timeout>(
+    config.ai.pipelineType,
+    store,
+    capture,
+    config,
+    model,
+    demo,
+    providerReady,
+    transcriber,
+    gate,
+    random,
+    {
+      now: Date.now,
+      id: randomUUID,
+      hash: (value) => createHash("sha256").update(value).digest("hex"),
+      clock: {
+        repeat: (callback, ms) => setInterval(callback, ms),
+        cancelRepeat: clearInterval,
+        delay: (callback, ms) => setTimeout(callback, ms),
+        cancelDelay: clearTimeout,
+      },
+      issue: (error) => ({
+        issue: generationIssue(error),
+        details: error instanceof ModelRequestError ? error.details : {},
+      }),
+    },
+  );
+  // The public contract retains the injected adapters; no private coordinator methods escape.
+  return Object.assign(engine, { store, capture, config, transcriber });
 }

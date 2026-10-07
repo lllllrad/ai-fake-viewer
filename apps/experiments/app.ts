@@ -41,6 +41,8 @@ export function createExperimentApp(
       join(options.directory, "interactive"),
       pipeline,
       (provider) => experimentModel(provider, pipeline, auth, true),
+      undefined,
+      pipeline.profile.ai.pipelineType ?? settings.pipelineType ?? "standard",
     );
     startup.add(() => experiments.close());
     app.addHook("onClose", async () => experiments.close());

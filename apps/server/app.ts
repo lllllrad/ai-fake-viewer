@@ -50,7 +50,7 @@ import type { Config } from "../../packages/config.ts";
 import { Store } from "../../packages/storage.ts";
 import { Capture } from "../../packages/infrastructure/inputs/screen-input.ts";
 import { Transcriber } from "../../packages/infrastructure/inputs/speech-input.ts";
-import { Scheduler } from "../../packages/infrastructure/reactions/scheduler.ts";
+import { createScheduler } from "../../packages/infrastructure/reactions/scheduler.ts";
 import { mockModel } from "../../packages/infrastructure/reactions/mock-model.ts";
 import { openaiModel } from "../../packages/infrastructure/reactions/responses-api.ts";
 import { chatgptModel } from "../../packages/infrastructure/reactions/chatgpt-model.ts";
@@ -191,7 +191,7 @@ async function assembleApp(
     `pipeline.loaded:${pipeline.profile.id}@${pipeline.profile.revision}:${pipeline.digest}`,
   );
   let cancelAuthoringJobs = () => {};
-  const scheduler = new Scheduler(
+  const scheduler = createScheduler(
     store,
     capture,
     config,

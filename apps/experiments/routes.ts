@@ -1,3 +1,4 @@
+import { reactionPipelines } from "../../packages/application/reactions/pipelines.ts";
 import { Transcriber } from "../../packages/infrastructure/inputs/speech-input.ts";
 import { readAudioEvent } from "../../packages/infrastructure/inputs/worker-events.ts";
 import { speechInPcm } from "../../packages/domain/inputs/pcm-chunks.ts";
@@ -38,6 +39,8 @@ export function registerExperimentRoutes(
       workspace.active && !workspace.active.endedAt
         ? workspace.active.id
         : null,
+    pipelineTypes: reactionPipelines.list(),
+    defaultPipelineType: workspace.defaultPipelineType,
     microphoneReady: !!speechApiKey(audio.provider),
     microphone: {
       ...speech,

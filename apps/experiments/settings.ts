@@ -23,6 +23,10 @@ export const experimentSettingsSchema = z
         chunkSeconds: 10,
         maxRequests: 360,
       }),
+    pipelineType: z
+      .string()
+      .regex(/^[a-z][a-z0-9_-]{0,63}$/)
+      .optional(),
     pipelineProfile: z.string().default(""),
   })
   .strict();
@@ -50,6 +54,7 @@ export function setupExperiments(directory = experimentDirectory) {
             maxRequests: config.audio.maxRequests,
             language: config.audio.language,
           },
+          pipelineType: config.ai.pipelineType,
           pipelineProfile: config.ai.pipelineProfile,
         }),
         null,

@@ -126,6 +126,37 @@ The fixtures verify the browser's continuous PCM/upload flow with a synthetic
 microphone and mocked transcription providers. They do not establish real microphone quality,
 speech recognition accuracy or real-model naturalness.
 
+## Replaceable AI implementations
+
+**AI type** selects an algorithm implementation independently of **AI connection**
+(the model provider/account). The shared [implementation registry](../../packages/application/reactions/pipelines.ts)
+contains the built-in `standard` pipeline. Its `create` factory replaces the whole
+reaction engine, including observation/selection, generation/review and scheduling;
+this is not a provider adapter or a prompt-only preset. The engine implements the
+public `ReactionEngine` lifecycle contract. The `draft` entry supplies its matching
+isolated draft path. Registered implementations are trusted repository code; JSON
+selects an ID and cannot load arbitrary executable module paths.
+
+To add an algorithm, implement `ReactionPipeline` (`id`, `revision`, `label`,
+`description`, `create`, `draft`) in an application module and register it alongside
+`standard`. Keep module dependencies within the application/domain boundaries.
+The test UI lists registry metadata automatically. Select it for a new test, then
+promote the same ID to live `ai.pipelineType` (or a versioned profile's
+`ai.pipelineType`) and restart the live server. No separate test implementation
+needs to be ported. The test server's `pipelineType` setting supplies its default;
+a profile's type overrides that default, and an explicit test selection wins for
+that test. Existing tests keep their chosen type until ended.
+
+Both server composition roots and replay use this registry. Draft CLI runs call
+the selected entry's `draft`, not a hardcoded baseline. Unknown IDs fail without
+fallback. Interactive snapshots retain type ID and implementation revision; old
+records default to `standard@1`. A type registration itself is not evidence of
+correct publication or consent behavior: alternate engines must preserve cancellation,
+usage accounting, evidence and publication guards, and pass the same conformance
+suite before live use. Only the existing standard algorithm ships by default;
+synthetic alternate implementations are exercised in tests, not presented as
+validated new AI behavior.
+
 ## Replay and compare
 
 From the repository root:
