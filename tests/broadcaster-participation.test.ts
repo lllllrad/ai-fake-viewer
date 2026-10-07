@@ -11,7 +11,7 @@ import {
 } from "../packages/domain/participation/notice-text.ts";
 
 for (const platform of ["youtube", "chzzk", "soop"] as const) {
-  test(`${platform} broadcaster can receive guidance, consent, publish chat and withdraw`, (t) => {
+  test(`${platform} broadcaster is admitted automatically without guidance and can withdraw`, (t) => {
     let now = Date.now();
     t.mock.method(Date, "now", () => now);
     const p = new Participation(approvedProfile(), "session");
@@ -19,26 +19,22 @@ for (const platform of ["youtube", "chzzk", "soop"] as const) {
     t.after(() => store.close());
     const send = (text: string) =>
       store.ingestBatch([privacyMessage("fixture", text, ++now, { platform })]);
-    send("Before consent");
+    send("My own live chat");
     const person = p.get(platform, "fixture", "fixture")!;
-    assert(person);
-    assert.equal(person.state, "WAITING_CONSENT");
-    assert.equal(store.snapshot().messages.length, 0);
+    assert.equal(person.state, "ACTIVE");
+    assert.deepEqual(person.accepted, ["broadcaster_auto"]);
+    assert.equal(person.age, "unknown");
+    assert(p.allowed(platform, "fixture", "fixture", person.epoch));
     const delivery = new FixedNoticeDelivery(p, "fixture", platform, {
       now: () => now,
       id: () => "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     });
-    const notice = delivery.next(true);
-    assert(notice);
-    assert(delivery.echo("fixture", notice.text));
-    send("!동의");
-    assert.equal(person.state, "ACTIVE");
-    send("My own live chat");
-    assert.equal(store.snapshot().messages.filter(Boolean).length, 1);
+    assert.equal(delivery.next(true), null);
+    assert.equal(store.snapshot().messages.length, 1);
     assert.equal(store.context([platform])[0].text, "My own live chat");
     const ownNotice =
       platform === "soop"
-        ? notice.text
+        ? consentNoticeText(p.profile) + " [안내 aaaaaaaa]"
         : fixedNoticeText(
             consentNoticeText(p.profile),
             platform === "chzzk" ? 88 : 170,
@@ -48,6 +44,18 @@ for (const platform of ["youtube", "chzzk", "soop"] as const) {
     send("!철회");
     assert.equal(person.state, "WITHDRAWN");
     assert.equal(store.context([platform]).length, 0);
+    send("After withdrawal");
+    assert.equal(store.context([platform]).length, 0);
+    send("!동의");
+    send("Rejoined");
+    assert.equal(store.context([platform]).length, 1);
+    const restored = new Participation(approvedProfile(), "session");
+    restored.restore(p.snapshot());
+    assert(restored.allowed(platform, "fixture", "fixture", person.epoch));
+    const viewer = privacyMessage("viewer", "ordinary viewer", ++now, {
+      platform,
+    });
+    assert.equal(p.handle(viewer).allow, false);
   });
 }
 test("notice echoes do not create participants or additional guidance targets", () => {
@@ -77,4 +85,35 @@ test("notice echoes do not create participants or additional guidance targets", 
       false,
     );
   }
+});
+
+test("owner auto-admission accepts untimestamped live input but preserves availability and age blocks", () => {
+  const profile = approvedProfile();
+  const p = new Participation(profile, "session");
+  const message = privacyMessage("fixture", "live", Date.now(), {
+    platform: "soop",
+    publishedAt: null,
+    sourceId: null,
+  });
+  assert.equal(p.handle(message).allow, true);
+  p.connectionLost("soop");
+  assert.equal(p.get("soop", "fixture", "fixture")?.state, "ACTIVE");
+  p.blockAge(p.get("soop", "fixture", "fixture")!.id);
+  assert.equal(p.handle(message).allow, false);
+  const unavailable = new Participation(
+    { ...profile, approvals: [] },
+    "session",
+  );
+  assert.equal(unavailable.handle(message).allow, false);
+  const stale = new Participation(profile, "session");
+  assert.equal(
+    stale.handle({ ...message, publishedAt: stale.startedAt - 1 }).allow,
+    false,
+  );
+  assert.equal(
+    stale.get("soop", "fixture", "fixture")?.state,
+    "WAITING_CONSENT",
+  );
+  stale.end();
+  assert.equal(stale.handle(message).allow, false);
 });

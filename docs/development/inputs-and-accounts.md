@@ -340,11 +340,17 @@ Timeout, disconnect and broadcast changes retire pending READY waits.
 
 ### Broadcaster chat admission
 
-YouTube, CHZZK and SOOP forward broadcaster-authored messages through ordinary
-participation admission. Being the channel owner neither drops the message nor
-automatically grants consent. Guidance must be enabled and delivered; a fresh
-consent command permits subsequent chat, and withdrawal removes its raw context.
+YouTube, CHZZK and SOOP forward broadcaster-authored messages through shared
+participation admission. An exact platform author/channel identity match activates
+the broadcaster automatically on the first live message, without notice delivery
+or a consent command. The persisted `broadcaster_auto` marker distinguishes this
+from an explicit viewer declaration and permits live events without provider
+timestamps. Ordinary viewers still require guidance and consent.
+Profile availability, blocked accounts, broadcast lifecycle and explicit withdrawal
+remain enforced. Withdrawal clears context and keeps the owner withdrawn until
+a fresh consent command; restarting the server preserves admission.
+
 The shared notice-text policy excludes exact own fixed-notice echoes, including
 the SOOP delivery suffix and the YouTube/CHZZK formatted prefix. SOOP still offers
-owner echoes to delivery confirmation before admission. This preserves notice
-acknowledgment without turning automatic notices into new guidance targets.
+owner echoes to delivery confirmation before admission. Automatic notices cannot
+activate the broadcaster or become public chat.

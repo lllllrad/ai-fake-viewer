@@ -18,7 +18,7 @@ manual-authoring experiment does not become a requirement because it has a test.
 The latest accepted changes override older private source documents: broadcast
 state survives process restart; broadcast end destroys it; consent uses one
 short confirmed notice and one fresh command; recently observed viewers can
-share delivery; broadcaster chat follows viewer consent while own fixed notices are excluded; configured video/audio need no
+share delivery; broadcaster chat is admitted automatically while own fixed notices are excluded; configured video/audio need no
 privacy enable flags; forced-reply and broadcaster test modes are removed.
 
 Keep Node, TypeScript, Fastify, React, Vite, SQLite and existing provider SDKs.

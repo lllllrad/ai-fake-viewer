@@ -142,7 +142,7 @@ Transcript download and media preview require administrator authorization.
 
 Describe the normal flow once: one short delivered notice and one fresh individual
 consent command. Sharing delivery with recently observed viewers is not shared
-consent. The broadcast account follows the same consent flow; automatic notice echoes are excluded. Display meaningful participant states
+consent. The broadcast account is admitted automatically without guidance or a consent command; automatic notice echoes are excluded. Display meaningful participant states
 such as waiting for guidance, waiting for consent, active, withdrawn and blocked;
 do not show obsolete multistage counters.
 

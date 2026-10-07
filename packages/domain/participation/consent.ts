@@ -54,6 +54,22 @@ function accept(
   return 1;
 }
 
+/** Owner admission is recorded separately from a viewer's explicit declaration. */
+export function hasBroadcasterAdmission(participant: Participant): boolean {
+  return (
+    participant.author === participant.broadcaster &&
+    participant.accepted.includes("broadcaster_auto")
+  );
+}
+
+export function hasParticipationAdmission(participant: Participant): boolean {
+  return (
+    participant.age !== "blocked" &&
+    (participant.age === "self_declared_14_plus" ||
+      hasBroadcasterAdmission(participant))
+  );
+}
+
 /** Caller excludes own fixed-notice echoes and configured bots before obtaining participant state. */
 export function receiveParticipantMessage(
   current: Participant,
@@ -101,6 +117,34 @@ export function receiveParticipantMessage(
     };
     return finish();
   }
+  if (
+    participant.author === participant.broadcaster &&
+    context.available &&
+    participant.age !== "blocked" &&
+    (participant.state === "WAITING_CONSENT" ||
+      participant.state === "UNCONSENTED" ||
+      (participant.state === "WITHDRAWN" &&
+        command === "!동의" &&
+        (at == null || at > participant.lastEventAt) &&
+        (!message.sourceId || !participant.eventIds.has(message.sourceId)))) &&
+    (at == null || (at >= context.startedAt && at <= context.now + 5000))
+  ) {
+    const rejoining = participant.state === "WITHDRAWN";
+    participant.state = "ACTIVE";
+    participant.accepted = ["broadcaster_auto"];
+    if (command === "!동의" && message.sourceId)
+      participant.eventIds.add(message.sourceId);
+    participant.version = context.fingerprint;
+    participant.stage = 1;
+    participant.deliveredAt = null;
+    participant.observed = undefined;
+    participant.introPending = false;
+    participant.activeAfter = rejoining
+      ? (at ?? context.now)
+      : Math.max(context.startedAt, participant.lastEventAt) - 1;
+    participant.epoch++;
+    transition.revisionDelta = 1;
+  }
   if (command === "!동의") {
     if (
       participant.state === "ACTIVE" ||
@@ -133,13 +177,15 @@ export function receiveParticipantMessage(
   const fresh =
     at != null && at > participant.activeAfter && at >= context.startedAt;
   const liveWithoutTimestamp =
-    at == null && participant.accepted.includes("manual_live_order");
+    at == null &&
+    (participant.accepted.includes("manual_live_order") ||
+      hasBroadcasterAdmission(participant));
   transition.result.allow =
     (fresh || liveWithoutTimestamp) &&
     context.available &&
     participant.state === "ACTIVE" &&
     participant.version === context.fingerprint &&
-    participant.age === "self_declared_14_plus";
+    hasParticipationAdmission(participant);
   if (transition.result.allow) participant.published = true;
   else if (participant.state === "UNCONSENTED" && !participant.introDelivered)
     participant.introPending = true;

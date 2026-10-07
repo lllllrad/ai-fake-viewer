@@ -10,7 +10,7 @@ notice transports are documented in [inputs and accounts](inputs-and-accounts.md
 
 1. Normalize the external event at the adapter boundary; retain original event
    ordering when available and never invent a provider timestamp.
-2. Exclude own fixed-notice echoes and configured bots. Broadcast account chat follows the same consent flow as other viewers. Classify exact commands
+2. Exclude own fixed-notice echoes and configured bots. Broadcast account chat is admitted automatically with a distinct owner marker; other viewers require explicit consent. Classify exact commands
    before any public storage or model context admission.
 3. Store only minimal state for a nonparticipant. Never retain their ordinary
    message body in the database, diagnostics, browser state or summaries.

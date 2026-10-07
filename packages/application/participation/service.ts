@@ -30,6 +30,7 @@ export type {
 } from "../../domain/participation/model.ts";
 import {
   receiveParticipantMessage,
+  hasParticipationAdmission,
   confirmObservedConsent,
 } from "../../domain/participation/consent.ts";
 export class ParticipationService {
@@ -116,7 +117,7 @@ export class ParticipationService {
       p?.state === "ACTIVE" &&
       p.epoch === epoch &&
       p.version === this.fingerprint &&
-      p.age === "self_declared_14_plus"
+      hasParticipationAdmission(p)
     );
   }
   handle(m: Incoming) {

@@ -117,10 +117,8 @@ test("one confirmed notice covers observed viewers only, survives restart, and s
   send("new-arrival", "hello");
   assert(recovered.next(true));
   send("fixture", "broadcaster");
-  assert.equal(
-    p.get("youtube", "fixture", "fixture")?.state,
-    "WAITING_CONSENT",
-  );
+  assert.equal(p.get("youtube", "fixture", "fixture")?.state, "ACTIVE");
+  send("fixture", "!철회");
   send("a", "!철회");
   assert.equal(store.snapshot().messages.length, 0);
   store.close();
